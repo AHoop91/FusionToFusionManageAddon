@@ -1,0 +1,237 @@
+/* ==========================================================================
+   Publish Item panel: summary, details and bill of materials of the open model.
+   ========================================================================== */
+
+.pub-line { display: flex; gap: 10px; padding: 3px 0; font-size: 13px; }
+.pub-label { flex: none; width: 80px; color: var(--muted); }
+.pub-value { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+
+/* ---- Summary header ------------------------------------------------------ */
+.pub-summary {
+  flex: none; display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.pub-thumb {
+  flex: none; width: 88px; height: 88px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg, transparent) center / contain no-repeat;
+}
+.pub-summary-text { flex: 1; min-width: 0; }
+.pub-summary .pub-label { width: 90px; }
+
+/* ---- Details and bill of materials tables -------------------------------- */
+.pub-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pub-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; }
+.pub-table td { padding: 5px 6px; border-top: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+.pub-table .num { text-align: right; white-space: nowrap; }
+.pub-error { color: var(--danger, #d13438); }
+
+/* ---- Fusion Manage comparison status ------------------------------------- */
+.pub-status { width: 28px; text-align: center; }
+.pub-status { vertical-align: middle; }
+.pub-mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; cursor: default; }
+.pub-status-match .pub-mark { background: var(--ok); }
+.pub-status-mismatch .pub-mark { background: #d98c00; }
+.pub-status-new .pub-mark { background: var(--accent); }
+.pub-status-unknown .pub-mark { background: var(--danger); }
+.pub-status-unchecked .pub-mark { background: var(--accent); opacity: .5; }
+.pub-status-unmapped .pub-mark { background: transparent; border: 1px solid var(--muted); }
+.pub-table td.muted { color: var(--muted); }
+
+/* ---- Properties: component list on the left, properties on the right ------ */
+.pub-split { display: flex; gap: 12px; align-items: flex-start; }
+.pub-components {
+  flex: 0 0 30%; max-height: 70vh; overflow-y: auto; position: sticky; top: 0; padding-right: 8px;
+  border-right: 1px solid var(--border);
+}
+.pub-props { flex: 1; min-width: 0; }
+.pub-comp-heading { padding: 0 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pub-comp {
+  display: block; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-left: 3px solid transparent;
+  border-radius: 0 4px 4px 0; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer;
+}
+.pub-comp:hover { background: var(--surface); }
+.pub-comp.active { border-left-color: var(--accent); background: var(--surface); font-weight: 600; }
+.pub-comp-root { margin-bottom: 4px; border-bottom: 1px solid var(--border); border-radius: 0; }
+.pub-comp-name { display: block; overflow-wrap: anywhere; }
+.pub-comp-sub { display: block; font-size: 11px; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
+.pub-props-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.pub-props-summary { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+.pub-unmapped { margin-top: 12px; font-size: 12px; }
+.pub-unmapped summary { cursor: pointer; color: var(--muted); padding: 4px 0; }
+.pub-unmapped .pub-table { margin-top: 4px; }
+
+/* Tab panels fill the area so the loading balls sit centred in it. */
+main { display: flex; flex-direction: column; }
+.tab-panel.pub-loading.active { display: flex; flex: 1; }
+
+/* ---- Narrow view: picklist instead of the list, stacked rows instead of columns ---- */
+.pub-pick { display: none; width: 100%; padding: 6px 8px; font: inherit; font-size: 13px; }
+@media (max-width: 760px) {
+  .pub-split { flex-direction: column; align-items: stretch; }
+  .pub-components { display: none; }
+  .pub-pick { display: block; }
+  .pub-props-head { display: none; }   /* the picklist already shows the component */
+}
+@media (max-width: 900px) {
+  /* Each property becomes a card: name on top, then its value and Fusion Manage lines. */
+  .pub-props .card:not(.pub-props-head):not(.pub-props-wait):not(.pub-empty) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .pub-table, .pub-table tbody, .pub-table tr, .pub-table td { display: block; width: 100%; }
+  .pub-table tr:first-of-type { display: none; }
+  .pub-table tr {
+    position: relative; margin: 0 0 8px; padding: 8px 32px 8px 12px;
+    background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 6px;
+  }
+  .pub-table td { border: 0; padding: 2px 0; }
+  .pub-table td[data-label="Property"] { font-weight: 600; padding-bottom: 4px; }
+  .pub-table td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; }
+  .pub-table td[data-label="Property"]::before { content: none; }
+  .pub-table td.pub-status { position: absolute; top: 10px; right: 10px; width: auto; padding: 0; }
+}
+
+
+/* ---- Bill of materials tree ---------------------------------------------- */
+.pub-tree { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border: 1px solid var(--border); }
+.pub-tree th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; background: transparent; border-bottom: 1px solid var(--border); }
+.pub-tree th + th, .pub-tree td + td { border-left: 1px solid var(--border); }
+.pub-tree td { height: 32px; padding: 0 10px 0 0; border-top: 1px solid var(--border); vertical-align: middle; }
+.pub-tree td.num { padding: 0 10px; }
+.pub-tree .num { width: 25%; min-width: 60px; text-align: right; white-space: nowrap; }
+.pub-tree th.num { text-align: left; }
+.pub-tree-root td { background: #eaf2fb; }
+.pub-tree-cell { display: flex; align-items: center; gap: 0; min-height: 32px; }
+.pub-tree-label { padding: 4px 0; overflow-wrap: anywhere; }
+.pub-tree-pn + .pub-tree-name::before { content: " - "; }
+.pub-tree-toggle {
+  flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  padding: 0; border: 0; background: transparent; color: var(--text, inherit); cursor: pointer;
+}
+.pub-tree-toggle:disabled { cursor: default; }
+.pub-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-tree-icon {
+  flex: none; align-self: stretch; display: flex; align-items: center; justify-content: center; width: 32px;
+  background: #fff; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+}
+.pub-tree-icon svg { fill: none; stroke: #111; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.pub-tree-icon-assembly svg, .pub-tree-icon-root svg { stroke: var(--accent); }
+.pub-tree-seq { flex: none; min-width: 14px; font-weight: 600; }
+.pub-tree-seq { margin: 0 8px 0 10px; }
+.pub-tree-icon + span:not(.pub-tree-seq) { margin-left: 10px; }
+.pub-tree-icon { border-right: 3px solid #111; }
+.pub-tree-icon-assembly, .pub-tree-icon-root { border-right-color: var(--accent); }
+
+.pub-tree .pub-tree-status-col { width: 40px; padding: 0; text-align: center; }
+.pub-bom-mark { display: inline-block; width: 20px; height: 20px; line-height: 20px; border-radius: 50%; font-weight: 700; cursor: default; }
+.pub-bom-new { color: #fff; background: #2e9d4f; }
+.pub-bom-removed { color: #fff; background: #d13438; }
+.pub-bom-unchecked { color: var(--muted); }
+.pub-tree-removed td { color: var(--muted); text-decoration: line-through; }
+
+/* Component list rows carry the tree icon and are indented by depth. */
+.pub-comp { display: flex; align-items: center; gap: 8px; }
+.pub-comp .pub-tree-icon { width: 20px; background: transparent; border: 0; }
+
+/* Properties table (wide view): fixed columns (widths come from its colgroup); the status dot sits far right. */
+@media (min-width: 901px) {
+  .pub-property-table { table-layout: fixed; }
+  .pub-property-table th { white-space: nowrap; }
+  .pub-property-table td.pub-status { padding: 0 14px 0 0; text-align: right; vertical-align: middle; }
+  .pub-property-table .pub-mark { vertical-align: middle; }
+  .pub-property-table td:first-child { overflow-wrap: anywhere; }
+}
+  .pub-property-table th:nth-child(1) { width: 22%; }
+  .pub-property-table th:nth-child(2), .pub-property-table th:nth-child(3) { width: 35%; }
+  .pub-property-table th:nth-child(4) { width: 8%; }
+  .pub-property-table td:nth-child(3) { padding-right: 24px; }
+  .pub-property-table th { white-space: nowrap; }
+  .pub-property-table td.pub-status { padding: 0 14px 0 0; text-align: right; vertical-align: middle; }
+  .pub-property-table .pub-mark { vertical-align: middle; }
+  .pub-property-table td:first-child { overflow-wrap: anywhere; }
+}
+  .pub-props .pub-table td:first-child { white-space: nowrap; width: 1%; }
+  .pub-props .pub-table td:nth-child(3), .pub-props .pub-table th:nth-child(3) { white-space: nowrap; width: 1%; }
+}
+@media (min-width: 901px) { .pub-props .card { padding: 8px 12px; } }
+
+/* Component list: one line per component, with the change indicator at the end. */
+.pub-comp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pub-comp { padding-left: 10px; }
+.pub-comp-status { flex: none; }
+@media (min-width: 901px) {
+  .pub-props .pub-table td.pub-cut { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* Loading balls sit in the middle of the properties pane, both ways. */
+.pub-props-wait { display: flex; align-items: center; justify-content: center; min-height: 120px; }
+
+.pub-subheading {
+  display: flex; align-items: center; gap: 4px; width: 100%; margin: 10px 0 6px; padding: 2px 0; border: 0; background: transparent;
+  font: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); cursor: pointer; text-align: left;
+}
+.pub-subheading svg { flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-subheading:hover { color: inherit; }
+
+/* Title card and drawings table */
+.pub-props-head { padding: 10px 12px; margin-bottom: 4px; }
+.pub-props-head .pub-props-title { margin: 0; }
+.pub-drawing-cell { width: 1%; text-align: right; white-space: nowrap; }
+.pub-drawing-open { padding: 3px 12px; border: 1px solid var(--accent); border-radius: 4px; background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
+.pub-drawing-open:hover { background: var(--accent); color: #fff; }
+@media (max-width: 900px) { .pub-drawing-cell { width: auto; text-align: left; } }
+.pub-drawings-wait { min-height: 120px; }
+
+/* Drawings table (wide view): Item Number and the link fit their content, Name takes the rest. */
+@media (min-width: 901px) {
+  .pub-drawings-table th:nth-child(1), .pub-drawings-table td:nth-child(1),
+  .pub-drawings-table th:nth-child(3), .pub-drawings-table td:nth-child(3) { width: 1%; white-space: nowrap; }
+}
+
+/* Empty state: icon and message centred both ways. */
+.pub-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; text-align: center; }
+.pub-empty p { margin: 0; }
+.pub-empty svg { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+@media (min-width: 901px) { .pub-props .card.pub-empty { padding: 16px; } }
+
+/* Drawings table: room between the columns. */
+.pub-drawings-table th, .pub-drawings-table td { padding-left: 16px; padding-right: 16px; }
+.pub-drawings-table td:nth-child(1), .pub-drawings-table th:nth-child(1) { padding-right: 32px; }
+@media (max-width: 900px) { .pub-drawings-table td { padding-left: 0; padding-right: 0; } }
+
+/* Failure state: centred in whatever holds it, with the warning icon and Retry. */
+.pub-error-state svg { stroke: var(--danger, #d13438); }
+.pub-error-title { margin: 0; font-size: 14px; font-weight: 600; }
+.pub-retry { margin-top: 4px; padding: 5px 18px; }
+.pub-loading > .pub-error-state { margin: auto; min-width: 260px; }
+
+/* ---- Footer with the actions ---------------------------------------------- */
+.pub-footer {
+  flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+
+.pub-seq-path { display: none; }
+
+/* BOM tree indent: one icon-box width per level. */
+.pub-tree-cell { padding-left: calc(var(--level, 0) * 32px); }
+
+/* BOM tree in a small panel: a flat list, one line per component, the text cut with "...",
+   the quantity at the right. Nesting is not shown, so the collapse toggles go; the icons still
+   tell assemblies from parts. */
+@media (max-width: 760px) {
+  .pub-tree, .pub-tree tbody { display: block; }
+  .pub-tree tr, .pub-tree tr[hidden] { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
+  .pub-tree th, .pub-tree td { display: flex; align-items: center; height: auto; min-height: 32px; }
+  .pub-tree th + th, .pub-tree td + td { border-left: 0; }
+  .pub-tree .pub-tree-status-col { display: none; }
+  .pub-tree .num { width: auto; min-width: 0; padding: 0 10px; justify-content: flex-end; }
+  .pub-tree td.num:not(:empty)::before { content: "\00D7\00A0"; color: var(--muted); }
+  .pub-tree td:first-child { display: block; padding: 0; height: auto; }
+  .pub-tree-cell { padding-left: 0; height: 100%; min-width: 0; }
+  .pub-tree-toggle { display: none; }
+  .pub-tree-icon { width: 24px; border-left: 0; border-right-width: 2px; }
+  .pub-tree-seq { margin: 0 6px 0 8px; }
+  .pub-seq-own { display: none; }
+  .pub-seq-path { display: inline; }
+  .pub-tree-label { flex: 1; min-width: 0; margin-left: 8px; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

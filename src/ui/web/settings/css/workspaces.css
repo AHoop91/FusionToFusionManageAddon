@@ -1,0 +1,127 @@
+/* ==========================================================================
+   Workspaces tab: workspace cards, panel tabs and mapping rows.
+   ========================================================================== */
+
+.ws-card {
+  margin-bottom: 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+
+.ws-desc { font-size: 12px; }
+.ws-body { padding: 14px 16px; }
+.ws-body label { display: block; font-weight: 500; }
+.ws-id {
+  display: block; width: 100%; margin-top: 4px; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: 4px; font: inherit;
+}
+.ws-heading { margin: 16px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Mapping table: source field -> FM field id, key radio, remove. */
+.ws-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ws-pick-wrap { position: relative; flex: 1 1 0; min-width: 0; }
+.ws-pick-btn {
+  padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--surface);
+}
+.ws-pick-btn {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; color: var(--text); cursor: pointer;
+}
+.ws-pick-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-pick-btn.placeholder { color: var(--muted); }
+.ws-pick-btn::after { content: "\25BE"; flex: none; color: var(--muted); }
+.ws-pick-btn:disabled { cursor: not-allowed; }
+/* The list is plain elements, so it opens instantly (no native popup). */
+.ws-pick-menu {
+  position: absolute; top: 100%; left: 0; z-index: 10; width: 100%; min-width: 240px;
+  margin-top: 2px; padding: 6px 0 4px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.ws-pick-menu[hidden] { display: none; }
+.ws-pick-search {
+  display: block; width: calc(100% - 12px); margin: 0 6px 4px; padding: 5px 6px;
+  border: 1px solid var(--border); border-radius: 4px; font: inherit;
+}
+/* Right-hand pickers open leftwards so the list stays inside the palette. */
+.ws-pick-menu.right { left: auto; right: 0; }
+/* Opens upwards when there is no room below. */
+.ws-pick-menu.up { top: auto; bottom: 100%; margin: 0 0 2px; }
+.ws-pick-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; }
+.ws-pick-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.04em; }
+.ws-pick-empty { padding: 6px 10px; font-size: 12px; }
+.ws-pick-section[hidden], .ws-pick-item[hidden], .ws-pick-empty[hidden] { display: none; }
+.ws-pick-item {
+  display: block; width: 100%; padding: 5px 10px; border: 0; background: none;
+  font: inherit; text-align: left; color: var(--text); cursor: pointer; white-space: normal; overflow-wrap: anywhere;
+}
+.ws-pick-item:hover, .ws-pick-clear:hover { background: var(--bg); }
+.ws-pick-clear {
+  display: block; width: 100%; padding: 5px 10px; border: 0; border-bottom: 1px solid var(--border);
+  background: none; font: inherit; text-align: left; color: var(--danger); cursor: pointer;
+}
+.ws-pick-item.selected { font-weight: 600; }
+.ws-pick-item:disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; background: none; }
+.ws-pick-detail { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+.ws-arrow { color: var(--muted); }
+.ws-body .ws-key { display: inline-flex; align-items: center; gap: 3px; margin: 0; font-weight: 400; font-size: 12px; white-space: nowrap; }
+.ws-remove {
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer;
+}
+.ws-remove:hover { background: var(--bg); color: var(--danger); }
+.ws-add { display: flex; gap: 8px; margin-top: 6px; }
+.ws-static-value {
+  flex: 1 1 0; min-width: 0; padding: 5px 6px; border: 1px solid var(--border);
+  border-radius: 4px; font: inherit; background: var(--surface);
+}
+
+/* ---- Workspace id row and validation ------------------------------------ */
+.ws-id-label { display: block; font-weight: 500; }
+.ws-id-row { display: flex; gap: 8px; margin-top: 4px; }
+.ws-id-row .ws-id { width: 100%; margin-top: 0; padding-right: 28px; }
+.ws-id-wrap { position: relative; flex: 1; }
+.ws-tick { position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  color: var(--ok); font-weight: 700; pointer-events: none; }
+.ws-tick[hidden] { display: none; }
+.ws-status { min-height: 0; margin: 4px 0 0; font-size: 12px; }
+.ws-status.ok { color: var(--ok); }
+.ws-hint { margin: 8px 0; font-size: 12px; }
+.ws-status:empty { display: none; }
+
+/* Mapping is locked until the workspace validates. */
+.ws-locked { min-width: 0; margin: 0; padding: 0; border: 0; }
+.ws-locked:disabled { opacity: 0.5; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
+
+/* ---- Panel tabs inside a workspace card --------------------------------- */
+.ws-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.ws-tabs::-webkit-scrollbar { display: none; }
+.ws-tab {
+  flex: none; padding: 7px 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.ws-tab:hover { color: var(--text); }
+.ws-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.ws-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ws-panels .ws-hint { margin: 10px 0 0; }
+.ws-panel .ws-heading { margin: 14px 0 8px; }
+
+/* ---- Workspace tab options ---------------------------------------------- */
+
+.ws-panel .ws-id-label { margin-top: 0; }
+.ws-body .ws-option { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; cursor: pointer; }
+.ws-option-box { margin-top: 2px; }
+.ws-option-text { display: flex; flex-direction: column; gap: 1px; }
+.ws-option-label { font-weight: 500; }
+.ws-option-desc { font-size: 12px; font-weight: 400; }
+.ws-panel { position: relative; }
+.ws-busy { position: absolute; inset: 0; z-index: 5; justify-content: center;
+  background: rgba(255, 255, 255, 0.85); }
+.ws-busy[hidden] { display: none; }
+.ws-option-note { font-size: 12px; font-weight: 400; }
+.ws-option-note[hidden] { display: none; }
+.ws-body .ws-option-blocked { opacity: 0.6; cursor: not-allowed; }
+.ws-locked:disabled .ws-option { cursor: not-allowed; }
+.ws-section { margin-bottom: 4px; }
+.ws-panel > .ws-desc { margin: 0; font-size: 12px; }

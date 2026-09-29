@@ -1,0 +1,58 @@
+/* ==========================================================================
+   Components: buttons, cards, form fields and the login screen.
+   ========================================================================== */
+
+/* ---- Buttons ------------------------------------------------------------ */
+.btn {
+  padding: 6px 14px; border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--accent); color: #fff; cursor: pointer; font: inherit;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-block { width: 100%; }
+
+.link-btn {
+  margin-top: 14px; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--accent); font: inherit;
+}
+.link-btn:hover { text-decoration: underline; }
+
+/* ---- Cards and form fields ---------------------------------------------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px 16px; margin-bottom: 14px;
+}
+.card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.card label { display: block; margin-bottom: 10px; font-weight: 500; }
+.card label.radio { font-weight: 400; margin-bottom: 6px; }
+.card input[type="text"], .card input[type="number"] {
+  display: block; width: 100%; margin-top: 4px; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: 4px; font: inherit;
+}
+.card input:disabled { background: var(--bg); }
+.card input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+.row { display: flex; gap: 8px; align-items: center; }
+.hint { color: var(--muted); font-size: 12px; }
+.hint code { display: block; margin-top: 2px; color: var(--text); }
+
+/* ---- Login screen ------------------------------------------------------- */
+.login-card h2 { font-size: 15px; }
+
+/* ---- Loader: three bouncing balls, centred in its view ------------------- */
+.loader {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 24px 16px;
+}
+.loader p { margin: 0; }
+.balls { display: flex; gap: 10px; height: 28px; align-items: flex-end; }
+.balls span {
+  width: 14px; height: 14px; border-radius: 50%; background: var(--accent);
+  animation: ball-bounce 0.9s ease-in-out infinite;
+}
+.balls span:nth-child(2) { animation-delay: 0.15s; }
+.balls span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ball-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}

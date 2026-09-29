@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fusion Manage Settings</title>
+  <!-- Shared panel styles -->
+  <link rel="stylesheet" href="../shared/css/base.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="../shared/css/header.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <!-- Settings panel styles -->
+  <link rel="stylesheet" href="css/settings.css">
+  <link rel="stylesheet" href="css/workspaces.css">
+</head>
+<body>
+  <!-- Shared top bar, filled in by shell.js. -->
+  <header id="app-header" class="app-header"></header>
+
+  <!-- ===== Signed-out view: sign-in only ================================ -->
+  <div id="view-login" class="view">
+    <div id="login-form" class="view-scroll" hidden>
+      <div class="card login-card">
+        <h2>Sign in to Fusion Manage</h2>
+        <p id="conn-summary" class="muted">Loading...</p>
+        <div class="row">
+          <button id="signin-btn" class="btn">Sign in</button>
+        </div>
+        <p id="conn-error" class="error" hidden></p>
+        <button id="toggle-conn" class="link-btn" type="button">Connection settings</button>
+      </div>
+      <!-- The connection settings form is moved here while signed out. -->
+      <div id="login-settings-slot" hidden></div>
+    </div>
+
+    <!-- Shown instead of the form while the browser sign-in is pending. -->
+    <div id="login-loader" class="loader">
+      <div class="balls" role="status" aria-label="Logging in"><span></span><span></span><span></span></div>
+      <p class="muted">Logging in...</p>
+      <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== Signed-in view ============================================== -->
+  <div id="view-app" class="view" hidden>
+    <nav class="tabs" data-group="settings" role="tablist">
+      <button class="tab active" data-tab="general">General</button>
+      <button class="tab" data-tab="connection">Connection</button>
+      <button class="tab" data-tab="workspaces">Workspaces</button>
+      <button class="tab" data-tab="profile">Profile</button>
+    </nav>
+
+    <main>
+      <section id="sub-general" class="tab-panel active" data-group="settings">
+        <div class="card">
+          <h2>Configuration mode</h2>
+          <p class="hint">
+            The mode decides where the add-in gets its Fusion Manage connection
+            details (Client ID, tenant, callback port and scopes). Workspace
+            IDs and field mappings are configured separately on the Workspaces tab.
+          </p>
+
+          <label class="mode-option">
+            <input type="radio" name="mode" value="local" checked>
+            <span class="mode-text">
+              <span class="mode-title">Local Configuration</span>
+              <span class="mode-desc">
+                You enter the connection details yourself on the Connection tab.
+                They are stored in your user profile on this machine only, and
+                sign-in tokens are kept encrypted by the operating system.
+                Best for individual use, testing and setup.
+              </span>
+            </span>
+          </label>
+
+          <label class="mode-option mode-disabled">
+            <input type="radio" name="mode" value="company" disabled>
+            <span class="mode-text">
+              <span class="mode-title">Shared Configuration <span class="badge">Coming soon</span></span>
+              <span class="mode-desc">
+                Connection details are read from a shared configuration file
+                published by your organisation (network path or web address), so
+                everyone uses the same Client ID and tenant without entering them.
+                Fields your organisation locks cannot be changed locally.
+              </span>
+            </span>
+          </label>
+
+          <div class="row">
+            <button id="gen-save-btn" class="btn">Save</button>
+            <span id="gen-save-msg" class="muted"></span>
+          </div>
+          <p id="gen-save-error" class="error" hidden></p>
+        </div>
+      </section>
+
+      <section id="sub-connection" class="tab-panel" data-group="settings">
+        <!-- Connection settings live here while signed in. -->
+        <div id="settings-slot">
+          <fieldset id="conn-settings" class="lockable">
+            <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+
+            <div class="card">
+              <h2>Local Configuration</h2>
+              <label>Client ID
+                <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">
+              </label>
+              <label>Tenant
+                <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
+              </label>
+              <label>Callback port
+                <input id="f-port" type="number" min="1024" max="65535">
+              </label>
+              <label>Scopes <span class="muted">(space separated)</span>
+                <input id="f-scopes" type="text" autocomplete="off" spellcheck="false">
+              </label>
+              <p class="hint">Register this callback URL on your APS app:
+                <code id="callback-url"></code></p>
+              <div class="row">
+                <button id="save-btn" class="btn">Save</button>
+                <span id="save-msg" class="muted"></span>
+              </div>
+              <p id="save-error" class="error" hidden></p>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <section id="sub-workspaces" class="tab-panel" data-group="settings">
+        <fieldset id="lock-workspaces" class="lockable">
+          <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+        <!-- One card per workspace kind, built by workspaces.js. -->
+        <div id="workspace-cards"></div>
+        <div class="row">
+          <button id="ws-save-btn" class="btn">Save</button>
+          <span id="ws-save-msg" class="muted"></span>
+        </div>
+        <p id="ws-save-error" class="error" hidden></p>
+        </fieldset>
+      </section>
+
+
+      <section id="sub-profile" class="tab-panel" data-group="settings">
+        <p class="lock-note" hidden>Managed by Shared Configuration. Import is disabled.</p>
+        <div class="card">
+          <h2>Export / Import</h2>
+          <p class="hint">
+            Save your configuration (mode, connection details, workspace IDs and
+            field mappings) to a JSON file, or load one to set up another machine
+            or share a standard setup. Sign-in tokens are never included.
+            Importing replaces your current settings.
+          </p>
+          <div class="row">
+            <button id="export-btn" class="btn btn-secondary">Export...</button>
+            <button id="import-btn" class="btn btn-secondary">Import...</button>
+            <span id="transfer-msg" class="muted"></span>
+          </div>
+          <p id="transfer-error" class="error" hidden></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+
+  <!-- Load order matters: each script builds on the ones above it. -->
+  <!-- Shared shell -->
+  <script src="../shared/js/dom.js"></script>
+  <script src="../shared/js/bridge.js"></script>
+  <script src="../shared/js/shell.js"></script>
+  <script src="../shared/js/tabs.js"></script>
+  <script src="../shared/js/account.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <!-- Settings panel -->
+  <script src="js/workspaces.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/transfer.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

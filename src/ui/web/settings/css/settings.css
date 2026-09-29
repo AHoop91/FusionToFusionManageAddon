@@ -1,0 +1,31 @@
+/* ==========================================================================
+   Settings panel only. Anything reusable belongs in ../../shared/css.
+   ========================================================================== */
+
+/* Connection form shown on the login screen while signed out. */
+#login-settings-slot { margin-top: 14px; }
+
+/* ---- General tab: configuration mode options ---------------------------- */
+.card .mode-option {
+  display: flex; gap: 10px; align-items: flex-start; margin: 10px 0;
+  padding: 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+}
+.card .mode-option:has(input:checked) { border-color: var(--accent); background: #f2f9fd; }
+.mode-option input { margin-top: 3px; }
+.mode-text { display: flex; flex-direction: column; gap: 4px; }
+.mode-title { font-weight: 600; }
+.mode-desc { font-weight: 400; font-size: 12px; color: var(--muted); }
+.mode-disabled { cursor: not-allowed; opacity: 0.7; }
+.badge {
+  margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: 500;
+  background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+}
+
+/* ---- Shared Configuration lock ------------------------------------------ */
+/* Fieldsets used only to disable a group of controls at once. */
+.lockable { min-width: 0; margin: 0; padding: 0; border: 0; }
+.lockable:disabled { opacity: 0.6; }
+.lock-note {
+  margin: 0 0 12px; padding: 8px 12px; font-size: 12px; color: var(--text);
+  background: #fff8e1; border: 1px solid #f0d98a; border-radius: 4px;
+}

@@ -1,0 +1,38 @@
+/* ==========================================================================
+   Base: design tokens, reset and page shell.
+   ========================================================================== */
+
+:root {
+  --bg: #f5f6f7;
+  --surface: #ffffff;
+  --border: #d9dcdf;
+  --text: #1f2328;
+  --muted: #6a737d;
+  --accent: #0696d7;
+  --ok: #2da44e;
+  --danger: #cf222e;
+  --neutral: #8c8c8c;
+  --header-bg: #d9d9d9;
+  --header-border: #bfbfbf;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+/* Fill the palette top to bottom: fixed header and tabs, scrolling content. */
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+  font: 13px/1.4 "Segoe UI", -apple-system, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* Elements toggled through the `hidden` attribute must always disappear. */
+[hidden] { display: none !important; }
+
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
