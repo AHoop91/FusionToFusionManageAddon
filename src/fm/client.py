@@ -49,7 +49,7 @@ class FmClient:
         """Accept only https links so a bad response cannot inject other schemes."""
         return url if isinstance(url, str) and url.lower().startswith("https://") else ""
 
-    def get_json(self, path: str) -> Any:
+    def get_json(self, path: str, accept: str = "application/json") -> Any:
         """GET ``path`` (e.g. ``/api/v3/users/@me``) and return parsed JSON.
 
         Raises ``AuthError`` if there is no valid session and ``FmApiError``
@@ -59,11 +59,19 @@ class FmClient:
         token = self._auth.get_access_token(self._settings)
         request = urllib.request.Request(
             f"{self.base_url}{path}",
-            headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
+            headers={"Accept": accept, "Authorization": f"Bearer {token}"},
         )
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                return json.loads(response.read())
+                body = response.read()
+                if response.status == 204 or not body.strip():   # no content, e.g. a search with no hits
+                    return None
+                try:
+                    return json.loads(body)
+                except ValueError:
+                    log.error("Fusion Manage HTTP %s for %s was not JSON (%s): %r", response.status, path,
+                              response.headers.get("Content-Type"), body[:300])
+                    raise
         except urllib.error.HTTPError as exc:
             log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path,
                       exc.read()[:1000].decode("utf-8", "replace"))

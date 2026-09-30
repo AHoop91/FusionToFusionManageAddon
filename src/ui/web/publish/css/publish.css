@@ -34,6 +34,7 @@
 .pub-status-mismatch .pub-mark { background: #d98c00; }
 .pub-status-new .pub-mark { background: var(--accent); }
 .pub-status-unknown .pub-mark { background: var(--danger); }
+.pub-status-multiple .pub-mark { background: #8a5cc2; }
 .pub-status-unchecked .pub-mark { background: var(--accent); opacity: .5; }
 .pub-status-unmapped .pub-mark { background: transparent; border: 1px solid var(--muted); }
 .pub-table td.muted { color: var(--muted); }
@@ -75,7 +76,7 @@ main { display: flex; flex-direction: column; }
 }
 @media (max-width: 900px) {
   /* Each property becomes a card: name on top, then its value and Fusion Manage lines. */
-  .pub-props .card:not(.pub-props-head):not(.pub-props-wait):not(.pub-empty) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .pub-props .card:not(.pub-props-head):not(.pub-props-wait):not(.pub-empty):not(.pub-pick-card) { padding: 0; border: 0; background: transparent; box-shadow: none; }
   .pub-table, .pub-table tbody, .pub-table tr, .pub-table td { display: block; width: 100%; }
   .pub-table tr:first-of-type { display: none; }
   .pub-table tr {
@@ -121,11 +122,14 @@ main { display: flex; flex-direction: column; }
 .pub-tree-icon-assembly, .pub-tree-icon-root { border-right-color: var(--accent); }
 
 .pub-tree .pub-tree-status-col { width: 40px; padding: 0; text-align: center; }
-.pub-bom-mark { display: inline-block; width: 20px; height: 20px; line-height: 20px; border-radius: 50%; font-weight: 700; cursor: default; }
-.pub-bom-new { color: #fff; background: #2e9d4f; }
-.pub-bom-removed { color: #fff; background: #d13438; }
-.pub-bom-unchecked { color: var(--muted); }
-.pub-tree-removed td { color: var(--muted); text-decoration: line-through; }
+.pub-bom-mark { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; cursor: default; vertical-align: middle; }
+.pub-bom-mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.pub-bom-new { background: #2e9d4f; }
+.pub-bom-changed { background: #d98c00; }
+.pub-bom-removed { background: #d13438; }
+.pub-bom-unchecked { width: auto; color: var(--muted); }
+.pub-tree-removed td { color: var(--muted); }
+.pub-tree-removed .pub-tree-label, .pub-tree-removed td.num { text-decoration: line-through; text-decoration-color: #d13438; text-decoration-thickness: 1.5px; }
 
 /* Component list rows carry the tree icon and are indented by depth. */
 .pub-comp { display: flex; align-items: center; gap: 8px; }
@@ -172,7 +176,8 @@ main { display: flex; flex-direction: column; }
 .pub-subheading:hover { color: inherit; }
 
 /* Title card and drawings table */
-.pub-props-head { padding: 10px 12px; margin-bottom: 4px; }
+.pub-props-head { padding: 10px 12px; margin-bottom: 4px; display: flex; align-items: center; gap: 12px; }
+.pub-props-head .pub-props-title { flex: 1; min-width: 0; }
 .pub-props-head .pub-props-title { margin: 0; }
 .pub-drawing-cell { width: 1%; text-align: right; white-space: nowrap; }
 .pub-drawing-open { padding: 3px 12px; border: 1px solid var(--accent); border-radius: 4px; background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
@@ -235,3 +240,35 @@ main { display: flex; flex-direction: column; }
   .pub-seq-path { display: inline; }
   .pub-tree-label { flex: 1; min-width: 0; margin-left: 8px; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+/* Which of several Fusion Manage items is meant. */
+.pub-pick-card { display: flex; flex-direction: column; gap: 8px; padding: 24px; margin-top: 12px; }
+.pub-pick-card p { margin: 0 0 6px; }
+.pub-pick-title { margin: 0; font-size: 15px; font-weight: 600; }
+.pub-dup-note { display: flex; flex-direction: column; gap: 2px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid #8a5cc2; border-left-width: 4px; border-radius: 4px; background: #f3eefa; font-size: 12px; }
+.pub-dup-note strong { color: #6b3fa0; }
+.pub-fm-change { flex: none; border: 1px solid #8a5cc2; border-radius: 999px; padding: 2px 12px; background: #fff; color: #6b3fa0; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pub-fm-change:hover { text-decoration: underline; }
+.pub-fm-choice { text-align: left; padding: 7px 10px; border: 1px solid var(--border, #d0d0d0); border-radius: 4px; background: #fff; color: inherit; font: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pub-fm-choice:hover { border-color: var(--accent); }
+.pub-fm-choice.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+
+/* State pill at the top right of the component title. */
+.pub-pill { flex: none; padding: 2px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }
+.pub-pill-new { background: var(--ok); }
+.pub-pill-mismatch { background: #d98c00; }
+.pub-pill-match { background: var(--accent); }
+.pub-pill-multiple { background: #8a5cc2; }
+.pub-pill-unknown { background: var(--danger); }
+/* Validation progress and quick filters above the component list. */
+.pub-validation { padding: 4px 10px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border, #d0d0d0); }
+.pub-validation:empty { display: none; }
+.pub-validation p { margin: 0 0 4px; font-size: 12px; }
+.pub-progress { height: 4px; border-radius: 2px; background: var(--border, #d0d0d0); overflow: hidden; }
+.pub-progress span { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.pub-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.pub-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.pub-check input { margin: 0; accent-color: var(--accent); }
+
+.pub-qty-old { margin-right: 8px; color: var(--muted); }
+.pub-qty-new { font-weight: 600; }

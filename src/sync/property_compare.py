@@ -9,8 +9,9 @@ current value, and a status telling the user what publishing would do:
 * ``unmapped``: no field mapping uses this property; it is not published.
 * ``unknown``: mapped, but the Fusion Manage item could not be read.
 * ``unchecked``: mapped, but Fusion Manage has not been looked up (``fm_state`` ``unchecked``).
+* ``multiple``: mapped, but several Fusion Manage items match and none is chosen yet.
 
-``fm_state`` is ``found``, ``new`` (no item yet) or ``unknown`` (lookup failed).
+``fm_state`` is ``found``, ``new`` (no item yet), ``multiple`` (several items, none chosen), ``unknown`` (lookup failed) or ``unchecked``.
 """
 
 from typing import Any, Dict, List, Optional
@@ -22,7 +23,8 @@ from ..config.workspace_models import (
     FieldMapping,
 )
 
-MATCH, MISMATCH, NEW, UNMAPPED, UNKNOWN, UNCHECKED = "match", "mismatch", "new", "unmapped", "unknown", "unchecked"
+MATCH, MISMATCH, NEW, UNMAPPED, UNKNOWN, UNCHECKED, MULTIPLE = (
+    "match", "mismatch", "new", "unmapped", "unknown", "unchecked", "multiple")
 FOUND = "found"   # fm_state: the Fusion Manage item exists
 
 _LABELS = {f.field_id: f.label for f in SOURCE_FIELDS if f.kind == "property"}
@@ -77,8 +79,8 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
         fm_value = (fm_fields or {}).get(mapping.fm_field_id, "")
         if fm_state == UNCHECKED:
             status = UNCHECKED
-        elif fm_state == UNKNOWN:
-            status = UNKNOWN
+        elif fm_state in (UNKNOWN, MULTIPLE):
+            status = fm_state
         elif fm_state != FOUND:
             status = NEW
         else:
@@ -86,5 +88,5 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
         rows.append({"name": name, "value": value, "fm_field": mapping.fm_field_id,
                      "fm_value": fm_value, "status": status})
     # Mapped rows first, so what will change is at the top.
-    order = {MISMATCH: 0, NEW: 1, UNKNOWN: 2, MATCH: 3, UNCHECKED: 4, UNMAPPED: 5}
+    order = {MISMATCH: 0, NEW: 1, MULTIPLE: 2, UNKNOWN: 3, MATCH: 4, UNCHECKED: 5, UNMAPPED: 6}
     return sorted(rows, key=lambda r: (order[r["status"]], r["name"].lower()))
