@@ -6,16 +6,19 @@ reduced to ``{parent item number: [child lines]}`` for the BOM comparison.
 """
 
 import re
+import time
 from datetime import date
 from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
-from .client import FmClient
+from .client import FmApiError, FmClient
 from .items import FIELD_ID, display_text
 
 log = get_logger("fm.bom")
 
 QUANTITY_FIELDS = ("103", "293")   # quantity field ids seen in BOM views; others fall back to the first number
+ATTEMPTS = 4          # reads of a BOM that comes back empty
+RETRY_SECONDS = 1.5  # wait between them
 ACCEPT = "*/*"   # the answer is application/vnd.autodesk.plm.bom.bulk+json
 _REVISION = re.compile(r"\s*\[REV:[^\]]*\]\s*$")
 
@@ -88,10 +91,14 @@ class BomService:
         """
         path = (f"/api/v3/workspaces/{workspace_id}/items/{item_id}/bom"
                 f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias=release&rootId={item_id}")
-        data = self._client.get_json(path, accept=ACCEPT)
-        if isinstance(data, dict):
-            log.info("BOM answer for %s: %d node(s), %d edge(s)", path,
-                     len(data.get("nodes") or []), len(data.get("edges") or []))
-        else:
-            log.info("BOM answer for %s was %s", path, type(data).__name__)
-        return parse_bom(data)
+        # Right after start-up Fusion Manage can answer a BOM with no nodes at all, not even the root,
+        # and give the full answer a moment later. An item always has itself as a node, so read again.
+        for attempt in range(1, ATTEMPTS + 1):
+            data = self._client.get_json(path, accept=ACCEPT)
+            nodes = len(data.get("nodes") or []) if isinstance(data, dict) else 0
+            log.info("BOM answer for %s: %d node(s), attempt %d", path, nodes, attempt)
+            if nodes:
+                return parse_bom(data)
+            if attempt < ATTEMPTS:
+                time.sleep(RETRY_SECONDS)
+        raise FmApiError("Fusion Manage returned an empty Bill of Materials. Try again in a moment.")

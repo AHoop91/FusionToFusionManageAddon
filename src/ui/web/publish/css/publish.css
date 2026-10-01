@@ -97,7 +97,7 @@ main { display: flex; flex-direction: column; }
 .pub-tree th + th, .pub-tree td + td { border-left: 1px solid var(--border); }
 .pub-tree td { height: 32px; padding: 0 10px 0 0; border-top: 1px solid var(--border); vertical-align: middle; }
 .pub-tree td.num { padding: 0 10px; }
-.pub-tree .num { width: 25%; min-width: 60px; text-align: right; white-space: nowrap; }
+.pub-tree .num { width: 64px; min-width: 60px; text-align: right; white-space: nowrap; }
 .pub-tree th.num { text-align: left; }
 .pub-tree-root td { background: #eaf2fb; }
 .pub-tree-cell { display: flex; align-items: center; gap: 0; min-height: 32px; }
@@ -121,15 +121,6 @@ main { display: flex; flex-direction: column; }
 .pub-tree-icon { border-right: 3px solid #111; }
 .pub-tree-icon-assembly, .pub-tree-icon-root { border-right-color: var(--accent); }
 
-.pub-tree .pub-tree-status-col { width: 40px; padding: 0; text-align: center; }
-.pub-bom-mark { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; cursor: default; vertical-align: middle; }
-.pub-bom-mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
-.pub-bom-new { background: #2e9d4f; }
-.pub-bom-changed { background: #d98c00; }
-.pub-bom-removed { background: #d13438; }
-.pub-bom-unchecked { width: auto; color: var(--muted); }
-.pub-tree-removed td { color: var(--muted); }
-.pub-tree-removed .pub-tree-label, .pub-tree-removed td.num { text-decoration: line-through; text-decoration-color: #d13438; text-decoration-thickness: 1.5px; }
 
 /* Component list rows carry the tree icon and are indented by depth. */
 .pub-comp { display: flex; align-items: center; gap: 8px; }
@@ -228,7 +219,6 @@ main { display: flex; flex-direction: column; }
   .pub-tree tr, .pub-tree tr[hidden] { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
   .pub-tree th, .pub-tree td { display: flex; align-items: center; height: auto; min-height: 32px; }
   .pub-tree th + th, .pub-tree td + td { border-left: 0; }
-  .pub-tree .pub-tree-status-col { display: none; }
   .pub-tree .num { width: auto; min-width: 0; padding: 0 10px; justify-content: flex-end; }
   .pub-tree td.num:not(:empty)::before { content: "\00D7\00A0"; color: var(--muted); }
   .pub-tree td:first-child { display: block; padding: 0; height: auto; }
@@ -270,5 +260,58 @@ main { display: flex; flex-direction: column; }
 .pub-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
 .pub-check input { margin: 0; accent-color: var(--accent); }
 
-.pub-qty-old { margin-right: 8px; color: var(--muted); }
-.pub-qty-new { font-weight: 600; }
+/* ---- Bill of Materials: one table, ticks show where each line exists -------------- */
+/* Its own table (not .pub-tree), so the flat small-panel list above does not apply; it scrolls sideways when very narrow. */
+.pub-cmp-wrap { overflow-x: auto; }
+/* Filter buttons above the table: toggles, any number on at once. */
+.pub-cmp-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.pub-cmp-filter { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: inherit; cursor: pointer; }
+.pub-cmp-filter:hover { border-color: var(--accent); }
+.pub-cmp-filter.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pub-cmp-filter-right { margin-left: auto; }
+.pub-cmp-filter-count { font-size: 11px; opacity: .7; }
+.pub-cmp { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.pub-cmp th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px; background: #fff; border-bottom: 1px solid var(--border); }
+.pub-cmp th.num { text-align: right; padding-right: 10px; }
+.pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence, .pub-cmp td.pub-cmp-action { text-align: center; }
+.pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid var(--border); vertical-align: middle; }
+.pub-cmp tr:last-child td { border-bottom: 1px solid var(--border); }
+.pub-cmp td.num { padding: 0 10px; text-align: right; white-space: nowrap; }
+.pub-cmp .pub-tree-cell { padding-left: var(--indent, 0); }
+.pub-cmp .pub-tree-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pub-cmp .pub-tree-toggle { display: flex; }
+.pub-cmp .pub-tree-seq { margin: 0 8px 0 10px; }
+/* Fusion / Manage columns: a tick where the line exists. */
+.pub-cmp-tick { display: inline-flex; color: #2e9d4f; }
+.pub-cmp-tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.pub-cmp-none { color: #b4bcc8; }
+/* Status chip. */
+.pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 88px; padding: 2px 0; text-align: center; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.pub-cmp td.pub-cmp-status, .pub-cmp th.pub-cmp-status { text-align: center; }
+.pub-cmp-chip-match { color: #5b6677; background: #eef1f5; }
+.pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
+.pub-cmp-chip-add { color: #1d7a3a; background: #e3f4e8; }
+.pub-cmp-chip-changed { color: #a86400; background: #fdf0d8; }
+.pub-cmp-chip-extra { color: #4f5d73; background: #e6eaf0; }
+.pub-cmp-chip-pair { color: #5b6677; background: #e3e7ee; }
+.pub-cmp-chip-removed { color: #b3262a; background: #fbe4e5; }
+.pub-cmp-diff { color: #b87300; font-weight: 600; }
+.pub-cmp-qty-diff { font-weight: 600; color: #d98c00; }
+.pub-cmp-qty-fm { font-weight: 400; color: var(--muted); font-size: 11px; }
+/* A differing pair is two rows: the design line, then the Fusion Manage line. */
+.pub-cmp-fmline td { border-top-style: dashed; }
+/* Action buttons: always visible, since the table also has to work without hover. */
+.pub-cmp-actions { display: inline-flex; gap: 4px; }
+.pub-cmp-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--muted); cursor: pointer; }
+.pub-cmp-act:hover { color: var(--accent); border-color: var(--accent); }
+.pub-cmp-act.chosen { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pub-cmp-act-remove { color: #d13438; }
+.pub-cmp-act-remove:hover { color: #d13438; border-color: #d13438; }
+.pub-cmp-act-remove.chosen { background: #d13438; border-color: #d13438; color: #fff; }
+.pub-cmp-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+/* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
+.pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: #d13438; text-decoration-thickness: 1.5px; }
+.pub-cmp-hidden { flex: none; display: inline-flex; margin-left: 8px; color: var(--muted); }
+.pub-cmp-hidden svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pub-cmp-is-hidden .pub-cmp-item .pub-tree-label { color: var(--muted); font-style: italic; }
+.pub-cmp-extra .pub-cmp-item, .pub-cmp-extra td.num { color: var(--muted); }

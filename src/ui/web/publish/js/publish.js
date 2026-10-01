@@ -438,7 +438,7 @@
     const seen = {};   // a part used in several places is listed once
     const items = [{ id: root.component_id || '', root: true, item_number: root.item_number, part_number: root.part_number, title: [root.part_number, root.description].filter(Boolean).join(' - ') || 'This design' }]
       .concat(structureRows.filter(function (b) {
-        if (!b.id || seen[b.id]) return false;   // rows only Fusion Manage has (removed) have no component
+        if (!b.id || seen[b.id]) return false;   // rows only Fusion Manage has (extra) have no component
         seen[b.id] = true;
         return true;
       }).map(function (b) {
@@ -568,7 +568,7 @@
 
   /** Draw whichever panels have everything they need. */
   function renderReady() {
-    if (loaded.structure && structureRows) renderBom(structureRows);
+    if (loaded.structure && structureRows) { renderBom(structureRows); }
     if (loaded.structure && structureRows && loaded.properties && rootCompare) renderProperties();
   }
 
@@ -626,128 +626,16 @@
     return svg;
   }
 
-  // Change against the Fusion Manage BOM; rows stay "unchecked" when it could not be compared.
-  const BOM_CHANGE = {
-    new:       { icon: 'plus', mark: '+', text: 'New entry: publishing will add it to Fusion Manage' },
-    changed:   { icon: 'changed', mark: '≠', text: 'Quantity differs from Fusion Manage: publishing will update it' },
-    removed:   { icon: 'minus', mark: '−', text: 'Removed: publishing will remove it from Fusion Manage' },
-    unchecked: { mark: '·', text: 'Fusion Manage BOM is not checked yet' },
-  };
-
-  /** Crisp line icon for a BOM change mark. */
-  function bomIcon(kind) {
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 14 14');
-    const paths = { plus: ['M7 2.5v9', 'M2.5 7h9'], minus: ['M2.5 7h9'], changed: ['M3 5h8', 'M3 9h8'] };
-    paths[kind].forEach(function (d) {
-      const p = document.createElementNS(SVG_NS, 'path');
-      p.setAttribute('d', d);
-      svg.appendChild(p);
-    });
-    return svg;
-  }
-
+  /** Bill of Materials tab: the design and Fusion Manage lines in one compare table (bomsplit.js). */
   function renderBom(rows) {
     const host = clearPanel('pub-tab-bom');
     if (structurePick) { panelMessage('pub-tab-bom', 'Several Fusion Manage items match this design. Choose one on the Details tab to compare the Bill of Materials.'); return; }
     if (!rows.length) { panelMessage('pub-tab-bom', 'This item has no child components.'); return; }
-
-    // The open design is the first row; its parts sit one level below it.
-    const root = currentSummary || {};
-    const numbers = [];   // sequence number at each depth, to number rows 1, 2, 2.1, 2.2, 3 ...
-    const items = [{ level: 0, sequence: '', quantity: '', status: '', root: true,
-                     pn: root.part_number || root.item_number || '', name: root.description || (root.part_number || root.item_number ? '' : 'This design') }]
-      .concat(rows.map(function (b) {
-        numbers[b.level] = String(b.sequence);
-        return { level: b.level + 1, sequence: String(b.sequence), quantity: String(b.quantity), fmQuantity: String(b.fm_quantity || ''),
-                 path: numbers.slice(0, b.level + 1).join('.'),
-                 status: b.status || 'unchecked',
-                 pn: b.part_number, name: b.name };
-      }));
-
-    const t = el('table', 'pub-tree');
-    const head = el('tr');
-    head.appendChild(el('th', '', 'Descriptor'));
-    head.appendChild(el('th', 'num', 'Qty'));
-    head.appendChild(el('th', 'pub-tree-status-col', ''));
-    t.appendChild(head);
-
-    const collapsed = {};
-    const trs = [];
-    // Hide every row under a collapsed assembly.
-    function apply() {
-      let hideBelow = null;
-      trs.forEach(function (tr, i) {
-        const level = items[i].level;
-        if (hideBelow !== null && level > hideBelow) { tr.hidden = true; return; }
-        hideBelow = null;
-        tr.hidden = false;
-        if (collapsed[i]) hideBelow = level;
-      });
-    }
-
-    items.forEach(function (item, i) {
-      const tr = el('tr', item.root ? 'pub-tree-root' : '');
-      const cell = el('td');
-      const box = el('div', 'pub-tree-cell');
-      box.style.setProperty('--level', String(item.level));   // the stylesheet turns depth into indent
-      const toggle = el('button', 'pub-tree-toggle');
-      toggle.type = 'button';
-      const isAssembly = !!(items[i + 1] && items[i + 1].level > item.level);
-      if (isAssembly) {
-        toggle.appendChild(chevron());
-        toggle.setAttribute('aria-label', 'Collapse or expand');
-        toggle.addEventListener('click', function () {
-          collapsed[i] = !collapsed[i];
-          setChevron(toggle.firstChild, collapsed[i]);
-          apply();
-        });
-      } else {
-        toggle.disabled = true;
-      }
-      box.appendChild(toggle);
-      box.appendChild(treeIcon(item.root ? 'root' : isAssembly ? 'assembly' : 'part'));
-      if (item.sequence) {
-        // The wide tree shows the row's own number (nesting shows where it belongs); the flat
-        // list shows the full number, such as 2.1.
-        const seq = el('span', 'pub-tree-seq' + (isAssembly ? ' pub-tree-asm' : ''));
-        seq.appendChild(el('span', 'pub-seq-own', item.sequence));
-        seq.appendChild(el('span', 'pub-seq-path', item.path));
-        box.appendChild(seq);
-      }
-      const label = el('span', 'pub-tree-label');
-      label.title = [item.pn, item.name].filter(Boolean).join(' - ');   // full text when the row is cut short
-      if (item.pn) label.appendChild(el('span', 'pub-tree-pn', item.pn));
-      if (item.name) label.appendChild(el('span', 'pub-tree-name', item.name));
-      box.appendChild(label);
-      cell.appendChild(box);
-      tr.appendChild(cell);
-      const qty = el('td', 'num');
-      if (item.status === 'changed' && item.fmQuantity) {   // what Fusion Manage has, struck through, then the new quantity
-        qty.appendChild(el('s', 'pub-qty-old', item.fmQuantity));
-        qty.appendChild(el('span', 'pub-qty-new', item.quantity));
-        qty.title = 'Fusion Manage has ' + item.fmQuantity;
-      } else {
-        qty.textContent = item.quantity;
-      }
-      tr.appendChild(qty);
-      const state = el('td', 'pub-tree-status-col');
-      const change = BOM_CHANGE[item.status];
-      if (change) {
-        const mark = el('span', 'pub-bom-mark pub-bom-' + item.status);
-        if (change.icon) mark.appendChild(bomIcon(change.icon)); else mark.textContent = change.mark;
-        mark.title = change.text;
-        mark.setAttribute('aria-label', change.text);
-        state.appendChild(mark);
-      }
-      tr.appendChild(state);
-      if (item.status === 'removed') tr.classList.add('pub-tree-' + item.status);
-      t.appendChild(tr);
-      trs.push(tr);
-    });
-
-    host.appendChild(t);
+    ns.bomSplit.render(host, rows, currentSummary || {});
   }
+
+  // Drawing helpers the compare table (bomsplit.js) shares.
+  ns.pubTree = { el: el, treeIcon: treeIcon, chevron: chevron, setChevron: setChevron };
 
   /** Bouncing balls with a caption. */
   function loaderNode() {
@@ -819,7 +707,11 @@
       return;
     }
     if (name === 'properties') rootCompare = entry.data.compare;
-    else { structureRows = entry.data.rows; structurePick = !!entry.data.pick; }
+    else {
+      structureRows = entry.data.rows;
+      structurePick = !!entry.data.pick;
+      Object.keys(ns.bomSplit.decisions).forEach(function (k) { delete ns.bomSplit.decisions[k]; });   // fresh comparison: nothing is chosen yet
+    }
     if (reload && name === 'properties' && selectedItem) { paintProps(); return; }
     if (reload && name === 'structure') { renderBom(structureRows); return; }
     renderReady();
@@ -882,7 +774,10 @@
     bridge.on('get_fm_validation', handleValidation);
     ns.tabs.setup('.tabs[data-group="publish"]', 'tab', 'pub-tab-');
     document.querySelectorAll('.tabs[data-group="publish"] .tab').forEach(function (button) {
-      button.addEventListener('click', function () { ensureTab(button.dataset.tab); });
+      button.addEventListener('click', function () {
+        ensureTab(button.dataset.tab);
+        if (button.dataset.tab === 'bom') bridge.send('probe_hidden_fields');   // development: log candidate "hidden" fields
+      });
     });
     $('pub-refresh').addEventListener('click', function () { refresh(true); });
     // The palette stays open while the user switches designs. Clicking into it

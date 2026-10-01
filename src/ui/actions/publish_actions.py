@@ -73,28 +73,26 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     """Mark each BOM row against the Fusion Manage BOM of the open design. Runs on a worker thread.
 
     One BOM call, deep enough for the whole tree, covers every assembly. Rows stay
-    unchecked (no status) when Fusion Manage cannot be read. When the design matches
+    unchecked (no status) when the design is not compared. When the design matches
     several items and none is chosen, ``pick`` is set and the panel waits for the choice.
     """
     number = str(summary.get("item_number") or summary.get("part_number") or "").strip()
     if not cfg or not cfg.workspace_id or not number:
         return {"rows": rows, "pick": False}
-    try:
-        service = ItemService(fm)
-        hits = service.search(cfg.workspace_id, number)
-        if not hits:
-            return {"rows": compare_bom(rows, number, {}), "pick": False}   # the design is new, so every line is
-        picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
-        if not picked:
-            return {"rows": rows, "pick": True}
-        depth = max([int(r["level"]) for r in rows] + [0]) + 1
-        fm_bom = BomService(fm).read(cfg.workspace_id, picked["id"], depth)
-        log.info("Fusion Manage BOM of %s: %d parent(s), %d line(s)", number, len(fm_bom),
-                 sum(len(v) for v in fm_bom.values()))
-        return {"rows": compare_bom(rows, number, fm_bom), "pick": False}
-    except (FmApiError, AuthError) as exc:
-        log.warning("Fusion Manage BOM lookup failed: %s", exc)
-        return {"rows": rows, "pick": False}
+    # A Fusion Manage or sign-in failure is not caught: the section fails and the panel offers Retry,
+    # rather than caching a table that looks compared but is not.
+    service = ItemService(fm)
+    hits = service.search(cfg.workspace_id, number)
+    if not hits:
+        return {"rows": compare_bom(rows, number, {}), "pick": False}   # the design is new, so every line is
+    picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
+    if not picked:
+        return {"rows": rows, "pick": True}
+    depth = max([int(r["level"]) for r in rows] + [0]) + 1
+    fm_bom = BomService(fm).read(cfg.workspace_id, picked["id"], depth)
+    log.info("Fusion Manage BOM of %s: %d parent(s), %d line(s)", number, len(fm_bom),
+             sum(len(v) for v in fm_bom.values()))
+    return {"rows": compare_bom(rows, number, fm_bom), "pick": False}
 
 
 def _model_ref() -> Tuple[str, str]:

@@ -7,6 +7,7 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``workspace_actions``: Fusion Manage workspace validation.
 * ``property_actions``: the hub's custom properties for field mapping.
 * ``publish_actions``: the open model for the Publish Item panel.
+* ``bom_split_actions``: the Bill of Materials tab (currently a schema probe).
 * ``transfer_actions``: export and import the configuration file.
 
 ``register_actions`` is the only function the add-in entry point needs.
@@ -17,6 +18,7 @@ from ...config.config_service import ConfigService
 from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
 from .auth_actions import register_auth_actions
+from .bom_split_actions import register_bom_split_actions
 from .property_actions import register_property_actions
 from .publish_actions import register_publish_actions
 from .settings_actions import register_settings_actions
@@ -34,4 +36,5 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_workspace_actions(bridge, config, auth)
     register_property_actions(bridge, config, auth)
     register_publish_actions(bridge, config, auth)
+    register_bom_split_actions(bridge, config, auth)
     register_transfer_actions(bridge, config, dialogs)
