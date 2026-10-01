@@ -363,10 +363,43 @@
     });
   }
 
+  const MIN_WIDTH = 260;        // narrowest the pane can be dragged to
+  const MIN_BOM_WIDTH = 240;    // room always left for the bill of materials
+
+  /** Drag the pane's left edge to change its width; arrow keys nudge it, double-click restores the default. */
+  function initResize() {
+    const pane0 = $('pub-detail');
+    const handle = $('pub-detail-resize');
+    function setWidth(w) {
+      const max = Math.max(MIN_WIDTH, pane0.parentElement.getBoundingClientRect().width - MIN_BOM_WIDTH);
+      pane0.style.flexBasis = Math.min(max, Math.max(MIN_WIDTH, w)) + 'px';
+    }
+    let startX = 0;
+    let startWidth = 0;
+    handle.addEventListener('pointerdown', function (e) {
+      startX = e.clientX;
+      startWidth = pane0.getBoundingClientRect().width;
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('dragging');
+    });
+    handle.addEventListener('pointermove', function (e) {
+      if (handle.hasPointerCapture(e.pointerId)) setWidth(startWidth + startX - e.clientX);
+    });
+    handle.addEventListener('pointerup', function () { handle.classList.remove('dragging'); });
+    handle.addEventListener('dblclick', function () { pane0.style.flexBasis = ''; });
+    handle.addEventListener('keydown', function (e) {
+      const step = e.key === 'ArrowLeft' ? 20 : e.key === 'ArrowRight' ? -20 : 0;
+      if (!step) return;
+      e.preventDefault();
+      setWidth(pane0.getBoundingClientRect().width + step);
+    });
+  }
+
   function init(options) {
     hooks = options;
     pane = $('pub-props');
     $('pub-detail-close').addEventListener('click', close);
+    initResize();
     $('pub-backdrop').addEventListener('click', close);   // only drawn in the small layout, where the details are a popup
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && selected) close(); });
   }
