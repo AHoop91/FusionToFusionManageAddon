@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="../shared/css/components.css">
   <!-- Publish panel styles -->
   <link rel="stylesheet" href="css/publish.css">
+  <link rel="stylesheet" href="css/bom.css">
+  <link rel="stylesheet" href="css/details.css">
 </head>
 <body>
   <!-- Shared top bar, filled in by shell.js. -->
@@ -43,22 +45,25 @@
       <div class="balls" role="status" aria-label="Loading item"><span></span><span></span><span></span></div>
       <p class="muted">Loading item...</p>
     </div>
-  
-      <div id="pub-content" class="view" hidden>
+
+    <div id="pub-content" class="view" hidden>
       <!-- Summary of the open model, filled in by publish.js. -->
       <div class="pub-summary">
         <div id="pub-thumb" class="pub-thumb" aria-hidden="true"></div>
         <div id="pub-summary" class="pub-summary-text"><p class="muted">Loading...</p></div>
       </div>
-  
-      <nav class="tabs" data-group="publish" role="tablist">
-        <button class="tab active" data-tab="details">Details</button>
-        <button class="tab" data-tab="bom">Bill of Materials</button>
-      </nav>
-  
-      <main>
-        <section id="pub-tab-details" class="tab-panel active" data-group="publish"></section>
-        <section id="pub-tab-bom" class="tab-panel" data-group="publish"></section>
+
+      <!-- The bill of materials; a row click opens that component's details beside it. -->
+      <main class="pub-main">
+        <section id="pub-bom" class="pub-bom"></section>
+        <div id="pub-backdrop" class="pub-backdrop" hidden></div>
+        <aside id="pub-detail" class="pub-detail" hidden>
+          <div class="pub-detail-header">
+            <span class="pub-detail-title">Details Panel</span>
+            <button id="pub-detail-close" class="pub-detail-close" type="button" title="Close details" aria-label="Close details">&times;</button>
+          </div>
+          <div id="pub-props" class="pub-props"></div>
+        </aside>
       </main>
 
       <!-- Actions for the open item. -->
@@ -75,9 +80,11 @@
   <script src="../shared/js/shell.js"></script>
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
-  <script src="../shared/js/tabs.js"></script>
   <!-- Publish panel -->
-  <script src="js/bomsplit.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/bom-model.js"></script>
+  <script src="js/bom-table.js"></script>
+  <script src="js/details.js"></script>
   <script src="js/publish.js"></script>
 </body>
 </html>

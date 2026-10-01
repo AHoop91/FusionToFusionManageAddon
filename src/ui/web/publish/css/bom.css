@@ -1,0 +1,105 @@
+/* ==========================================================================
+   Publish Item panel: Bill of Materials compare table. One table, ticks show where each
+   line exists. It scrolls sideways when very narrow.
+   ========================================================================== */
+
+/* ---- Item cell: indent, chevron, icon, sequence and label ------------------ */
+.pub-tree-cell { display: flex; align-items: center; min-height: 32px; padding-left: var(--indent, 0); }
+.pub-tree-label { padding: 4px 0; overflow-wrap: anywhere; }
+.pub-tree-pn + .pub-tree-name::before { content: " - "; }
+.pub-tree-toggle {
+  flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  padding: 0; border: 0; background: transparent; color: var(--text, inherit); cursor: pointer;
+}
+.pub-tree-toggle:disabled { cursor: default; }
+.pub-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-tree-icon {
+  flex: none; align-self: stretch; display: flex; align-items: center; justify-content: center; width: 32px;
+  background: #fff; border-left: 1px solid var(--border); border-right: 3px solid #111;
+}
+.pub-tree-icon svg { fill: none; stroke: #111; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.pub-tree-icon-assembly, .pub-tree-icon-root { border-right-color: var(--accent); }
+.pub-tree-icon-assembly svg, .pub-tree-icon-root svg { stroke: var(--accent); }
+.pub-tree-seq { flex: none; min-width: 14px; margin: 0 8px 0 10px; font-weight: 600; }
+.pub-tree-icon + span:not(.pub-tree-seq) { margin-left: 10px; }
+
+/* ---- The table --------------------------------------------------------------- */
+.pub-cmp-wrap { overflow-x: auto; }
+/* A row opens its component's details; the open one stays marked. */
+.pub-cmp-pick { cursor: pointer; }
+.pub-cmp-pick:hover > td { background: var(--surface); }
+.pub-cmp-pick.selected > td { background: #eaf2fb; }
+.pub-cmp-pick.selected > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Filter buttons above the table: toggles, any number on at once. */
+.pub-cmp-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.pub-cmp-filter { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: inherit; cursor: pointer; }
+.pub-cmp-filter:hover { border-color: var(--accent); }
+.pub-cmp-filter.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pub-cmp-filter-right { margin-left: auto; }
+.pub-cmp-filter-count { font-size: 11px; opacity: .7; }
+
+.pub-cmp { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.pub-cmp th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px; background: #fff; border-bottom: 1px solid var(--border); }
+.pub-cmp th.num { text-align: right; padding-right: 10px; }
+.pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence, .pub-cmp td.pub-cmp-action { text-align: center; }
+.pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid var(--border); vertical-align: middle; }
+.pub-cmp tr:last-child td { border-bottom: 1px solid var(--border); }
+.pub-cmp td.num { padding: 0 10px; text-align: right; white-space: nowrap; }
+.pub-cmp .pub-tree-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Fusion / Manage columns: a tick where the line exists. */
+.pub-cmp-tick { display: inline-flex; color: #2e9d4f; }
+.pub-cmp-tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.pub-cmp-none { color: #b4bcc8; }
+
+/* Status chip. */
+.pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 88px; padding: 2px 0; text-align: center; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.pub-cmp td.pub-cmp-status, .pub-cmp th.pub-cmp-status { text-align: center; }
+.pub-cmp-chip-match { color: #5b6677; background: #eef1f5; }
+.pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
+.pub-cmp-chip-changed { color: #a86400; background: #fdf0d8; }
+.pub-cmp-chip-extra { color: #4f5d73; background: #e6eaf0; }
+.pub-cmp-chip-pair { color: #5b6677; background: #e3e7ee; }
+.pub-cmp-chip-removed { color: #b3262a; background: #fbe4e5; }
+.pub-cmp-diff { color: #b87300; font-weight: 600; }
+.pub-cmp-qty-diff { font-weight: 600; color: #d98c00; }
+.pub-cmp-qty-fm { font-weight: 400; color: var(--muted); font-size: 11px; }
+
+/* A differing pair is two rows: the design line, then the Fusion Manage line. */
+.pub-cmp-fmline td { border-top-style: dashed; }
+/* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
+.pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: #d13438; text-decoration-thickness: 1.5px; }
+
+/* Action buttons: always visible, since the table also has to work without hover. */
+.pub-cmp-actions { display: inline-flex; gap: 4px; }
+.pub-cmp-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--muted); cursor: pointer; }
+.pub-cmp-act:hover { color: var(--accent); border-color: var(--accent); }
+.pub-cmp-act.chosen { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pub-cmp-act-remove { color: #d13438; }
+.pub-cmp-act-remove:hover { color: #d13438; border-color: #d13438; }
+.pub-cmp-act-remove.chosen { background: #d13438; border-color: #d13438; color: #fff; }
+.pub-cmp-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Hidden components and lines only Fusion Manage has are quieter. */
+.pub-cmp-hidden { flex: none; display: inline-flex; margin-left: 8px; color: var(--muted); }
+.pub-cmp-hidden svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pub-cmp-is-hidden .pub-cmp-item .pub-tree-label { color: var(--muted); font-style: italic; }
+.pub-cmp-extra .pub-cmp-item, .pub-cmp-extra td.num { color: var(--muted); }
+
+/* Small panel: the table is a compact list (Item, Qty, Status, Actions; the Fusion and Manage ticks are what the status chip says). */
+@media (max-width: 760px) {
+  .pub-cmp { min-width: 0; }
+  .pub-cmp col:nth-child(2), .pub-cmp col:nth-child(3), .pub-cmp th:nth-child(2), .pub-cmp th:nth-child(3),
+  .pub-cmp td:nth-child(2), .pub-cmp td:nth-child(3) { display: none; }
+  .pub-cmp col:nth-child(4) { width: 44px !important; }
+  .pub-cmp col:nth-child(5) { width: 76px !important; }
+  .pub-cmp col:nth-child(6) { width: 56px !important; }
+  .pub-cmp td.num { padding: 0 6px; }
+  .pub-cmp-chip { width: 68px; font-size: 9px; letter-spacing: .02em; }
+  .pub-cmp-actions { gap: 2px; }
+  .pub-cmp .pub-tree-seq { margin: 0 6px 0 8px; }
+  .pub-tree-cell { height: 100%; min-width: 0; }
+  .pub-tree-icon { width: 24px; border-left: 0; border-right-width: 2px; }
+  .pub-tree-label { flex: 1; min-width: 0; margin-left: 8px; padding: 0; }
+}
