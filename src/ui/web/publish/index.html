@@ -55,12 +55,18 @@
 
       <!-- The bill of materials; a row click opens that component's details beside it. -->
       <main class="pub-main">
-        <section id="pub-bom" class="pub-bom"></section>
+        <div class="pub-bom-pane">
+          <div class="pub-pane-header">
+            <span class="pub-pane-title">Bill of Materials</span>
+            <button id="pub-add-items" class="btn pub-pane-action" type="button">Add Items</button>
+          </div>
+          <section id="pub-bom" class="pub-bom"></section>
+        </div>
         <div id="pub-backdrop" class="pub-backdrop" hidden></div>
         <aside id="pub-detail" class="pub-detail" hidden>
           <div id="pub-detail-resize" class="pub-detail-resize" role="separator" aria-orientation="vertical" aria-label="Resize details" title="Drag to resize (double-click to reset)" tabindex="0"></div>
-          <div class="pub-detail-header">
-            <span class="pub-detail-title">Details Panel</span>
+          <div class="pub-pane-header">
+            <span class="pub-pane-title">Details Panel</span>
             <button id="pub-detail-close" class="pub-detail-close" type="button" title="Close details" aria-label="Close details">&times;</button>
           </div>
           <div id="pub-props" class="pub-props"></div>

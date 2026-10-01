@@ -8,9 +8,7 @@
 /* Runs the full height of the area, flush with its top, right and bottom edges (cancels the 16px padding of main). */
 .pub-detail { display: flex; flex-direction: column; flex: 0 0 44%; min-width: 260px; margin: -16px -16px -16px 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); position: relative; container: details / inline-size; }
 .pub-detail[hidden] { display: none; }
-/* Title bar in the same grey as the top bar, with the close button at its right; the content below it scrolls. */
-.pub-detail-header { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 8px 16px; background: var(--header-bg); border-bottom: 1px solid var(--header-border); }
-.pub-detail-title { font-size: 13px; font-weight: 600; }
+/* Its title bar (.pub-pane-header) has the close button at its right; the content below it scrolls. */
 .pub-detail-close {
   width: 26px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 50%;
   background: #fff; color: inherit; font-size: 16px; line-height: 1; cursor: pointer;
