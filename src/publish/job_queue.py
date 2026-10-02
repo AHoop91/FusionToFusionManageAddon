@@ -6,10 +6,10 @@ when none is waiting.
 """
 
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..core.logging_setup import get_logger
-from .runner import DONE, FINISHED, QUEUED, PublishRun
+from .runner import DONE, ERROR, FINISHED, QUEUED, RUNNING, PublishRun
 
 log = get_logger("publish_queue")
 
@@ -17,7 +17,10 @@ log = get_logger("publish_queue")
 class JobQueue:
     """Publish runs in the order they were added; finished ones stay listed until cleared."""
 
-    def __init__(self) -> None:
+    def __init__(self, on_change: Optional[Callable[[], None]] = None,
+                 on_finished: Optional[Callable[[PublishRun], None]] = None) -> None:
+        self._on_change = on_change   # called (from any thread) whenever the state of the queue may have changed
+        self._on_finished = on_finished   # called on the worker thread when a run has ended
         self._runs: List[PublishRun] = []
         self._lock = threading.Lock()
         self._worker: Optional[threading.Thread] = None
@@ -29,6 +32,7 @@ class JobQueue:
                 self._worker = threading.Thread(target=self._loop, name="MfgToFm_PublishQueue", daemon=True)
                 self._worker.start()
         log.info("Publish run %s queued: %s", run.id, run.name)
+        self._changed()
 
     def get(self, run_id: str) -> Optional[PublishRun]:
         with self._lock:
@@ -38,10 +42,21 @@ class JobQueue:
         run = self.get(run_id)
         if run:
             run.cancel()
+            self._changed()
 
     def clear_finished(self) -> None:
         with self._lock:
             self._runs = [r for r in self._runs if r.phase not in FINISHED]
+        self._changed()
+
+    def state(self) -> str:
+        """'running' while a run waits or works, else 'error' while a listed run failed, else 'idle'."""
+        with self._lock:
+            runs = list(self._runs)
+        if any(r.phase in (QUEUED, RUNNING) for r in runs):
+            return "running"
+        failed = any(r.phase == ERROR or any(row["status"] == "error" for row in r.rows) for r in runs)
+        return "error" if failed else "idle"
 
     def snapshots(self) -> List[Dict[str, Any]]:
         """Every run, oldest first; a waiting run also says its place in the queue."""
@@ -64,11 +79,28 @@ class JobQueue:
                 if run is None:
                     self._worker = None
                     return
+            self._changed()
             try:
                 run.work()
             except Exception:   # work reports its own failures; this only keeps the queue alive
                 log.exception("Publish run %s crashed", run.id)
+            self._finished(run)
             self._drop_if_clean(run)
+            self._changed()
+
+    def _finished(self, run: PublishRun) -> None:
+        if self._on_finished:
+            try:
+                self._on_finished(run)
+            except Exception:   # a failed notification must not stop the queue
+                log.exception("Reporting run %s failed", run.id)
+
+    def _changed(self) -> None:
+        if self._on_change:
+            try:
+                self._on_change()
+            except Exception:   # a failed notification must not stop the queue
+                log.exception("Reporting the state of the queue failed")
 
     def _drop_if_clean(self, run: PublishRun) -> None:
         """A run that finished with every item done has nothing left to show; failed or cancelled ones stay until cleared."""

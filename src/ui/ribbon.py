@@ -124,8 +124,10 @@ class Ribbon:
                 panel = tab.toolbarPanels.itemById(panel_id) \
                     or tab.toolbarPanels.add(panel_id, ribbon_panel.name)
                 for definition in definitions[ribbon_panel.panel_id]:
-                    if panel.controls.itemById(definition.id) is None:
-                        panel.controls.addCommand(definition)
+                    control = panel.controls.itemById(definition.id) or panel.controls.addCommand(definition)
+                    # Promoted controls show as buttons on the panel; the others go into its dropdown.
+                    control.isPromotedByDefault = True
+                    control.isPromoted = True
 
     def unregister(self) -> None:
         """Remove tabs, panels and command definitions. Safe to call repeatedly."""

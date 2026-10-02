@@ -18,6 +18,8 @@ from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
+from ..job_alerts import JobAlerts
+from ..jobs_badge import JobsBadge
 from .auth_actions import register_auth_actions
 from .bom_split_actions import register_bom_split_actions
 from .linkable_actions import register_linkable_actions
@@ -31,7 +33,7 @@ from .workspace_actions import register_workspace_actions
 
 
 def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
-                     dialogs: FileDialogs) -> None:
+                     dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
     """Register every palette action on ``bridge``."""
     # Diagnostic round trip used to verify the palette bridge is alive.
     bridge.register("ping", lambda _payload: {"message": "pong"})
@@ -40,7 +42,7 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_workspace_actions(bridge, config, auth)
     register_property_actions(bridge, config, auth)
     register_publish_actions(bridge, config, auth)
-    register_publish_run_actions(bridge, config, auth, dialogs)
+    register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)
     register_bom_split_actions(bridge, config, auth)
     register_publish_probe_actions(bridge, config, auth)
     register_linkable_actions(bridge, config, auth)

@@ -13,19 +13,62 @@ from ...core.logging_setup import get_logger
 from ...fm.client import FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
-from ...publish.runner import PublishRun
+from ...publish.runner import ERROR, DONE, PublishRun
 from ...publish.writer import PublishFolder
 from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
+from ..job_alerts import JobAlerts
+from ..jobs_badge import JobsBadge
 from .publish_actions import ITEMS_KIND, _model_ref
 
 log = get_logger("publish_run")
 
+MAX_LISTED = 5   # failed items named in the message box; the Job Queue lists them all
+
+
+def _requests(run: PublishRun, method: str) -> int:
+    """How many items the run wrote a request of this kind for (POST creates an item, PATCH updates one)."""
+    return sum(1 for entry in list(run.folder.entries)
+               if entry["artifact"] == "item request" and entry["status"] == "ok" and entry["detail"].startswith(method + " "))
+
+
+def _report(run: PublishRun) -> str:
+    """The text of the message box for a run that ended: how many items it processed, created and updated, and what failed."""
+    failed = [row for row in run.rows if row["status"] == "error"]
+    if run.phase == ERROR:
+        return "\n".join([f"Publish of {run.name} could not be completed.", "", f"Reason: {run.message}"])
+    lines = [f"Publish of {run.name} completed successfully." if not failed
+             else f"Publish of {run.name} completed with errors: {len(failed)} of {run.total} item(s) failed.", ""]
+    for row in failed[:MAX_LISTED]:
+        lines.append(f"  - {row['item']}: {(row['detail'] or 'Failed.')[:160]}")
+    if len(failed) > MAX_LISTED:
+        lines.append(f"  - and {len(failed) - MAX_LISTED} more")
+    if failed:
+        lines.append("")
+    lines += [f"Total Items Processed: {run.done}",
+              f"Total Items Created: {_requests(run, 'POST')}",
+              f"Total Items Updated: {_requests(run, 'PATCH')}", "",
+              "The requests were written for review. Nothing has been sent to Fusion Manage yet."]
+    if failed:
+        lines.append("Open the Job Queue for the full reason of each failure.")
+    return "\n".join(lines)
+
 
 def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
-                                 dialogs: FileDialogs) -> None:
+                                 dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
     """Register the publish actions; the queue lives as long as the add-in."""
-    queue = JobQueue()
+
+    def announce(run: PublishRun) -> None:
+        """A run that ends gets a message box, a warning when it failed or had failed items (the panels may be closed)."""
+        if run.phase == ERROR:
+            alerts.alert(_report(run), "Publish failed")
+        elif run.phase == DONE and any(row["status"] == "error" for row in run.rows):
+            alerts.alert(_report(run), "Publish completed with errors")
+        elif run.phase == DONE:
+            alerts.done(_report(run), "Publish complete")
+
+    # The Job Queue button on the ribbon shows whether runs are working or have failed.
+    queue = JobQueue(lambda: badge.update(queue.state()), announce)
 
     def jobs() -> Dict[str, Any]:
         return {"jobs": queue.snapshots()}

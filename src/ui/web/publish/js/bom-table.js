@@ -30,6 +30,7 @@
   const FILTERS = [
     { id: 'review',  label: 'Review',      title: 'Item number differs from Fusion Manage and no action is chosen yet' },
     { id: 'new',     label: 'New',         title: 'Not in Fusion Manage yet, with the Fusion Manage line each is paired with' },
+    { id: 'added',   label: 'Added',       title: 'Picked with Add Items: publishing adds them to the Fusion Manage BOM' },
     { id: 'changed', label: 'Updates',     title: 'Quantity differs from Fusion Manage' },
     { id: 'extra',   label: 'Fusion Manage Only', title: 'Only in Fusion Manage' },
     { id: 'hidden',  label: 'Show Hidden Components', title: 'Hidden in the Fusion component tree', right: true },
@@ -39,6 +40,7 @@
   const SLOT = 32;   // width of a chevron or icon box; every level steps in by this much
 
   let selectedId = null;   // component whose details are open, so its rows stay highlighted across redraws
+  let seenStaged = new Set();   // picked lines already drawn, so only a new one animates in
   let current = null;      // { items, trs } of the table on screen
 
   function selectionKey(c) {
@@ -145,7 +147,11 @@
     b.title = 'Do not add ' + item.fm.pn + ' to the Fusion Manage BOM';
     b.setAttribute('aria-label', b.title);
     b.appendChild(ui.svg(['M5 12h14']));
-    b.addEventListener('click', function () { model.unstage(item.stagedId); redraw(); });
+    b.addEventListener('click', function () {
+      model.unstage(item.stagedId);
+      ns.pubToast.show('Removed ' + item.fm.pn + ' from the added items', { tone: 'info' });
+      redraw();
+    });
     box.appendChild(b);
     return box;
   }
@@ -164,7 +170,11 @@
         const clean = input.value.replace(/[^0-9.]/g, '').replace(/^([^.]*\.)(.*)$/, function (_, head, tail) { return head + tail.replace(/\./g, ''); });
         if (clean !== input.value) input.value = clean;
       });
-      input.addEventListener('change', function () { input.value = model.setStagedQuantity(item.stagedId, input.value); });
+      input.addEventListener('change', function () {
+        const typed = input.value;
+        input.value = model.setStagedQuantity(item.stagedId, typed);
+        if (Number(typed) !== Number(input.value)) ns.pubToast.show('Quantity must be a number above 0', { tone: 'error' });
+      });
       td.appendChild(input);
       return td;
     }
@@ -312,8 +322,11 @@
     const table = el('table', 'pub-cmp');
     tableHead().forEach(function (node) { table.appendChild(node); });
 
+    const seenBefore = seenStaged;
+    seenStaged = new Set(items.filter(function (item) { return item.stagedId !== undefined; }).map(function (item) { return item.stagedId; }));
     items.forEach(function (item, i) {
-      const tr = el('tr', 'pub-cmp-row pub-cmp-' + item.status + (item.hidden ? ' pub-cmp-is-hidden' : ''));
+      const fresh = item.stagedId !== undefined && !seenBefore.has(item.stagedId);   // picked since the last draw
+      const tr = el('tr', 'pub-cmp-row pub-cmp-' + item.status + (item.hidden ? ' pub-cmp-is-hidden' : '') + (fresh ? ' pub-cmp-fresh' : ''));
       const isAssembly = !!(items[i + 1] && items[i + 1].level > item.level);
       const toggle = chevronLevels[item.level] ? el('button', 'pub-tree-toggle') : null;
       if (toggle) toggle.type = 'button';

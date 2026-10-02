@@ -142,7 +142,8 @@
     let groups;
     switch (item.status) {
       case 'mismatch': groups = decisions[item.key] ? ['new', 'extra'] : ['new', 'review', 'extra']; break;   // its Fusion Manage line is only in Fusion Manage
-      case 'added': case 'linked': groups = ['new']; break;
+      case 'added': groups = ['new']; break;
+      case 'linked': groups = ['added']; break;   // picked with Add Items
       case 'kept': groups = ['extra']; break;
       case 'root': groups = []; break;
       default: groups = [item.status];
