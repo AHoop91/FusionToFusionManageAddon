@@ -22,6 +22,7 @@
     added:   { tone: 'new',     label: 'New',           text: 'Publishing adds this line to the Fusion Manage BOM' },
     kept:    { tone: 'extra',   label: 'Keep',          text: 'Publishing keeps this Fusion Manage line, renumbered at the end of the BOM' },
     extra:   { tone: 'extra',   label: 'FM only',       text: 'Only in Fusion Manage: kept, publishing never removes lines' },
+    linked:  { tone: 'added',   label: 'Added',        text: 'Picked with Add Items: publishing adds this Fusion Manage item to the end of the Fusion Manage BOM' },
   };
   const PAIR_ASK = 'Item number differs from the Fusion Manage line at this position: choose an action';
 
@@ -70,7 +71,7 @@
   }
 
   /** Item cell: indent (``item.iconX`` is where the icon starts), chevron (when ``toggle`` is given), icon, sequence, part number and name. */
-  function itemCell(side, item, isAssembly, toggle) {
+  function itemCell(side, item, isAssembly, toggle, actions) {
     const td = el('td', 'pub-cmp-item');
     const box = el('div', 'pub-tree-cell');
     box.style.setProperty('--indent', (item.iconX - (toggle ? SLOT : 0)) + 'px');
@@ -83,6 +84,7 @@
     if (side.name) label.appendChild(el('span', 'pub-tree-name', side.name));
     box.appendChild(label);
     if (item.hidden) box.appendChild(hiddenIcon());
+    if (actions) box.appendChild(actions);   // at the end of the item; shown while the row is hovered
     td.appendChild(box);
     return td;
   }
@@ -130,9 +132,39 @@
     return td;
   }
 
-  /** Quantity: the design's, or the Fusion Manage line's for a line only it has; a differing Fusion Manage quantity is shown beside it. */
+  /** A line drawn from its Fusion Manage side: one only Fusion Manage has, or one picked with Add Items. */
+  function fromFm(item) {
+    return item.status === 'extra' || item.status === 'kept' || item.status === 'linked';
+  }
+
+  /** Remove button of a line picked with Add Items. */
+  function unstageActions(item, redraw) {
+    const box = el('span', 'pub-cmp-actions');
+    const b = el('button', 'pub-cmp-act pub-cmp-act-remove');
+    b.type = 'button';
+    b.title = 'Do not add ' + item.fm.pn + ' to the Fusion Manage BOM';
+    b.setAttribute('aria-label', b.title);
+    b.appendChild(ui.svg(['M5 12h14']));
+    b.addEventListener('click', function () { model.unstage(item.stagedId); redraw(); });
+    box.appendChild(b);
+    return box;
+  }
+
+  /** Quantity: the design's, or the Fusion Manage line's for a line only it has; a differing Fusion Manage quantity is shown beside it. A line picked with Add Items has a box to edit it. */
   function quantityCell(item) {
-    const td = el('td', 'num pub-cmp-qty', item.status === 'extra' || item.status === 'kept' ? item.fm.quantity : item.design.quantity);
+    if (item.status === 'linked') {
+      const td = el('td', 'num pub-cmp-qty');
+      const input = el('input', 'pub-cmp-qty-input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.value = item.fm.quantity;
+      input.title = 'Quantity of this line in the Fusion Manage BOM';
+      input.setAttribute('aria-label', 'Quantity of ' + item.fm.pn);
+      input.addEventListener('change', function () { input.value = model.setStagedQuantity(item.stagedId, input.value); });
+      td.appendChild(input);
+      return td;
+    }
+    const td = el('td', 'num pub-cmp-qty', fromFm(item) ? item.fm.quantity : item.design.quantity);
     if (item.status === 'changed') {
       td.classList.add('pub-cmp-qty-diff');
       td.appendChild(el('span', 'pub-cmp-qty-fm', ' (FM ' + item.fm.quantity + ')'));
@@ -141,9 +173,8 @@
   }
 
   /** Icon buttons on the Fusion Manage line of a differing pair: keep both lines, or remove this one. A kept line has them too, to undo the choice. */
-  function actionCell(item, redraw) {
-    const td = el('td', 'pub-cmp-action');
-    if (!item.key || item.status === 'added') return td;
+  function actionButtons(item, redraw) {
+    if (!item.key || item.status === 'added') return null;
     const box = el('span', 'pub-cmp-actions');
     [['add', 'Keep both: add ' + item.design.pn + ' and keep ' + item.fm.pn, ['M5 12l5 5L20 7']],
      ['remove', 'Remove ' + item.fm.pn + ' from Fusion Manage and add ' + item.design.pn, ['M5 12h14']]].forEach(function (a) {
@@ -158,8 +189,7 @@
       });
       box.appendChild(b);
     });
-    td.appendChild(box);
-    return td;
+    return box;
   }
 
   // ---- The table -----------------------------------------------------------------
@@ -206,10 +236,18 @@
     return bar;
   }
 
-  /** Rows that pass the filters, plus the assemblies above them so a row keeps its place in the tree; null when no filter is on. */
+  /**
+   * Rows that pass the filters, plus the assemblies above them so a row keeps its place in the tree; null when nothing is left out.
+   * Show Hidden Components is not a filter of its own: off, components hidden in Fusion are left out; on, they join the rest.
+   */
   function visibleByFilter(items) {
-    if (!Object.keys(filters).length) return null;
-    const show = items.map(function (item) { return item.root || model.groupsOf(item).some(function (g) { return filters[g]; }); });
+    const groupOn = Object.keys(filters).some(function (id) { return id !== 'hidden'; });
+    if (!groupOn && filters.hidden) return null;
+    const show = items.map(function (item) {
+      if (item.root) return true;
+      if (item.hidden && !filters.hidden) return false;
+      return !groupOn || model.groupsOf(item).some(function (g) { return g !== 'hidden' && filters[g]; });
+    });
     let need = Infinity;   // level a row must be below to be the ancestor of a shown row further down
     for (let i = items.length - 1; i >= 0; i--) {
       if (show[i]) need = Math.min(need, items[i].level);
@@ -221,13 +259,13 @@
   /** Column widths and the header row. */
   function tableHead() {
     const cols = el('colgroup');
-    ['', '64px', '64px', '84px', '116px', '64px'].forEach(function (w) {
+    ['', '64px', '64px', '84px', '116px'].forEach(function (w) {
       const col = el('col');
       if (w) col.style.width = w;
       cols.appendChild(col);
     });
     const head = el('tr');
-    [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num'], ['Status', 'pub-cmp-status'], ['Actions', 'pub-cmp-center']].forEach(function (h) {
+    [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num'], ['Status', 'pub-cmp-status']].forEach(function (h) {
       head.appendChild(el('th', h[1], h[0]));
     });
     return [cols, head];
@@ -236,9 +274,10 @@
   /**
    * Draw the compare table into ``host``.
    * ``rows`` are the compared BOM rows (tree order, ``level`` 0 = child of the root);
-   * ``root`` is the open design's summary; ``onSelect(component)`` is called when a row is clicked.
+   * ``root`` is the open design's summary; ``onSelect(component)`` is called when a row is clicked;
+   * ``onReview(pending)`` is called after each draw with the number of lines still waiting for a choice.
    */
-  function render(host, rows, root, onSelect) {
+  function render(host, rows, root, onSelect, onReview) {
     const items = model.arrange(model.buildItems(rows, root));
     const chevronLevels = {};
     items.forEach(function (item, i) { if (items[i + 1] && items[i + 1].level > item.level) chevronLevels[item.level] = true; });
@@ -261,7 +300,7 @@
     }
     function redraw() {
       host.removeChild(view);
-      render(host, rows, root, onSelect);
+      render(host, rows, root, onSelect, onReview);
     }
 
     const view = el('div', 'pub-cmp-view');
@@ -287,13 +326,13 @@
       }
 
       // A line only Fusion Manage has is drawn from its own side; every other row from the design's.
-      const fmOnly = item.status === 'extra' || item.status === 'kept';
-      tr.appendChild(itemCell(fmOnly ? item.fm : item.design, item, isAssembly, toggle));
+      const fmOnly = fromFm(item);
+      const actions = item.status === 'kept' ? actionButtons(item, redraw) : item.status === 'linked' ? unstageActions(item, redraw) : null;
+      tr.appendChild(itemCell(fmOnly ? item.fm : item.design, item, isAssembly, toggle, actions));
       tr.appendChild(presenceCell(!fmOnly, 'the design'));
-      tr.appendChild(presenceCell(item.status !== 'new' && item.status !== 'mismatch' && item.status !== 'added', 'Fusion Manage'));
+      tr.appendChild(presenceCell(!['new', 'mismatch', 'added', 'linked'].includes(item.status), 'Fusion Manage'));
       tr.appendChild(quantityCell(item));
       tr.appendChild(statusCell(item, false));
-      tr.appendChild(item.status === 'kept' ? actionCell(item, redraw) : el('td', 'pub-cmp-action'));
       if (item.component && (item.root || item.component.id !== '')) {
         tr.classList.add('pub-cmp-pick');
         tr.addEventListener('click', function (event) {
@@ -309,14 +348,13 @@
       if (item.status === 'mismatch') {   // the Fusion Manage line at this position gets its own row
         const fmTr = el('tr', 'pub-cmp-row pub-cmp-fmline' + (decisions[item.key] === 'remove' ? ' pub-cmp-removing' : ''));
         const spacer = chevronLevels[item.level] ? Object.assign(el('button', 'pub-tree-toggle'), { type: 'button', disabled: true }) : null;
-        const fmCell = itemCell(item.fm, Object.assign({}, item, { hidden: false }), false, spacer);
+        const fmCell = itemCell(item.fm, Object.assign({}, item, { hidden: false }), false, spacer, actionButtons(item, redraw));   // the buttons sit on the line that is not in the design
         fmCell.querySelector('.pub-tree-pn').classList.add('pub-cmp-diff');
         fmTr.appendChild(fmCell);
         fmTr.appendChild(presenceCell(false, 'the design'));
         fmTr.appendChild(presenceCell(true, 'Fusion Manage'));
         fmTr.appendChild(el('td', 'num pub-cmp-qty', item.fm.quantity));
         fmTr.appendChild(statusCell(item, true));
-        fmTr.appendChild(actionCell(item, redraw));   // the buttons sit on the line that is not in the design
         table.appendChild(fmTr);
         fmTrs[fmTrs.length - 1] = fmTr;
       }
@@ -329,6 +367,7 @@
     current = { items: items, trs: trs };
     paintSelection();
     apply();
+    if (onReview) onReview(model.pendingReviews(items));
   }
 
   ns.bomTable = { render: render, select: select };

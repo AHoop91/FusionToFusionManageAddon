@@ -20,52 +20,14 @@ from ...fm.items import ItemService
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
 from ...sync.bom_compare import compare_bom
-from ...sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN, compare_properties
+from ...sync.item_compare import compare_item
+from ...sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN
 from ..message_bridge import MessageBridge
 
 log = get_logger("publish_actions")
 
 ITEMS_KIND = "items"
 VALIDATION_WORKERS = 5   # Fusion Manage searches in flight at once
-
-def _compare(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig,
-             fm: FmClient, chosen: str = "") -> Dict[str, Any]:
-    """Compare the properties with Fusion Manage. Runs on a worker thread.
-
-    The item is searched by item number in the Items workspace. When several
-    items match, ``chosen`` (an item id the user picked) selects one; until then
-    the state is ``multiple`` and ``candidates`` lists them.
-    """
-    mappings = [m for m in cfg.mappings if m.source and m.fm_field_id]
-    number = str(summary.get("item_number") or summary.get("part_number") or "").strip()
-    info: Dict[str, Any] = {"state": "unchecked", "message": "", "item_id": "", "item_number": number,
-                            "candidates": []}
-    fm_fields = None
-    if not cfg.workspace_id:
-        info["message"] = "Set the Items workspace ID in Settings to compare with Fusion Manage."
-    elif not number:
-        info["message"] = "This component has no item number to look up in Fusion Manage."
-    else:
-        try:
-            service = ItemService(fm)
-            hits = service.search(cfg.workspace_id, number)
-            picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
-            if picked:
-                fm_fields = service.read(cfg.workspace_id, picked["id"])
-        except (FmApiError, AuthError) as exc:
-            log.warning("Fusion Manage lookup failed: %s", exc)
-            info.update(state=UNKNOWN, message=f"Could not read Fusion Manage: {exc}")
-        else:
-            if not hits:
-                info.update(state=NEW)
-            else:
-                info["candidates"] = hits if len(hits) > 1 else []
-                if picked:
-                    info.update(state=FOUND, item_id=picked["id"])
-                else:
-                    info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items match {number}. Choose one.")
-    return {"fm": info,
-            "rows": compare_properties(properties, summary, mappings, fm_fields, info["state"])}
 
 
 def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: WorkspaceConfig,
@@ -75,6 +37,7 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     One BOM call, deep enough for the whole tree, covers every assembly. Rows stay
     unchecked (no status) when the design is not compared. When the design matches
     several items and none is chosen, ``pick`` is set and the panel waits for the choice.
+    ``fm_item_id`` is the Fusion Manage item compared with, empty when there is none (the Add Items picker needs it).
     """
     number = str(summary.get("item_number") or summary.get("part_number") or "").strip()
     if not cfg or not cfg.workspace_id or not number:
@@ -92,7 +55,7 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     fm_bom = BomService(fm).read(cfg.workspace_id, picked["id"], depth)
     log.info("Fusion Manage BOM of %s: %d parent(s), %d line(s)", number, len(fm_bom),
              sum(len(v) for v in fm_bom.values()))
-    return {"rows": compare_bom(rows, number, fm_bom), "pick": False}
+    return {"rows": compare_bom(rows, number, fm_bom), "pick": False, "fm_item_id": picked["id"]}
 
 
 def _model_ref() -> Tuple[str, str]:
@@ -136,11 +99,11 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                 summary = dict(sections["summary"]["data"] or {}) if sections["summary"]["key"] == key else {}
             data = read_section(client, name, model_id, time, summary, component.get("id", ""))
             if name == "properties":
-                data = {"count": len(data), "compare": _compare(data, summary, cfg, fm, chosen)}
+                data = {"count": len(data), "compare": compare_item(data, summary, cfg, fm, chosen)}
             elif name == "structure":
                 data = _compare_bom(data, summary, cfg, fm, chosen)
             elif name == "component":
-                data = {"compare": _compare(data["properties"], component, cfg, fm, chosen), "drawings": data["drawings"]}
+                data = {"compare": compare_item(data["properties"], component, cfg, fm, chosen), "drawings": data["drawings"]}
             log.info("Loaded %s of %s", slot, model_id)
             outcome = _entry(slot, ok=True, data=data, key=key)
         except Exception as exc:  # never leave the panel waiting

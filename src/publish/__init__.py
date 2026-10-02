@@ -1,0 +1,9 @@
+"""Publishing: turn the compared design into Fusion Manage requests and files.
+
+* ``payloads``: the Fusion Manage requests (pure functions, no I/O).
+* ``writer``: the output folder and its ``manifest.json``.
+* ``exporters``: files made with the Fusion API (STEP).
+* ``runner``: the steps of one publish run.
+
+During development the requests are written to a folder for review instead of being sent.
+"""

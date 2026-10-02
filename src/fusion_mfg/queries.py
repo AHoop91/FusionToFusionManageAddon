@@ -52,6 +52,15 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 }
 """
 
+# A component's thumbnail alone: its signed url is short-lived, so a publish asks for it when it needs it.
+THUMBNAIL_QUERY = """
+query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
+  component(componentId: $componentId, composition: $composition, time: $time) {
+    thumbnail { status signedUrl }
+  }
+}
+"""
+
 # The whole bill of materials: one flat list of relations down to STRUCTURE_DEPTH
 # levels. Each relation names its parent (fromComponent), so the parser rebuilds
 # the tree. Results are paged with a cursor.
@@ -73,6 +82,7 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime, $d
           name { value }
           description { value }
           partNumber { value }
+          thumbnail { status signedUrl }
         }
       }
     }

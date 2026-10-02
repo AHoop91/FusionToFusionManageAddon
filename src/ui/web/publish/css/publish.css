@@ -30,7 +30,7 @@
 /* Title bar of a pane (the bill of materials, the details): a lighter grey than the top bar, so the panes stand out from it. */
 .pub-pane-header { flex: none; box-sizing: border-box; height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 8px 16px; background: #e9eaec; border-bottom: 1px solid var(--header-border); }
 .pub-pane-title { font-size: 13px; font-weight: 600; }
-.pub-pane-action { padding: 3px 12px; font-size: 12px; }
+.pub-pane-action { padding: 3px 12px; }
 .pub-bom.pub-loading { display: flex; }
 
 /* ---- Footer with the actions ---------------------------------------------- */
@@ -55,5 +55,32 @@
 .pub-loading > .pub-error-state { margin: auto; min-width: 260px; }
 
 /* Outlined button (Open, Retry, Cancel). */
-.pub-drawing-open { padding: 3px 12px; border: 1px solid var(--accent); border-radius: 4px; background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
+.pub-drawing-open { padding: 3px 12px; border: 1px solid var(--accent); border-radius: 4px; background: transparent; color: var(--accent); font: inherit; font-size: 11px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; cursor: pointer; }
 .pub-drawing-open:hover { background: var(--accent); color: #fff; }
+
+/* ---- Publish jobs: each job with progress and result (the Jobs window) ----------------- */
+.pub-jobs-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.pub-jobs-title { margin: 0; font-size: 15px; font-weight: 600; }
+.pub-jobs-message { margin: 2px 0 0; font-size: 12px; }
+.pub-job-group td { padding: 6px; background: var(--header-bg); border-top: 0; }
+.pub-job-group:not(:first-of-type) td { border-top: 8px solid var(--bg); }
+.pub-job-group-box { display: flex; align-items: center; gap: 8px; }
+.pub-job-count { flex: 1; font-size: 12px; }
+.pub-job-name { font-weight: 600; }
+.pub-job-rows { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.pub-job-rows th { padding: 4px 6px; text-align: left; font-weight: 600; color: var(--muted); }
+.pub-job-rows td { padding: 6px; border-top: 1px solid var(--border); }
+.pub-job-rows th:nth-child(2), .pub-job-rows td:nth-child(2) { width: 64px; text-align: center; }
+.pub-job-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pub-job-reason { overflow: hidden; text-overflow: ellipsis; margin-top: 2px; font-weight: 400; color: var(--danger, #d13438); }
+.pub-job-status svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pub-job-queued, .pub-job-cancelled { color: #8a8f98; }
+.pub-job-running { color: var(--accent); }
+.pub-job-done { color: #2e9d4a; }
+.pub-job-error { color: var(--danger, #d13438); }
+.pub-run-row { display: flex; justify-content: space-between; margin: 0 0 4px; font-size: 12px; }
+.pub-run-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.pub-queued { flex: none; display: flex; align-items: flex-start; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--surface); font-size: 12px; }
+.pub-queued[hidden] { display: none; }
+.pub-queued span { flex: 1; }
+.pub-queued-error { border-left-color: var(--danger, #d13438); color: var(--danger, #d13438); }

@@ -1,0 +1,78 @@
+"""The queue of publish runs: one worker thread takes them in order, so Publish returns at once.
+
+Runs only use the network and the disk (see ``runner``), so the queue never blocks Fusion and the
+user keeps working, even in another design. The worker thread starts when a run is added and ends
+when none is waiting.
+"""
+
+import threading
+from typing import Any, Dict, List, Optional
+
+from ..core.logging_setup import get_logger
+from .runner import DONE, FINISHED, QUEUED, PublishRun
+
+log = get_logger("publish_queue")
+
+
+class JobQueue:
+    """Publish runs in the order they were added; finished ones stay listed until cleared."""
+
+    def __init__(self) -> None:
+        self._runs: List[PublishRun] = []
+        self._lock = threading.Lock()
+        self._worker: Optional[threading.Thread] = None
+
+    def add(self, run: PublishRun) -> None:
+        with self._lock:
+            self._runs.append(run)
+            if self._worker is None:
+                self._worker = threading.Thread(target=self._loop, name="MfgToFm_PublishQueue", daemon=True)
+                self._worker.start()
+        log.info("Publish run %s queued: %s", run.id, run.name)
+
+    def get(self, run_id: str) -> Optional[PublishRun]:
+        with self._lock:
+            return next((r for r in self._runs if r.id == run_id), None)
+
+    def cancel(self, run_id: str) -> None:
+        run = self.get(run_id)
+        if run:
+            run.cancel()
+
+    def clear_finished(self) -> None:
+        with self._lock:
+            self._runs = [r for r in self._runs if r.phase not in FINISHED]
+
+    def snapshots(self) -> List[Dict[str, Any]]:
+        """Every run, oldest first; a waiting run also says its place in the queue."""
+        with self._lock:
+            runs = list(self._runs)
+        place = 0
+        result = []
+        for run in runs:
+            snap = run.snapshot()
+            if snap["phase"] == QUEUED:
+                place += 1
+                snap["place"] = place
+            result.append(snap)
+        return result
+
+    def _loop(self) -> None:
+        while True:
+            with self._lock:
+                run = next((r for r in self._runs if r.phase == QUEUED), None)
+                if run is None:
+                    self._worker = None
+                    return
+            try:
+                run.work()
+            except Exception:   # work reports its own failures; this only keeps the queue alive
+                log.exception("Publish run %s crashed", run.id)
+            self._drop_if_clean(run)
+
+    def _drop_if_clean(self, run: PublishRun) -> None:
+        """A run that finished with every item done has nothing left to show; failed or cancelled ones stay until cleared."""
+        if run.phase == DONE and not any(row["status"] != "done" for row in run.rows):
+            with self._lock:
+                if run in self._runs:
+                    self._runs.remove(run)

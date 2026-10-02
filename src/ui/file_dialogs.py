@@ -29,6 +29,14 @@ class FileDialogs:
         path = dialog.filename
         return path if path.lower().endswith(".json") else path + ".json"
 
+    def choose_folder(self, title: str) -> Optional[str]:
+        """Return an existing folder, or None if the user cancelled."""
+        dialog = self._ui.createFolderDialog()
+        dialog.title = title
+        if dialog.showDialog() != adsk.core.DialogResults.DialogOK:
+            return None
+        return dialog.folder
+
     def choose_open_path(self, title: str) -> Optional[str]:
         """Return an existing ``.json`` path, or None if the user cancelled."""
         dialog = self._ui.createFileDialog()

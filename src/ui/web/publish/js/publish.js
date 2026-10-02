@@ -10,6 +10,7 @@
   const bridge = ns.bridge;
   const ui = ns.pubUi;
   const details = ns.pubDetails;
+  const jobs = ns.pubJobs;
 
   const POLL_INTERVAL_MS = 700;
   const SECTIONS = ['properties', 'structure'];   // loaded for the open design once its summary is in
@@ -17,6 +18,8 @@
   let currentSummary = null;   // summary of the open design
   let loadedKey = null;        // design the panel currently shows
   let lastLoad = 0;
+  let currentRows = [];        // compared rows of the Bill of Materials shown
+  let fmItemId = '';           // Fusion Manage item the BOM was compared with; empty when the design has none
   const loaded = {};           // section -> true once shown for the current design
   const inflight = {};         // section -> true while loading
   const timers = {};           // section (or "component:<id>") -> poll timer
@@ -60,7 +63,54 @@
 
   // ---- Bill of materials panel ---------------------------------------------------
 
+  /** Publish is available once the Bill of Materials is shown and every differing line has a choice. */
+  function setPublishState(pending, reason) {
+    const button = $('pub-publish');
+    button.disabled = pending > 0 || !!reason;
+    button.title = reason || (pending > 0
+      ? 'Review ' + pending + ' line' + (pending === 1 ? '' : 's') + ' first: choose keep both or remove on each Review line.'
+      : 'Publish the changes.');
+  }
+
+  /** Publish: queue the changed items and BOM lines; they go to a folder for review in the background (nothing is sent to Fusion Manage yet). */
+  function publish() {
+    const summary = currentSummary || {};
+    const root = summary;
+    const model = ns.bomModel;
+    if (model.pendingReviews(model.arrange(model.buildItems(currentRows, root))) > 0) return;
+    const plan = model.publishPlan(currentRows, root);
+    jobs.start({
+      summary: summary,
+      root_number: summary.item_number || summary.part_number || '',
+      operations: plan.operations,
+      items: plan.components.map(function (c) {
+        return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '', thumbnail: c.thumbnail || '', fm_item: details.choiceFor(c) };
+      }),
+    });
+  }
+
+  /** Add Items needs the Fusion Manage item of the design; ``reason`` says why it is not available yet. */
+  function setAddItemsState(reason) {
+    const button = $('pub-add-items');
+    button.disabled = !!reason;
+    button.title = reason || 'Add Fusion Manage items to the end of the Bill of Materials.';
+  }
+
+  function openAddItems() {
+    const model = ns.bomModel;
+    ns.pubAddItems.open({
+      itemId: fmItemId,
+      staged: model.stagedIds(),
+      onAdd: function (picked) {
+        model.stage(picked);
+        renderBom(currentRows, false);   // draw the table again with the new lines at the end
+      },
+    });
+  }
+
   function clearBom() {
+    setAddItemsState('Waiting for the Bill of Materials.');
+    setPublishState(0, 'Waiting for the Bill of Materials.');
     const host = $('pub-bom');
     host.classList.remove('pub-loading');
     host.textContent = '';
@@ -89,11 +139,21 @@
     const host = clearBom();
     if (pick) {   // no table until the question is answered, so open the design's details, which ask it
       bomMessage('Several Fusion Manage items match this design. Choose one in the details to compare the Bill of Materials.');
+      setAddItemsState('Choose the Fusion Manage item for this design first.');
+      setPublishState(0, 'Choose the Fusion Manage item for this design first.');
       details.open(ns.bomModel.rootComponent(currentSummary || {}));
       return;
     }
-    if (!rows.length) { bomMessage('This item has no child components.'); return; }
-    ns.bomTable.render(host, rows, currentSummary || {}, details.open);
+    currentRows = rows;
+    const addReason = fmItemId ? '' : 'The design is not in Fusion Manage yet, so there is no Bill of Materials to add to.';
+    if (!rows.length && !ns.bomModel.stagedIds().length) {
+      bomMessage('This item has no child components.');
+      setAddItemsState(addReason);
+      setPublishState(0);
+      return;
+    }
+    ns.bomTable.render(host, rows, currentSummary || {}, details.open, setPublishState);
+    setAddItemsState(addReason);
   }
 
   // ---- Loading sections ------------------------------------------------------------
@@ -156,7 +216,8 @@
       bomError(entry.message, function () { loaded.structure = false; loadSection('structure'); });
       return;
     }
-    ns.bomModel.clearDecisions();   // fresh comparison: nothing is chosen yet
+    ns.bomModel.clearDecisions();   // fresh comparison: nothing is chosen or added yet
+    fmItemId = entry.data.fm_item_id || '';
     renderBom(entry.data.rows, !!entry.data.pick);
     if (!reload) bridge.send('probe_hidden_fields');   // development: log candidate "hidden" fields
   }
@@ -200,9 +261,12 @@
         loadSection('properties');
       },
     });
+    jobs.init();
+    $('pub-publish').addEventListener('click', publish);
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
     $('pub-refresh').addEventListener('click', function () { refresh(true); });
+    $('pub-add-items').addEventListener('click', openAddItems);
     // The palette stays open while the user switches designs. Clicking into it
     // also fires focus, so reload only when a different design is open.
     bridge.on('get_publish_model_key', function (r) {

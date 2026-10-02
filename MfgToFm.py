@@ -30,6 +30,11 @@ from src.ui.message_bridge import MessageBridge  # noqa: E402
 from src.ui.palette_host import PaletteHost  # noqa: E402
 from src.core.constants import (  # noqa: E402
     COMMAND_ID,
+    JOBS_COMMAND_ID,
+    JOBS_HEIGHT,
+    JOBS_PALETTE_ID,
+    JOBS_TITLE,
+    JOBS_WIDTH,
     PUBLISH_COMMAND_ID,
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
@@ -51,6 +56,7 @@ log = get_logger()
 _ui = None
 _palette_host = None
 _publish_host = None
+_jobs_host = None
 _ribbon = None
 
 
@@ -58,7 +64,7 @@ _ribbon = None
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _ui, _palette_host, _publish_host, _ribbon
+    global _ui, _palette_host, _publish_host, _jobs_host, _ribbon
     try:
         _ui = adsk.core.Application.get().userInterface
 
@@ -67,6 +73,7 @@ def run(context) -> None:
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
         _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, PUBLISH_TITLE, "publish")
+        _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, JOBS_TITLE, "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
         # Panels appear in this order. Add further buttons or panels here; the
         # ribbon needs no other changes.
         _ribbon = Ribbon(_ui, RIBBON_WORKSPACE_IDS, [
@@ -77,6 +84,10 @@ def run(context) -> None:
                               os.path.join(_ADDIN_DIR, "resources", "publish")),
             ]),
             RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
+                RibbonCommand(JOBS_COMMAND_ID, "Job Queue",
+                              "Show the job queue: publishes that are waiting, running and finished.",
+                              _jobs_host.show,
+                              os.path.join(_ADDIN_DIR, "resources", "jobs")),
                 RibbonCommand(COMMAND_ID, "Settings",
                               "Open the Fusion Manage panel: connection and settings.",
                               _palette_host.show,
@@ -98,6 +109,8 @@ def stop(context) -> None:
             _palette_host.dispose()
         if _publish_host:
             _publish_host.dispose()
+        if _jobs_host:
+            _jobs_host.dispose()
         if _ribbon:
             _ribbon.unregister()
         log.info("Add-in stopped")

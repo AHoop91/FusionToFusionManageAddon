@@ -11,6 +11,9 @@ SETTINGS_PALETTE_ID = "MfgToFm_SettingsPalette"
 PUBLISH_COMMAND_ID = "MfgToFm_PublishItemCmd"
 PUBLISH_PALETTE_ID = "MfgToFm_PublishPalette"
 PUBLISH_TITLE = "Publish Item"
+JOBS_COMMAND_ID = "MfgToFm_PublishJobsCmd"
+JOBS_PALETTE_ID = "MfgToFm_PublishJobsPalette"
+JOBS_TITLE = "Job Queue"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
@@ -26,3 +29,5 @@ RIBBON_WORKSPACE_IDS = ["FusionSolidEnvironment", "FusionDrawingEnvironment"]
 # Palette geometry (pixels).
 PALETTE_WIDTH = 480
 PALETTE_HEIGHT = 720
+JOBS_WIDTH = 440
+JOBS_HEIGHT = 520

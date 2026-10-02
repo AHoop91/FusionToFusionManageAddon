@@ -9,7 +9,7 @@ from typing import Any, Dict
 from .graphql_client import MfgGraphQlClient
 from .parsers import parse_component, parse_properties, parse_structure, parse_summary
 from .queries import (COMPONENT_PROPERTIES_QUERY, PROPERTIES_QUERY, STRUCTURE_DEPTH,
-                      STRUCTURE_PAGE_SIZE, STRUCTURE_QUERY, SUMMARY_QUERY)
+                      STRUCTURE_PAGE_SIZE, STRUCTURE_QUERY, SUMMARY_QUERY, THUMBNAIL_QUERY)
 
 # Sections read with ``bulkModels`` from the open model.
 SECTIONS = {
@@ -50,6 +50,12 @@ def _component_variables(summary: Dict[str, Any], component_id: str, time: str) 
     if time:
         variables["time"] = time
     return variables
+
+
+def read_thumbnail_url(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> str:
+    """A fresh signed url of a component's thumbnail (empty when it has none yet); it expires soon, so use it at once."""
+    node = (client.query(THUMBNAIL_QUERY, _component_variables(summary, component_id, time)).get("component") or {})
+    return str((node.get("thumbnail") or {}).get("signedUrl") or "")
 
 
 def _read_component(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str) -> Any:

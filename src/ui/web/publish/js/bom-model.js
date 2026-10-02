@@ -17,8 +17,40 @@
   // (see ``buildItems``), so a choice survives a redraw. Publishing will read it.
   const decisions = {};
 
+  // Fusion Manage items the user picked with Add Items: lines of the Fusion Manage BOM that publishing adds
+  // under the design, at the end. Each is { id, link, number, name, quantity }.
+  const staged = [];
+  const DEFAULT_QUANTITY = '1';
+
   function clearDecisions() {
     Object.keys(decisions).forEach(function (k) { delete decisions[k]; });
+    staged.length = 0;
+  }
+
+  /** Add the picked items (those not staged already) as lines at the end of the Bill of Materials. */
+  function stage(picked) {
+    picked.forEach(function (p) {
+      if (staged.some(function (s) { return s.id === p.id; })) return;
+      staged.push({ id: p.id, link: p.link, number: p.number, name: p.name, quantity: DEFAULT_QUANTITY });
+    });
+  }
+
+  function unstage(id) {
+    const at = staged.findIndex(function (s) { return s.id === id; });
+    if (at >= 0) staged.splice(at, 1);
+  }
+
+  /** Set the quantity of a picked line; returns the quantity now held (unchanged when ``value`` is not a positive number). */
+  function setStagedQuantity(id, value) {
+    const line = staged.find(function (s) { return s.id === id; });
+    if (!line) return '';
+    const n = Number(String(value).trim());
+    if (isFinite(n) && n > 0) line.quantity = String(n);
+    return line.quantity;
+  }
+
+  function stagedIds() {
+    return staged.map(function (s) { return s.id; });
   }
 
   /** The component a line stands for, in the form publish.js opens: the design itself, or a BOM line. */
@@ -28,7 +60,7 @@
   }
 
   function lineComponent(r) {
-    return { id: r.id, root: false, item_number: r.item_number, part_number: r.part_number, description: r.description,
+    return { id: r.id, root: false, item_number: r.item_number, part_number: r.part_number, description: r.description, name: r.name, thumbnail: r.thumbnail || '',
              title: [r.part_number, r.name].filter(Boolean).join(' - ') };
   }
 
@@ -66,6 +98,15 @@
       held = null;
       items.push(item);
     });
+    // Picked Fusion Manage items go last, numbered after the highest line directly under the design.
+    let highest = 0;
+    items.forEach(function (item) { if (item.level === 1) highest = Math.max(highest, parseInt(item.sequence, 10) || 0); });
+    staged.forEach(function (s, i) {
+      const number = String(highest + 1 + i);
+      items.push({ level: 1, root: false, sequence: number, status: 'linked', hidden: false, stagedId: s.id, link: s.link,
+                   design: { pn: '', name: '', quantity: '', sequence: '' },
+                   fm: { pn: s.number, name: s.name, quantity: s.quantity, sequence: number } });
+    });
     return items;
   }
 
@@ -101,7 +142,7 @@
     let groups;
     switch (item.status) {
       case 'mismatch': groups = decisions[item.key] ? ['new', 'extra'] : ['new', 'review', 'extra']; break;   // its Fusion Manage line is only in Fusion Manage
-      case 'added': groups = ['new']; break;
+      case 'added': case 'linked': groups = ['new']; break;
       case 'kept': groups = ['extra']; break;
       case 'root': groups = []; break;
       default: groups = [item.status];
@@ -109,8 +150,58 @@
     return item.hidden && !item.root ? groups.concat('hidden') : groups;
   }
 
+  /** How many differing pairs still wait for a choice (the lines the Review filter shows). */
+  function pendingReviews(items) {
+    return items.filter(function (item) { return item.status === 'mismatch' && !decisions[item.key]; }).length;
+  }
+
+  /**
+   * What publishing does: the components whose Fusion Manage item is created or updated (the design and every
+   * line that is new, or the design side of a differing pair) and the BOM operations (add, update the quantity,
+   * remove, renumber a kept line), each naming its parent by item number. Fusion Manage only lines with no
+   * choice are left alone.
+   */
+  function publishPlan(rows, root) {
+    const base = buildItems(rows, root);
+    const items = arrange(base);
+    const oldSequence = {};
+    base.forEach(function (item) { if (item.key) oldSequence[item.key] = item.fm.sequence; });
+    const numberAt = [];   // item number of the latest line on each level, so a line finds its parent
+    const components = [];
+    const seen = {};
+    const operations = [];
+    items.forEach(function (item) {
+      const own = item.component ? String(item.component.item_number || item.design.pn || '') : String(item.fm.pn || '');
+      const parent = item.level > 0 ? numberAt[item.level - 1] || '' : '';
+      numberAt[item.level] = own;
+      if (item.root) { components.push(Object.assign({}, item.component, { root: true })); return; }
+      const line = { parent: parent, number: own, quantity: item.design.quantity, sequence: item.design.sequence };
+      switch (item.status) {
+        case 'new': case 'added': operations.push(Object.assign({ op: 'add' }, line)); break;
+        case 'mismatch':   // only a pair that chose 'remove' is still a mismatch here
+          operations.push(Object.assign({ op: 'add' }, line));
+          operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence });
+          break;
+        case 'linked':   // an existing Fusion Manage item: only the BOM line is added, never the item
+          operations.push({ op: 'add', parent: parent, number: own, quantity: item.fm.quantity, sequence: item.fm.sequence, link: item.link });
+          break;
+        case 'changed': operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity }, line)); break;
+        case 'kept':
+          operations.push({ op: 'renumber', parent: parent, number: item.fm.pn, from_sequence: oldSequence[item.key], sequence: item.sequence });
+          break;
+        default: break;
+      }
+      const creates = item.status === 'new' || item.status === 'added' || item.status === 'mismatch';
+      if (creates && item.component && item.component.id && !seen[item.component.id]) {
+        seen[item.component.id] = true;
+        components.push(item.component);
+      }
+    });
+    return { components: components, operations: operations };
+  }
+
   ns.bomModel = {
-    decisions: decisions, clearDecisions: clearDecisions, rootComponent: rootComponent,
-    buildItems: buildItems, arrange: arrange, groupsOf: groupsOf,
+    decisions: decisions, clearDecisions: clearDecisions, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent,
+    buildItems: buildItems, arrange: arrange, groupsOf: groupsOf, pendingReviews: pendingReviews, publishPlan: publishPlan,
   };
 })(window.MfgUi);

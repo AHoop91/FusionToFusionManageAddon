@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Job Queue</title>
+  <!-- Shared panel styles -->
+  <link rel="stylesheet" href="../shared/css/base.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <!-- The job cards are shared with the Publish panel -->
+  <link rel="stylesheet" href="../publish/css/publish.css">
+</head>
+<body>
+  <!-- Top bar: the title and what the queue is doing. -->
+  <header class="pub-jobs-bar">
+    <div>
+      <h1 class="pub-jobs-title">Job Queue</h1>
+      <p id="pub-jobs-message" class="muted pub-jobs-message"></p>
+    </div>
+  </header>
+
+  <!-- Every item of every publish, one row each, newest publish first. -->
+  <div class="view">
+    <div id="pub-jobs-list" class="view-scroll"></div>
+    <footer class="pub-footer">
+      <button id="pub-jobs-clear" class="btn btn-secondary" type="button">Clear finished</button>
+    </footer>
+  </div>
+
+  <script src="../shared/js/dom.js"></script>
+  <script src="../shared/js/bridge.js"></script>
+  <script src="../publish/js/ui.js"></script>
+  <script src="../publish/js/publish-jobs.js"></script>
+  <script>
+    (function (ns) {
+      // Fusion injects `adsk` asynchronously, so wait for it.
+      (function start() {
+        if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
+        ns.pubJobs.init();
+      })();
+    })(window.MfgUi);
+  </script>
+</body>
+</html>

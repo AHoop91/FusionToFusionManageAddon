@@ -59,9 +59,6 @@ ITEM_OPTIONS = (
     WorkspaceOption("include_step", "Publish STEP Representation",
                     "Attach the STEP representation to the item.", False,
                     ("view_attachments", "add_attachments")),
-    WorkspaceOption("include_drawing", "Publish Drawing Representation",
-                    "Attach the drawing (PDF) representation to the item.", False,
-                    ("view_attachments", "add_attachments")),
 )
 
 WORKSPACE_KINDS = [

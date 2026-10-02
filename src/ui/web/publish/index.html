@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/publish.css">
   <link rel="stylesheet" href="css/bom.css">
   <link rel="stylesheet" href="css/details.css">
+  <link rel="stylesheet" href="css/add-items.css">
 </head>
 <body>
   <!-- Shared top bar, filled in by shell.js. -->
@@ -73,10 +74,16 @@
         </aside>
       </main>
 
+      <!-- Said after Publish: the job was added to the queue (or why not). -->
+      <div id="pub-queued" class="pub-queued" role="status" hidden>
+        <span id="pub-queued-text"></span>
+        <button id="pub-queued-close" class="pub-detail-close" type="button" title="Dismiss" aria-label="Dismiss">&times;</button>
+      </div>
+
       <!-- Actions for the open item. -->
       <footer class="pub-footer">
         <button id="pub-refresh" class="btn btn-secondary">Refresh</button>
-        <button id="pub-publish" class="btn" disabled title="Publishing to Fusion Manage is not built yet.">Publish</button>
+        <button id="pub-publish" class="btn" disabled title="Waiting for the Bill of Materials.">Publish</button>
       </footer>
     </div>
   </div>
@@ -92,6 +99,8 @@
   <script src="js/bom-model.js"></script>
   <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>
+  <script src="js/add-items.js"></script>
+  <script src="js/publish-jobs.js"></script>
   <script src="js/publish.js"></script>
 </body>
 </html>

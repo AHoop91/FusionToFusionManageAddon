@@ -40,6 +40,7 @@ class AuthService:
     def __init__(self, store: Optional[TokenStore] = None) -> None:
         self._store = store or TokenStore()
         self._lock = threading.Lock()
+        self._refresh_lock = threading.Lock()   # one refresh at a time: refresh tokens rotate, a second use of the old one fails
         self._state = STATE_SIGNED_OUT
         self._error = ""
         self._cancel = threading.Event()
@@ -119,21 +120,34 @@ class AuthService:
     # ---- Token access ------------------------------------------------------
 
     def get_access_token(self, settings: ConnectionSettings) -> str:
-        """Return a valid access token, refreshing if near expiry."""
+        """Return a valid access token, refreshing if near expiry.
+
+        Calls from several threads wait while one of them refreshes, then use its new token.
+        """
         tokens = self._store.load(settings.client_id)
         if not tokens:
             raise AuthError("Not signed in.")
-        if tokens.get("expires_at", 0) - EXPIRY_MARGIN_SECONDS > time.time():
+        if self._fresh(tokens):
             return tokens["access_token"]
-        refresh = tokens.get("refresh_token")
-        if not refresh:
-            raise AuthError("Session expired; sign in again.")
-        try:
-            fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
-        except AuthError:
-            self.sign_out(settings)
-            raise
-        # Refresh tokens rotate; keep the old one if none is returned.
-        fresh.setdefault("refresh_token", refresh)
-        self._store.save(settings.client_id, fresh)
-        return fresh["access_token"]
+        with self._refresh_lock:
+            tokens = self._store.load(settings.client_id)   # another thread may have refreshed while this one waited
+            if not tokens:
+                raise AuthError("Not signed in.")
+            if self._fresh(tokens):
+                return tokens["access_token"]
+            refresh = tokens.get("refresh_token")
+            if not refresh:
+                raise AuthError("Session expired; sign in again.")
+            try:
+                fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
+            except AuthError:
+                self.sign_out(settings)
+                raise
+            # Refresh tokens rotate; keep the old one if none is returned.
+            fresh.setdefault("refresh_token", refresh)
+            self._store.save(settings.client_id, fresh)
+            return fresh["access_token"]
+
+    @staticmethod
+    def _fresh(tokens: Dict[str, Any]) -> bool:
+        return tokens.get("expires_at", 0) - EXPIRY_MARGIN_SECONDS > time.time()

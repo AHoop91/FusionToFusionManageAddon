@@ -42,7 +42,7 @@
 .pub-cmp { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
 .pub-cmp th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px; background: #fff; border-bottom: 1px solid var(--border); }
 .pub-cmp th.num { text-align: right; padding-right: 10px; }
-.pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence, .pub-cmp td.pub-cmp-action { text-align: center; }
+.pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence { text-align: center; }
 .pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid var(--border); vertical-align: middle; }
 .pub-cmp tr:last-child td { border-bottom: 1px solid var(--border); }
 .pub-cmp td.num { padding: 0 10px; text-align: right; white-space: nowrap; }
@@ -58,6 +58,7 @@
 .pub-cmp td.pub-cmp-status, .pub-cmp th.pub-cmp-status { text-align: center; }
 .pub-cmp-chip-match { color: #5b6677; background: #eef1f5; }
 .pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
+.pub-cmp-chip-added { color: #1e7a3a; background: #dff3e5; }
 .pub-cmp-chip-changed { color: #a86400; background: #fdf0d8; }
 .pub-cmp-chip-extra { color: #4f5d73; background: #e6eaf0; }
 .pub-cmp-chip-pair { color: #5b6677; background: #e3e7ee; }
@@ -71,8 +72,13 @@
 /* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
 .pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: #d13438; text-decoration-thickness: 1.5px; }
 
-/* Action buttons: always visible, since the table also has to work without hover. */
-.pub-cmp-actions { display: inline-flex; gap: 4px; }
+/* Action buttons: at the end of the item, shown while the row is hovered or has focus (a chosen one stays visible). */
+.pub-cmp-actions { flex: none; display: inline-flex; gap: 4px; margin-left: auto; padding: 0 6px 0 8px; visibility: hidden; }
+.pub-cmp tr:hover .pub-cmp-actions, .pub-cmp-actions:focus-within { visibility: visible; }
+.pub-cmp-actions .pub-cmp-act.chosen { visibility: visible; }
+.pub-cmp-qty-input { box-sizing: border-box; width: 52px; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: inherit; font: inherit; text-align: right; outline: none; }
+.pub-cmp-qty-input:hover { border-color: rgba(0, 0, 0, .6); }
+.pub-cmp-qty-input:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .pub-cmp-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--muted); cursor: pointer; }
 .pub-cmp-act:hover { color: var(--accent); border-color: var(--accent); }
 .pub-cmp-act.chosen { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -87,15 +93,16 @@
 .pub-cmp-is-hidden .pub-cmp-item .pub-tree-label { color: var(--muted); font-style: italic; }
 .pub-cmp-extra .pub-cmp-item, .pub-cmp-extra td.num { color: var(--muted); }
 
-/* Small panel: the table is a compact list (Item, Qty, Status, Actions; the Fusion and Manage ticks are what the status chip says). */
+/* Small panel: the table is a compact list (Item with its actions, Qty, Status; the Fusion and Manage ticks are what the status chip says). */
 @media (max-width: 760px) {
   .pub-cmp { min-width: 0; }
   .pub-cmp col:nth-child(2), .pub-cmp col:nth-child(3), .pub-cmp th:nth-child(2), .pub-cmp th:nth-child(3),
   .pub-cmp td:nth-child(2), .pub-cmp td:nth-child(3) { display: none; }
   .pub-cmp col:nth-child(4) { width: 44px !important; }
   .pub-cmp col:nth-child(5) { width: 76px !important; }
-  .pub-cmp col:nth-child(6) { width: 56px !important; }
   .pub-cmp td.num { padding: 0 6px; }
+  .pub-cmp-qty-input { width: 40px; }
+  .pub-cmp-actions { visibility: visible; }   /* no hover on touch */
   .pub-cmp-chip { width: 68px; font-size: 9px; letter-spacing: .02em; }
   .pub-cmp-actions { gap: 2px; }
   .pub-cmp .pub-tree-seq { margin: 0 6px 0 8px; }

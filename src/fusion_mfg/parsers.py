@@ -89,6 +89,7 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
                            "name": _text(child.get("name")),
                            "part_number": _text(child.get("partNumber")) or str((child.get("itemNumber") or {}).get("id") or ""),
                            "description": _text(child.get("description")),
+                           "thumbnail": str((child.get("thumbnail") or {}).get("signedUrl") or ""),
                            "quantity": str((row.get("quantityProperty") or {}).get("displayValue") or "")})
             walk(str(child.get("id") or ""), level + 1)
 

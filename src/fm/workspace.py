@@ -5,7 +5,7 @@ Validating a workspace id means:
 * ``GET /api/v3/workspaces/{id}`` succeeds and the workspace is not deleted.
 * ``GET /api/v3/workspaces/{id}/users/@me/permissions`` shows the signed-in
   user holds the permissions the workspace kind needs (view/add/edit items).
-* Each option (BOM, STEP, drawing) is checked against the permissions it
+* Each option (BOM, STEP) is checked against the permissions it
   needs. An option the user cannot use is reported as blocked, with a reason,
   so the panel can switch it off.
 * ``GET /api/v3/workspaces/{id}/views/1/fields`` supplies the field list for
