@@ -10,10 +10,11 @@
 .pub-detail[hidden] { display: none; }
 /* Its title bar (.pub-pane-header) has the close button at its right; the content below it scrolls. */
 .pub-detail-close {
-  width: 26px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 50%;
-  background: #fff; color: inherit; font-size: 16px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: rgba(0, 0, 0, .54); cursor: pointer; transition: background-color .15s, color .15s;
 }
-.pub-detail-close:hover { border-color: var(--accent); color: var(--accent); }
+.pub-detail-close:hover { background: rgba(0, 0, 0, .06); color: rgba(0, 0, 0, .87); }
+.pub-detail-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .pub-props { min-width: 0; }
 .pub-detail > .pub-props { flex: 1; min-height: 0; padding: 12px; overflow-y: auto; }
 .pub-backdrop { display: none; }

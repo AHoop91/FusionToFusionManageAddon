@@ -232,20 +232,84 @@
         buttons[f.id].classList.toggle('on', !!filters[f.id]);
         buttons[f.id].setAttribute('aria-pressed', filters[f.id] ? 'true' : 'false');
       });
+      paintMenu();
+    }
+    function flip(id) {
+      if (filters[id]) delete filters[id]; else filters[id] = true;
+      paint();
+      onChange();
     }
     FILTERS.forEach(function (f) {
       const b = el('button', 'pub-cmp-filter' + (f.right ? ' pub-cmp-filter-right' : ''), f.label);
       b.type = 'button';
       b.title = f.title;
       b.appendChild(el('span', 'pub-cmp-filter-count', String(counts[f.id] || 0)));
-      b.addEventListener('click', function () {
-        if (filters[f.id]) delete filters[f.id]; else filters[f.id] = true;
-        paint();
-        onChange();
-      });
+      b.addEventListener('click', function () { flip(f.id); });
       buttons[f.id] = b;
       bar.appendChild(b);
     });
+
+    // In a narrow panel the buttons are replaced by one Filters drop-down with a tick list (any number on at once).
+    const menu = el('div', 'pub-cmp-menu');
+    const trigger = el('button', 'pub-cmp-menu-btn');
+    trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.appendChild(el('span', '', 'Filters'));
+    const badge = el('span', 'pub-cmp-filter-count');
+    trigger.appendChild(badge);
+    trigger.appendChild(ui.svg(['M6 9l6 6 6-6']));
+    const pop = el('div', 'pub-cmp-menu-pop');
+    pop.hidden = true;
+    const boxes = {};
+    FILTERS.forEach(function (f) {
+      const row = el('label', 'pub-cmp-menu-item' + (f.right ? ' pub-cmp-menu-sep' : ''));
+      row.title = f.title;
+      const box = el('input');
+      box.type = 'checkbox';
+      box.addEventListener('change', function () { flip(f.id); });
+      boxes[f.id] = box;
+      row.appendChild(box);
+      row.appendChild(el('span', 'pub-cmp-menu-text', f.label));
+      row.appendChild(el('span', 'pub-cmp-filter-count', String(counts[f.id] || 0)));
+      pop.appendChild(row);
+    });
+    const clear = el('button', 'pub-cmp-menu-clear', 'Clear filters');
+    clear.type = 'button';
+    clear.addEventListener('click', function () {
+      Object.keys(filters).forEach(function (id) { delete filters[id]; });
+      paint();
+      onChange();
+    });
+    pop.appendChild(clear);
+    menu.appendChild(trigger);
+    menu.appendChild(pop);
+    bar.appendChild(menu);
+
+    function paintMenu() {
+      const active = Object.keys(filters).length;
+      FILTERS.forEach(function (f) { boxes[f.id].checked = !!filters[f.id]; });
+      badge.textContent = String(active);
+      badge.hidden = !active;
+      trigger.classList.toggle('on', active > 0);
+      clear.disabled = !active;
+    }
+    function closeMenu() {
+      pop.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', onEsc, true);
+    }
+    function outside(event) { if (!menu.contains(event.target)) closeMenu(); }
+    function onEsc(event) { if (event.key === 'Escape') closeMenu(); }
+    trigger.addEventListener('click', function () {
+      if (!pop.hidden) { closeMenu(); return; }
+      pop.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      document.addEventListener('mousedown', outside, true);
+      document.addEventListener('keydown', onEsc, true);
+    });
+
     paint();
     return bar;
   }
@@ -270,19 +334,63 @@
     return show;
   }
 
-  /** Column widths and the header row. */
-  function tableHead() {
-    const cols = el('colgroup');
-    ['', '64px', '64px', '84px', '116px'].forEach(function (w) {
-      const col = el('col');
-      if (w) col.style.width = w;
-      cols.appendChild(col);
-    });
+  // Column widths (px; 0 = takes the rest). The user can drag a header edge; each layout remembers its own widths.
+  const NARROW = window.matchMedia('(max-width: 760px)');
+  const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84, 116], narrow: [0, 76, 76, 44, 76] };
+  const MIN_WIDTHS = [120, 64, 64, 36, 72];
+  const HEADS = [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num'], ['Status', 'pub-cmp-status']];
+  const dragged = { wide: {}, narrow: {} };   // layout -> column index -> width the user chose
+
+  function layoutKey() { return NARROW.matches ? 'narrow' : 'wide'; }
+
+  /** Column widths and the header row (with a drag handle on each column's right edge). */
+  function tableHead(table) {
+    const key = layoutKey();
+    const cols = HEADS.map(function () { return el('col'); });
+    function widthOf(i) { return dragged[key][i] !== undefined ? dragged[key][i] : DEFAULT_WIDTHS[key][i]; }
+    function apply() {
+      let sum = 0;
+      cols.forEach(function (col, i) {
+        const w = widthOf(i);
+        col.style.width = w ? w + 'px' : '';
+        sum += w;
+      });
+      // Once the Item column has a width of its own the table is exactly as wide as its columns (it scrolls when that is wider than the panel).
+      table.style.width = dragged[key][0] !== undefined ? sum + 'px' : '';
+      table.style.setProperty('--status-w', widthOf(4) + 'px');   // Qty sticks beside Status
+    }
+    const group = el('colgroup');
+    cols.forEach(function (col) { group.appendChild(col); });
+
     const head = el('tr');
-    [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num'], ['Status', 'pub-cmp-status']].forEach(function (h) {
-      head.appendChild(el('th', h[1], h[0]));
+    HEADS.forEach(function (h, i) {
+      const th = el('th', h[1], h[0]);
+      const grip = el('span', 'pub-cmp-grip');
+      grip.title = 'Drag to resize the column (double-click to reset)';
+      grip.addEventListener('pointerdown', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const from = th.getBoundingClientRect().width;
+        const x0 = event.clientX;
+        grip.setPointerCapture(event.pointerId);
+        grip.classList.add('dragging');
+        function onMove(e) { dragged[key][i] = Math.max(MIN_WIDTHS[i], Math.round(from + e.clientX - x0)); apply(); }
+        function onUp() {
+          grip.classList.remove('dragging');
+          grip.removeEventListener('pointermove', onMove);
+          grip.removeEventListener('pointerup', onUp);
+          grip.removeEventListener('pointercancel', onUp);
+        }
+        grip.addEventListener('pointermove', onMove);
+        grip.addEventListener('pointerup', onUp);
+        grip.addEventListener('pointercancel', onUp);
+      });
+      grip.addEventListener('dblclick', function () { delete dragged[key][i]; apply(); });
+      th.appendChild(grip);
+      head.appendChild(th);
     });
-    return [cols, head];
+    apply();
+    return [group, head];
   }
 
   /**
@@ -320,7 +428,7 @@
     const view = el('div', 'pub-cmp-view');
     view.appendChild(filterBar(items, apply));
     const table = el('table', 'pub-cmp');
-    tableHead().forEach(function (node) { table.appendChild(node); });
+    tableHead(table).forEach(function (node) { table.appendChild(node); });
 
     const seenBefore = seenStaged;
     seenStaged = new Set(items.filter(function (item) { return item.stagedId !== undefined; }).map(function (item) { return item.stagedId; }));
@@ -381,11 +489,14 @@
     wrap.appendChild(table);
     view.appendChild(wrap);
     host.appendChild(view);
-    current = { items: items, trs: trs };
+    current = { items: items, trs: trs, redraw: redraw };
     paintSelection();
     apply();
     if (onReview) onReview(model.pendingReviews(items));
   }
+
+  // Crossing between the wide and narrow layouts changes the default column widths: draw the table again.
+  NARROW.addEventListener('change', function () { if (current && current.redraw) current.redraw(); });
 
   ns.bomTable = { render: render, select: select };
 })(window.MfgUi);

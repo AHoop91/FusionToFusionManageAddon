@@ -55,7 +55,8 @@
     icon.appendChild(ui.svg(ICONS[tone]));
     node.appendChild(icon);
     node.appendChild(el('span', 'pub-toast-text', message));
-    const close = el('button', 'pub-toast-close', '×');
+    const close = el('button', 'pub-toast-close');
+    close.appendChild(ui.svg(['M6 6l12 12', 'M18 6L6 18']));
     close.type = 'button';
     close.title = 'Dismiss';
     close.setAttribute('aria-label', 'Dismiss');

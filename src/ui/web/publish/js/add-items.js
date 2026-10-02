@@ -324,7 +324,8 @@
     const title = el('h2', 'pub-add-heading', 'Add Items');
     title.id = 'pub-add-heading';
     box.setAttribute('aria-labelledby', title.id);
-    const closeButton = el('button', 'pub-add-close', '×');
+    const closeButton = el('button', 'pub-add-close');
+    closeButton.appendChild(ns.pubUi.svg(['M6 6l12 12', 'M18 6L6 18']));
     closeButton.type = 'button';
     closeButton.title = 'Close';
     closeButton.setAttribute('aria-label', 'Close');
