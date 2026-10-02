@@ -24,27 +24,28 @@
 .pub-tree-icon + span:not(.pub-tree-seq) { margin-left: 10px; }
 
 /* ---- The table --------------------------------------------------------------- */
-.pub-cmp-wrap { overflow-x: auto; }
+.pub-cmp-wrap { overflow-x: auto; border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px; }
 /* A row opens its component's details; the open one stays marked. */
 .pub-cmp-pick { cursor: pointer; }
-.pub-cmp-pick:hover > td { background: var(--surface); }
+.pub-cmp-pick:hover > td { background: #f5f5f5; }
 .pub-cmp-pick.selected > td { background: #eaf2fb; }
 .pub-cmp-pick.selected > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
-/* Filter buttons above the table: toggles, any number on at once. */
-.pub-cmp-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.pub-cmp-filter { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: inherit; cursor: pointer; }
-.pub-cmp-filter:hover { border-color: var(--accent); }
+/* Filters above the table: small outlined 4px chips, filled when on, any number on at once. */
+.pub-cmp-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.pub-cmp-filter { display: inline-flex; align-items: center; gap: 6px; height: 24px; box-sizing: border-box; padding: 0 10px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: transparent; color: rgba(0, 0, 0, .87); cursor: pointer; transition: background-color .15s, border-color .15s; }
+.pub-cmp-filter:hover { background: rgba(0, 0, 0, .04); }
 .pub-cmp-filter.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pub-cmp-filter.on:hover { filter: brightness(1.08); }
 .pub-cmp-filter-right { margin-left: auto; }
-.pub-cmp-filter-count { font-size: 11px; opacity: .7; }
+.pub-cmp-filter-count { min-width: 16px; padding: 0 5px; box-sizing: border-box; border-radius: 3px; background: rgba(0, 0, 0, .08); font-size: 11px; line-height: 16px; text-align: center; }
+.pub-cmp-filter.on .pub-cmp-filter-count { background: rgba(255, 255, 255, .25); }
 
 .pub-cmp { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
-.pub-cmp th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px; background: #fff; border-bottom: 1px solid var(--border); }
+.pub-cmp th { text-align: left; color: rgba(0, 0, 0, .87); font-weight: 600; padding: 6px; background: #e6e6e6; border-bottom: 1px solid rgba(0, 0, 0, .12); }
 .pub-cmp th.num { text-align: right; padding-right: 10px; }
 .pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence { text-align: center; }
-.pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid var(--border); vertical-align: middle; }
-.pub-cmp tr:last-child td { border-bottom: 1px solid var(--border); }
+.pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid rgba(0, 0, 0, .08); vertical-align: middle; }
 .pub-cmp td.num { padding: 0 10px; text-align: right; white-space: nowrap; }
 .pub-cmp .pub-tree-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -53,8 +54,8 @@
 .pub-cmp-tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .pub-cmp-none { color: #b4bcc8; }
 
-/* Status chip. */
-.pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 88px; padding: 2px 0; text-align: center; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+/* Status chip: a small 4px chip. */
+.pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 76px; padding: 0; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
 .pub-cmp td.pub-cmp-status, .pub-cmp th.pub-cmp-status { text-align: center; }
 .pub-cmp-chip-match { color: #5b6677; background: #eef1f5; }
 .pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
@@ -103,7 +104,7 @@
   .pub-cmp td.num { padding: 0 6px; }
   .pub-cmp-qty-input { width: 40px; }
   .pub-cmp-actions { visibility: visible; }   /* no hover on touch */
-  .pub-cmp-chip { width: 68px; font-size: 9px; letter-spacing: .02em; }
+  .pub-cmp-chip { width: 64px; }
   .pub-cmp-actions { gap: 2px; }
   .pub-cmp .pub-tree-seq { margin: 0 6px 0 8px; }
   .pub-tree-cell { height: 100%; min-width: 0; }

@@ -160,6 +160,10 @@
       input.value = item.fm.quantity;
       input.title = 'Quantity of this line in the Fusion Manage BOM';
       input.setAttribute('aria-label', 'Quantity of ' + item.fm.pn);
+      input.addEventListener('input', function () {   // numbers only: digits and one decimal point, whether typed or pasted
+        const clean = input.value.replace(/[^0-9.]/g, '').replace(/^([^.]*\.)(.*)$/, function (_, head, tail) { return head + tail.replace(/\./g, ''); });
+        if (clean !== input.value) input.value = clean;
+      });
       input.addEventListener('change', function () { input.value = model.setStagedQuantity(item.stagedId, input.value); });
       td.appendChild(input);
       return td;

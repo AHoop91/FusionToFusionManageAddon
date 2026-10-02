@@ -19,6 +19,19 @@
 
 .pub-add-body { display: flex; flex-direction: column; min-height: 0; padding: 12px 16px 4px; }
 
+/* Once dragged or resized the dialog is pinned at a place and size of its own, and the list takes the height. */
+.pub-add-dialog { position: relative; }
+.pub-add-dialog.sized { position: absolute; max-width: none; max-height: none; }
+.pub-add-dialog.sized .pub-add-body { flex: 1 1 auto; }
+.pub-add-dialog.sized .pub-add-list { flex: 1 1 0; height: auto; min-height: 90px; }
+.pub-add-drag { cursor: move; user-select: none; touch-action: none; }
+.pub-add-grip { position: absolute; z-index: 2; touch-action: none; }
+.pub-add-grip-right { top: 0; right: -3px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.pub-add-grip-bottom { left: 0; right: 12px; bottom: -3px; height: 8px; cursor: ns-resize; }
+/* The corner shows a diagonal grip icon, so it is clear the dialog can be resized. */
+.pub-add-grip-corner { right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: 0 0 4px 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 6 6 14M14 10l-4 4M14 2 2 14' stroke='%23757575' stroke-width='1.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") center / 14px 14px no-repeat; opacity: .8; }
+.pub-add-grip-corner:hover { opacity: 1; }
+
 /* Outlined fields. */
 .pub-add-top { display: flex; gap: 10px; }
 .pub-add-workspace, .pub-add-filter {
@@ -40,6 +53,9 @@
 .pub-add-row[hidden], .pub-add-status[hidden] { display: none; }
 .pub-add-row:not(.pub-add-head) { content-visibility: auto; contain-intrinsic-size: auto 30px; }
 .pub-add-row:not(.pub-add-head):hover { background: rgba(0, 0, 0, .04); }
+/* An item already added to the Bill of Materials: greyed out and locked. */
+.pub-add-row.pub-add-row-added { background: rgba(0, 0, 0, .04); color: rgba(0, 0, 0, .38); cursor: not-allowed; }
+.pub-add-row.pub-add-row-added:hover { background: rgba(0, 0, 0, .04); }
 .pub-add-head { position: sticky; top: 0; z-index: 1; height: 30px; background: #e6e6e6; border-bottom-color: rgba(0, 0, 0, .12); font-size: 11px; font-weight: 600; color: rgba(0, 0, 0, .75); }
 .pub-add-check { width: 14px; height: 14px; margin: 0 auto; accent-color: var(--accent); cursor: pointer; }
 .pub-add-check:disabled { cursor: default; }

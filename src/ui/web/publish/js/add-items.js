@@ -17,6 +17,8 @@
 
   const POLL_MS = 200;          // wait between checks for a page being fetched
   const PREFETCH_PX = 600;      // load the next page when this close to the end of the list
+  const MIN_WIDTH = 380;        // smallest the dialog can be resized to
+  const MIN_HEIGHT = 340;
   const FILTER_DELAY_MS = 300;  // typing pause before the filter is applied (and more pages are fetched for it)
 
   // State of the open dialog. ``generation`` changes whenever the list restarts (opened, sorted, closed), which makes
@@ -111,6 +113,7 @@
     const already = options.staged.has(item.id);
     box.checked = already || selected.has(item.id);
     box.disabled = already;
+    row.classList.toggle('pub-add-row-added', already);
     row.appendChild(box);
     const name = el('span', 'pub-add-cell', text);
     name.title = already ? text + ' (already added)' : text;
@@ -252,6 +255,65 @@
     if (picked.length) callback(picked);
   }
 
+  /**
+   * Let the user drag the dialog by its title bar and resize it from the right edge, bottom edge or corner.
+   * The first move pins the dialog at its current place (it starts centred); the list then takes the extra height.
+   */
+  function enableMoveAndResize(box, titleBar) {
+    function pin() {
+      if (box.classList.contains('sized')) return;
+      const r = box.getBoundingClientRect();
+      box.classList.add('sized');
+      box.style.left = r.left + 'px';
+      box.style.top = r.top + 'px';
+      box.style.width = r.width + 'px';
+      box.style.height = r.height + 'px';
+    }
+
+    // Follow the pointer until it is released; ``move(dx, dy)`` gets the distance from where it went down.
+    function track(down, move, done) {
+      down.preventDefault();
+      const target = down.currentTarget;
+      const x0 = down.clientX, y0 = down.clientY;
+      const from = box.getBoundingClientRect();
+      target.setPointerCapture(down.pointerId);
+      function onMove(event) { move(event.clientX - x0, event.clientY - y0, from); }
+      function onUp() {
+        target.removeEventListener('pointermove', onMove);
+        target.removeEventListener('pointerup', onUp);
+        target.removeEventListener('pointercancel', onUp);
+        if (done) done();
+      }
+      target.addEventListener('pointermove', onMove);
+      target.addEventListener('pointerup', onUp);
+      target.addEventListener('pointercancel', onUp);
+    }
+
+    titleBar.classList.add('pub-add-drag');
+    titleBar.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0 || event.target.closest('button')) return;
+      pin();
+      track(event, function (dx, dy, from) {
+        // Keep the title bar reachable: never fully off screen.
+        box.style.left = Math.min(window.innerWidth - 80, Math.max(80 - from.width, from.left + dx)) + 'px';
+        box.style.top = Math.min(window.innerHeight - 32, Math.max(0, from.top + dy)) + 'px';
+      });
+    });
+
+    [['right', true, false], ['bottom', false, true], ['corner', true, true]].forEach(function (edge) {
+      const grip = el('div', 'pub-add-grip pub-add-grip-' + edge[0]);
+      grip.addEventListener('pointerdown', function (event) {
+        if (event.button !== 0) return;
+        pin();
+        track(event, function (dx, dy, from) {
+          if (edge[1]) box.style.width = Math.max(MIN_WIDTH, Math.min(window.innerWidth - from.left, from.width + dx)) + 'px';
+          if (edge[2]) box.style.height = Math.max(MIN_HEIGHT, Math.min(window.innerHeight - from.top, from.height + dy)) + 'px';
+        }, onScroll);   // a taller list may need its next page
+      });
+      box.appendChild(grip);
+    });
+  }
+
   function build() {
     const overlay = el('div', 'pub-add-overlay');
     const box = el('div', 'pub-add-dialog');
@@ -322,6 +384,7 @@
     footer.appendChild(add);
     box.appendChild(footer);
     overlay.appendChild(box);
+    enableMoveAndResize(box, titleBar);
 
     // One listener serves every row.
     list.addEventListener('change', function (event) {
