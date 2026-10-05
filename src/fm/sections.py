@@ -7,8 +7,9 @@ fields) belong to the section too.
 """
 
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient
@@ -17,6 +18,7 @@ log = get_logger("fm.sections")
 
 _FIELD_ID = re.compile(r"/fields/([^/]+)/?$")
 READERS = 4   # section details read at once
+CACHE_SECONDS = 300   # a workspace's layout rarely changes; runs queued close together share one read
 
 
 def parse_sections(data: Any) -> Dict[str, str]:
@@ -50,11 +52,22 @@ def _link(node: Any) -> str:
 class SectionService:
     """Reads a workspace's sections through an ``FmClient``."""
 
+    _cache: Dict[Tuple[str, str], Tuple[float, Dict[str, str]]] = {}   # (tenant, workspace id) -> (read at, map)
+
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
     def field_sections(self, workspace_id: str) -> Dict[str, str]:
         """``{field id: section link}`` for every field of the workspace."""
+        key = (self._client.tenant, workspace_id)
+        cached = self._cache.get(key)
+        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
+            return cached[1]
+        fields = self._read(workspace_id)
+        self._cache[key] = (time.monotonic(), fields)
+        return fields
+
+    def _read(self, workspace_id: str) -> Dict[str, str]:
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")
         listed = (data.get("sections") or data.get("items") or []) if isinstance(data, dict) else data
         entries = [e for e in listed if isinstance(e, dict)] if isinstance(listed, list) else []

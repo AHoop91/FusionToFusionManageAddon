@@ -7,13 +7,7 @@
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
-  /** Build an element. Text is set with textContent, so nothing is parsed as HTML. */
-  function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
+  const el = ns.el;
 
   /** A 24x24 icon drawn from path strings; ``size`` (px) is optional, the stylesheet can size it instead. */
   function svg(paths, size) {
