@@ -6,25 +6,26 @@ from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
 from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
-from ..fm.items import ItemService
+from ..fm.items import ItemService, display_values
 from .property_compare import FOUND, MULTIPLE, NEW, UNKNOWN, compare_properties
 
 log = get_logger("item_compare")
 
 
 def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig,
-                 fm: FmClient, chosen: str = "") -> Dict[str, Any]:
+                 fm: FmClient, chosen: str = "", with_values: bool = False) -> Dict[str, Any]:
     """Compare the properties with Fusion Manage. Runs on a worker thread.
 
     The item is searched by item number in the Items workspace. When several
     items match, ``chosen`` (an item id the user picked) selects one; until then
-    the state is ``multiple`` and ``candidates`` lists them.
+    the state is ``multiple`` and ``candidates`` lists them. ``with_values`` adds the item's raw field
+    values to the answer (``values``), so a caller needs no second read.
     """
     mappings = [m for m in cfg.mappings if m.source and m.fm_field_id]
     number = str(summary.get("item_number") or summary.get("part_number") or "").strip()
     info: Dict[str, Any] = {"state": "unchecked", "message": "", "item_id": "", "item_number": number,
                             "candidates": []}
-    fm_fields = None
+    values = None
     if not cfg.workspace_id:
         info["message"] = "Set the Items workspace ID in Settings to compare with Fusion Manage."
     elif not number:
@@ -35,7 +36,7 @@ def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg:
             hits = service.search(cfg.workspace_id, number)
             picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
             if picked:
-                fm_fields = service.read(cfg.workspace_id, picked["id"])
+                values = service.read(cfg.workspace_id, picked["id"])
         except (FmApiError, AuthError) as exc:
             log.warning("Fusion Manage lookup failed: %s", exc)
             info.update(state=UNKNOWN, message=f"Could not read Fusion Manage: {exc}")
@@ -48,5 +49,8 @@ def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg:
                     info.update(state=FOUND, item_id=picked["id"])
                 else:
                     info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items match {number}. Choose one.")
-    return {"fm": info,
-            "rows": compare_properties(properties, summary, mappings, fm_fields, info["state"])}
+    result = {"fm": info,
+              "rows": compare_properties(properties, summary, mappings, display_values(values) if values is not None else None, info["state"])}
+    if with_values:
+        result["values"] = values
+    return result

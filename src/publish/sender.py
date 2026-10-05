@@ -15,7 +15,6 @@ import json
 import os
 import re
 import threading
-import uuid
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from ..auth.errors import AuthError
@@ -23,7 +22,8 @@ from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient, SendResult
 from ..fm.items import ItemService
 from .placeholders import Unresolved, key_of, markers, resolve
-from .states import CANCELLED, DONE, ERROR, QUEUED, RUNNING, time_now
+from .job_state import JobState
+from .states import CANCELLED, DONE, ERROR, RUNNING
 
 log = get_logger("publish_send")
 
@@ -132,8 +132,10 @@ class Dispatcher:
         key = "item:" + number
         with self._lock:
             if key in self._sent:
+                log.debug("Item %s was sent before, skipped", number)
                 self.learn(number, str(self._sent[key].get("id") or ""))
                 return "Already sent."
+            log.debug("Sending item %s: %s %s", number, request["method"], request["url"])
             try:
                 result = self._fm.send_json(request["method"], request["url"], request.get("body"))
             except (FmApiError, AuthError) as exc:
@@ -177,9 +179,11 @@ class Dispatcher:
             key = f"bom:{parent}:{index}"
             with self._lock:
                 if key in self._sent:
+                    log.debug("BOM request %d of %s was sent before, skipped", index + 1, parent)
                     continue
                 try:
                     final = resolve(request, self._values(request))
+                    log.debug("BOM request %d of %s: %s %s", index + 1, parent, final["method"], final["url"])
                     try:
                         self._fm.send_json(final["method"], final["url"], final.get("body"))
                     except FmApiError as exc:
@@ -244,42 +248,29 @@ class Dispatcher:
         os.replace(target + ".tmp", target)
 
 
-class SendRun:
+class SendRun(JobState):
     """State and steps of sending one folder. ``snapshot`` is what the panels poll."""
 
     kind = "send"
     sends = True
     stage = "sending"
+    unreached = "Not sent: the send failed."
 
     def __init__(self, path: str, plan: Dict[str, Any], fm: FmClient) -> None:
-        self.path, self.plan = path, plan
         manifest = plan["manifest"]
+        super().__init__(str(manifest.get("root") or os.path.basename(path)), path)
+        self.plan = plan
         self._dispatcher = Dispatcher(path, fm, str(manifest.get("workspace_id") or ""),
                                       {number: str(info.get("id") or "") for number, info in manifest["items"].items()})
-        self.id = uuid.uuid4().hex[:8]
-        self._lock = threading.Lock()
-        self.name = str(manifest.get("root") or os.path.basename(path))
-        self.phase = QUEUED
-        self.cancelled = False
-        self.message = ""
-        self.current = ""
-        self.done = 0
-        self.rows: List[Dict[str, Any]] = (
-            [{"item": i["number"], "description": "Create item" if i["request"]["method"] == "POST" else "Update item",
-              "root": False, "status": QUEUED, "detail": ""} for i in plan["items"]] +
-            [{"item": b["parent"], "description": f"Bill of Materials, {len(b['requests'])} request(s)",
-              "root": False, "status": QUEUED, "detail": ""} for b in plan["boms"]])
+        self.rows = ([self.row(i["number"], "Create item" if i["request"]["method"] == "POST" else "Update item") for i in plan["items"]] +
+                     [self.row(b["parent"], f"Bill of Materials, {len(b['requests'])} request(s)") for b in plan["boms"]])
         self.total = len(self.rows)
-        self.queued_at, self.started_at, self.finished_at = time_now(), 0.0, 0.0
 
     # ---- Worker thread ----------------------------------------------------------
 
     def work(self) -> None:
-        with self._lock:
-            if self.phase != QUEUED:   # cancelled while it waited
-                return
-            self.phase = RUNNING
-            self.started_at = time_now()
+        if not self._start():   # cancelled while it waited
+            return
         try:
             rows = iter(self.rows)
             for job in self.plan["items"]:
@@ -308,32 +299,6 @@ class SendRun:
         with self._lock:
             self.done += 1
 
-    # ---- Any thread -------------------------------------------------------------
-
-    def cancel(self) -> None:
-        """Stop: a waiting send never starts, a running one stops after the request in flight."""
-        with self._lock:
-            self.cancelled = True
-            waiting = self.phase == QUEUED
-        if waiting:
-            self._finish(CANCELLED, "Cancelled.")
-
-    def _set(self, **changes: Any) -> None:
-        with self._lock:
-            for name, value in changes.items():
-                setattr(self, name, value)
-
     def _finish(self, phase: str, message: str) -> None:
-        with self._lock:
-            for row in self.rows:
-                if row["status"] == QUEUED:   # never reached
-                    row["status"], row["detail"] = CANCELLED, "Cancelled." if self.cancelled else "Not sent: the send failed."
-        self._set(phase=phase, message=message, current="", finished_at=time_now())
+        self._end(phase, message)
         log.info("Send run %s %s: %s (%s)", self.id, phase, self.path, message or "ok")
-
-    def snapshot(self) -> Dict[str, Any]:
-        with self._lock:
-            return {"id": self.id, "kind": self.kind, "name": self.name, "phase": self.phase, "message": self.message,
-                    "current": self.current, "done": self.done, "total": self.total, "queued_at": self.queued_at,
-                    "started_at": self.started_at, "finished_at": self.finished_at, "folder": self.path, "counts": {},
-                    "sends": True, "stage": self.stage, "rows": [dict(r) for r in self.rows]}

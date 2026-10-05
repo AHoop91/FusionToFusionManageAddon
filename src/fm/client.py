@@ -6,6 +6,7 @@ Feature classes (profile today; items, BOMs and files later) take an
 """
 
 import json
+import logging
 import time
 import urllib.error
 import urllib.request
@@ -17,7 +18,13 @@ from ..core.logging_setup import get_logger
 
 log = get_logger("fm.client")
 
+
+def _clip(data: bytes) -> str:
+    """The start of a request or answer, for a verbose log."""
+    return data[:DEBUG_BODY].decode("utf-8", "replace")
+
 FM_HOST_SUFFIX =".autodeskplm360.net"
+DEBUG_BODY = 20000   # characters of a request or answer kept in a verbose log
 REQUEST_TIMEOUT_SECONDS = 15
 WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
 READ_ATTEMPTS = 3
@@ -94,9 +101,12 @@ class FmClient:
             f"{self.base_url}{path}",
             headers={"Accept": accept, "Authorization": f"Bearer {token}"},
         )
+        began = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 body = response.read()
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("GET %s -> %s in %.2fs: %s", path, response.status, time.monotonic() - began, _clip(body))
                 if response.status == 204 or not body.strip():   # no content, e.g. a search with no hits
                     return None
                 try:
@@ -125,6 +135,9 @@ class FmClient:
         if payload is not None:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(f"{self.base_url}{path}", data=payload, headers=headers, method=method)
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("%s %s body: %s", method, path, _clip(payload or b""))
+        began = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=WRITE_TIMEOUT_SECONDS) as response:
                 raw = response.read()
@@ -134,6 +147,8 @@ class FmClient:
                     data = None
                 result = SendResult(response.status, dict(response.headers.items()), data)
                 log.info("Fusion Manage %s %s -> %s %s", method, path, result.status, raw[:500].decode("utf-8", "replace"))
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("%s %s took %.2fs, answered: %s", method, path, time.monotonic() - began, _clip(raw))
                 return result
         except urllib.error.HTTPError as exc:
             said = exc.read()[:1000].decode("utf-8", "replace")

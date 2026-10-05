@@ -75,6 +75,6 @@ class PublishFolder:
             counts[entry["status"]] = counts.get(entry["status"], 0) + 1
         manifest = {"draft": True,
                     "note": "Requests are drafts for review: bodies follow the Fusion Manage v3 API but are unverified. "
-                            "Publishing sends nothing; sending the folder is a separate step and logs to send-log.json.",
+                            "A publish sends them as it goes; sending the folder again retries, and send-log.json records what Fusion Manage accepted.",
                     **info, "counts": counts, "items": self.items, "artifacts": self.entries}
         self.write_json("manifest.json", manifest)

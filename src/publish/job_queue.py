@@ -9,7 +9,8 @@ import threading
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.logging_setup import get_logger
-from .runner import DONE, ERROR, FINISHED, QUEUED, RUNNING, PublishRun
+from .job_state import JobState
+from .states import DONE, ERROR, FINISHED, QUEUED, RUNNING
 
 log = get_logger("publish_queue")
 
@@ -18,14 +19,14 @@ class JobQueue:
     """Publish runs in the order they were added; finished ones stay listed until cleared."""
 
     def __init__(self, on_change: Optional[Callable[[], None]] = None,
-                 on_finished: Optional[Callable[[PublishRun], None]] = None) -> None:
+                 on_finished: Optional[Callable[[JobState], None]] = None) -> None:
         self._on_change = on_change   # called (from any thread) whenever the state of the queue may have changed
         self._on_finished = on_finished   # called on the worker thread when a run has ended
-        self._runs: List[PublishRun] = []
+        self._runs: List[JobState] = []
         self._lock = threading.Lock()
         self._worker: Optional[threading.Thread] = None
 
-    def add(self, run: PublishRun) -> None:
+    def add(self, run: JobState) -> None:
         with self._lock:
             self._runs.append(run)
             if self._worker is None:
@@ -34,7 +35,7 @@ class JobQueue:
         log.info("Publish run %s queued: %s", run.id, run.name)
         self._changed()
 
-    def get(self, run_id: str) -> Optional[PublishRun]:
+    def get(self, run_id: str) -> Optional[JobState]:
         with self._lock:
             return next((r for r in self._runs if r.id == run_id), None)
 
@@ -88,7 +89,7 @@ class JobQueue:
             self._drop_if_clean(run)
             self._changed()
 
-    def _finished(self, run: PublishRun) -> None:
+    def _finished(self, run: JobState) -> None:
         if self._on_finished:
             try:
                 self._on_finished(run)
@@ -102,7 +103,7 @@ class JobQueue:
             except Exception:   # a failed notification must not stop the queue
                 log.exception("Reporting the state of the queue failed")
 
-    def _drop_if_clean(self, run: PublishRun) -> None:
+    def _drop_if_clean(self, run: JobState) -> None:
         """A run that finished with every item done has nothing left to show; failed or cancelled ones stay until cleared."""
         if run.phase == DONE and not any(row["status"] != "done" for row in run.rows):
             with self._lock:

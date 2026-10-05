@@ -14,7 +14,8 @@ from ...core.logging_setup import get_logger, log_directory
 from ...fm.client import FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
-from ...publish.runner import ERROR, DONE, PublishRun
+from ...publish.runner import PublishRun
+from ...publish.states import DONE, ERROR
 from ...publish.sender import FolderError, SendRun, load_plan, summarize
 from ...publish.writer import PublishFolder
 from ..file_dialogs import FileDialogs
