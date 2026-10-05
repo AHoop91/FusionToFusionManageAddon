@@ -149,7 +149,6 @@
     b.appendChild(ui.svg(['M5 12h14']));
     b.addEventListener('click', function () {
       model.unstage(item.stagedId);
-      ns.pubToast.show('Removed ' + item.fm.pn + ' from the added items', { tone: 'info' });
       redraw();
     });
     box.appendChild(b);

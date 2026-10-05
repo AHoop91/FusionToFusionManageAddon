@@ -80,7 +80,26 @@
 .pub-job-error { color: var(--danger, #d13438); }
 .pub-run-row { display: flex; justify-content: space-between; margin: 0 0 4px; font-size: 12px; }
 .pub-run-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-.pub-queued { flex: none; display: flex; align-items: flex-start; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--surface); font-size: 12px; }
-.pub-queued[hidden] { display: none; }
-.pub-queued span { flex: 1; }
-.pub-queued-error { border-left-color: var(--danger, #d13438); color: var(--danger, #d13438); }
+
+/* Progress of the publish just queued (publish-jobs.js) */
+.pub-progress-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.35); }
+.pub-progress-backdrop[hidden] { display: none; }
+.pub-progress { width: 100%; max-width: 420px; padding: 20px 22px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
+.pub-progress-title { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+.pub-progress-status { margin: 0 0 14px; font-size: 13px; overflow-wrap: anywhere; }
+.pub-progress-bar { position: relative; height: 6px; overflow: hidden; border-radius: 3px; background: var(--border); }
+.pub-progress-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.4s ease; }
+.pub-progress-bar.indeterminate .pub-progress-fill { position: absolute; width: 35%; transition: none; animation: pub-progress-slide 1.2s ease-in-out infinite; }
+.pub-progress-ok .pub-progress-fill { background: var(--ok); }
+.pub-progress-error .pub-progress-fill { background: var(--danger); }
+.pub-progress-count { margin: 6px 0 0; min-height: 16px; font-size: 12px; }
+.pub-progress-note { margin: 12px 0 0; font-size: 12px; line-height: 1.45; }
+.pub-progress-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.pub-progress-actions [hidden] { display: none; }
+.pub-progress-confirm { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--danger); border-radius: 6px; font-size: 12px; line-height: 1.45; }
+.pub-progress-confirm[hidden] { display: none; }
+.pub-progress-confirm p { margin: 0; }
+.pub-progress-confirm .pub-progress-actions { margin-top: 12px; }
+.pub-progress-danger { background: var(--danger); border-color: var(--danger); }
+@keyframes pub-progress-slide { from { left: -35%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .pub-progress-bar.indeterminate .pub-progress-fill { animation-duration: 3s; } .pub-progress-fill { transition: none; } }

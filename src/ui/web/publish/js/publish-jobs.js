@@ -1,7 +1,8 @@
 /**
  * The publish jobs, as ``ns.pubJobs``, used by two pages. In the Publish Item panel, Publish adds a job
- * to the queue in Python (which asks for the folder) and returns at once; the panel says the job was
- * added. The queue itself is shown in the Job Queue window (web/jobs), opened from the ribbon: its list
+ * to the queue in Python (which asks for the folder) and returns at once; the panel then shows a progress
+ * dialog that follows the job until it ends. The dialog can be closed at any time: the job keeps running
+ * in the background. The queue itself is shown in the Job Queue window (web/jobs), opened from the ribbon: its list
  * has each job's progress, time, folder and failures. The jobs run in the background either way.
  */
 (function (ns) {
@@ -17,7 +18,8 @@
 
   let jobs = [];
   let timer = null;
-  let noteTimer = null;
+  let confirming = false;   // the dialog asks whether to cancel the publish
+  let watched = '';   // id of the job the progress dialog follows ("" = no dialog)
 
   function listOpen() { return !!$('pub-jobs-list'); }   // only the Jobs window has the list
 
@@ -112,31 +114,99 @@
     timer = setTimeout(function () { bridge.send('list_publish_jobs'); }, POLL_MS);
   }
 
-  /** The message above the footer of the Publish panel: the job was queued, or why it was not. */
-  function note(text, isError) {
-    const box = $('pub-queued');
-    if (!box) return;
-    $('pub-queued-text').textContent = text;
-    box.classList.toggle('pub-queued-error', !!isError);
-    box.hidden = !text;
-    clearTimeout(noteTimer);
-    if (text && !isError) noteTimer = setTimeout(function () { box.hidden = true; }, 20000);
+  // ---- Progress dialog (Publish panel) -----------------------------------------
+
+  function isFinished(job) { return FINISHED.indexOf(job.phase) >= 0; }
+
+  function failedRows(job) { return (job.rows || []).filter(function (r) { return r.status === 'error'; }).length; }
+
+  /** What the dialog says for a job: title, status line, count line, bar (percent or null while waiting) and tone. */
+  function describe(job) {
+    const total = job.total || 0;
+    const count = total ? job.done + ' of ' + total + ' Items Processed' : '';
+    if (job.phase === 'queued') {
+      return { title: 'Added to the publishing queue', status: job.place > 1 ? 'Waiting, number ' + job.place + ' in the queue.' : 'Waiting to start.', count: count, percent: null, tone: '' };
+    }
+    if (job.phase === 'running') {
+      return { title: 'Publishing ' + job.name, status: job.current ? 'Processing ' + job.current + '.' : 'Starting.', count: count, percent: total ? Math.round(job.done * 100 / total) : null, tone: '' };
+    }
+    if (job.phase === 'error') return { title: 'Publish failed', status: job.message || 'The publish could not be completed.', count: '', percent: 100, tone: 'error' };
+    if (job.phase === 'cancelled') return { title: 'Publish cancelled', status: job.name + ' was not published.', count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
+    const failed = failedRows(job);
+    return failed
+      ? { title: 'Completed with errors', status: failed + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' }
+      : { title: 'Publish complete', status: job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.', count: count, percent: 100, tone: 'ok' };
+  }
+
+  function showProgress(view, job) {
+    const box = $('pub-progress');
+    const bar = $('pub-progress-bar');
+    const active = !!job && !isFinished(job);
+    box.firstElementChild.classList.remove('pub-progress-ok', 'pub-progress-error');
+    if (view.tone) box.firstElementChild.classList.add('pub-progress-' + view.tone);
+    $('pub-progress-title').textContent = view.title;
+    $('pub-progress-status').textContent = view.status;
+    $('pub-progress-count').textContent = view.count || '';
+    bar.classList.toggle('indeterminate', view.percent === null);
+    if (view.percent === null) bar.removeAttribute('aria-valuenow'); else bar.setAttribute('aria-valuenow', String(view.percent));
+    $('pub-progress-fill').style.width = view.percent === null ? '' : view.percent + '%';
+    $('pub-progress-note').textContent = active
+      ? 'You can close this window. Publishing continues in the background and you can follow it in Job Queue on the Fusion Manage tab.'
+      : (job ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
+    if (!active) confirming = false;
+    $('pub-progress-confirm').hidden = !confirming;
+    $('pub-progress-actions').hidden = confirming;
+    $('pub-progress-cancel').hidden = !active;
+    box.hidden = false;
+    if (!confirming) $('pub-progress-close').focus();
+  }
+
+  function closeProgress() {
+    watched = '';
+    confirming = false;
+    clearTimeout(timer);
+    $('pub-progress').hidden = true;
+  }
+
+  /** Show or hide the "cancel this publish?" question; the job keeps running until it is answered yes. */
+  function askCancel(on) {
+    confirming = on;
+    $('pub-progress-confirm').hidden = !on;
+    $('pub-progress-actions').hidden = on;
+    $(on ? 'pub-progress-keep' : 'pub-progress-close').focus();
+  }
+
+  function watchedJob() {
+    return jobs.filter(function (j) { return j.id === watched; })[0] || null;
+  }
+
+  /** Redraw the dialog from the latest list; true while its job is still active. */
+  function updateProgress() {
+    const job = watchedJob();
+    if (!job) { closeProgress(); return false; }
+    showProgress(describe(job), job);
+    return !isFinished(job);
   }
 
   function handle(r) {
-    if (!listOpen()) return;
-    if (r.ok && r.result.jobs) { jobs = r.result.jobs; renderList(); }
-    schedule();
+    if (r.ok && r.result.jobs) jobs = r.result.jobs;
+    const list = listOpen();
+    if (list && r.ok) renderList();
+    const following = watched && r.ok ? updateProgress() : !!watched;   // keep polling through a failed read
+    if (list || following) schedule();
   }
 
   function handleStart(r) {
     const s = r.ok ? r.result : { error: r.error || 'Could not publish.' };
-    if (s.error) { note(s.error, true); return; }
+    if (s.error) {
+      watched = '';
+      showProgress({ title: 'Could not publish', status: s.error, count: '', percent: 100, tone: 'error' }, null);
+      return;
+    }
     if (s.cancelled) return;   // the folder dialog was cancelled
-    const job = (s.jobs || []).filter(function (j) { return j.id === s.queued; })[0];
-    const waiting = job && job.phase === 'queued' && job.place > 1 ? ' It is number ' + job.place + ' in the queue.' : '';
-    note((job ? job.name : 'The item') + ' was added to the publishing queue. It publishes in the background and you can keep working.' + waiting
-      + ' Follow it in Job Queue on the Fusion Manage tab.');
+    jobs = s.jobs || [];
+    watched = s.queued;
+    if (updateProgress()) schedule();
   }
 
   /** Queue a publish of ``payload`` (summary, items, operations); Python asks for the folder first. */
@@ -147,7 +217,19 @@
   function init() {
     ACTIONS.forEach(function (name) { bridge.on(name, name === 'start_publish' ? handleStart : handle); });
     bridge.on('open_publish_folder', function () {});
-    if ($('pub-queued-close')) $('pub-queued-close').addEventListener('click', function () { note(''); });
+    if ($('pub-progress')) {
+      $('pub-progress-close').addEventListener('click', closeProgress);
+      $('pub-progress-cancel').addEventListener('click', function () { askCancel(true); });
+      $('pub-progress-keep').addEventListener('click', function () { askCancel(false); });
+      $('pub-progress-stop').addEventListener('click', function () {
+        bridge.send('cancel_publish', { id: watched });
+        askCancel(false);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape' || $('pub-progress').hidden) return;
+        if (confirming) askCancel(false); else closeProgress();
+      });
+    }
     if (listOpen()) {
       $('pub-jobs-clear').addEventListener('click', function () { bridge.send('clear_publish_jobs'); });
       bridge.send('list_publish_jobs');

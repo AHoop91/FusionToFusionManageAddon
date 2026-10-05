@@ -103,7 +103,6 @@
       staged: model.stagedIds(),
       onAdd: function (picked) {
         model.stage(picked);
-        ns.pubToast.show(picked.length === 1 ? 'Added ' + (picked[0].number || picked[0].name) + ' to the Bill of Materials' : 'Added ' + picked.length + ' items to the Bill of Materials', { tone: 'success' });
         renderBom(currentRows, false);   // draw the table again with the new lines at the end
       },
     });
