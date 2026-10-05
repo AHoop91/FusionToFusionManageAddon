@@ -40,6 +40,8 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     ``fm_item_id`` is the Fusion Manage item compared with, empty when there is none (the Add Items picker needs it).
     """
     number = str(summary.get("item_number") or summary.get("part_number") or "").strip()
+    log.info("Design structure of %s: %s", number or "(no number)", "; ".join(
+        f"{'  ' * int(r['level'])}{r['item_number'] or r['part_number']} x{r['quantity']}" for r in rows) or "no components")
     if not cfg or not cfg.workspace_id or not number:
         return {"rows": rows, "pick": False}
     # A Fusion Manage or sign-in failure is not caught: the section fails and the panel offers Retry,

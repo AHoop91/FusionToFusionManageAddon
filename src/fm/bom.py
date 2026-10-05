@@ -55,10 +55,18 @@ def _quantity(fields: List[Any]) -> str:
     return next((text for _, text in values if _is_number(text)), "")
 
 
-def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
-    """``{parent item number: [{"number", "name", "quantity", "sequence"}]}`` from a bulk BOM answer.
+def _edge_id(edge: Dict[str, Any]) -> str:
+    """Id of a BOM line (the ``13836`` of ``.../bom-items/13836``): ``edgeId``, else the end of ``edgeLink``; empty if neither is there."""
+    if edge.get("edgeId"):
+        return str(edge["edgeId"])
+    match = re.search(r"/bom-items/(\d+)", str(edge.get("edgeLink") or edge.get("link") or ""))
+    return match.group(1) if match else ""
 
-    ``sequence`` is the line's BOM item number. The quantity is the edge field with
+
+def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
+    """``{parent item number: [{"number", "name", "quantity", "sequence", "edge_id"}]}`` from a bulk BOM answer.
+
+    ``sequence`` is the line's BOM item number, ``edge_id`` the id Fusion Manage gives the line (to change or delete it). The quantity is the edge field with
     one of ``QUANTITY_FIELDS`` as its id, else the first numeric edge field.
     """
     data = data if isinstance(data, dict) else {}
@@ -74,7 +82,8 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
             continue
         children.setdefault(parent, []).append(
             {"number": child, "name": _name_of(titles[str(edge.get("child"))]),
-             "quantity": _quantity(edge.get("fields") or []), "sequence": str(edge.get("itemNumber", ""))})
+             "quantity": _quantity(edge.get("fields") or []), "sequence": str(edge.get("itemNumber", "")),
+             "edge_id": _edge_id(edge)})
     return children
 
 

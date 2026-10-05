@@ -48,7 +48,7 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
         def extra(line: Dict[str, str], pair: str = "") -> Dict[str, Any]:
             return {"level": len(stack), "id": "", "item_number": line["number"], "sequence": line.get("sequence", ""),
                     "name": line.get("name", ""), "part_number": line["number"], "description": "",
-                    "quantity": line["quantity"], "status": EXTRA, "pair": pair}
+                    "quantity": line["quantity"], "status": EXTRA, "pair": pair, "edge_id": line.get("edge_id", "")}
 
         pairs = list(zip(frame["new"], extras))
         for index, line in reversed(pairs):   # last first, so earlier positions stay valid
@@ -76,7 +76,8 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
             status = CHANGED
         if status == NEW:
             frame["new"].append(len(out))
-        out.append({**row, "status": status, "fm_quantity": line["quantity"] if line else ""})
+        out.append({**row, "status": status, "fm_quantity": line["quantity"] if line else "",
+                    "fm_edge_id": line.get("edge_id", "") if line else ""})
         stack.append({"number": _number(row), "used": set(), "new": []})
     while stack:
         close()

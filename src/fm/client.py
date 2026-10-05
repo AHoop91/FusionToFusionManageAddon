@@ -6,9 +6,10 @@ Feature classes (profile today; items, BOMs and files later) take an
 """
 
 import json
+import time
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, Dict, NamedTuple
 
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
@@ -18,6 +19,10 @@ log = get_logger("fm.client")
 
 FM_HOST_SUFFIX =".autodeskplm360.net"
 REQUEST_TIMEOUT_SECONDS = 15
+WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
+READ_ATTEMPTS = 3
+RETRY_STATUSES = (429, 502, 503, 504)   # worth another try; a timeout or lost connection (status 0) is too
+RETRY_SECONDS = 2   # wait before the second try, twice that before the third
 
 # Path roots of the REST API, shared by every feature that builds a url.
 WORKSPACES = "/api/v3/workspaces"
@@ -27,6 +32,13 @@ LOOKUPS = "/api/v3/lookups"
 def last_segment(link: Any) -> str:
     """The id at the end of a link such as ``/api/v3/workspaces/242/views/1/fields/TITLE`` ("" if not text)."""
     return link.rstrip("/").rsplit("/", 1)[-1] if isinstance(link, str) else ""
+
+
+class SendResult(NamedTuple):
+    """What a write returned: HTTP status, response headers and the parsed JSON (None when there was none)."""
+    status: int
+    headers: Dict[str, str]
+    data: Any
 
 
 class FmApiError(Exception):
@@ -63,8 +75,20 @@ class FmClient:
 
         Raises ``AuthError`` if there is no valid session and ``FmApiError``
         for network, HTTP or parsing failures. The access token is fetched per
-        call so an expired one is refreshed transparently.
+        call so an expired one is refreshed transparently. A read that fails
+        in a way that usually passes (a gateway error or a timeout) is tried
+        again a few times, since reading changes nothing.
         """
+        for attempt in range(1, READ_ATTEMPTS + 1):
+            try:
+                return self._get_once(path, accept)
+            except FmApiError as exc:
+                if attempt == READ_ATTEMPTS or not (exc.status in RETRY_STATUSES or exc.status == 0):
+                    raise
+                log.warning("Fusion Manage read of %s failed (%s), attempt %d of %d", path, exc, attempt, READ_ATTEMPTS)
+                time.sleep(RETRY_SECONDS * attempt)
+
+    def _get_once(self, path: str, accept: str) -> Any:
         token = self._auth.get_access_token(self._settings)
         request = urllib.request.Request(
             f"{self.base_url}{path}",
@@ -87,3 +111,33 @@ class FmClient:
             raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
         except (OSError, ValueError) as exc:
             raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
+
+    def send_json(self, method: str, path: str, body: Any = None) -> SendResult:
+        """POST, PATCH or DELETE ``path`` with ``body`` as JSON; return the status, headers and parsed answer.
+
+        A write can have no answer (201 with only a ``Location`` header, 204), so ``data`` may be None.
+        A refusal raises ``FmApiError`` whose message carries what Fusion Manage said, since that is
+        the reason the user needs.
+        """
+        token = self._auth.get_access_token(self._settings)
+        payload = None if body is None else json.dumps(body).encode("utf-8")
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(f"{self.base_url}{path}", data=payload, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=WRITE_TIMEOUT_SECONDS) as response:
+                raw = response.read()
+                try:
+                    data = json.loads(raw) if raw.strip() else None
+                except ValueError:
+                    data = None
+                result = SendResult(response.status, dict(response.headers.items()), data)
+                log.info("Fusion Manage %s %s -> %s %s", method, path, result.status, raw[:500].decode("utf-8", "replace"))
+                return result
+        except urllib.error.HTTPError as exc:
+            said = exc.read()[:1000].decode("utf-8", "replace")
+            log.error("Fusion Manage HTTP %s for %s %s: %s", exc.code, method, path, said)
+            raise FmApiError(f"Fusion Manage returned {exc.code} for {method} {path}: {said[:300]}", exc.code) from exc
+        except OSError as exc:
+            raise FmApiError(f"Fusion Manage request failed for {method} {path}: {exc}") from exc

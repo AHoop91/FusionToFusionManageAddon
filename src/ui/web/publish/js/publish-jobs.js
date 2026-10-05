@@ -12,7 +12,7 @@
   const bridge = ns.bridge;
   const ui = ns.pubUi;
 
-  const ACTIONS = ['start_publish', 'list_publish_jobs', 'cancel_publish', 'clear_publish_jobs'];
+  const ACTIONS = ['start_publish', 'list_publish_jobs', 'cancel_publish', 'clear_publish_jobs', 'send_publish_folder'];
   const POLL_MS = 1000;
   const FINISHED = ['done', 'error', 'cancelled'];
 
@@ -64,7 +64,7 @@
     const cell = ui.el('td');
     cell.colSpan = 2;
     const box = ui.el('div', 'pub-job-group-box');
-    box.appendChild(ui.el('span', 'pub-job-name', 'Publish of ' + job.name));
+    box.appendChild(ui.el('span', 'pub-job-name', (job.kind === 'send' ? 'Send to Fusion Manage: ' : 'Publish of ') + job.name));
     const note = job.phase === 'queued' ? 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '')
       : (job.phase === 'cancelled' ? 'Cancelled' : (job.phase === 'error' ? 'Failed' : ''));
     box.appendChild(ui.el('span', 'muted pub-job-count', note));
@@ -232,6 +232,7 @@
     }
     if (listOpen()) {
       $('pub-jobs-clear').addEventListener('click', function () { bridge.send('clear_publish_jobs'); });
+      $('pub-jobs-send').addEventListener('click', function () { bridge.send('send_publish_folder'); });
       bridge.send('list_publish_jobs');
     }
   }

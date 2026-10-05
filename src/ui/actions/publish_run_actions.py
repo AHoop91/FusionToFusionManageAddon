@@ -14,6 +14,7 @@ from ...fm.client import FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
 from ...publish.runner import ERROR, DONE, PublishRun
+from ...publish.sender import FolderError, SendRun, load_plan, summarize
 from ...publish.writer import PublishFolder
 from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
@@ -54,13 +55,45 @@ def _report(run: PublishRun) -> str:
     return "\n".join(lines)
 
 
+def _confirm_text(about: Dict[str, Any]) -> str:
+    lines = [f"Send {about['root'] or 'this folder'} to Fusion Manage?", "",
+             f"Tenant: {about['tenant'] or 'unknown'}   Workspace: {about['workspace_id']}", "",
+             f"Items to create: {about['creates']}", f"Items to update: {about['updates']}",
+             f"Bill of Materials requests: {about['bom_lines']}", ""]
+    if about["sent_before"]:
+        lines += [f"{about['sent_before']} request(s) were sent by an earlier try and will be skipped.", ""]
+    lines.append("This changes real data in Fusion Manage.")
+    return "\n".join(lines)
+
+
+def _send_report(run: Any) -> str:
+    """The text of the message box for a send that ended."""
+    failed = [row for row in run.rows if row["status"] == "error"]
+    if run.phase == ERROR:
+        return f"Sending {run.name} could not be completed.\n\nReason: {run.message}"
+    if not failed:
+        return f"{run.name} was sent to Fusion Manage.\n\nSteps completed: {run.done} of {run.total}"
+    lines = [f"Sending {run.name} finished with errors: {len(failed)} of {run.total} step(s) failed.", ""]
+    lines += [f"  - {row['item']}: {(row['detail'] or 'Failed.')[:160]}" for row in failed[:MAX_LISTED]]
+    if len(failed) > MAX_LISTED:
+        lines.append(f"  - and {len(failed) - MAX_LISTED} more")
+    lines += ["", "Send the folder again to retry: what Fusion Manage accepted is skipped."]
+    return "\n".join(lines)
+
+
 def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
                                  dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
     """Register the publish actions; the queue lives as long as the add-in."""
 
-    def announce(run: PublishRun) -> None:
+    def announce(run: Any) -> None:
         """A run that ends gets a message box, a warning when it failed or had failed items (the panels may be closed)."""
-        if run.phase == ERROR:
+        if run.kind == "send":
+            failed = [row for row in run.rows if row["status"] == "error"]
+            if run.phase == ERROR or failed:
+                alerts.alert(_send_report(run), "Send to Fusion Manage failed")
+            elif run.phase == DONE:
+                alerts.done(_send_report(run), "Sent to Fusion Manage")
+        elif run.phase == ERROR:
             alerts.alert(_report(run), "Publish failed")
         elif run.phase == DONE and any(row["status"] == "error" for row in run.rows):
             alerts.alert(_report(run), "Publish completed with errors")
@@ -92,6 +125,30 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         log.info("Publish queued into %s: %d item(s), %d BOM operation(s)", folder.path, len(job["items"]), len(job["operations"]))
         return {"queued": run.id, **jobs()}
 
+    def send_publish_folder(_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Ask for a publish folder, show what sending it does, and queue the send once the user says yes."""
+        path = dialogs.choose_folder("Choose the publish folder to send to Fusion Manage")
+        if path is None:
+            log.info("Send: no folder chosen")
+            return jobs()
+        try:
+            plan = load_plan(path)
+        except FolderError as exc:
+            log.warning("Send: %s is not sendable: %s", path, exc)
+            dialogs.notify("Send to Fusion Manage", str(exc))
+            return jobs()
+        about = summarize(path, plan)
+        if not about["creates"] and not about["updates"] and not about["bom_lines"]:
+            log.info("Send: %s has no requests", path)
+            dialogs.notify("Send to Fusion Manage", "This folder has no requests to send.")
+            return jobs()
+        if not dialogs.confirm("Send to Fusion Manage", _confirm_text(about)):
+            log.info("Send: not confirmed for %s", path)
+            return jobs()
+        queue.add(SendRun(path, plan, FmClient(config.effective_settings(), auth)))
+        log.info("Send queued for %s: %s", path, about)
+        return jobs()
+
     def list_publish_jobs(_payload: Dict[str, Any]) -> Dict[str, Any]:
         return jobs()
 
@@ -106,11 +163,13 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
     def open_publish_folder(payload: Dict[str, Any]) -> Dict[str, Any]:
         """Open the folder of a run in Explorer (only a folder a run created, never a path from the panel)."""
         run = queue.get(str(payload.get("id") or ""))
-        if run and os.path.isdir(run.folder.path):
-            os.startfile(run.folder.path)  # noqa: S606 - Windows only, a folder we created
+        folder = run.snapshot()["folder"] if run else ""
+        if folder and os.path.isdir(folder):
+            os.startfile(folder)  # noqa: S606 - Windows only, a folder we created
         return {}
 
     bridge.register("start_publish", start_publish)
+    bridge.register("send_publish_folder", send_publish_folder)
     bridge.register("list_publish_jobs", list_publish_jobs)
     bridge.register("cancel_publish", cancel_publish)
     bridge.register("clear_publish_jobs", clear_publish_jobs)

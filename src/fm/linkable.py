@@ -21,7 +21,9 @@ def _title(node: Any) -> str:
 
 
 def parse_page(data: Any) -> Dict[str, Any]:
-    """``{"total", "count", "items": [{"id", "link", "number", "name", "version", "workspace", "lifecycle"}]}``."""
+    """``{"total", "count", "items": [{"id", "link", "number", "name", "version", "workspace", "lifecycle", "linkable"}]}``.
+
+    ``linkable`` is the row as Fusion Manage sent it (``__self__``, ``urn``, ``item``): adding the item to a BOM posts it back."""
     data = data if isinstance(data, dict) else {}
     items: List[Dict[str, str]] = []
     for row in data.get("items") or []:
@@ -35,7 +37,8 @@ def parse_page(data: Any) -> Dict[str, Any]:
         title = str(item.get("title", ""))
         items.append({"id": match.group(1), "link": link, "number": _number_of(title), "name": _name_of(title) or title,
                       "version": str(item.get("version", "")), "workspace": _title(row.get("workspace")),
-                      "lifecycle": _title(row.get("lifecycle"))})
+                      "lifecycle": _title(row.get("lifecycle")),
+                      "linkable": {k: row[k] for k in ("__self__", "urn", "item") if k in row}})
     return {"total": int(data.get("totalCount") or 0), "count": len(items), "items": items}
 
 

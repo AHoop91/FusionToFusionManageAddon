@@ -30,6 +30,7 @@ class PublishFolder:
         self.path = os.path.join(parent, f"{safe_name(root_number, 'design')}_{stamp}")
         os.makedirs(self.path)
         self.entries: List[Dict[str, Any]] = []
+        self.items: Dict[str, Dict[str, str]] = {}   # item number -> {"id", "state", "request"}: what sending needs to find each item
         self._names: Dict[str, int] = {}
         self._lock = threading.Lock()   # items are prepared on several threads
 
@@ -73,6 +74,7 @@ class PublishFolder:
         for entry in self.entries:
             counts[entry["status"]] = counts.get(entry["status"], 0) + 1
         manifest = {"draft": True,
-                    "note": "Requests are drafts for review: bodies follow the Fusion Manage v3 API but are unverified, and nothing was sent.",
-                    **info, "counts": counts, "artifacts": self.entries}
+                    "note": "Requests are drafts for review: bodies follow the Fusion Manage v3 API but are unverified. "
+                            "Publishing sends nothing; sending the folder is a separate step and logs to send-log.json.",
+                    **info, "counts": counts, "items": self.items, "artifacts": self.entries}
         self.write_json("manifest.json", manifest)

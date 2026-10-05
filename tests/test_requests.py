@@ -35,6 +35,13 @@ class ItemRequestTests(unittest.TestCase):
         self.assertEqual((request["method"], request["url"]), ("PATCH", "/api/v3/workspaces/1/items/7"))
         self.assertEqual(entries(request), {"TITLE": "Axle"})
 
+    def test_an_update_names_the_sections_and_fields_of_the_item_itself(self):
+        rows = [row("TITLE", "Axle", MISMATCH)]
+        request, _ = item_request("1", {"state": FOUND, "item_id": "7"}, rows, [], SECTIONS)
+        section = request["body"]["sections"][0]
+        self.assertEqual(section["link"], "/api/v3/workspaces/1/items/7/views/1/sections/10")
+        self.assertEqual(section["fields"][0]["__self__"], "/api/v3/workspaces/1/items/7/views/1/fields/TITLE")
+
     def test_existing_item_with_nothing_to_send_makes_no_request(self):
         request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [], SECTIONS)
         self.assertIsNone(request)
@@ -67,6 +74,24 @@ class BomRequestTests(unittest.TestCase):
                {"op": "remove", "parent": "A", "number": "B", "sequence": 2}]
         methods = [r["method"] for r in bom_requests("1", ops)["A"]]
         self.assertEqual(methods, ["DELETE", "POST"])
+
+    def test_remove_deletes_the_line_by_its_id(self):
+        request = bom_requests("57", [{"op": "remove", "parent": "A", "number": "B", "sequence": 2, "edge": "13836"}])["A"][0]
+        self.assertEqual((request["method"], request["body"]), ("DELETE", None))
+        self.assertTrue(request["url"].endswith("/workspaces/57/items/{{item:A}}/bom-items/13836"))
+
+    def test_add_posts_the_linkable_row_with_its_line_number(self):
+        row = {"__self__": "/api/v3/workspaces/57/items/14669/views/5/linkable-items/15719", "urn": "urn:x",
+               "item": {"link": "/api/v3/workspaces/57/items/15719", "title": "WG1-6073 - HEX NUT"}}
+        request = bom_requests("57", [{"op": "add", "parent": "A", "number": "WG1-6073", "sequence": "1", "quantity": 2, "linkable": row}])["A"][0]
+        self.assertEqual(request["body"], {**row, "itemNumber": 1, "quantity": "2", "children": [], "fields": []})
+
+    def test_add_without_a_linkable_row_links_the_item_by_placeholder(self):
+        body = bom_requests("57", [{"op": "add", "parent": "A", "number": "C", "sequence": "2"}])["A"][0]["body"]
+        self.assertEqual(body["item"]["link"], "/api/v3/workspaces/57/items/{{item:C}}")
+        self.assertEqual(body["__self__"], "/api/v3/workspaces/57/items/{{item:A}}/views/5/linkable-items/{{item:C}}")
+        self.assertEqual(body["urn"], "urn:adsk.plm:tenant.workspace.item.view.linkable-item:{{tenant}}.57.{{item:A}}.5.{{item:C}}")
+        self.assertEqual(list(body), ["__self__", "urn", "item", "itemNumber", "quantity", "children", "fields"])
 
 
 if __name__ == "__main__":

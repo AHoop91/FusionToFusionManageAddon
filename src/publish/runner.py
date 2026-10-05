@@ -38,6 +38,8 @@ FINISHED = (DONE, ERROR, CANCELLED)
 class PublishRun:
     """State and steps of one run. ``snapshot`` is what the panel polls."""
 
+    kind = "publish"
+
     def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: MfgGraphQlClient,
                  fm: FmClient, model_id: str, time: str) -> None:
         self.folder, self.job, self.cfg = folder, job, cfg
@@ -128,11 +130,15 @@ class PublishRun:
                  if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
         if blank:
             self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank))
+        request_file = ""
         if request is None:
             self.folder.record(number, "item request", SKIPPED, reason)
         else:
+            request_file = os.path.join(folder, "item.request.json")
             self.folder.record(number, "item request", OK, request["method"] + " " + request["url"],
-                               self.folder.write_json(os.path.join(folder, "item.request.json"), request))
+                               self.folder.write_json(request_file, request))
+        self.folder.items[number] = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""),
+                                     "request": request_file}
 
         log.info("Prepared %s in %.1fs (Data Model %.1fs, Fusion Manage %.1fs)", number,
                  time.monotonic() - began, read_time, compare_time)
@@ -184,7 +190,7 @@ class PublishRun:
                 setattr(self, name, value)
 
     def _finish(self, phase: str, message: str) -> None:
-        self.folder.save_manifest({"root": self.job.get("root_number", ""), "workspace_id": self.cfg.workspace_id,
+        self.folder.save_manifest({"root": self.job.get("root_number", ""), "workspace_id": self.cfg.workspace_id, "tenant": self._fm.tenant,
                                    "model": f"{self._model_id}|{self._time}", "cancelled": self.cancelled, "message": message})
         with self._lock:
             for row in self.rows:
@@ -199,7 +205,7 @@ class PublishRun:
             counts: Dict[str, int] = {}
             for entry in entries:
                 counts[entry["status"]] = counts.get(entry["status"], 0) + 1
-            return {"id": self.id, "name": self.name, "phase": self.phase, "message": self.message, "current": self.current,
+            return {"id": self.id, "kind": self.kind, "name": self.name, "phase": self.phase, "message": self.message, "current": self.current,
                     "done": self.done, "total": self.total, "queued_at": self.queued_at, "started_at": self.started_at,
                     "finished_at": self.finished_at, "folder": self.folder.path, "counts": counts,
                     "rows": [dict(r) for r in self.rows]}

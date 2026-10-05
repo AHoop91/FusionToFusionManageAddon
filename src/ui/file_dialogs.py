@@ -37,6 +37,17 @@ class FileDialogs:
             return None
         return dialog.folder
 
+    def confirm(self, title: str, message: str) -> bool:
+        """Ask a yes/no question in Fusion's message box; True only for Yes."""
+        answer = self._ui.messageBox(message, title, adsk.core.MessageBoxButtonTypes.YesNoButtonType,
+                                     adsk.core.MessageBoxIconTypes.WarningIconType)
+        return answer == adsk.core.DialogResults.DialogYes
+
+    def notify(self, title: str, message: str) -> None:
+        """Tell the user something in Fusion's message box."""
+        self._ui.messageBox(message, title, adsk.core.MessageBoxButtonTypes.OKButtonType,
+                            adsk.core.MessageBoxIconTypes.InformationIconType)
+
     def choose_open_path(self, title: str) -> Optional[str]:
         """Return an existing ``.json`` path, or None if the user cancelled."""
         dialog = self._ui.createFileDialog()

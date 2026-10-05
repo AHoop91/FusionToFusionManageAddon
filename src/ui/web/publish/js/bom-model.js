@@ -31,7 +31,7 @@
   function stage(picked) {
     picked.forEach(function (p) {
       if (staged.some(function (s) { return s.id === p.id; })) return;
-      staged.push({ id: p.id, link: p.link, number: p.number, name: p.name, quantity: DEFAULT_QUANTITY });
+      staged.push({ id: p.id, link: p.link, linkable: p.linkable || null, number: p.number, name: p.name, quantity: DEFAULT_QUANTITY });
     });
   }
 
@@ -76,20 +76,20 @@
                      fm: { pn: rootPn, name: rootName, quantity: '', sequence: '' } }];
     const repeats = {};
     let held = null;   // paired Fusion Manage line waiting for its design line, which follows it
-    function side(r, quantity) {
-      return { pn: r.part_number, name: r.name, quantity: String(quantity), sequence: String(r.sequence) };
+    function side(r, quantity, edge) {
+      return { pn: r.part_number, name: r.name, quantity: String(quantity), sequence: String(r.sequence), edge: edge || '' };
     }
     rows.forEach(function (r) {
       if (r.status === 'extra' && r.pair) { held = r; return; }
       if (r.status === 'extra') {
-        items.push({ level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity) });
+        items.push({ level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity, r.edge_id) });
         return;
       }
       const item = { level: r.level + 1, root: false, sequence: String(r.sequence), status: r.status || 'unchecked', hidden: !!r.hidden, component: lineComponent(r),
-                     design: side(r, r.quantity), fm: side(r, r.status === 'match' ? r.quantity : r.fm_quantity || '') };
+                     design: side(r, r.quantity), fm: side(r, r.status === 'match' ? r.quantity : r.fm_quantity || '', r.fm_edge_id) };
       if (held && held.pair === String(r.item_number || r.part_number)) {
         item.status = 'mismatch';
-        item.fm = side(held, held.quantity);
+        item.fm = side(held, held.quantity, held.edge_id);
         // Repeats of the same pair of numbers get their own choice: "design|Fusion Manage|n", n counting the repeats.
         const base = item.design.pn + '|' + item.fm.pn;
         repeats[base] = (repeats[base] || 0) + 1;
@@ -103,7 +103,7 @@
     items.forEach(function (item) { if (item.level === 1) highest = Math.max(highest, parseInt(item.sequence, 10) || 0); });
     staged.forEach(function (s, i) {
       const number = String(highest + 1 + i);
-      items.push({ level: 1, root: false, sequence: number, status: 'linked', hidden: false, stagedId: s.id, link: s.link,
+      items.push({ level: 1, root: false, sequence: number, status: 'linked', hidden: false, stagedId: s.id, link: s.link, linkable: s.linkable,
                    design: { pn: '', name: '', quantity: '', sequence: '' },
                    fm: { pn: s.number, name: s.name, quantity: s.quantity, sequence: number } });
     });
@@ -181,14 +181,14 @@
         case 'new': case 'added': operations.push(Object.assign({ op: 'add' }, line)); break;
         case 'mismatch':   // only a pair that chose 'remove' is still a mismatch here
           operations.push(Object.assign({ op: 'add' }, line));
-          operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence });
+          operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence, edge: item.fm.edge });
           break;
         case 'linked':   // an existing Fusion Manage item: only the BOM line is added, never the item
-          operations.push({ op: 'add', parent: parent, number: own, quantity: item.fm.quantity, sequence: item.fm.sequence, link: item.link });
+          operations.push({ op: 'add', parent: parent, number: own, quantity: item.fm.quantity, sequence: item.fm.sequence, link: item.link, linkable: item.linkable });
           break;
-        case 'changed': operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity }, line)); break;
+        case 'changed': operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity, edge: item.fm.edge }, line)); break;
         case 'kept':
-          operations.push({ op: 'renumber', parent: parent, number: item.fm.pn, from_sequence: oldSequence[item.key], sequence: item.sequence });
+          operations.push({ op: 'renumber', parent: parent, number: item.fm.pn, from_sequence: oldSequence[item.key], sequence: item.sequence, edge: item.fm.edge });
           break;
         default: break;
       }
