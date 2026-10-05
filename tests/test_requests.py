@@ -42,6 +42,28 @@ class ItemRequestTests(unittest.TestCase):
         self.assertEqual(section["link"], "/api/v3/workspaces/1/items/7/views/1/sections/10")
         self.assertEqual(section["fields"][0]["__self__"], "/api/v3/workspaces/1/items/7/views/1/fields/TITLE")
 
+    def test_a_static_value_the_item_already_holds_does_not_make_an_update(self):
+        held = {"TYPE": {"link": TYPE.value, "title": "Part"}}
+        request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [TYPE], SECTIONS,
+                                       [("IMAGE", "data:image/png;base64,AA")], held)
+        self.assertIsNone(request)
+        self.assertTrue(reason)
+
+    def test_a_static_value_the_item_lacks_makes_an_update(self):
+        held = {"TYPE": {"link": "/api/v3/lookups/TYPES/options/2"}}
+        request, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [TYPE], SECTIONS,
+                                  [("IMAGE", "data:image/png;base64,AA")], held)
+        self.assertEqual(set(entries(request)), {"TYPE", "IMAGE"})   # the image goes along; the unchanged title does not
+
+    def test_a_new_static_value_is_sent_to_an_item_that_has_no_value_for_it(self):
+        request, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [TYPE], SECTIONS, [], {})
+        self.assertEqual(set(entries(request)), {"TYPE"})
+
+    def test_a_static_text_value_is_compared_as_text(self):
+        text = StaticValue("TITLE", "Axle")
+        none, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [], [text], SECTIONS, [], {"TITLE": "Axle"})
+        self.assertIsNone(none)
+
     def test_existing_item_with_nothing_to_send_makes_no_request(self):
         request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [], SECTIONS)
         self.assertIsNone(request)

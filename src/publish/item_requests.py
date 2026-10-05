@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..fm.client import LOOKUPS, WORKSPACES, last_segment
+from ..fm.items import display_text
 from ..sync.property_compare import FOUND, MISMATCH, NEW
 
 
@@ -32,15 +33,24 @@ def _by_section(workspace_id: str, fields: List[Tuple[str, Any]], field_sections
     return {"sections": [{"link": own[link], "fields": items} for link, items in sections.items()]}, ""
 
 
+def _holds(current: Any, value: Any) -> bool:
+    """Whether the item's current value of a field is ``value`` (a picklist option is held as ``{"link": ...}``)."""
+    if isinstance(value, str) and value.startswith(LOOKUPS + "/"):
+        return isinstance(current, dict) and current.get("link") == value
+    return display_text(current).strip() == str(value).strip()
+
+
 def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any]], static_values: List[Any],
-                 field_sections: Dict[str, str], files: Optional[List[Tuple[str, Any]]] = None) -> Tuple[Optional[Dict[str, Any]], str]:
+                 field_sections: Dict[str, str], files: Optional[List[Tuple[str, Any]]] = None,
+                 current: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Dict[str, Any]], str]:
     """``(request, reason)`` for one item: create it (POST), update what differs (PATCH), or nothing (request None).
 
     ``fm`` is the comparison's Fusion Manage info (``state``, ``item_id``) and ``rows`` the
-    compared property rows. The static values are always sent, on a new item and on an existing one.
-    A new item also gets every mapped value that has one; an existing one only the mapped values that
-    differ. ``files`` are (field id, value) pairs for image fields; they cannot be compared, so they are
-    sent on every create and update. ``field_sections`` maps each field id to its section link,
+    compared property rows. A new item gets every mapped value that has one and every static value. An
+    existing one gets the mapped values that differ and the static values it does not hold yet (``current``
+    is its values as Fusion Manage holds them; without it every static value is sent), and nothing at all
+    when none differ. ``files`` are (field id, value) pairs for image fields; they cannot be compared, so
+    they go along with a create or an update that has a difference. ``field_sections`` maps each field id to its section link,
     because Fusion Manage takes the values grouped by section.
     """
     state = fm.get("state")
@@ -49,9 +59,12 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any
         fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == NEW and r["value"] != ""] + statics
         method, url = "POST", f"{WORKSPACES}/{workspace_id}/items"
     elif state == FOUND:
-        fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == MISMATCH] + statics
+        wanted = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id]
+        fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == MISMATCH] + [
+            (field_id, value) for field_id, value in wanted if current is None or not _holds(current.get(field_id), value)]
         if not fields:
             return None, "Fusion Manage already has the same values."
+        fields += list(files or [])
         method, url = "PATCH", f"{WORKSPACES}/{workspace_id}/items/{fm.get('item_id')}"
     else:
         return None, fm.get("message") or f"Fusion Manage state is {state}."

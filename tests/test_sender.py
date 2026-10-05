@@ -101,6 +101,13 @@ class SendRunTests(unittest.TestCase):
         self.assertEqual(body["urn"], "urn:x:TEST.57.102")
         self.assertEqual(len(logged), 3)
 
+    def test_every_item_is_sent_before_any_bom_line(self):
+        fm = FakeFm()
+        items = {n: create(n) for n in ("A", "B", "C", "D")}
+        self.run_send(fm, items, {"A": [bom_add("A", "B")], "C": [bom_add("C", "D")]})
+        kinds = ["bom" if p.endswith("/bom-items") else "item" for m, p, b in fm.sent]
+        self.assertEqual(kinds, ["item"] * 4 + ["bom"] * 2)
+
     def test_a_failed_item_stops_its_bom_but_not_the_others(self):
         fm = FakeFm(refuse="?bad")
         run, _ = self.run_send(fm, {"A": create("A"), "B": {"method": "POST", "url": "/api/v3/workspaces/57/items?bad", "body": {}}},

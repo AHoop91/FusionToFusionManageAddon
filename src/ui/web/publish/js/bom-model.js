@@ -158,7 +158,7 @@
 
   /**
    * What publishing does: the components whose Fusion Manage item is created or updated (the design and every
-   * line that is new, or the design side of a differing pair) and the BOM operations (add, update the quantity,
+   * component of it; the comparison finds out which of them differ) and the BOM operations (add, update the quantity,
    * remove, renumber a kept line), each naming its parent by item number. Fusion Manage only lines with no
    * choice are left alone.
    */
@@ -192,8 +192,8 @@
           break;
         default: break;
       }
-      const creates = item.status === 'new' || item.status === 'added' || item.status === 'mismatch';
-      if (creates && item.component && item.component.id && !seen[item.component.id]) {
+      // Every design component goes through the comparison, so an existing item is updated when its properties differ.
+      if (item.component && item.component.id && !seen[item.component.id]) {
         seen[item.component.id] = true;
         components.push(item.component);
       }

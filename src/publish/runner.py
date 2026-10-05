@@ -1,9 +1,10 @@
-"""One publish run: write the requests and files of the changed items into a folder.
+"""One publish run: write the requests and files of the items into a folder, and send them to Fusion Manage.
 
 A run is a job in the ``JobQueue``. ``work`` runs on the queue's worker thread and does everything
 that needs the network (Data Model and Fusion Manage reads, thumbnail downloads) and writes the
-JSON; the items are prepared several at a time. Nothing here touches the Fusion API, so a run
-never blocks Fusion and does not need the design to stay open.
+JSON; the items are prepared several at a time, and each is sent as soon as its request is written.
+Once every item is done, the Bill of Materials of each parent is sent (``sender``). Nothing here
+touches the Fusion API, so a run never blocks Fusion and does not need the design to stay open.
 """
 
 import base64
@@ -14,25 +15,28 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
+from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
 from ..core.logging_setup import get_logger
-from ..fm.client import FmClient
+from ..fm.client import FmApiError, FmClient
+from ..fm.items import ItemService
 from ..fm.sections import SectionService
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
 from ..fusion_mfg.model_service import read_section, read_thumbnail_url
 from ..sync.item_compare import compare_item
-from ..sync.property_compare import NEW
+from ..sync.property_compare import FOUND, NEW
 from .bom_requests import bom_requests
 from .download import download
 from .item_requests import item_request
+from .placeholders import Unresolved
+from .sender import Dispatcher
+from .states import CANCELLED, DONE, ERROR, FINISHED, QUEUED, RUNNING, time_now  # noqa: F401 - the states are also imported from here
 from .writer import FAILED, OK, SKIPPED, PublishFolder, safe_name
 
 log = get_logger("publish")
 
 WORKERS = 5   # items prepared at once
-
-QUEUED, RUNNING, DONE, ERROR, CANCELLED = "queued", "running", "done", "error", "cancelled"
-FINISHED = (DONE, ERROR, CANCELLED)
+SENT = "sent to Fusion Manage"   # the artifact of an item that was sent
 
 
 class PublishRun:
@@ -41,8 +45,11 @@ class PublishRun:
     kind = "publish"
 
     def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: MfgGraphQlClient,
-                 fm: FmClient, model_id: str, time: str) -> None:
+                 fm: FmClient, model_id: str, time: str, send: bool = False) -> None:
         self.folder, self.job, self.cfg = folder, job, cfg
+        self.sends = send   # send each item as it is written, then the Bill of Materials
+        self.stage = "items"   # items -> bom (only when ``sends``)
+        self._dispatcher = Dispatcher(folder.path, fm, cfg.workspace_id) if send else None
         self._client, self._fm, self._model_id, self._time = client, fm, model_id, time
         self.id = uuid.uuid4().hex[:8]
         self._lock = threading.Lock()
@@ -58,6 +65,11 @@ class PublishRun:
             {"item": _number(i), "description": str(i.get("description") or i.get("name") or ""), "root": bool(i.get("root")),
              "status": QUEUED, "detail": ""} for i in job["items"]]
         self._row_of = {id(i): row for i, row in zip(job["items"], self.rows)}
+        self._bom_requests = bom_requests(cfg.workspace_id, job["operations"])
+        # A Bill of Materials is sent after the items, so its rows come last and are not counted in the items processed.
+        self._bom_row_of = {parent: {"item": parent, "description": f"Bill of Materials, {len(lines)} request(s)", "root": False,
+                                     "status": QUEUED, "detail": ""} for parent, lines in self._bom_requests.items()} if send else {}
+        self.rows.extend(self._bom_row_of.values())
         self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
         self.queued_at = time_now()
         self.started_at = 0.0
@@ -79,12 +91,30 @@ class PublishRun:
                 list(pool.map(self._prepare, self.job["items"]))
             if not self.cancelled:
                 self._bom()
+            log.info("Prepared %d item(s) in %.1fs", len(self.job["items"]), time.monotonic() - started)
+            if self.sends and not self.cancelled:
+                self._send_boms()   # only now: every item has been created or updated
         except Exception as exc:
             log.exception("Publish run failed")
             self._finish(ERROR, str(exc) or type(exc).__name__)
             return
-        log.info("Prepared %d item(s) in %.1fs", len(self.job["items"]), time.monotonic() - started)
         self._finish(CANCELLED if self.cancelled else DONE, "Cancelled." if self.cancelled else "")
+
+    def _send_boms(self) -> None:
+        """Send the Bill of Materials of each parent, one after the other; a failure stops that parent only."""
+        self._set(stage="bom")
+        for parent, lines in self._bom_requests.items():
+            if self.cancelled:
+                break
+            row = self._bom_row_of[parent]
+            self._set(current=parent)
+            row["status"] = RUNNING
+            try:
+                row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled)
+                row["status"] = CANCELLED if row["detail"].startswith("Cancelled") else DONE
+            except (FmApiError, AuthError, Unresolved) as exc:
+                row["status"], row["detail"] = ERROR, str(exc)
+                self.folder.record(parent, SENT, FAILED, str(exc))
 
     def _prepare(self, item: Dict[str, Any]) -> None:
         """One item, on a pool thread; a failure here never stops the others."""
@@ -124,8 +154,11 @@ class PublishRun:
 
         result = compare_item(properties, component, self.cfg, self._fm, str(item.get("fm_item") or ""))
         compare_time = time.monotonic() - began - read_time
+        current = None   # what an existing item holds now, to tell which static values it lacks
+        if result["fm"].get("state") == FOUND and result["fm"].get("item_id") and any(s.fm_field_id for s in self.cfg.static_values):
+            current = ItemService(self._fm).read_values(self.cfg.workspace_id, result["fm"]["item_id"])
         request, reason = item_request(self.cfg.workspace_id, result["fm"], result["rows"], self.cfg.static_values,
-                                       self._field_sections, files)
+                                       self._field_sections, files, current)
         blank = [f"{r['name']} (-> {r['fm_field']})" for r in result["rows"]
                  if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
         if blank:
@@ -139,9 +172,19 @@ class PublishRun:
                                self.folder.write_json(request_file, request))
         self.folder.items[number] = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""),
                                      "request": request_file}
+        if self._dispatcher:
+            self._dispatcher.learn(number, self.folder.items[number]["id"])
+            if request is not None:
+                self._send_item(number, request)
 
         log.info("Prepared %s in %.1fs (Data Model %.1fs, Fusion Manage %.1fs)", number,
                  time.monotonic() - began, read_time, compare_time)
+
+    def _send_item(self, number: str, request: Dict[str, Any]) -> None:
+        try:
+            self.folder.record(number, SENT, OK, self._dispatcher.send_item(number, request))
+        except (FmApiError, AuthError) as exc:
+            self.folder.record(number, SENT, FAILED, str(exc))
 
     def _thumbnail(self, number: str, folder: str, component_id: str, stored_url: str) -> str:
         """Save the thumbnail and return it as a ``data:image/png;base64,...`` value for an image field ("" if none).
@@ -166,7 +209,7 @@ class PublishRun:
             return ""
 
     def _bom(self) -> None:
-        requests = bom_requests(self.cfg.workspace_id, self.job["operations"])
+        requests = self._bom_requests
         for parent, items in requests.items():
             relative = os.path.join("bom", safe_name(parent) + ".bom.request.json")
             self.folder.record(parent, "bom requests", OK, f"{len(items)} request(s)",
@@ -189,9 +232,12 @@ class PublishRun:
             for name, value in changes.items():
                 setattr(self, name, value)
 
-    def _finish(self, phase: str, message: str) -> None:
+    def _save_manifest(self, message: str) -> None:
         self.folder.save_manifest({"root": self.job.get("root_number", ""), "workspace_id": self.cfg.workspace_id, "tenant": self._fm.tenant,
                                    "model": f"{self._model_id}|{self._time}", "cancelled": self.cancelled, "message": message})
+
+    def _finish(self, phase: str, message: str) -> None:
+        self._save_manifest(message)
         with self._lock:
             for row in self.rows:
                 if row["status"] == QUEUED:   # never reached: cancelled, or the run failed first
@@ -208,12 +254,8 @@ class PublishRun:
             return {"id": self.id, "kind": self.kind, "name": self.name, "phase": self.phase, "message": self.message, "current": self.current,
                     "done": self.done, "total": self.total, "queued_at": self.queued_at, "started_at": self.started_at,
                     "finished_at": self.finished_at, "folder": self.folder.path, "counts": counts,
-                    "rows": [dict(r) for r in self.rows]}
+                    "sends": self.sends, "stage": self.stage, "rows": [dict(r) for r in self.rows]}
 
 
 def _number(item: Dict[str, Any]) -> str:
     return str(item.get("item_number") or item.get("part_number") or "")
-
-
-def time_now() -> float:
-    return time.time()

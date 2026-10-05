@@ -127,12 +127,20 @@
     if (job.phase === 'queued') {
       return { title: 'Added to the publishing queue', status: job.place > 1 ? 'Waiting, number ' + job.place + ' in the queue.' : 'Waiting to start.', count: count, percent: null, tone: '' };
     }
+    if (job.phase === 'running' && job.stage === 'bom') {   // every item is done; the Bill of Materials goes last
+      return { title: 'Publishing ' + job.name, status: job.current ? 'Adding the Bill of Materials of ' + job.current + '.' : 'Adding the Bill of Materials.', count: count, percent: 100, tone: '' };
+    }
     if (job.phase === 'running') {
       return { title: 'Publishing ' + job.name, status: job.current ? 'Processing ' + job.current + '.' : 'Starting.', count: count, percent: total ? Math.round(job.done * 100 / total) : null, tone: '' };
     }
     if (job.phase === 'error') return { title: 'Publish failed', status: job.message || 'The publish could not be completed.', count: '', percent: 100, tone: 'error' };
     if (job.phase === 'cancelled') return { title: 'Publish cancelled', status: job.name + ' was not published.', count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
     const failed = failedRows(job);
+    if (job.sends) {
+      return failed
+        ? { title: 'Completed with errors', status: failed + ' step' + (failed === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' }
+        : { title: 'Published to Fusion Manage', status: job.name + ' was published to Fusion Manage.', count: count, percent: 100, tone: 'ok' };
+    }
     return failed
       ? { title: 'Completed with errors', status: failed + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' }
       : { title: 'Publish complete', status: job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.', count: count, percent: 100, tone: 'ok' };

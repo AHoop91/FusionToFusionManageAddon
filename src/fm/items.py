@@ -48,6 +48,21 @@ def collect_fields(node: Any, found: Optional[Dict[str, str]] = None) -> Dict[st
     return found
 
 
+def collect_values(node: Any, found: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Every ``field id -> value as Fusion Manage holds it`` (a picklist is ``{"link", "title"}``) found in an item's JSON."""
+    found = {} if found is None else found
+    if isinstance(node, dict):
+        match = FIELD_ID.search(str(node.get("__self__", "")))
+        if match and "value" in node:
+            found[match.group(1)] = node["value"]
+        for child in node.values():
+            collect_values(child, found)
+    elif isinstance(node, list):
+        for child in node:
+            collect_values(child, found)
+    return found
+
+
 def _hits(data: Any) -> List[Dict[str, str]]:
     """``{"id", "descriptor"}`` for each item of a search-results answer."""
     rows = data.get("items") if isinstance(data, dict) else None
@@ -79,6 +94,10 @@ class ItemService:
         hits = _hits(data)
         log.info("Item number %s matched %d item(s) in workspace %s", item_number, len(hits), workspace_id)
         return hits
+
+    def read_values(self, workspace_id: str, item_id: str) -> Dict[str, Any]:
+        """The item's fields as ``{field id: value}``, picklists as Fusion Manage holds them (for comparing with a link)."""
+        return collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}"))
 
     def read(self, workspace_id: str, item_id: str) -> Dict[str, str]:
         """The item's fields as ``{field id: text}``."""
