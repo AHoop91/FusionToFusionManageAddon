@@ -8,7 +8,6 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``property_actions``: the hub's custom properties for field mapping.
 * ``publish_actions``: the open model for the Publish Item panel.
 * ``linkable_actions``: pages of items the Add Items picker can add to the Bill of Materials.
-* ``bom_split_actions``: the Bill of Materials tab (currently a schema probe).
 * ``transfer_actions``: export and import the configuration file.
 
 ``register_actions`` is the only function the add-in entry point needs.
@@ -21,12 +20,10 @@ from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
 from .auth_actions import register_auth_actions
-from .bom_split_actions import register_bom_split_actions
 from .linkable_actions import register_linkable_actions
 from .property_actions import register_property_actions
 from .publish_actions import register_publish_actions
 from .publish_run_actions import register_publish_run_actions
-from .publish_probe_actions import register_publish_probe_actions
 from .settings_actions import register_settings_actions
 from .transfer_actions import register_transfer_actions
 from .workspace_actions import register_workspace_actions
@@ -43,7 +40,5 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_property_actions(bridge, config, auth)
     register_publish_actions(bridge, config, auth)
     register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)
-    register_bom_split_actions(bridge, config, auth)
-    register_publish_probe_actions(bridge, config, auth)
     register_linkable_actions(bridge, config, auth)
     register_transfer_actions(bridge, config, dialogs)

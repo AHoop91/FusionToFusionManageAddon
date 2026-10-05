@@ -206,7 +206,6 @@
       ensureSections();
       return;
     }
-    const reload = loaded[name];   // a repeat load (a Fusion Manage item was chosen)
     loaded[name] = true;
     if (name === 'properties') {
       if (entry.ok) details.setRoot(entry.data.compare);
@@ -220,7 +219,6 @@
     ns.bomModel.clearDecisions();   // fresh comparison: nothing is chosen or added yet
     fmItemId = entry.data.fm_item_id || '';
     renderBom(entry.data.rows, !!entry.data.pick);
-    if (!reload) bridge.send('probe_hidden_fields');   // development: log candidate "hidden" fields
   }
 
   /** Read the open design again (all sections), skipping the cached copies when ``force``. */
