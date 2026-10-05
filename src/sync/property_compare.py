@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from ..config.workspace_models import (
     BASE_PREFIX,
     CUSTOM_PREFIX,
+    DATA_MODEL_NAMES,
     SOURCE_FIELDS,
     FieldMapping,
 )
@@ -35,7 +36,12 @@ def source_property_name(source: str) -> str:
     for prefix in (CUSTOM_PREFIX, BASE_PREFIX):
         if source.startswith(prefix):
             return source[len(prefix):]
-    return _LABELS.get(source, "")
+    return DATA_MODEL_NAMES.get(source) or _LABELS.get(source, "")
+
+
+def _key(name: str) -> str:
+    """Property names compare without case or spaces: "Material Name" is the Data Model's materialName."""
+    return name.replace(" ", "").lower()
 
 
 def source_value(source: str, summary: Dict[str, Any], values: Dict[str, str]) -> str:
@@ -44,7 +50,7 @@ def source_value(source: str, summary: Dict[str, Any], values: Dict[str, str]) -
               "description": summary.get("description", "")}
     if source in direct and direct[source]:
         return str(direct[source])
-    return values.get(source_property_name(source).strip().lower(), "")
+    return values.get(_key(source_property_name(source)), "")
 
 
 def _same(left: str, right: str) -> bool:
@@ -55,14 +61,14 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
                        mappings: List[FieldMapping], fm_fields: Optional[Dict[str, str]],
                        fm_state: str) -> List[Dict[str, Any]]:
     """One row per property, plus rows for mapped sources that are not listed."""
-    values = {p["name"].strip().lower(): p["value"] for p in properties}
+    values = {_key(p["name"]): p["value"] for p in properties}
     by_name: Dict[str, FieldMapping] = {}
     for mapping in mappings:
         if mapping.source and mapping.fm_field_id:
-            by_name[source_property_name(mapping.source).strip().lower()] = mapping
+            by_name[_key(source_property_name(mapping.source))] = mapping
 
     names = [(p["name"], p["value"]) for p in properties]
-    listed = {n.strip().lower() for n, _ in names}
+    listed = {_key(n) for n, _ in names}
     for key, mapping in by_name.items():
         if key and key not in listed:   # e.g. "Part number" when the hub lists it differently
             names.append((source_property_name(mapping.source),
@@ -70,7 +76,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
 
     rows = []
     for name, value in names:
-        mapping = by_name.get(name.strip().lower())
+        mapping = by_name.get(_key(name))
         if mapping is None:
             rows.append({"name": name, "value": value, "fm_field": "", "fm_value": "", "status": UNMAPPED})
             continue

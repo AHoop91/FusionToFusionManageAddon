@@ -2,7 +2,7 @@
  * Workspaces tab: one card with a tab per Fusion Manage workspace ("Items", ...).
  *
  * Each tab stacks that workspace's sections: Workspace ID with Validate,
- * Options (Publish Bill of Materials, Publish STEP Representation, ...) and Field
+ * Options (none today) and Field
  * mapping (source field -> Fusion Manage field id, one row optionally the
  * match key). Kinds, options and source fields come from the catalog Python
  * sends, so a new workspace or option only needs a Python-side entry.
@@ -274,7 +274,7 @@
       if ((fmFields[kind] || []).length) return 'No matching fields';
       return fmFieldsError[kind] || 'No fields loaded. Validate the workspace first.';
     },
-    taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field'); },
+    taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap)); },
     label: function (value) {
       // Show the title with the id that is actually stored.
       for (const kind in fmFields) {
@@ -291,6 +291,76 @@
         items.push({ value: current, label: current });
       }
       return items.length ? [{ title: 'Fusion Manage Fields', items: items }] : [];
+    },
+  };
+
+  const fmPicklists = {};     // kindId -> {lookupId: [{value, title}]}
+
+  /** The options for a fixed-list field, or null when the field takes free text. */
+  function picklistFor(kind, fieldId) {
+    const field = (fmFields[kind] || []).filter(function (f) { return f.id === fieldId; })[0];
+    return field && field.picklist && (fmPicklists[kind] || {})[field.picklist] || null;
+  }
+
+  /** Picker config for the options of one picklist; the stored value is the option's link. */
+  function valueCfg(options) {
+    return {
+      valueClass: 'ws-static-value',
+      alignRight: true,
+      placeholder: 'Choose a value...',
+      search: 'Search values...',
+      empty: function () { return 'No matching values'; },
+      label: function (value) {
+        const option = options.filter(function (o) { return o.value === value; })[0];
+        return option ? option.title : value;
+      },
+      groups: function (current) {
+        const items = options.map(function (o) { return { value: o.value, label: o.title }; });
+        // A saved value no longer in the list must still be shown.
+        if (current && !options.some(function (o) { return o.value === current; })) {
+          items.push({ value: current, label: current });
+        }
+        return [{ title: 'Values', items: items }];
+      },
+    };
+  }
+
+  /** The workspace's chosen component-linking field, as a list so it can join the "taken" values. */
+  function componentValue(wrap) {
+    const panel = wrap.closest('.ws-kind');
+    const input = panel && panel.querySelector('.ws-component-field');
+    return input && input.value ? [input.value] : [];
+  }
+
+  /** Picker config for the field that links an item to a component: fields using the component picklist. */
+  const componentCfg = {
+    valueClass: 'ws-component-field',
+    alignRight: true,
+    placeholder: 'Choose the linking field...',
+    search: 'Search fields...',
+    empty: function (wrap) {
+      const kind = kindOf(wrap);
+      if ((fmFields[kind] || []).length) return 'No field links to the component picklist';
+      return fmFieldsError[kind] || 'No fields loaded. Validate the workspace first.';
+    },
+    taken: function (wrap) {
+      const panel = wrap.closest('.ws-kind');
+      const values = [];
+      if (panel) {
+        panel.querySelectorAll('.ws-row .ws-fm-field').forEach(function (i) { if (i.value) values.push(i.value); });
+      }
+      return values;
+    },
+    label: fmFieldCfg.label,
+    groups: function (current, wrap) {
+      const kind = kindOf(wrap);
+      const lookup = (catalog.kinds.filter(function (k) { return k.id === kind; })[0] || {}).component_lookup;
+      const fields = (fmFields[kind] || []).filter(function (f) { return lookup && f.link_lookup === lookup; });
+      const items = fields.map(function (f) { return { value: f.id, label: f.title, detail: f.id + ' · ' + f.type }; });
+      if (current && !fields.some(function (f) { return f.id === current; })) {
+        items.push({ value: current, label: current });
+      }
+      return items.length ? [{ title: 'Component linking fields', items: items }] : [];
     },
   };
 
@@ -326,6 +396,13 @@
     row.querySelector('.ws-key').style.opacity = canMatch ? '' : '0.4';
   }
 
+  /** A round button with a drawn X, so it looks the same everywhere. */
+  function removeButton() {
+    const button = el('button', 'ws-remove');
+    button.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    return button;
+  }
+
   /** Build one mapping row; the match-key radio group is per workspace kind. */
   function mappingRow(kindId, mapping) {
     const row = el('div', 'ws-row');
@@ -338,14 +415,17 @@
     const key = el('label', 'ws-key');
     key.title = 'Match key: identifies an existing item so it is updated, not duplicated';
     const radio = el('input', 'ws-match');
-    radio.type = 'radio';
-    radio.name = 'match-' + kindId;
+    radio.type = 'checkbox';   // square box, but only one row can hold the key
+    radio.addEventListener('change', function () {
+      if (!radio.checked) return;
+      const panel = row.closest('.ws-kind');
+      if (panel) panel.querySelectorAll('.ws-match').forEach(function (other) { if (other !== radio) other.checked = false; });
+    });
     radio.checked = !!mapping.match_key;
     key.appendChild(radio);
-    key.appendChild(el('span', '', 'Key'));
     row.appendChild(key);
 
-    const remove = el('button', 'ws-remove', '×');
+    const remove = removeButton();
     remove.type = 'button';
     remove.title = 'Remove mapping';
     remove.addEventListener('click', function () { row.remove(); });
@@ -356,18 +436,37 @@
   }
 
   /** A Fusion Manage field that always gets the same value. */
-  function staticRow(item) {
+  function staticRow(kindId, item) {
     const row = el('div', 'ws-row ws-static-row');
-    row.appendChild(makePicker(fmFieldCfg, item.fm_field_id || ''));
+    const fieldPicker = makePicker(fmFieldCfg, item.fm_field_id || '');
+    row.appendChild(fieldPicker);
     row.appendChild(el('span', 'ws-arrow', '='));
-    const value = el('input', 'ws-static-value');
-    value.type = 'text';
-    value.placeholder = 'Static value';
-    value.autocomplete = 'off';
-    value.spellcheck = false;
-    value.value = item.value || '';
-    row.appendChild(value);
-    const remove = el('button', 'ws-remove', '×');
+    // The value is typed, or picked from the options when the field is a picklist.
+    const slot = el('div', 'ws-static-slot');
+    row.appendChild(slot);
+    function buildValue(current) {
+      slot.textContent = '';
+      const fieldId = fieldPicker.querySelector('.ws-fm-field').value;
+      const options = picklistFor(kindId, fieldId);
+      if (options) {
+        slot.appendChild(makePicker(valueCfg(options), current));
+        return;
+      }
+      const value = el('input', 'ws-static-value');
+      value.type = 'text';
+      value.placeholder = 'Static value';
+      value.autocomplete = 'off';
+      value.spellcheck = false;
+      value.value = current;
+      slot.appendChild(value);
+    }
+    row.rebuildValue = function () {
+      const old = slot.querySelector('.ws-static-value');
+      buildValue(old ? old.value : '');
+    };
+    fieldPicker.addEventListener('pick', function () { buildValue(''); });
+    buildValue(item.value || '');
+    const remove = removeButton();
     remove.type = 'button';
     remove.title = 'Remove static value';
     remove.addEventListener('click', function () { row.remove(); });
@@ -388,7 +487,7 @@
 
   /** Lock or unlock every gated section of a card and show the status text. */
   function setValid(card, valid, message) {
-    card.querySelectorAll('.ws-locked').forEach(function (f) { f.disabled = !valid; });
+    card.querySelectorAll('.ws-locked, .ws-lock-btn').forEach(function (f) { f.disabled = !valid; });
     card.querySelectorAll('.ws-hint').forEach(function (h) { h.hidden = valid; });
     const status = card.querySelector('.ws-status');
     // Success is shown by the tick; only failures get a message.
@@ -465,6 +564,11 @@
       blocked[result.kind] = result.blocked || {};
       fmFields[result.kind] = result.fields || [];
       fmFieldsError[result.kind] = result.fields_error || '';
+      fmPicklists[result.kind] = result.picklists || {};
+      // Saved ids show their titles once the field list is known.
+      card.querySelectorAll('.ws-component-field').forEach(function (i) { refreshPicker(i.parentNode, componentCfg); });
+      // Static rows built before validation (typed values) become pickers where the field has a list.
+      card.querySelectorAll('.ws-static-row').forEach(function (row) { row.rebuildValue(); });
       loadProperties();   // custom properties are per hub, so refresh with each validation
     } else {
       delete validated[result.kind];
@@ -525,6 +629,7 @@
   function buildOptionsSection(kind, config) {
     const section = el('div', 'ws-section');
     section.appendChild(buildIdSection(kind, config));
+    if (!(kind.options || []).length) return section;   // no options: the mapping section carries the hint
     section.appendChild(hint());
     section.appendChild(lockedSection((kind.options || []).map(function (o) {
       const row = el('label', 'ws-option');
@@ -545,30 +650,155 @@
     return section;
   }
 
-  /** Source field -> FM field id rows. */
+  /** Column titles above a block of rows; the spans line up with the row's grid columns. */
+  function columnHeads(titles, className) {
+    const row = el('div', 'ws-cols ' + (className || ''));
+    titles.forEach(function (t) { row.appendChild(el('span', '', t)); });
+    return row;
+  }
+
+  const INFO_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7.5" r="1.4" fill="#fff"/></svg>';
+
+  /** Close any open info tip. */
+  function closeTips(except) {
+    document.querySelectorAll('.ws-tip-wrap.open').forEach(function (w) { if (w !== except) w.classList.remove('open'); });
+  }
+  document.addEventListener('click', function (e) { if (!e.target.closest('.ws-tip-wrap')) closeTips(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTips(); });
+
+  /** An info icon button; clicking it shows or hides a tip with `text`. */
+  function infoTip(text) {
+    const wrap = el('span', 'ws-tip-wrap');
+    const btn = el('button', 'ws-tip-btn');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'More information');
+    btn.innerHTML = INFO_ICON;
+    const tip = el('span', 'ws-tip', text);
+    tip.setAttribute('role', 'tooltip');
+    btn.addEventListener('click', function () {
+      const open = !wrap.classList.contains('open');
+      closeTips(wrap);
+      wrap.classList.toggle('open', open);
+    });
+    wrap.appendChild(btn);
+    wrap.appendChild(tip);
+    return wrap;
+  }
+
+  /** A sub-heading with an info icon (click for what the block does) and an optional action at the right. */
+  function blockTitle(title, text, action) {
+    const box = el('div', 'ws-block-title');
+    const head = el('div', 'ws-block-head');
+    const name = el('div', 'ws-block-namebox');
+    name.appendChild(el('h4', 'ws-block-name', title));
+    if (text) name.appendChild(infoTip(text));
+    head.appendChild(name);
+    if (action) head.appendChild(action);   // sits at the right of the title
+    box.appendChild(head);
+    return box;
+  }
+
+  /** Ask before "Add default fields" replaces the mapped fields; ``onYes`` runs if the user agrees. */
+  function confirmDefaults(onYes) {
+    const overlay = el('div', 'ws-dialog-overlay');
+    const box = el('div', 'ws-dialog');
+    box.setAttribute('role', 'alertdialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'ws-dialog-title');
+    const title = el('h3', 'ws-dialog-title', 'Load default fields?');
+    title.id = 'ws-dialog-title';
+    box.appendChild(title);
+    box.appendChild(el('p', 'ws-dialog-text',
+      'Loading the default fields replaces all existing field mappings with the standard set. Any mappings you have added or changed will be removed. Do you want to continue?'));
+    const note = el('div', 'ws-info');
+    note.setAttribute('role', 'note');
+    const icon = el('span', 'ws-info-icon');
+    icon.innerHTML = INFO_ICON;
+    note.appendChild(icon);
+    note.appendChild(el('p', 'ws-info-text',
+      'The defaults reflect the out-of-the-box Items workspace. If your workspace has been customized, you will need to adjust the mappings manually.'));
+    box.appendChild(note);
+
+    const actions = el('div', 'ws-dialog-actions');
+    const cancel = el('button', 'btn btn-secondary', 'Cancel');
+    const ok = el('button', 'btn', 'Load default fields');
+    cancel.type = ok.type = 'button';
+    actions.appendChild(cancel);
+    actions.appendChild(ok);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+
+    function close() { document.removeEventListener('keydown', onKey); overlay.remove(); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    cancel.addEventListener('click', close);
+    ok.addEventListener('click', function () { close(); onYes(); });
+    overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    cancel.focus();
+  }
+
+  /** The Fusion Manage field that links each item to its component. */
+  function buildComponentSection(kind, config) {
+    const section = el('div', 'ws-section');
+    section.appendChild(heading('Component linking'));
+    section.appendChild(hint());
+    const block = el('div', 'ws-block');
+    block.appendChild(blockTitle('Component field',
+      'The Fusion Manage field that links an item to its component. It must be a picklist that uses the component workspace list (' + kind.component_lookup + ').'));
+    block.appendChild(makePicker(componentCfg, config.component_field || ''));
+    section.appendChild(lockedSection([block]));
+    return section;
+  }
+
+  /** Source field -> FM field id rows, then the static values. */
   function buildMappingSection(kind, config) {
     const section = el('div', 'ws-section');
-    section.appendChild(heading('Field mapping'));
+    const head = el('div', 'ws-section-head');   // heading on the left, Add default fields on the right
+    head.appendChild(heading('Field mapping'));
+    section.appendChild(head);
     section.appendChild(hint());
+
     const rows = el('div', 'ws-rows');
     config.mappings.forEach(function (m) { rows.appendChild(mappingRow(kind.id, m)); });
-    const statics = el('div', 'ws-rows');
-    (config.static_values || []).forEach(function (s) { statics.appendChild(staticRow(s)); });
-
-    const add = el('button', 'btn btn-secondary', 'Add Field Mapping');
+    const add = el('button', 'ws-add-btn', '+ Add field mapping');
     add.type = 'button';
     add.addEventListener('click', function () {
       rows.appendChild(mappingRow(kind.id, { source: '', fm_field_id: '', match_key: false }));
     });
-    const addStatic = el('button', 'btn btn-secondary', 'Add Static Value');
+    const defaults = el('button', 'btn btn-secondary ws-defaults ws-lock-btn', 'Add default fields');
+    defaults.type = 'button';
+    defaults.title = 'Replace the mapped fields with the standard mappings (part number, name, description)';
+    defaults.addEventListener('click', function () {
+      confirmDefaults(function () {
+        rows.innerHTML = '';
+        (kind.default_mappings || []).forEach(function (m) {
+          rows.appendChild(mappingRow(kind.id, { source: m.source, fm_field_id: m.fm_field_id, match_key: m.match_key }));
+        });
+      });
+    });
+    head.appendChild(defaults);
+    const mapping = el('div', 'ws-block');
+    mapping.appendChild(blockTitle('Mapped fields',
+      'Maps each Fusion field to a field in the Fusion Manage workspace. Select Key on the one mapping used to identify existing items, so a matching item is updated rather than duplicated.'));
+    mapping.appendChild(columnHeads(['Fusion field', '', 'Manage field', 'Key', ''], 'ws-cols-map'));
+    mapping.appendChild(rows);
+    mapping.appendChild(add);
+
+    const statics = el('div', 'ws-rows');
+    (config.static_values || []).forEach(function (s) { statics.appendChild(staticRow(kind.id, s)); });
+    const addStatic = el('button', 'ws-add-btn', '+ Add static value');
     addStatic.type = 'button';
     addStatic.addEventListener('click', function () {
-      statics.appendChild(staticRow({ fm_field_id: '', value: '' }));
+      statics.appendChild(staticRow(kind.id, { fm_field_id: '', value: '' }));
     });
-    const buttons = el('div', 'ws-add');
-    buttons.appendChild(add);
-    buttons.appendChild(addStatic);
-    section.appendChild(lockedSection([rows, statics, buttons]));
+    const fixed = el('div', 'ws-block');
+    fixed.appendChild(blockTitle('Static values', 'Sets a Fusion Manage field to the same fixed value on every published item, regardless of the design.'));
+    fixed.appendChild(columnHeads(['Manage field', '', 'Value', ''], 'ws-cols-static'));
+    fixed.appendChild(statics);
+    fixed.appendChild(addStatic);
+
+    section.appendChild(lockedSection([mapping, fixed]));
     return section;
   }
 
@@ -581,6 +811,7 @@
     panel.dataset.kind = kind.id;
     panel.appendChild(el('p', 'ws-desc muted', kind.description));
     panel.appendChild(buildOptionsSection(kind, config));
+    if (kind.component_lookup) panel.appendChild(buildComponentSection(kind, config));
     panel.appendChild(buildMappingSection(kind, config));
 
     // Overlay shown while the workspace is being validated.
@@ -647,8 +878,18 @@
 
   // ---- Public API ---------------------------------------------------------
 
+  /** Validate every workspace that has an id but is not validated yet (on opening the tab). */
+  function autoValidate() {
+    $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
+      const button = card.querySelector('.ws-validate');
+      if (!button.disabled && card.querySelector('.ws-id').value.trim() && !polling[card.dataset.kind]) button.click();
+    });
+  }
+
   /** Listen for validation results. Call once at start-up. */
   function init() {
+    const tab = document.querySelector('.tab[data-tab="workspaces"]');
+    if (tab) tab.addEventListener('click', autoValidate);
     ns.bridge.on('validate_workspace', onValidated);
     ns.bridge.on('validate_workspace_status', onValidated);
     ns.bridge.on('list_custom_properties', onProperties);
@@ -668,6 +909,8 @@
         if (tab.textContent === active.textContent) tab.click();
       });
     }
+    // Settings can load while the Workspaces tab is already showing.
+    if ($('sub-workspaces').classList.contains('active')) autoValidate();
   }
 
   /** Read every card back into the `workspaces` payload Python expects. */
@@ -681,6 +924,7 @@
       result[card.dataset.kind] = {
         workspace_id: card.querySelector('.ws-id').value,
         options: options,
+        component_field: (card.querySelector('.ws-component-field') || { value: '' }).value,
         mappings: Array.prototype.map.call(card.querySelectorAll('.ws-row:not(.ws-static-row)'), function (row) {
           return {
             source: row.querySelector('.ws-source').value,

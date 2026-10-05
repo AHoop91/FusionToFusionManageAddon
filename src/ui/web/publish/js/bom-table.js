@@ -336,8 +336,8 @@
 
   // Column widths (px; 0 = takes the rest). The user can drag a header edge; each layout remembers its own widths.
   const NARROW = window.matchMedia('(max-width: 760px)');
-  const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84, 116], narrow: [0, 76, 76, 44, 76] };
-  const MIN_WIDTHS = [120, 64, 64, 36, 72];
+  const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84, 116], narrow: [0, 76, 76, 72, 84] };
+  const MIN_WIDTHS = [120, 64, 64, 56, 72];
   const HEADS = [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num'], ['Status', 'pub-cmp-status']];
   const dragged = { wide: {}, narrow: {} };   // layout -> column index -> width the user chose
 
@@ -358,6 +358,7 @@
       // Once the Item column has a width of its own the table is exactly as wide as its columns (it scrolls when that is wider than the panel).
       table.style.width = dragged[key][0] !== undefined ? sum + 'px' : '';
       table.style.setProperty('--status-w', widthOf(4) + 'px');   // Qty sticks beside Status
+      table.style.setProperty('--qty-w', widthOf(3) + 'px');      // row buttons stick beside Qty
     }
     const group = el('colgroup');
     cols.forEach(function (col) { group.appendChild(col); });

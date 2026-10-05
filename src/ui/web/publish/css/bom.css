@@ -98,7 +98,6 @@
 @media (max-width: 760px) {
   .pub-cmp td.num { padding: 0 6px; }
   .pub-cmp-qty-input { width: 40px; }
-  .pub-cmp-actions { visibility: visible; }   /* no hover on touch */
   .pub-cmp-chip { width: 64px; }
   .pub-cmp-actions { gap: 2px; }
   .pub-cmp .pub-tree-seq { margin: 0 6px 0 8px; }
@@ -128,7 +127,7 @@
 .pub-cmp-fresh .pub-tree-cell { animation: pub-slide-in .3s ease-out; }
 @keyframes pub-slide-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 @keyframes pub-pop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
-@media (max-width: 760px) { .pub-cmp-act { opacity: 1; } }
+@media (max-width: 760px) and (hover: none) { .pub-cmp-actions { visibility: visible; } .pub-cmp-act { opacity: 1; } }   /* no hover on touch */
 @media (prefers-reduced-motion: reduce) {
   .pub-cmp td, .pub-cmp-chip, .pub-cmp-filter, .pub-cmp-act, .pub-cmp-actions, .pub-cmp-fresh td, .pub-cmp-fresh .pub-tree-cell { transition: none; animation: none; }
 }
@@ -158,6 +157,8 @@
   .pub-cmp-filters .pub-cmp-filter { display: none; }
   .pub-cmp-menu { display: block; }
   .pub-cmp { min-width: 640px; }
+  /* Row buttons stay in view just left of Qty instead of sitting at the far end of the scrolled item. */
+  .pub-cmp-actions { position: sticky; right: calc(var(--status-w, 84px) + var(--qty-w, 72px)); z-index: 1; padding-left: 16px; background: linear-gradient(to right, transparent, #fff 14px); }
 }
 
 /* Drag handle on the right edge of each column header. */

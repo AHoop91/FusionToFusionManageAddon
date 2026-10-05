@@ -22,6 +22,11 @@ class WorkspaceKind:
     options: tuple = ()   # WorkspaceOption entries shown on the workspace's tab
     # Short FM permission names the user needs on the workspace at all.
     required_permissions: tuple = ()
+    # (source field id, Fusion Manage field id, match key) rows the "Add default fields" button adds.
+    default_mappings: tuple = ()
+    # Name of the picklist that links an item to a component (e.g. CUSTOM_LOOKUP_WS_COMPONENTS_...);
+    # the workspace's Fusion Manage field using it is the "Component linking" field. Empty: none.
+    component_lookup: str = ""
 
 
 @dataclass(frozen=True)
@@ -52,18 +57,14 @@ class WorkspaceOption:
     permissions: tuple = ()
 
 
-ITEM_OPTIONS = (
-    WorkspaceOption("include_bom", "Publish Bill of Materials",
-                    "Push the item's BOM rows along with the item.", True,
-                    ("view_bom", "add_to_bom", "edit_bom")),
-    WorkspaceOption("include_step", "Publish STEP Representation",
-                    "Attach the STEP representation to the item.", False,
-                    ("view_attachments", "add_attachments")),
-)
+# The item BOM is always published, so its permissions are required rather than optional.
+ITEM_OPTIONS = ()
 
 WORKSPACE_KINDS = [
     WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.", ITEM_OPTIONS,
-                  ("view_items", "add_items", "edit_items")),
+                  ("view_items", "add_items", "edit_items", "view_bom", "add_to_bom", "edit_bom"),
+                  (("part_number", "NUMBER", True), ("name", "TITLE", False), ("description", "DESCRIPTION", False)),
+                  "CUSTOM_LOOKUP_WS_COMPONENTS_ALL_INCLUDING_WORKING"),
 ]
 
 KINDS_BY_ID = {k.kind_id: k for k in WORKSPACE_KINDS}
@@ -79,6 +80,9 @@ SOURCE_FIELDS = [
 ]
 
 _SOURCES_BY_ID = {f.field_id: f for f in SOURCE_FIELDS}
+
+# The Data Model's own name for a built-in source, where it differs from the label shown in Settings.
+DATA_MODEL_NAMES = {"material": "materialName"}
 
 # Hub properties are stored as "custom:<name>" or "base:<name>", so any
 # property defined on the Manufacturing Data Model item can be mapped by name.
@@ -145,6 +149,8 @@ class WorkspaceConfig:
     workspace_id: str = ""
     mappings: List[FieldMapping] = field(default_factory=list)
     static_values: List[StaticValue] = field(default_factory=list)
+    # The Fusion Manage field that links an item to its component ("" = not linked).
+    component_field: str = ""
     # option_id -> on/off; missing ids fall back to the option's default.
     options: Dict[str, bool] = field(default_factory=dict)
 
@@ -164,10 +170,15 @@ class WorkspaceConfig:
             seen.add(row.source)
             if not row.fm_field_id:
                 problems.append(f"{title}: enter a Fusion Manage field ID for every mapping.")
-        if sum(1 for row in self.mappings if row.match_key) > 1:
+        keys = sum(1 for row in self.mappings if row.match_key)
+        if keys > 1:
             problems.append(f"{title}: only one mapping can be the match key.")
+        elif keys == 0 and self.workspace_id:
+            problems.append(f"{title}: tick Key on one mapping so existing items in Fusion Manage can be matched.")
         # A Fusion Manage field can be filled once, by a mapping or a static value.
         targets = [row.fm_field_id for row in self.mappings if row.fm_field_id]
+        if self.component_field:
+            targets.append(self.component_field)
         for row in self.static_values:
             if not row.fm_field_id:
                 problems.append(f"{title}: choose a Fusion Manage field for every static value.")
@@ -181,6 +192,7 @@ class WorkspaceConfig:
         return {"workspace_id": self.workspace_id,
                 "mappings": [row.to_dict() for row in self.mappings],
                 "static_values": [row.to_dict() for row in self.static_values],
+                "component_field": self.component_field,
                 "options": dict(self.options)}
 
     @classmethod
@@ -194,6 +206,7 @@ class WorkspaceConfig:
         return cls(
             options=options,
             workspace_id=str(data.get("workspace_id", "")).strip(),
+            component_field=str(data.get("component_field", "")).strip(),
             mappings=[FieldMapping.from_dict(r) for r in rows if isinstance(r, dict)]
             if isinstance(rows, list) else [],
             static_values=[StaticValue.from_dict(r) for r in statics if isinstance(r, dict)]
@@ -235,7 +248,8 @@ class WorkspaceSettings:
 def catalog() -> Dict[str, Any]:
     """Static lists the panel needs to render workspace cards and mapping rows."""
     return {
-        "kinds": [{"id": k.kind_id, "title": k.title, "description": k.description,
+        "kinds": [{"id": k.kind_id, "title": k.title, "description": k.description, "component_lookup": k.component_lookup,
+                   "default_mappings": [{"source": m[0], "fm_field_id": m[1], "match_key": m[2]} for m in k.default_mappings],
                    "options": [{"id": o.option_id, "label": o.label, "description": o.description}
                                for o in k.options]}
                   for k in WORKSPACE_KINDS],

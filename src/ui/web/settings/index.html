@@ -130,11 +130,13 @@
           <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
         <!-- One card per workspace kind, built by workspaces.js. -->
         <div id="workspace-cards"></div>
-        <div class="row">
-          <button id="ws-save-btn" class="btn">Save</button>
-          <span id="ws-save-msg" class="muted"></span>
+        <div class="ws-footer">
+          <div class="row">
+            <p id="ws-save-error" class="error ws-alert" role="alert" hidden></p>
+            <span id="ws-save-msg" class="muted"></span>
+            <button id="ws-save-btn" class="btn">Save</button>
+          </div>
         </div>
-        <p id="ws-save-error" class="error" hidden></p>
         </fieldset>
       </section>
 

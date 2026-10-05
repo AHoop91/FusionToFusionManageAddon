@@ -8,8 +8,9 @@ Validating a workspace id means:
 * Each option (BOM, STEP) is checked against the permissions it
   needs. An option the user cannot use is reported as blocked, with a reason,
   so the panel can switch it off.
-* ``GET /api/v3/workspaces/{id}/views/1/fields`` supplies the field list for
-  the mapping picker.
+* ``GET /api/v3/workspaces/{id}/fields`` supplies the field list for the
+  mapping picker. Each fixed-list field's ``GET /api/v3/lookups/{name}``
+  supplies the options offered for its static value.
 """
 
 from typing import Any, Dict, List
@@ -22,7 +23,8 @@ from .client import FmApiError, FmClient
 log = get_logger("fm.workspace")
 
 PERMISSION_PREFIX = "permission.shortname."
-FIELDS_VIEW = 1   # view 1 lists the workspace's fields, e.g. /views/1/fields
+OPTIONS_PAGE = 100   # picklist options requested per call
+MAX_OPTIONS = 2000   # stop reading a picklist after this many options
 
 
 class WorkspaceService:
@@ -71,7 +73,7 @@ class WorkspaceService:
 
         result["valid"] = True
         result["message"] = f"Workspace '{workspace.get('name', workspace_id)}' is valid."
-        result["fields"], result["fields_error"] = self._fields(base)
+        result["fields"], result["picklists"], result["fields_error"] = self._fields(base)
         return result
 
     def _fields(self, base: str) -> Any:
@@ -81,10 +83,11 @@ class WorkspaceService:
         ``error`` in the empty field list instead.
         """
         try:
-            rows = self._client.get_json(f"{base}/views/{FIELDS_VIEW}/fields")
+            data = self._client.get_json(f"{base}/fields")
         except (FmApiError, AuthError) as exc:
             log.warning("Could not load fields for %s: %s", base, exc)
-            return [], f"Could not load the workspace's fields: {exc}"
+            return [], {}, f"Could not load the workspace's fields: {exc}"
+        rows = data.get("fields") if isinstance(data, dict) else data
         fields = []
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
@@ -93,10 +96,50 @@ class WorkspaceService:
             if not field_id:
                 continue
             kind = row.get("type") if isinstance(row.get("type"), dict) else {}
-            fields.append({"id": field_id, "title": str(row.get("title") or field_id),
-                           "type": str(kind.get("title", ""))})
+            # Fixed-list fields take one of the lookup's options. Fields that link to
+            # another workspace (picklistFieldDefinition) and fields nobody can edit are left as text.
+            lookup = ""
+            link_lookup = ""   # the picklist of a field that links to another workspace
+            if isinstance(row.get("picklist"), str) and row.get("picklistFieldDefinition"):
+                link_lookup = row["picklist"].rstrip("/").rsplit("/", 1)[-1]
+            if (isinstance(row.get("picklist"), str) and not row.get("picklistFieldDefinition")
+                    and row.get("editability") != "NEVER"):
+                lookup = row["picklist"].rstrip("/").rsplit("/", 1)[-1]
+            fields.append({"id": field_id, "title": str(row.get("name") or row.get("title") or field_id),
+                           "type": str(kind.get("title", "")), "picklist": lookup,
+                           "link_lookup": link_lookup})
         fields.sort(key=lambda f: f["title"].lower())
-        return fields, ""
+        picklists = {}
+        for lookup in sorted({f["picklist"] for f in fields if f["picklist"]}):
+            options = self._options(lookup)
+            if options:
+                picklists[lookup] = options
+        for f in fields:   # a list that could not be loaded leaves its field as plain text
+            if f["picklist"] not in picklists:
+                f["picklist"] = ""
+        return fields, picklists, ""
+
+    def _options(self, lookup: str) -> List[Dict[str, str]]:
+        """The options of one picklist as ``[{value: link, title}]``; empty if it cannot be read."""
+        options: List[Dict[str, str]] = []
+        offset = 0
+        try:
+            while offset < MAX_OPTIONS:
+                data = self._client.get_json(
+                    f"/api/v3/lookups/{lookup}?offset={offset}&limit={OPTIONS_PAGE}&filter=&asc=&desc=")
+                items = data.get("items") if isinstance(data, dict) else None
+                if not isinstance(items, list) or not items:
+                    break
+                for item in items:
+                    if isinstance(item, dict) and item.get("link"):
+                        options.append({"value": str(item["link"]), "title": str(item.get("title") or item["link"])})
+                offset += len(items)
+                if offset >= int(data.get("totalCount") or 0):
+                    break
+        except (FmApiError, AuthError, ValueError) as exc:
+            log.warning("Could not load picklist %s: %s", lookup, exc)
+            return []
+        return options
 
     @staticmethod
     def _granted(data: Any) -> set:

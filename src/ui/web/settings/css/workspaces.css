@@ -20,8 +20,21 @@
 .ws-heading { margin: 16px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Mapping table: source field -> FM field id, key radio, remove. */
-.ws-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.ws-pick-wrap { position: relative; flex: 1 1 0; min-width: 0; }
+.ws-row, .ws-cols { display: grid; align-items: center; column-gap: 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 68px 24px; }
+.ws-row { margin-bottom: 6px; }
+.ws-static-row, .ws-cols-static { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 24px; }
+.ws-arrow { text-align: center; }
+.ws-cols { margin-bottom: 6px; padding: 0;
+  font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ws-block { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.ws-block-name { margin: 0; font-size: 13px; font-weight: 600; }
+.ws-block-text { margin: 2px 0 10px; font-size: 12px; }
+.ws-add-btn { margin-top: 2px; padding: 4px 6px; border: 0; border-radius: 4px; background: none;
+  color: var(--accent); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.ws-add-btn:hover { background: var(--bg); }
+.ws-add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ws-add-btn:disabled { color: var(--muted); cursor: not-allowed; }
+.ws-pick-wrap { position: relative; min-width: 0; }
 .ws-pick-btn {
   padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--surface);
 }
@@ -70,9 +83,9 @@
   background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer;
 }
 .ws-remove:hover { background: var(--bg); color: var(--danger); }
-.ws-add { display: flex; gap: 8px; margin-top: 6px; }
+.ws-add { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
 .ws-static-value {
-  flex: 1 1 0; min-width: 0; padding: 5px 6px; border: 1px solid var(--border);
+  min-width: 0; padding: 5px 6px; border: 1px solid var(--border);
   border-radius: 4px; font: inherit; background: var(--surface);
 }
 
@@ -125,3 +138,62 @@
 .ws-locked:disabled .ws-option { cursor: not-allowed; }
 .ws-section { margin-bottom: 4px; }
 .ws-panel > .ws-desc { margin: 0; font-size: 12px; }
+
+/* Save stays in view at the bottom of the scrolling panel. */
+.ws-footer { position: sticky; bottom: -16px; z-index: 6; margin: 16px -16px -16px; padding: 10px 16px;
+  background: var(--surface); border-top: 1px solid var(--border); }
+.ws-footer .error { margin: 0 0 8px; }
+.ws-panel .ws-heading { margin-bottom: 0; }
+.ws-section > .ws-block:first-child, .ws-locked > .ws-block:first-child { margin-top: 6px; }
+.ws-footer .row { justify-content: flex-end; }
+.ws-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ws-defaults { flex: none; }
+.ws-defaults { margin-bottom: 14px; }
+.ws-block-title .ws-block-text { margin-bottom: 10px; }
+.ws-block-title .ws-defaults { display: block; margin-left: auto; }
+.ws-remove { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; transition: background 0.15s, color 0.15s; }
+.ws-remove:hover { background: #fdecea; color: var(--danger); }
+.ws-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ws-body .ws-key { align-self: stretch; justify-content: flex-start; gap: 8px; padding: 0 4px; cursor: pointer; }
+.ws-match { width: 20px; height: 20px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.ws-block-head { margin-bottom: 8px; }
+.ws-block-title .ws-defaults { margin: 0; }
+.ws-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.ws-section-head .ws-heading { margin: 0; }
+.ws-section-head .ws-defaults { margin: 0; }
+.ws-info { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; padding: 8px 10px;
+  border: 1px solid #b9dcf3; border-radius: 4px; background: #eef7fd; }
+.ws-info-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--accent); }
+.ws-info-text { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text); }
+.ws-footer .ws-alert { flex: 1; margin: 0; padding: 8px 10px 8px 34px; border: 1px solid #f1b8b8; border-left: 3px solid var(--danger);
+  border-radius: 4px; background: #fdf0ef center left 10px / 16px 16px no-repeat; font-size: 12px; line-height: 1.4; color: #9b1c1c;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23d62830'/%3E%3Cpath d='M12 6.5v6.5' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17' r='1.4' fill='%23fff'/%3E%3C/svg%3E"); }
+
+/* Confirm dialog for "Add default fields". */
+.ws-dialog-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .5); }
+.ws-dialog { width: 100%; max-width: 420px; max-height: 100%; overflow: auto; padding: 16px; background: #fff; border-radius: 4px; font-size: 12px; box-shadow: 0 11px 15px -7px rgba(0, 0, 0, .2), 0 24px 38px 3px rgba(0, 0, 0, .14), 0 9px 46px 8px rgba(0, 0, 0, .12); }
+.ws-dialog-title { margin: 0 0 8px; font-size: 15px; font-weight: 500; }
+.ws-dialog-text { margin: 0 0 12px; line-height: 1.4; }
+.ws-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* Info icon next to a block title; clicking it opens a tip. */
+.ws-block-namebox { display: flex; align-items: center; gap: 6px; }
+.ws-tip-wrap { position: relative; display: inline-flex; }
+.ws-tip-btn { display: inline-flex; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--accent); cursor: pointer; }
+.ws-tip-btn:hover, .ws-tip-wrap.open .ws-tip-btn { color: #0b5f9a; }
+.ws-tip { display: none; position: absolute; z-index: 20; top: calc(100% + 6px); left: -8px; width: 240px; padding: 8px 10px;
+  border-radius: 4px; background: #323232; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.4; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
+.ws-tip::before { content: ''; position: absolute; top: -4px; left: 12px; width: 8px; height: 8px; background: #323232; transform: rotate(45deg); }
+.ws-tip-wrap.open .ws-tip { display: block; }
+
+/* Roomier mapping rows: space under the block titles, larger fields, and a Key column that is just the box. */
+.ws-block-head { margin-bottom: 16px; }
+.ws-row, .ws-cols { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 28px 24px; }
+.ws-static-row, .ws-cols-static { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 24px; }
+.ws-row { margin-bottom: 8px; }
+.ws-cols span:nth-child(4) { text-align: center; }
+.ws-cols-static span:nth-child(4) { text-align: left; }
+.ws-body .ws-key { justify-content: center; padding: 0; }
+.ws-pick-btn, .ws-static-value { padding: 6px 8px; }
+.ws-static-slot { min-width: 0; }
+.ws-static-slot .ws-static-value:not([type="hidden"]) { width: 100%; box-sizing: border-box; }

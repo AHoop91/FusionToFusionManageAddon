@@ -6,6 +6,7 @@ JSON; the items are prepared several at a time. Nothing here touches the Fusion 
 never blocks Fusion and does not need the design to stay open.
 """
 
+import base64
 import os
 import threading
 import time
@@ -16,11 +17,14 @@ from typing import Any, Dict, List
 from ..config.workspace_models import WorkspaceConfig
 from ..core.logging_setup import get_logger
 from ..fm.client import FmClient
+from ..fm.sections import SectionService
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
 from ..fusion_mfg.model_service import read_section, read_thumbnail_url
 from ..sync.item_compare import compare_item
+from ..sync.property_compare import NEW
+from .bom_requests import bom_requests
 from .download import download
-from .payloads import bom_requests, item_request
+from .item_requests import item_request
 from .writer import FAILED, OK, SKIPPED, PublishFolder, safe_name
 
 log = get_logger("publish")
@@ -52,6 +56,7 @@ class PublishRun:
             {"item": _number(i), "description": str(i.get("description") or i.get("name") or ""), "root": bool(i.get("root")),
              "status": QUEUED, "detail": ""} for i in job["items"]]
         self._row_of = {id(i): row for i, row in zip(job["items"], self.rows)}
+        self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
         self.queued_at = time_now()
         self.started_at = 0.0
         self.finished_at = 0.0
@@ -66,6 +71,8 @@ class PublishRun:
             self.started_at = time_now()
         started = time.monotonic()
         try:
+            if self.cfg.workspace_id:
+                self._field_sections = SectionService(self._fm).field_sections(self.cfg.workspace_id)
             with ThreadPoolExecutor(max_workers=WORKERS) as pool:
                 list(pool.map(self._prepare, self.job["items"]))
             if not self.cancelled:
@@ -109,22 +116,35 @@ class PublishRun:
             component = {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
         read_time = time.monotonic() - began
 
+        stored = str(summary.get("thumbnail") if root else item.get("thumbnail") or "")
+        image = self._thumbnail(number, folder, str(summary.get("component_id") or "") if root else str(item["id"]), stored)
+        files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
+
         result = compare_item(properties, component, self.cfg, self._fm, str(item.get("fm_item") or ""))
         compare_time = time.monotonic() - began - read_time
-        request, reason = item_request(self.cfg.workspace_id, result["fm"], result["rows"], self.cfg.static_values)
+        request, reason = item_request(self.cfg.workspace_id, result["fm"], result["rows"], self.cfg.static_values,
+                                       self._field_sections, files)
+        blank = [f"{r['name']} (-> {r['fm_field']})" for r in result["rows"]
+                 if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
+        log.info("%s Data Model properties (%d): %s", number, len(properties),
+                 "; ".join(f"{p['name']}={p['value']!r}" for p in properties))
+        if blank:
+            near = [f"{p['name']}={p['value']!r}" for p in properties if "material" in p["name"].lower()]
+            self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank)
+                               + ". Properties with 'material' in the name: " + ("; ".join(near) or "none") + ".")
         if request is None:
             self.folder.record(number, "item request", SKIPPED, reason)
         else:
             self.folder.record(number, "item request", OK, request["method"] + " " + request["url"],
                                self.folder.write_json(os.path.join(folder, "item.request.json"), request))
 
-        stored = str(summary.get("thumbnail") if root else item.get("thumbnail") or "")
-        self._thumbnail(number, folder, str(summary.get("component_id") or "") if root else str(item["id"]), stored)
         log.info("Prepared %s in %.1fs (Data Model %.1fs, Fusion Manage %.1fs)", number,
                  time.monotonic() - began, read_time, compare_time)
 
-    def _thumbnail(self, number: str, folder: str, component_id: str, stored_url: str) -> None:
-        """The signed url expires soon and the run may have waited in the queue, so ask for a fresh one now."""
+    def _thumbnail(self, number: str, folder: str, component_id: str, stored_url: str) -> str:
+        """Save the thumbnail and return it as a ``data:image/png;base64,...`` value for an image field ("" if none).
+
+        The signed url expires soon and the run may have waited in the queue, so ask for a fresh one now."""
         url = stored_url
         try:
             url = read_thumbnail_url(self._client, self.job["summary"], component_id, self._time) or stored_url
@@ -132,14 +152,16 @@ class PublishRun:
             log.warning("Fresh thumbnail address of %s failed, using the loaded one: %s", number, exc)
         if not url:
             self.folder.record(number, "thumbnail", SKIPPED, "The Data Model has no thumbnail for this component yet.")
-            return
+            return ""
         try:
             data = download(url)
             self.folder.record(number, "thumbnail", OK, f"{len(data)} bytes",
                                self.folder.write_bytes(os.path.join(folder, "thumbnail.png"), data))
+            return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
         except Exception as exc:
             log.warning("Thumbnail of %s failed: %s", number, exc)
             self.folder.record(number, "thumbnail", FAILED, str(exc) or type(exc).__name__)
+            return ""
 
     def _bom(self) -> None:
         requests = bom_requests(self.cfg.workspace_id, self.job["operations"])
