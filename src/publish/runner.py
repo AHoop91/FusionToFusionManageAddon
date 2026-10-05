@@ -126,12 +126,8 @@ class PublishRun:
                                        self._field_sections, files)
         blank = [f"{r['name']} (-> {r['fm_field']})" for r in result["rows"]
                  if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
-        log.info("%s Data Model properties (%d): %s", number, len(properties),
-                 "; ".join(f"{p['name']}={p['value']!r}" for p in properties))
         if blank:
-            near = [f"{p['name']}={p['value']!r}" for p in properties if "material" in p["name"].lower()]
-            self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank)
-                               + ". Properties with 'material' in the name: " + ("; ".join(near) or "none") + ".")
+            self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank))
         if request is None:
             self.folder.record(number, "item request", SKIPPED, reason)
         else:

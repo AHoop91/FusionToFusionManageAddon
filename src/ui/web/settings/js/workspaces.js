@@ -343,14 +343,7 @@
       if ((fmFields[kind] || []).length) return 'No field links to the component picklist';
       return fmFieldsError[kind] || 'No fields loaded. Validate the workspace first.';
     },
-    taken: function (wrap) {
-      const panel = wrap.closest('.ws-kind');
-      const values = [];
-      if (panel) {
-        panel.querySelectorAll('.ws-row .ws-fm-field').forEach(function (i) { if (i.value) values.push(i.value); });
-      }
-      return values;
-    },
+    taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field'); },
     label: fmFieldCfg.label,
     groups: function (current, wrap) {
       const kind = kindOf(wrap);

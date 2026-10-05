@@ -13,6 +13,7 @@ Validating a workspace id means:
   supplies the options offered for its static value.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from ..auth.errors import AuthError
@@ -25,6 +26,7 @@ log = get_logger("fm.workspace")
 PERMISSION_PREFIX = "permission.shortname."
 OPTIONS_PAGE = 100   # picklist options requested per call
 MAX_OPTIONS = 2000   # stop reading a picklist after this many options
+READERS = 4          # picklists read at once
 
 
 class WorkspaceService:
@@ -98,22 +100,18 @@ class WorkspaceService:
             kind = row.get("type") if isinstance(row.get("type"), dict) else {}
             # Fixed-list fields take one of the lookup's options. Fields that link to
             # another workspace (picklistFieldDefinition) and fields nobody can edit are left as text.
-            lookup = ""
-            link_lookup = ""   # the picklist of a field that links to another workspace
-            if isinstance(row.get("picklist"), str) and row.get("picklistFieldDefinition"):
-                link_lookup = row["picklist"].rstrip("/").rsplit("/", 1)[-1]
-            if (isinstance(row.get("picklist"), str) and not row.get("picklistFieldDefinition")
-                    and row.get("editability") != "NEVER"):
-                lookup = row["picklist"].rstrip("/").rsplit("/", 1)[-1]
+            pick = row.get("picklist")
+            name = pick.rstrip("/").rsplit("/", 1)[-1] if isinstance(pick, str) else ""
+            links = bool(row.get("picklistFieldDefinition"))
+            link_lookup = name if links else ""   # the picklist of a field that links to another workspace
+            lookup = "" if links or row.get("editability") == "NEVER" else name
             fields.append({"id": field_id, "title": str(row.get("name") or row.get("title") or field_id),
                            "type": str(kind.get("title", "")), "picklist": lookup,
                            "link_lookup": link_lookup})
         fields.sort(key=lambda f: f["title"].lower())
-        picklists = {}
-        for lookup in sorted({f["picklist"] for f in fields if f["picklist"]}):
-            options = self._options(lookup)
-            if options:
-                picklists[lookup] = options
+        names = sorted({f["picklist"] for f in fields if f["picklist"]})
+        with ThreadPoolExecutor(max_workers=READERS) as pool:   # one lookup per picklist, several at once
+            picklists = {n: o for n, o in zip(names, pool.map(self._options, names)) if o}
         for f in fields:   # a list that could not be loaded leaves its field as plain text
             if f["picklist"] not in picklists:
                 f["picklist"] = ""
