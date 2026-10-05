@@ -1,11 +1,10 @@
 /**
  * Workspaces tab: one card with a tab per Fusion Manage workspace ("Items", ...).
  *
- * Each tab stacks that workspace's sections: Workspace ID with Validate,
- * Options (none today) and Field
+ * Each tab stacks that workspace's sections: Workspace ID with Validate, then Field
  * mapping (source field -> Fusion Manage field id, one row optionally the
- * match key). Kinds, options and source fields come from the catalog Python
- * sends, so a new workspace or option only needs a Python-side entry.
+ * match key). Kinds and source fields come from the catalog Python
+ * sends, so a new workspace only needs a Python-side entry.
  */
 (function (ns) {
   'use strict';
@@ -468,7 +467,7 @@
   }
 
   // ---- Validation state ---------------------------------------------------
-  // A workspace must be validated before its options and mapping can be
+  // A workspace must be validated before its mapping can be
   // edited. The result is remembered per kind for the current session, keyed
   // by the id it was validated for, so re-rendering after a save keeps it.
 
@@ -495,24 +494,6 @@
   /** Show or hide the bouncing-ball overlay while Python checks the workspace. */
   function setBusy(card, busy) {
     card.querySelector('.ws-busy').hidden = !busy;
-  }
-
-  // Options the user's Fusion Manage permissions rule out: kindId -> {optionId: reason}.
-  const blocked = {};
-
-  /** Switch off and lock the options in `blocked[kindId]`; free the rest. */
-  function applyBlocked(card, kindId) {
-    const reasons = blocked[kindId] || {};
-    card.querySelectorAll('.ws-option').forEach(function (row) {
-      const box = row.querySelector('.ws-option-box');
-      const note = row.querySelector('.ws-option-note');
-      const reason = reasons[box.dataset.option];
-      box.disabled = !!reason;
-      if (reason) box.checked = false;
-      row.classList.toggle('ws-option-blocked', !!reason);
-      note.textContent = reason || '';
-      note.hidden = !reason;
-    });
   }
 
   // Validations in flight: kindId -> workspace id being checked. Python answers
@@ -554,7 +535,6 @@
     stopBusy(card, result.kind);
     if (result.valid) {
       validated[result.kind] = card.querySelector('.ws-id').value.trim();
-      blocked[result.kind] = result.blocked || {};
       fmFields[result.kind] = result.fields || [];
       fmFieldsError[result.kind] = result.fields_error || '';
       fmPicklists[result.kind] = result.picklists || {};
@@ -565,16 +545,14 @@
       loadProperties();   // custom properties are per hub, so refresh with each validation
     } else {
       delete validated[result.kind];
-      delete blocked[result.kind];
     }
-    applyBlocked(card, result.kind);
     setValid(card, result.valid, result.message);
   }
 
   // ---- Workspace sections -------------------------------------------------
-  // A workspace's settings are stacked sections: Workspace (id + Validate),
-  // Options, Field mapping. Gated sections (options, mapping) sit in
-  // `fieldset.ws-locked`, which validation enables. The id row is never gated.
+  // A workspace's settings are stacked sections: Workspace (id + Validate), then
+  // Field mapping. Gated sections sit in `fieldset.ws-locked`, which validation enables.
+  // The id row is never gated.
 
   /** Section heading. */
   function heading(text) { return el('h3', 'ws-heading', text); }
@@ -615,31 +593,6 @@
     idRow.appendChild(validate);
     section.appendChild(idRow);
     section.appendChild(el('p', 'ws-status muted'));
-    return section;
-  }
-
-  /** Options: the workspace id row, then the kind's on/off options. */
-  function buildOptionsSection(kind, config) {
-    const section = el('div', 'ws-section');
-    section.appendChild(buildIdSection(kind, config));
-    if (!(kind.options || []).length) return section;   // no options: the mapping section carries the hint
-    section.appendChild(hint());
-    section.appendChild(lockedSection((kind.options || []).map(function (o) {
-      const row = el('label', 'ws-option');
-      const box = el('input', 'ws-option-box');
-      box.type = 'checkbox';
-      box.dataset.option = o.id;
-      box.checked = !!(config.options && config.options[o.id]);
-      const text = el('span', 'ws-option-text');
-      text.appendChild(el('span', 'ws-option-label', o.label));
-      text.appendChild(el('span', 'ws-option-desc muted', o.description));
-      const note = el('span', 'ws-option-note error');
-      note.hidden = true;
-      text.appendChild(note);
-      row.appendChild(box);
-      row.appendChild(text);
-      return row;
-    })));
     return section;
   }
 
@@ -691,8 +644,8 @@
     return box;
   }
 
-  /** Ask before "Add default fields" replaces the mapped fields; ``onYes`` runs if the user agrees. */
-  function confirmDefaults(onYes) {
+  /** Ask before "Add default fields" replaces the mapped fields; ``onYes`` runs if the user agrees; ``kind`` names the workspace. */
+  function confirmDefaults(kind, onYes) {
     const overlay = el('div', 'ws-dialog-overlay');
     const box = el('div', 'ws-dialog');
     box.setAttribute('role', 'alertdialog');
@@ -709,7 +662,7 @@
     icon.innerHTML = INFO_ICON;
     note.appendChild(icon);
     note.appendChild(el('p', 'ws-info-text',
-      'The defaults reflect the out-of-the-box Items workspace. If your workspace has been customized, you will need to adjust the mappings manually.'));
+      'The defaults reflect the out-of-the-box ' + kind.title + ' workspace. If your workspace has been customized, you will need to adjust the mappings manually.'));
     box.appendChild(note);
 
     const actions = el('div', 'ws-dialog-actions');
@@ -761,9 +714,9 @@
     });
     const defaults = el('button', 'btn btn-secondary ws-defaults ws-lock-btn', 'Add default fields');
     defaults.type = 'button';
-    defaults.title = 'Replace the mapped fields with the standard mappings (part number, name, description)';
+    defaults.title = 'Replace the mapped fields with the standard mappings';
     defaults.addEventListener('click', function () {
-      confirmDefaults(function () {
+      confirmDefaults(kind, function () {
         rows.innerHTML = '';
         (kind.default_mappings || []).forEach(function (m) {
           rows.appendChild(mappingRow(kind.id, { source: m.source, fm_field_id: m.fm_field_id, match_key: m.match_key }));
@@ -803,7 +756,7 @@
     const panel = el('div', 'ws-kind ws-panel');
     panel.dataset.kind = kind.id;
     panel.appendChild(el('p', 'ws-desc muted', kind.description));
-    panel.appendChild(buildOptionsSection(kind, config));
+    panel.appendChild(buildIdSection(kind, config));
     if (kind.component_lookup) panel.appendChild(buildComponentSection(kind, config));
     panel.appendChild(buildMappingSection(kind, config));
 
@@ -822,12 +775,9 @@
     const idInput = panel.querySelector('.ws-id');
     const validate = panel.querySelector('.ws-validate');
     setValid(panel, !!validated[kind.id] && validated[kind.id] === idInput.value.trim(), '');
-    applyBlocked(panel, kind.id);
     idInput.addEventListener('input', function () {
       delete validated[kind.id];
-      delete blocked[kind.id];
       stopBusy(panel, kind.id);
-      applyBlocked(panel, kind.id);
       setValid(panel, false, '');
     });
     validate.addEventListener('click', function () {
@@ -853,7 +803,7 @@
       tab.type = 'button';
       tab.setAttribute('role', 'tab');
       const panel = buildKindPanel(kind, settings.workspaces[kind.id] ||
-        { workspace_id: '', mappings: [], static_values: [], options: {} });
+        { workspace_id: '', mappings: [], static_values: [] });
       panel.hidden = i !== 0;
       panels.push(panel);
       tab.addEventListener('click', function () {
@@ -910,13 +860,8 @@
   function read() {
     const result = {};
     $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
-      const options = {};
-      card.querySelectorAll('.ws-option-box').forEach(function (box) {
-        options[box.dataset.option] = box.checked;
-      });
       result[card.dataset.kind] = {
         workspace_id: card.querySelector('.ws-id').value,
-        options: options,
         component_field: (card.querySelector('.ws-component-field') || { value: '' }).value,
         mappings: Array.prototype.map.call(card.querySelectorAll('.ws-row:not(.ws-static-row)'), function (row) {
           return {

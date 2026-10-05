@@ -16,27 +16,11 @@ current value, and a status telling the user what publishing would do:
 
 from typing import Any, Dict, List, Optional
 
-from ..config.workspace_models import (
-    BASE_PREFIX,
-    CUSTOM_PREFIX,
-    DATA_MODEL_NAMES,
-    SOURCE_FIELDS,
-    FieldMapping,
-)
+from ..config.workspace_models import FieldMapping, data_model_name
 
 MATCH, MISMATCH, NEW, UNMAPPED, UNKNOWN, UNCHECKED, MULTIPLE = (
     "match", "mismatch", "new", "unmapped", "unknown", "unchecked", "multiple")
 FOUND = "found"   # fm_state: the Fusion Manage item exists
-
-_LABELS = {f.field_id: f.label for f in SOURCE_FIELDS if f.kind == "property"}
-
-
-def source_property_name(source: str) -> str:
-    """Name of the Data Model property a mapping source refers to."""
-    for prefix in (CUSTOM_PREFIX, BASE_PREFIX):
-        if source.startswith(prefix):
-            return source[len(prefix):]
-    return DATA_MODEL_NAMES.get(source) or _LABELS.get(source, "")
 
 
 def _key(name: str) -> str:
@@ -50,7 +34,7 @@ def source_value(source: str, summary: Dict[str, Any], values: Dict[str, str]) -
               "description": summary.get("description", "")}
     if source in direct and direct[source]:
         return str(direct[source])
-    return values.get(_key(source_property_name(source)), "")
+    return values.get(_key(data_model_name(source)), "")
 
 
 def _same(left: str, right: str) -> bool:
@@ -65,13 +49,13 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
     by_name: Dict[str, FieldMapping] = {}
     for mapping in mappings:
         if mapping.source and mapping.fm_field_id:
-            by_name[_key(source_property_name(mapping.source))] = mapping
+            by_name[_key(data_model_name(mapping.source))] = mapping
 
     names = [(p["name"], p["value"]) for p in properties]
     listed = {_key(n) for n, _ in names}
     for key, mapping in by_name.items():
         if key and key not in listed:   # e.g. "Part number" when the hub lists it differently
-            names.append((source_property_name(mapping.source),
+            names.append((data_model_name(mapping.source),
                           source_value(mapping.source, summary, values)))
 
     rows = []

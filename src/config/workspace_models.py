@@ -8,7 +8,7 @@ To support another workspace, add a ``WorkspaceKind`` to ``WORKSPACE_KINDS``.
 To offer another source field, add a ``SourceField`` to ``SOURCE_FIELDS``.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
 
@@ -19,14 +19,22 @@ class WorkspaceKind:
     kind_id: str
     title: str
     description: str
-    options: tuple = ()   # WorkspaceOption entries shown on the workspace's tab
     # Short FM permission names the user needs on the workspace at all.
     required_permissions: tuple = ()
-    # (source field id, Fusion Manage field id, match key) rows the "Add default fields" button adds.
+    # DefaultMapping rows the "Add default fields" button adds.
     default_mappings: tuple = ()
     # Name of the picklist that links an item to a component (e.g. CUSTOM_LOOKUP_WS_COMPONENTS_...);
     # the workspace's Fusion Manage field using it is the "Component linking" field. Empty: none.
     component_lookup: str = ""
+
+
+@dataclass(frozen=True)
+class DefaultMapping:
+    """A mapping row added by "Add default fields"."""
+
+    source: str
+    fm_field_id: str
+    match_key: bool = False
 
 
 @dataclass(frozen=True)
@@ -38,6 +46,8 @@ class SourceField:
     # "property" fills a text/number field; "file" pushes a file (e.g. the
     # thumbnail) into an FM image or attachment field.
     kind: str = "property"
+    # The Data Model's own name for the property, where it differs from the label shown in Settings.
+    data_model_name: str = ""
 
     @property
     def can_match(self) -> bool:
@@ -45,25 +55,13 @@ class SourceField:
         return self.kind == "property"
 
 
-@dataclass(frozen=True)
-class WorkspaceOption:
-    """An on/off setting shown on a workspace card's Workspace tab."""
-
-    option_id: str
-    label: str
-    description: str
-    default: bool = False
-    # Short FM permission names (e.g. "add_attachments") the option needs.
-    permissions: tuple = ()
-
-
-# The item BOM is always published, so its permissions are required rather than optional.
-ITEM_OPTIONS = ()
-
 WORKSPACE_KINDS = [
-    WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.", ITEM_OPTIONS,
+    # The item BOM is always published, so its permissions are required.
+    WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.",
                   ("view_items", "add_items", "edit_items", "view_bom", "add_to_bom", "edit_bom"),
-                  (("part_number", "NUMBER", True), ("name", "TITLE", False), ("description", "DESCRIPTION", False)),
+                  (DefaultMapping("part_number", "NUMBER", True), DefaultMapping("name", "TITLE"),
+                   DefaultMapping("description", "DESCRIPTION"), DefaultMapping("thumbnail", "IMAGE"),
+                   DefaultMapping("material", "MATERIAL")),
                   "CUSTOM_LOOKUP_WS_COMPONENTS_ALL_INCLUDING_WORKING"),
 ]
 
@@ -74,15 +72,12 @@ SOURCE_FIELDS = [
     SourceField("name", "Name"),
     SourceField("description", "Description"),
     SourceField("revision", "Revision"),
-    SourceField("material", "Material"),
+    SourceField("material", "Material", data_model_name="materialName"),
     SourceField("lifecycle_state", "Lifecycle state"),
     SourceField("thumbnail", "Thumbnail", "file"),
 ]
 
 _SOURCES_BY_ID = {f.field_id: f for f in SOURCE_FIELDS}
-
-# The Data Model's own name for a built-in source, where it differs from the label shown in Settings.
-DATA_MODEL_NAMES = {"material": "materialName"}
 
 # Hub properties are stored as "custom:<name>" or "base:<name>", so any
 # property defined on the Manufacturing Data Model item can be mapped by name.
@@ -97,6 +92,15 @@ def is_valid_source(source: str) -> bool:
         if source.startswith(prefix):
             return bool(source[len(prefix):].strip())
     return source in _SOURCES_BY_ID
+
+
+def data_model_name(source: str) -> str:
+    """Name of the Data Model property a source reads ("" for a file source or an unknown one)."""
+    for prefix in _PROPERTY_PREFIXES:
+        if source.startswith(prefix):
+            return source[len(prefix):]
+    known = _SOURCES_BY_ID.get(source)
+    return (known.data_model_name or known.label) if known and known.kind == "property" else ""
 
 
 def can_match(source: str) -> bool:
@@ -151,8 +155,6 @@ class WorkspaceConfig:
     static_values: List[StaticValue] = field(default_factory=list)
     # The Fusion Manage field that links an item to its component ("" = not linked).
     component_field: str = ""
-    # option_id -> on/off; missing ids fall back to the option's default.
-    options: Dict[str, bool] = field(default_factory=dict)
 
     def validate(self, title: str) -> List[str]:
         """Return human-readable problems; ``title`` names the workspace."""
@@ -192,19 +194,13 @@ class WorkspaceConfig:
         return {"workspace_id": self.workspace_id,
                 "mappings": [row.to_dict() for row in self.mappings],
                 "static_values": [row.to_dict() for row in self.static_values],
-                "component_field": self.component_field,
-                "options": dict(self.options)}
+                "component_field": self.component_field}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], kind: "WorkspaceKind" = None) -> "WorkspaceConfig":
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkspaceConfig":
         rows = data.get("mappings")
         statics = data.get("static_values")
-        stored = data.get("options") if isinstance(data.get("options"), dict) else {}
-        # Keep only options the kind defines, defaulting any that are missing.
-        options = {o.option_id: bool(stored.get(o.option_id, o.default))
-                   for o in (kind.options if kind else ())}
         return cls(
-            options=options,
             workspace_id=str(data.get("workspace_id", "")).strip(),
             component_field=str(data.get("component_field", "")).strip(),
             mappings=[FieldMapping.from_dict(r) for r in rows if isinstance(r, dict)]
@@ -219,7 +215,7 @@ class WorkspaceSettings:
     """Configuration for every workspace kind, keyed by ``WorkspaceKind.kind_id``."""
 
     workspaces: Dict[str, WorkspaceConfig] = field(
-        default_factory=lambda: {k.kind_id: WorkspaceConfig.from_dict({}, k) for k in WORKSPACE_KINDS})
+        default_factory=lambda: {k.kind_id: WorkspaceConfig() for k in WORKSPACE_KINDS})
 
     def get(self, kind_id: str) -> WorkspaceConfig:
         return self.workspaces[kind_id]
@@ -240,7 +236,7 @@ class WorkspaceSettings:
         if "items_workspace_id" in data:
             data = {"items": {"workspace_id": data["items_workspace_id"]}}
         return cls(workspaces={
-            kind.kind_id: WorkspaceConfig.from_dict(data.get(kind.kind_id) or {}, kind)
+            kind.kind_id: WorkspaceConfig.from_dict(data.get(kind.kind_id) or {})
             for kind in WORKSPACE_KINDS
         })
 
@@ -249,9 +245,7 @@ def catalog() -> Dict[str, Any]:
     """Static lists the panel needs to render workspace cards and mapping rows."""
     return {
         "kinds": [{"id": k.kind_id, "title": k.title, "description": k.description, "component_lookup": k.component_lookup,
-                   "default_mappings": [{"source": m[0], "fm_field_id": m[1], "match_key": m[2]} for m in k.default_mappings],
-                   "options": [{"id": o.option_id, "label": o.label, "description": o.description}
-                               for o in k.options]}
+                   "default_mappings": [asdict(m) for m in k.default_mappings]}
                   for k in WORKSPACE_KINDS],
         "source_fields": [{"id": f.field_id, "label": f.label, "kind": f.kind,
                            "can_match": f.can_match} for f in SOURCE_FIELDS],

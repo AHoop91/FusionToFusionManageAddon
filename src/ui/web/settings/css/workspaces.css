@@ -116,19 +116,10 @@
 /* ---- Workspace tab options ---------------------------------------------- */
 
 .ws-panel .ws-id-label { margin-top: 0; }
-.ws-body .ws-option { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; cursor: pointer; }
-.ws-option-box { margin-top: 2px; }
-.ws-option-text { display: flex; flex-direction: column; gap: 1px; }
-.ws-option-label { font-weight: 500; }
-.ws-option-desc { font-size: 12px; font-weight: 400; }
 .ws-panel { position: relative; }
 .ws-busy { position: absolute; inset: 0; z-index: 5; justify-content: center;
   background: rgba(255, 255, 255, 0.85); }
 .ws-busy[hidden] { display: none; }
-.ws-option-note { font-size: 12px; font-weight: 400; }
-.ws-option-note[hidden] { display: none; }
-.ws-body .ws-option-blocked { opacity: 0.6; cursor: not-allowed; }
-.ws-locked:disabled .ws-option { cursor: not-allowed; }
 .ws-section { margin-bottom: 4px; }
 .ws-panel > .ws-desc { margin: 0; font-size: 12px; }
 

@@ -5,9 +5,6 @@ Validating a workspace id means:
 * ``GET /api/v3/workspaces/{id}`` succeeds and the workspace is not deleted.
 * ``GET /api/v3/workspaces/{id}/users/@me/permissions`` shows the signed-in
   user holds the permissions the workspace kind needs (view/add/edit items).
-* Each option (BOM, STEP) is checked against the permissions it
-  needs. An option the user cannot use is reported as blocked, with a reason,
-  so the panel can switch it off.
 * ``GET /api/v3/workspaces/{id}/fields`` supplies the field list for the
   mapping picker. Each fixed-list field's ``GET /api/v3/lookups/{name}``
   supplies the options offered for its static value.
@@ -36,12 +33,8 @@ class WorkspaceService:
         self._client = client
 
     def validate(self, kind: WorkspaceKind, workspace_id: str) -> Dict[str, Any]:
-        """Return ``{kind, valid, message, blocked}`` for one workspace id.
-
-        ``blocked`` maps option id -> reason for options the user lacks the
-        permissions for. It is only meaningful when ``valid`` is true.
-        """
-        result: Dict[str, Any] = {"kind": kind.kind_id, "valid": False, "message": "", "blocked": {}}
+        """Return ``{kind, valid, message, ...}`` for one workspace id; a valid one also carries its fields and picklists."""
+        result: Dict[str, Any] = {"kind": kind.kind_id, "valid": False, "message": ""}
         if not workspace_id.isdigit():
             result["message"] = "Workspace ID must be a number."
             return result
@@ -66,12 +59,6 @@ class WorkspaceService:
             result["message"] = (f"You need these permissions on '{workspace.get('name', workspace_id)}': "
                                  + ", ".join(self._title(p) for p in missing) + ".")
             return result
-
-        for option in kind.options:
-            lacking = [p for p in option.permissions if p not in granted]
-            if lacking:
-                result["blocked"][option.option_id] = (
-                    "Not available: you lack " + ", ".join(self._title(p) for p in lacking) + ".")
 
         result["valid"] = True
         result["message"] = f"Workspace '{workspace.get('name', workspace_id)}' is valid."

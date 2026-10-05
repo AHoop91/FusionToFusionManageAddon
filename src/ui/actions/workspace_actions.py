@@ -26,7 +26,7 @@ def register_workspace_actions(bridge: MessageBridge, config: ConfigService, aut
 
     def failure(kind_id: str, workspace_id: str, message: str) -> Dict[str, Any]:
         return {"kind": kind_id, "workspace_id": workspace_id, "valid": False,
-                "message": message, "blocked": {}, "pending": False}
+                "message": message, "pending": False}
 
     def run(kind_id: str, workspace_id: str, client: FmClient) -> None:
         try:
