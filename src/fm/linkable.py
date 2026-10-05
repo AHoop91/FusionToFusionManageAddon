@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 from urllib.parse import quote
 
 from .bom import _name_of, _number_of
-from .client import FmClient
+from .client import WORKSPACES, FmClient
 
 PAGE_SIZE = 100
 SORT_DIRECTIONS = ("asc", "desc")
@@ -48,6 +48,6 @@ class LinkableService:
     def page(self, workspace_id: str, item_id: str, offset: int, sort: str) -> Dict[str, Any]:
         """One page of the items that can be added to ``item_id``'s BOM, sorted by title (``asc`` or ``desc``)."""
         direction = sort if sort in SORT_DIRECTIONS else "asc"
-        path = (f"/api/v3/workspaces/{workspace_id}/items/{item_id}/views/{BOM_VIEW_ID}/linkable-items"
+        path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/views/{BOM_VIEW_ID}/linkable-items"
                 f"?limit={PAGE_SIZE}&offset={int(offset)}&relatedWorkspaceId={workspace_id}&sort={quote('item.title ' + direction)}")
         return parse_page(self._client.get_json(path))

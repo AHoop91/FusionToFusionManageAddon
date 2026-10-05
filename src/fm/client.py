@@ -19,6 +19,15 @@ log = get_logger("fm.client")
 FM_HOST_SUFFIX =".autodeskplm360.net"
 REQUEST_TIMEOUT_SECONDS = 15
 
+# Path roots of the REST API, shared by every feature that builds a url.
+WORKSPACES = "/api/v3/workspaces"
+LOOKUPS = "/api/v3/lookups"
+
+
+def last_segment(link: Any) -> str:
+    """The id at the end of a link such as ``/api/v3/workspaces/242/views/1/fields/TITLE`` ("" if not text)."""
+    return link.rstrip("/").rsplit("/", 1)[-1] if isinstance(link, str) else ""
+
 
 class FmApiError(Exception):
     """Raised when a Fusion Manage request fails or returns bad data."""

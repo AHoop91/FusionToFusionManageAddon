@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict
 
 from ..core.logging_setup import get_logger
-from .client import FmApiError, FmClient
+from .client import WORKSPACES, FmApiError, FmClient
 
 log = get_logger("fm.sections")
 
@@ -55,7 +55,7 @@ class SectionService:
 
     def field_sections(self, workspace_id: str) -> Dict[str, str]:
         """``{field id: section link}`` for every field of the workspace."""
-        data = self._client.get_json(f"/api/v3/workspaces/{workspace_id}/sections")
+        data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")
         listed = (data.get("sections") or data.get("items") or []) if isinstance(data, dict) else data
         entries = [e for e in listed if isinstance(e, dict)] if isinstance(listed, list) else []
         # The list holds links only; a section carrying its fields already needs no second read.

@@ -2,8 +2,15 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..fm.client import LOOKUPS, WORKSPACES
 from ..sync.property_compare import FOUND, MISMATCH, NEW
-from .fm_api import API, field_entry
+
+
+def field_entry(workspace_id: str, field_id: str, value: Any) -> Dict[str, Any]:
+    """One field of an item body. A picklist option is sent as a link to it."""
+    if isinstance(value, str) and value.startswith(LOOKUPS + "/"):
+        value = {"link": value}
+    return {"__self__": f"{WORKSPACES}/{workspace_id}/views/1/fields/{field_id}", "value": value}
 
 
 def _by_section(workspace_id: str, fields: List[Tuple[str, Any]],
@@ -33,12 +40,12 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any
     statics = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id] + list(files or [])
     if state == NEW:
         fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == NEW and r["value"] != ""] + statics
-        method, url = "POST", f"{API}/{workspace_id}/items"
+        method, url = "POST", f"{WORKSPACES}/{workspace_id}/items"
     elif state == FOUND:
         fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == MISMATCH] + statics
         if not fields:
             return None, "Fusion Manage already has the same values."
-        method, url = "PATCH", f"{API}/{workspace_id}/items/{fm.get('item_id')}"
+        method, url = "PATCH", f"{WORKSPACES}/{workspace_id}/items/{fm.get('item_id')}"
     else:
         return None, fm.get("message") or f"Fusion Manage state is {state}."
     body, reason = _by_section(workspace_id, fields, field_sections)

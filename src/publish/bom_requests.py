@@ -6,7 +6,7 @@ the request is sent (a new item's id, a BOM line's id).
 
 from typing import Any, Dict, List
 
-from .fm_api import API
+from ..fm.client import WORKSPACES
 
 BOM_ORDER = {"remove": 0, "renumber": 1, "update": 2, "add": 3}   # a line is freed before another takes its number
 
@@ -26,11 +26,11 @@ def bom_requests(workspace_id: str, operations: List[Dict[str, Any]]) -> Dict[st
     out: Dict[str, List[Dict[str, Any]]] = {}
     for op in sorted(operations, key=lambda o: BOM_ORDER.get(o["op"], 9)):
         parent = op["parent"]
-        base = f"{API}/{workspace_id}/items/{{{{item:{parent}}}}}/bom-items"
+        base = f"{WORKSPACES}/{workspace_id}/items/{{{{item:{parent}}}}}/bom-items"
         kind = op["op"]
         if kind == "add":
             request = {"method": "POST", "url": base,
-                       "body": {"item": {"link": op.get("link") or f"{API}/{workspace_id}/items/{{{{item:{op['number']}}}}}"},
+                       "body": {"item": {"link": op.get("link") or f"{WORKSPACES}/{workspace_id}/items/{{{{item:{op['number']}}}}}"},
                                 "quantity": op.get("quantity", ""), "itemNumber": op.get("sequence", "")}}
         elif kind == "update":
             request = {"method": "PATCH", "url": f"{base}/{_edge(parent, op)}", "body": {"quantity": op.get("quantity", "")}}

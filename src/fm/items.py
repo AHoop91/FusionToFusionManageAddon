@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote_plus
 
 from ..core.logging_setup import get_logger
-from .client import FmClient
+from .client import WORKSPACES, FmClient
 
 log = get_logger("fm.items")
 
@@ -83,4 +83,4 @@ class ItemService:
     def read(self, workspace_id: str, item_id: str) -> Dict[str, str]:
         """The item's fields as ``{field id: text}``."""
         return collect_fields(self._client.get_json(
-            f"/api/v3/workspaces/{workspace_id}/items/{item_id}"))
+            f"{WORKSPACES}/{workspace_id}/items/{item_id}"))

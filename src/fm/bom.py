@@ -11,7 +11,7 @@ from datetime import date
 from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
-from .client import FmApiError, FmClient
+from .client import WORKSPACES, FmApiError, FmClient
 from .items import FIELD_ID, display_text
 
 log = get_logger("fm.bom")
@@ -89,7 +89,7 @@ class BomService:
 
         ``effectiveDate`` is always sent: without it Fusion Manage sometimes answers 400 (``null wrong date format``).
         """
-        path = (f"/api/v3/workspaces/{workspace_id}/items/{item_id}/bom"
+        path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/bom"
                 f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias=release&rootId={item_id}")
         # Right after start-up Fusion Manage can answer a BOM with no nodes at all, not even the root,
         # and give the full answer a moment later. An item always has itself as a node, so read again.

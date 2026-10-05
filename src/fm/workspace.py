@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceKind
 from ..core.logging_setup import get_logger
-from .client import FmApiError, FmClient
+from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
 
 log = get_logger("fm.workspace")
 
@@ -39,7 +39,7 @@ class WorkspaceService:
             result["message"] = "Workspace ID must be a number."
             return result
 
-        base = f"/api/v3/workspaces/{workspace_id}"
+        base = f"{WORKSPACES}/{workspace_id}"
         try:
             workspace = self._client.get_json(base)
             if not isinstance(workspace, dict) or workspace.get("deleted"):
@@ -81,14 +81,14 @@ class WorkspaceService:
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
                 continue
-            field_id = str(row.get("__self__", "")).rstrip("/").rsplit("/", 1)[-1]
+            field_id = last_segment(row.get("__self__"))
             if not field_id:
                 continue
             kind = row.get("type") if isinstance(row.get("type"), dict) else {}
             # Fixed-list fields take one of the lookup's options. Fields that link to
             # another workspace (picklistFieldDefinition) and fields nobody can edit are left as text.
             pick = row.get("picklist")
-            name = pick.rstrip("/").rsplit("/", 1)[-1] if isinstance(pick, str) else ""
+            name = last_segment(pick)
             links = bool(row.get("picklistFieldDefinition"))
             link_lookup = name if links else ""   # the picklist of a field that links to another workspace
             lookup = "" if links or row.get("editability") == "NEVER" else name
@@ -111,7 +111,7 @@ class WorkspaceService:
         try:
             while offset < MAX_OPTIONS:
                 data = self._client.get_json(
-                    f"/api/v3/lookups/{lookup}?offset={offset}&limit={OPTIONS_PAGE}&filter=&asc=&desc=")
+                    f"{LOOKUPS}/{lookup}?offset={offset}&limit={OPTIONS_PAGE}&filter=&asc=&desc=")
                 items = data.get("items") if isinstance(data, dict) else None
                 if not isinstance(items, list) or not items:
                     break
