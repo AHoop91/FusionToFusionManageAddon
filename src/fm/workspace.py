@@ -98,13 +98,13 @@ class WorkspaceService:
         fields.sort(key=lambda f: f["title"].lower())
         names = sorted({f["picklist"] for f in fields if f["picklist"]})
         with ThreadPoolExecutor(max_workers=READERS) as pool:   # one lookup per picklist, several at once
-            picklists = {n: o for n, o in zip(names, pool.map(self._options, names)) if o}
+            picklists = {n: o for n, o in zip(names, pool.map(self.options, names)) if o}
         for f in fields:   # a list that could not be loaded leaves its field as plain text
             if f["picklist"] not in picklists:
                 f["picklist"] = ""
         return fields, picklists, ""
 
-    def _options(self, lookup: str) -> List[Dict[str, str]]:
+    def options(self, lookup: str) -> List[Dict[str, str]]:
         """The options of one picklist as ``[{value: link, title}]``; empty if it cannot be read."""
         options: List[Dict[str, str]] = []
         offset = 0

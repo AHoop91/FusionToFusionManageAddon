@@ -7,10 +7,12 @@ the items the add-in reads.
 
 from typing import Any, Dict, List
 
+from ..config.workspace_models import PHYSICAL_NAMES
 from .graphql_client import MfgApiError, MfgGraphQlClient
 
 BASE = "base"
 CUSTOM = "custom"
+PHYSICAL = "physical"
 
 HUBS_QUERY = "query Hubs { hubs { results { id name } } }"
 
@@ -66,7 +68,7 @@ def parse_definitions(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     for key, group in (("basePropertyDefinitionCollections", BASE), ("propertyDefinitionCollections", CUSTOM)):
         found = _visible(hub.get(key), group)
         result += sorted(found.values(), key=lambda p: p["name"].lower())
-    return result
+    return result + [{"name": n, "group": PHYSICAL, "specification": ""} for n in PHYSICAL_NAMES]   # every component has them
 
 
 class PropertyService:

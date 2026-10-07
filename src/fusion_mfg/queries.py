@@ -18,6 +18,15 @@ query ($input: [BulkModelsQueryInput!]!) {
 }
 """
 
+# The Fusion Manage item a component is linked to (the hyperlink on its Item Number in Fusion).
+MANAGE_QUERY = """
+query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
+  component(componentId: $componentId, composition: $composition, time: $time) {
+    lifecycle { itemUrn itemUrl }
+  }
+}
+"""
+
 PROPERTIES_QUERY = """
 query ($input: [BulkModelsQueryInput!]!) {
   bulkModels(input: $input) {

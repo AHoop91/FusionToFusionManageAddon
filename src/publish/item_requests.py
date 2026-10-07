@@ -35,6 +35,8 @@ def _by_section(workspace_id: str, fields: List[Tuple[str, Any]], field_sections
 
 def _holds(current: Any, value: Any) -> bool:
     """Whether the item's current value of a field is ``value`` (a picklist option is held as ``{"link": ...}``)."""
+    if isinstance(value, dict):   # a link to an item, e.g. the component
+        return isinstance(current, dict) and current.get("link") == value.get("link")
     if isinstance(value, str) and value.startswith(LOOKUPS + "/"):
         return isinstance(current, dict) and current.get("link") == value
     return display_text(current).strip() == str(value).strip()
@@ -42,7 +44,7 @@ def _holds(current: Any, value: Any) -> bool:
 
 def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any]], static_values: List[Any],
                  field_sections: Dict[str, str], files: Optional[List[Tuple[str, Any]]] = None,
-                 current: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Dict[str, Any]], str]:
+                 current: Optional[Dict[str, Any]] = None, component: Optional[Tuple[str, str]] = None) -> Tuple[Optional[Dict[str, Any]], str]:
     """``(request, reason)`` for one item: create it (POST), update what differs (PATCH), or nothing (request None).
 
     ``fm`` is the comparison's Fusion Manage info (``state``, ``item_id``) and ``rows`` the
@@ -50,18 +52,21 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any
     existing one gets the mapped values that differ and the static values it does not hold yet (``current``
     is its values as Fusion Manage holds them; without it every static value is sent), and nothing at all
     when none differ. ``files`` are (field id, value) pairs for image fields; they cannot be compared, so
-    they go along with a create or an update that has a difference. ``field_sections`` maps each field id to its section link,
+    they go along with a create or an update that has a difference. ``component`` is the (field id, link) of the
+    component linking field: it is sent like a static value, so an item that lacks the link gets it. ``field_sections`` maps each field id to its section link,
     because Fusion Manage takes the values grouped by section.
     """
     state = fm.get("state")
-    statics = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id] + list(files or [])
+    fixed = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id]
+    if component:
+        fixed.append((component[0], {"link": component[1]}))
+    statics = fixed + list(files or [])
     if state == NEW:
         fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == NEW and r["value"] != ""] + statics
         method, url = "POST", f"{WORKSPACES}/{workspace_id}/items"
     elif state == FOUND:
-        wanted = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id]
         fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == MISMATCH] + [
-            (field_id, value) for field_id, value in wanted if current is None or not _holds(current.get(field_id), value)]
+            (field_id, value) for field_id, value in fixed if current is None or not _holds(current.get(field_id), value)]
         if not fields:
             return None, "Fusion Manage already has the same values."
         fields += list(files or [])

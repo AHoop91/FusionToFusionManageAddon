@@ -3,6 +3,7 @@
 import unittest
 
 from src.config.workspace_models import StaticValue
+from src.fm.components import _matches
 from src.fm.sections import parse_sections
 from src.publish.bom_requests import bom_requests
 from src.publish.item_requests import item_request
@@ -28,6 +29,22 @@ class ItemRequestTests(unittest.TestCase):
         request, reason = item_request("1", {"state": NEW}, rows, [TYPE], SECTIONS, [("IMAGE", "data:image/png;base64,AA")])
         self.assertEqual((request["method"], request["url"]), ("POST", "/api/v3/workspaces/1/items"))
         self.assertEqual(entries(request), {"TITLE": "Axle", "TYPE": {"link": TYPE.value}, "IMAGE": "data:image/png;base64,AA"})
+
+    def test_component_link_is_sent_on_create_and_added_to_an_item_that_lacks_it(self):
+        link = "/api/v3/workspaces/57/items/15695"
+        sections = {**SECTIONS, "COMPONENT": "/api/v3/workspaces/1/sections/10"}
+        created, _ = item_request("1", {"state": NEW}, [row("TITLE", "Axle", NEW)], [], sections, None, None, ("COMPONENT", link))
+        self.assertEqual(entries(created)["COMPONENT"], {"link": link})
+        lacking, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MATCH)], [], sections, None, {}, ("COMPONENT", link))
+        self.assertEqual(entries(lacking), {"COMPONENT": {"link": link}})
+        holding, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MATCH)], [], sections, None,
+                                       {"COMPONENT": {"link": link, "title": "PN-1"}}, ("COMPONENT", link))
+        self.assertIsNone(holding)
+
+    def test_component_option_matches_the_number_not_a_longer_one(self):
+        self.assertTrue(_matches("PN-000703", "pn-000703"))
+        self.assertTrue(_matches("PN-000703 - Axle", "PN-000703"))
+        self.assertFalse(_matches("PN-0007031", "PN-000703"))
 
     def test_existing_item_is_patched_with_differences_only(self):
         rows = [row("TITLE", "Axle", MISMATCH), row("MATERIAL", "Steel", MATCH)]

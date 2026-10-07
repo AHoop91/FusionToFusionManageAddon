@@ -11,17 +11,19 @@ import base64
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..auth.errors import AuthError
-from ..config.workspace_models import WorkspaceConfig
+from ..config.workspace_models import KINDS_BY_ID, PHYSICAL_PREFIX, WorkspaceConfig
 from ..core.logging_setup import get_logger
-from ..fm.client import FmApiError, FmClient
+from ..fm.client import LOOKUPS, FmApiError, FmClient
+from ..fm.components import ComponentService, manage_link
+from ..fm.picklists import PicklistResolver
 from ..fm.sections import SectionService
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
-from ..fusion_mfg.model_service import read_section, read_thumbnail_url
+from ..fusion_mfg.model_service import read_manage_item, read_section, read_thumbnail_url
 from ..sync.item_compare import compare_item
-from ..sync.property_compare import NEW
+from ..sync.property_compare import FOUND, MISMATCH, NEW
 from .bom_requests import bom_requests
 from .download import download
 from .item_requests import item_request
@@ -35,6 +37,13 @@ log = get_logger("publish")
 
 WORKERS = 5   # items prepared at once
 SENT = "sent to Fusion Manage"   # the artifact of an item that was sent
+
+
+def _same_number(left: str, right: Any) -> bool:
+    try:
+        return float(left) == float(str(right).strip())
+    except ValueError:
+        return False
 
 
 class PublishRun(JobState):
@@ -60,6 +69,8 @@ class PublishRun(JobState):
                             for parent, lines in self._bom_requests.items()} if send else {}
         self.rows.extend(self._bom_row_of.values())
         self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
+        self._physical = any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in cfg.mappings)   # read them only when something maps them
+        self._picklists = PicklistResolver(self._fm, cfg.workspace_id)   # options of the picklist fields, read once per run
 
     # ---- Worker thread ----------------------------------------------------------
 
@@ -124,22 +135,25 @@ class PublishRun(JobState):
         root = bool(item.get("root"))
         began = time.monotonic()
         if root:
-            properties = read_section(self._client, "properties", self._model_id, self._time, summary)
+            properties = read_section(self._client, "properties", self._model_id, self._time, summary, physical=self._physical)
             component = summary
         else:
-            properties = read_section(self._client, "component", self._model_id, self._time, summary, item["id"])["properties"]
+            properties = read_section(self._client, "component", self._model_id, self._time, summary, item["id"], self._physical)["properties"]
             component = {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
         read_time = time.monotonic() - began
 
+        component_id = str(summary.get("component_id") or "") if root else str(item["id"])
         stored = str(summary.get("thumbnail") if root else item.get("thumbnail") or "")
-        image = self._thumbnail(number, folder, str(summary.get("component_id") or "") if root else str(item["id"]), stored)
+        image = self._thumbnail(number, folder, component_id, stored)
         files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
 
         result = compare_item(properties, component, self.cfg, self._fm, str(item.get("fm_item") or ""), with_values=True)
         compare_time = time.monotonic() - began - read_time
-        request, reason = item_request(self.cfg.workspace_id, result["fm"], result["rows"], self.cfg.static_values,
-                                       self._field_sections, files, result["values"])   # the values tell which static values an existing item lacks
-        blank = [f"{r['name']} (-> {r['fm_field']})" for r in result["rows"]
+        link = self._component(number, component_id, result["fm"])
+        rows = self._option_rows(number, result["rows"])
+        request, reason = item_request(self.cfg.workspace_id, result["fm"], rows, self.cfg.static_values,
+                                       self._field_sections, files, result["values"], link)   # the values tell which static values an existing item lacks
+        blank = [f"{r['name']} (-> {r['fm_field']})" for r in rows
                  if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
         if blank:
             self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank))
@@ -161,6 +175,59 @@ class PublishRun(JobState):
                   self.folder.items[number]["id"] or "none", reason if request is None else request["method"] + " " + request["url"])
         log.info("Prepared %s in %.1fs (Data Model %.1fs, Fusion Manage %.1fs)", number,
                  time.monotonic() - began, read_time, compare_time)
+
+    def _option_rows(self, number: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The rows with the text of each picklist field's value replaced by the link of its option.
+
+        Fusion Manage refuses the whole item for text where a picklist wants an option, so a value that
+        matches no option is left out and recorded.
+        """
+        out = []
+        for row in rows:
+            value = row["value"]
+            if row["status"] not in (NEW, MISMATCH) or not row.get("fm_field") or not isinstance(value, str) or value == "" or value.startswith(LOOKUPS + "/"):
+                out.append(row)
+                continue
+            link = self._picklists.link(row["fm_field"], value)
+            if link is None:   # not a picklist field: a number is rounded to the digits the field takes
+                fitted = self._picklists.fit_number(row["fm_field"], value)
+                if fitted != value and _same_number(fitted, row.get("fm_value", "")):
+                    continue   # the field already holds this number at its precision
+                out.append(dict(row, value=fitted) if fitted != value else row)
+            elif link:
+                out.append(dict(row, value=link))
+            else:
+                self.folder.record(number, "picklist " + row["fm_field"], SKIPPED, f"'{value}' is not an option of {row['fm_field']} in Fusion Manage, so it was not sent.")
+        return out
+
+    def _manage_link(self, number: str, component_id: str) -> str:
+        """The API link of the Fusion Manage item the Data Model says this component is linked to ("" if it says none)."""
+        try:
+            found = read_manage_item(self._client, self.job["summary"], component_id, self._time)
+        except Exception as exc:   # the picklist is searched instead
+            log.warning("The Data Model would not give the Fusion Manage link of %s: %s", number, exc)
+            return ""
+        link = manage_link(found["urn"], found["url"])
+        log.info("Data Model link of %s: urn %r, url %r -> %s", number, found["urn"], found["url"], link or "none")
+        return link
+
+    def _component(self, number: str, component_id: str, fm_info: Dict[str, Any]) -> Optional[Tuple[str, str]]:
+        """``(field id, link)`` of the Components item for this part, or None (and the reason recorded) when it cannot be found."""
+        field_id = self.cfg.component_field
+        if not field_id or fm_info.get("state") not in (FOUND, NEW):
+            return None
+        link = self._manage_link(number, component_id)   # the link on the component's Item Number in Fusion
+        reason = ""
+        if not link:   # not linked in the Data Model: look for it in the component picklist
+            try:
+                link, reason = ComponentService(self._fm).find(KINDS_BY_ID["items"].component_lookup, number)
+            except (FmApiError, AuthError) as exc:
+                link, reason = "", str(exc)
+        if not link:
+            self.folder.record(number, "component link", FAILED, reason)
+            return None
+        self.folder.record(number, "component link", OK, f"{field_id} -> {link}")
+        return field_id, link
 
     def _send_item(self, number: str, request: Dict[str, Any]) -> None:
         try:

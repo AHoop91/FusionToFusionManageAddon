@@ -1,8 +1,8 @@
 """Palette actions for the Add Items picker of the Publish Item panel.
 
 A page of linkable items is fetched on a worker thread and the panel polls for it, so Fusion's
-palette handler never waits on the network. Pages are kept for the session, so reopening the
-picker or sorting back is instant. Only one Fusion Manage request runs at a time.
+palette handler never waits on the network. Later pages of an open picker are kept, but opening
+the picker (the first page) always reads again, so new items show. Only one Fusion Manage request runs at a time.
 """
 
 import threading
@@ -60,6 +60,9 @@ def register_linkable_actions(bridge: MessageBridge, config: ConfigService, auth
             return answer(token, message="The design has no Fusion Manage item to add to.")
         key = (cfg.workspace_id, item_id, max(0, int(payload.get("offset") or 0)), "desc" if payload.get("sort") == "desc" else "asc")
         with lock:
+            if key[2] == 0:   # the picker was opened (or sorted again): read the list afresh, never an old copy
+                for old in [k for k in pages if k[:2] == key[:2]]:
+                    del pages[old]
             cached = pages.get(key)
         if cached:
             return answer(token, ok=True, page=cached)

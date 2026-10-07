@@ -83,7 +83,9 @@ _SOURCES_BY_ID = {f.field_id: f for f in SOURCE_FIELDS}
 # property defined on the Manufacturing Data Model item can be mapped by name.
 CUSTOM_PREFIX = "custom:"
 BASE_PREFIX = "base:"
-_PROPERTY_PREFIXES = (CUSTOM_PREFIX, BASE_PREFIX)
+PHYSICAL_PREFIX = "physical:"   # "physical:Mass": a physical property of the component (see ``fusion_mfg.physical``)
+PHYSICAL_NAMES = ("Mass", "Volume", "Area", "Density", "Length", "Width", "Height")   # Length, Width and Height are the bounding box
+_PROPERTY_PREFIXES = (CUSTOM_PREFIX, BASE_PREFIX, PHYSICAL_PREFIX)
 
 
 def is_valid_source(source: str) -> bool:
@@ -96,6 +98,8 @@ def is_valid_source(source: str) -> bool:
 
 def data_model_name(source: str) -> str:
     """Name of the Data Model property a source reads ("" for a file source or an unknown one)."""
+    if source.startswith(PHYSICAL_PREFIX):   # listed as "Physical Mass", so it never meets a hub property of the same name
+        return "Physical " + source[len(PHYSICAL_PREFIX):]
     for prefix in _PROPERTY_PREFIXES:
         if source.startswith(prefix):
             return source[len(prefix):]
@@ -106,7 +110,7 @@ def data_model_name(source: str) -> str:
 def can_match(source: str) -> bool:
     """Hub properties are property values, so they can be the match key."""
     field_def = _SOURCES_BY_ID.get(source)
-    return field_def.can_match if field_def else source.startswith(_PROPERTY_PREFIXES)
+    return field_def.can_match if field_def else source.startswith((CUSTOM_PREFIX, BASE_PREFIX))   # a physical property is a measurement, never the key
 
 
 @dataclass
@@ -251,4 +255,5 @@ def catalog() -> Dict[str, Any]:
                            "can_match": f.can_match} for f in SOURCE_FIELDS],
         "custom_prefix": CUSTOM_PREFIX,
         "base_prefix": BASE_PREFIX,
+        "physical_prefix": PHYSICAL_PREFIX,
     }

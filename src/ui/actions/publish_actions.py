@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Tuple
 from ...auth.auth_service import AuthService
 from ...auth.errors import AuthError
 from ...config.config_service import ConfigService
-from ...config.workspace_models import WorkspaceConfig
+from ...config.workspace_models import PHYSICAL_PREFIX, WorkspaceConfig
 from ...core.logging_setup import get_logger
 from ...fm.bom import BomService
 from ...fm.client import FmApiError, FmClient
@@ -99,7 +99,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
         try:
             with lock:
                 summary = dict(sections["summary"]["data"] or {}) if sections["summary"]["key"] == key else {}
-            data = read_section(client, name, model_id, time, summary, component.get("id", ""))
+            physical = any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in cfg.mappings) if cfg else False
+            data = read_section(client, name, model_id, time, summary, component.get("id", ""), physical)
             if name == "properties":
                 data = {"count": len(data), "compare": compare_item(data, summary, cfg, fm, chosen)}
             elif name == "structure":

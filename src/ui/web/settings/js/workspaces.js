@@ -24,7 +24,8 @@
 
   function customPrefix() { return catalog.custom_prefix || 'custom:'; }
   function basePrefix() { return catalog.base_prefix || 'base:'; }
-  function hubPrefixes() { return [customPrefix(), basePrefix()]; }
+  function physicalPrefix() { return catalog.physical_prefix || 'physical:'; }
+  function hubPrefixes() { return [customPrefix(), basePrefix(), physicalPrefix()]; }
 
   // ---- Hub properties -----------------------------------------------------
   // Python lists the active hub's base and custom properties (per hub). They
@@ -70,7 +71,7 @@
           .filter(function (f) { return (f.kind || 'property') === g[1]; })
           .map(function (f) { return { value: f.id, label: f.label }; }) };
       });
-      [['base', basePrefix(), 'Base Properties'], ['custom', customPrefix(), 'Custom Properties']].forEach(function (g) {
+      [['base', basePrefix(), 'Base Properties'], ['physical', physicalPrefix(), 'Physical Properties'], ['custom', customPrefix(), 'Custom Properties']].forEach(function (g) {
         const names = hubProps.filter(function (p) { return p.group === g[0]; })
           .map(function (p) { return p.name; });
         // A saved hub property missing from the list must still be shown.

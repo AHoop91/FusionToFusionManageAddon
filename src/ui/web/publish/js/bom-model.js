@@ -22,9 +22,67 @@
   const staged = [];
   const DEFAULT_QUANTITY = '1';
 
+  // Quantities the user typed over a line's own, keyed by ``item.qkey`` (see ``buildItems``).
+  const quantities = {};
+  const EDITABLE = ['match', 'new', 'changed', 'added', 'mismatch', 'extra'];
+
+  /** A quantity the way Fusion writes it: Fusion Manage's "1.0" and "2.50" read "1" and "2.5". Anything that is not a number is left as it is. */
+  function plainQuantity(value) {
+    const text = String(value === undefined || value === null ? '' : value).trim();
+    const n = Number(text);
+    return text !== '' && isFinite(n) ? String(n) : text;
+  }
+
   function clearDecisions() {
     Object.keys(decisions).forEach(function (k) { delete decisions[k]; });
+    Object.keys(quantities).forEach(function (k) { delete quantities[k]; });
     staged.length = 0;
+  }
+
+  /** The quantity a line has before any edit: the design's, or Fusion Manage's for a line only it has. */
+  function baseQuantity(item) {
+    return item.status === 'extra' ? item.fm.quantity : item.design.quantity;
+  }
+
+  /** Quantity a line can be edited on (a picked line has its own box). */
+  function canEditQuantity(item) {
+    return EDITABLE.includes(item.status) && !!item.qkey;
+  }
+
+  /** The quantity a line will have once published. */
+  function quantityOf(item) {
+    const typed = quantities[item.qkey];
+    return typed === undefined ? baseQuantity(item) : typed;
+  }
+
+  /** Set a line's quantity; returns the quantity now held (unchanged when ``value`` is not a positive number). */
+  function setQuantity(item, value) {
+    const n = Number(String(value).trim());
+    if (isFinite(n) && n > 0) {
+      if (n === Number(baseQuantity(item))) delete quantities[item.qkey]; else quantities[item.qkey] = String(n);
+    }
+    return quantityOf(item);
+  }
+
+  /** Has the user typed a quantity over the line's own? */
+  function quantityEdited(item) {
+    return quantities[item.qkey] !== undefined;
+  }
+
+  function revertQuantity(item) {
+    delete quantities[item.qkey];
+  }
+
+  /** A line in both the design and Fusion Manage whose quantity to publish is not Fusion Manage's. */
+  function quantityDiffers(item) {
+    return ['match', 'changed', 'extra'].includes(item.status) && Number(quantityOf(item)) !== Number(item.fm.quantity);
+  }
+
+  /** The status a line shows: a match edited to another quantity updates, an update edited back to Fusion Manage's matches. */
+  function statusOf(item) {
+    if (item.status === 'match' && quantityDiffers(item)) return 'changed';
+    if (item.status === 'changed' && !quantityDiffers(item)) return 'match';
+    return item.status;
   }
 
   /** Add the picked items (those not staged already) as lines at the end of the Bill of Materials. */
@@ -77,12 +135,13 @@
     const repeats = {};
     let held = null;   // paired Fusion Manage line waiting for its design line, which follows it
     function side(r, quantity, edge) {
-      return { pn: r.part_number, name: r.name, quantity: String(quantity), sequence: String(r.sequence), edge: edge || '' };
+      return { pn: r.part_number, name: r.name, quantity: plainQuantity(quantity), sequence: String(r.sequence), edge: edge || '' };
     }
     rows.forEach(function (r) {
       if (r.status === 'extra' && r.pair) { held = r; return; }
       if (r.status === 'extra') {
-        items.push({ level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity, r.edge_id) });
+        items.push({ level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity, r.edge_id),
+                     key: 'only|' + r.part_number + '|' + r.sequence + '|' + r.level });   // so the user can choose to remove it
         return;
       }
       const item = { level: r.level + 1, root: false, sequence: String(r.sequence), status: r.status || 'unchecked', hidden: !!r.hidden, component: lineComponent(r),
@@ -97,6 +156,12 @@
       }
       held = null;
       items.push(item);
+    });
+    const seqAt = [];   // sequence of the latest line on each level, so a line's quantity edit has a key of its own
+    items.forEach(function (item) {
+      if (item.root) return;
+      seqAt[item.level] = item.sequence;
+      item.qkey = seqAt.slice(1, item.level + 1).join('.') + '|' + item.design.pn + '|' + item.fm.pn;
     });
     // Picked Fusion Manage items go last, numbered after the highest line directly under the design.
     let highest = 0;
@@ -146,7 +211,8 @@
       case 'linked': groups = ['added']; break;   // picked with Add Items
       case 'kept': groups = ['extra']; break;
       case 'root': groups = []; break;
-      default: groups = [item.status];
+      case 'extra': groups = quantityDiffers(item) ? ['extra', 'changed'] : ['extra']; break;
+      default: groups = [statusOf(item)];
     }
     return item.hidden && !item.root ? groups.concat('hidden') : groups;
   }
@@ -159,8 +225,8 @@
   /**
    * What publishing does: the components whose Fusion Manage item is created or updated (the design and every
    * component of it; the comparison finds out which of them differ) and the BOM operations (add, update the quantity,
-   * remove, renumber a kept line), each naming its parent by item number. Fusion Manage only lines with no
-   * choice are left alone.
+   * remove, renumber a kept line), each naming its parent by item number. Fusion Manage only lines are
+   * left alone unless the user chose to remove them.
    */
   function publishPlan(rows, root) {
     const base = buildItems(rows, root);
@@ -176,7 +242,7 @@
       const parent = item.level > 0 ? numberAt[item.level - 1] || '' : '';
       numberAt[item.level] = own;
       if (item.root) { components.push(Object.assign({}, item.component, { root: true })); return; }
-      const line = { parent: parent, number: own, quantity: item.design.quantity, sequence: item.design.sequence };
+      const line = { parent: parent, number: own, quantity: quantityOf(item), sequence: item.design.sequence };
       switch (item.status) {
         case 'new': case 'added': operations.push(Object.assign({ op: 'add' }, line)); break;
         case 'mismatch':   // only a pair that chose 'remove' is still a mismatch here
@@ -186,7 +252,13 @@
         case 'linked':   // an existing Fusion Manage item: only the BOM line is added, never the item
           operations.push({ op: 'add', parent: parent, number: own, quantity: item.fm.quantity, sequence: item.fm.sequence, link: item.link, linkable: item.linkable });
           break;
-        case 'changed': operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity, edge: item.fm.edge }, line)); break;
+        case 'extra':   // only in Fusion Manage: left alone unless the user chose to remove it
+          if (decisions[item.key] === 'remove') operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence, edge: item.fm.edge });
+          else if (quantityDiffers(item)) operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity, edge: item.fm.edge }, line, { sequence: item.fm.sequence }));
+          break;
+        case 'match': case 'changed':   // an edit can turn either into an update, or an update back into nothing
+          if (quantityDiffers(item)) operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity, edge: item.fm.edge }, line));
+          break;
         case 'kept':
           operations.push({ op: 'renumber', parent: parent, number: item.fm.pn, from_sequence: oldSequence[item.key], sequence: item.sequence, edge: item.fm.edge });
           break;
@@ -202,7 +274,8 @@
   }
 
   ns.bomModel = {
-    decisions: decisions, clearDecisions: clearDecisions, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent,
+    decisions: decisions, clearDecisions: clearDecisions, canEditQuantity: canEditQuantity, quantityOf: quantityOf, setQuantity: setQuantity,
+    quantityDiffers: quantityDiffers, quantityEdited: quantityEdited, revertQuantity: revertQuantity, statusOf: statusOf, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent,
     buildItems: buildItems, arrange: arrange, groupsOf: groupsOf, pendingReviews: pendingReviews, publishPlan: publishPlan,
   };
 })(window.MfgUi);

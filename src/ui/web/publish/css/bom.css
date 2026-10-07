@@ -86,13 +86,17 @@
 .pub-cmp-act-remove { color: #d13438; }
 .pub-cmp-act-remove:hover { color: #d13438; border-color: #d13438; }
 .pub-cmp-act-remove.chosen { background: #d13438; border-color: #d13438; color: #fff; }
+.pub-cmp-actions .pub-cmp-act-revert { visibility: visible; color: var(--accent); border-color: var(--accent); transition: background .15s, color .15s; }   /* an edited line always shows how to undo it */
+.pub-cmp-act-revert:hover { background: var(--accent); color: #fff; }
 .pub-cmp-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Hidden components and lines only Fusion Manage has are quieter. */
 .pub-cmp-hidden { flex: none; display: inline-flex; margin-left: 8px; color: var(--muted); }
 .pub-cmp-hidden svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pub-cmp-is-hidden .pub-cmp-item .pub-tree-label { color: var(--muted); font-style: italic; }
-.pub-cmp-extra .pub-cmp-item, .pub-cmp-extra td.num { color: var(--muted); }
+/* A line only Fusion Manage has reads like any other; its icon and bar are the same grey, so it is plainly from Manage. */
+.pub-cmp-extra .pub-tree-icon { border-right-color: #9a9a9a; }
+.pub-cmp-extra .pub-tree-icon svg { stroke: #9a9a9a; }
 
 /* Small panel: the table is a compact list that scrolls sideways (Fusion and Manage scroll with the item; Qty and Status stay fixed). */
 @media (max-width: 760px) {

@@ -21,7 +21,6 @@
     changed: { tone: 'changed', label: 'Updates',       text: 'Quantity differs from Fusion Manage' },
     added:   { tone: 'new',     label: 'New',           text: 'Publishing adds this line to the Fusion Manage BOM' },
     kept:    { tone: 'extra',   label: 'Keep',          text: 'Publishing keeps this Fusion Manage line, renumbered at the end of the BOM' },
-    extra:   { tone: 'extra',   label: 'FM only',       text: 'Only in Fusion Manage: kept, publishing never removes lines' },
     linked:  { tone: 'added',   label: 'Added',        text: 'Picked with Add Items: publishing adds this Fusion Manage item to the end of the Fusion Manage BOM' },
   };
   const PAIR_ASK = 'Item number differs from the Fusion Manage line at this position: choose an action';
@@ -120,13 +119,18 @@
   /** Status chip. A differing pair has two rows: the design line (``fmRow`` false) and the Fusion Manage line. */
   function statusCell(item, fmRow) {
     const td = el('td', 'pub-cmp-status');
-    if (item.status === 'match') {   // nothing to do: a quiet dash, not a chip
+    const status = model.statusOf(item);
+    if (status === 'match') {   // nothing to do: a quiet dash, not a chip
       const dash = el('span', 'pub-cmp-none', '–');
       dash.title = STATUS.match.text;
       td.appendChild(dash);
       return td;
     }
-    const chip = item.status === 'mismatch' ? pairChip(item, fmRow) : STATUS[item.status];
+    let chip;
+    if (status === 'mismatch') chip = pairChip(item, fmRow);
+    else if (status !== 'extra') chip = STATUS[status];
+    else if (decisions[item.key] === 'remove') chip = { tone: 'removed', label: 'Remove', text: 'Publishing will remove ' + item.fm.pn + ' from Fusion Manage' };
+    else chip = model.quantityDiffers(item) ? STATUS.changed : null;   // the ticks already say it is only in Fusion Manage
     if (!chip) return td;
     const node = el('span', 'pub-cmp-chip pub-cmp-chip-' + chip.tone, chip.label);
     node.title = chip.text;
@@ -155,34 +159,65 @@
     return box;
   }
 
+  /** Remove button of a line only Fusion Manage has: it is kept unless this is on (click again to keep it). */
+  function removeAction(item, redraw) {
+    const box = el('span', 'pub-cmp-actions');
+    const b = el('button', 'pub-cmp-act pub-cmp-act-remove' + (decisions[item.key] === 'remove' ? ' chosen' : ''));
+    b.type = 'button';
+    b.title = decisions[item.key] === 'remove' ? 'Keep ' + item.fm.pn + ' in Fusion Manage' : 'Remove ' + item.fm.pn + ' from Fusion Manage';
+    b.setAttribute('aria-label', b.title);
+    b.appendChild(ui.svg(['M5 12h14']));
+    b.addEventListener('click', function () {
+      if (decisions[item.key] === 'remove') delete decisions[item.key]; else decisions[item.key] = 'remove';
+      redraw();
+    });
+    box.appendChild(b);
+    return box;
+  }
+
+  /** Add a revert button, beside the line's other buttons, while the user's quantity is over the line's own. */
+  function withRevert(box, item, redraw) {
+    if (!model.canEditQuantity(item) || !model.quantityEdited(item)) return box;
+    const b = el('button', 'pub-cmp-act pub-cmp-act-revert');
+    b.type = 'button';
+    b.title = 'Revert the quantity to ' + (item.status === 'extra' ? item.fm.quantity : item.design.quantity);
+    b.setAttribute('aria-label', b.title);
+    b.appendChild(ui.svg(['M9 14L4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11']));   // a curved undo arrow
+    b.addEventListener('click', function () {
+      model.revertQuantity(item);
+      redraw();
+    });
+    const out = box || el('span', 'pub-cmp-actions');
+    out.appendChild(b);
+    return out;
+  }
+
   /** Quantity: the design's, or the Fusion Manage line's for a line only it has; a differing Fusion Manage quantity is shown beside it. A line picked with Add Items has a box to edit it. */
-  function quantityCell(item) {
-    if (item.status === 'linked') {
+  function quantityCell(item, redraw) {
+    const staged = item.status === 'linked';
+    if (staged || model.canEditQuantity(item)) {
       const td = el('td', 'num pub-cmp-qty');
       const input = el('input', 'pub-cmp-qty-input');
       input.type = 'text';
       input.inputMode = 'decimal';
-      input.value = item.fm.quantity;
+      input.value = staged ? item.fm.quantity : model.quantityOf(item);
       input.title = 'Quantity of this line in the Fusion Manage BOM';
-      input.setAttribute('aria-label', 'Quantity of ' + item.fm.pn);
+      input.setAttribute('aria-label', 'Quantity of ' + (staged || fromFm(item) ? item.fm.pn : item.design.pn));
       input.addEventListener('input', function () {   // numbers only: digits and one decimal point, whether typed or pasted
         const clean = input.value.replace(/[^0-9.]/g, '').replace(/^([^.]*\.)(.*)$/, function (_, head, tail) { return head + tail.replace(/\./g, ''); });
         if (clean !== input.value) input.value = clean;
       });
       input.addEventListener('change', function () {
         const typed = input.value;
-        input.value = model.setStagedQuantity(item.stagedId, typed);
+        input.value = staged ? model.setStagedQuantity(item.stagedId, typed) : model.setQuantity(item, typed);
         if (Number(typed) !== Number(input.value)) ns.pubToast.show('Quantity must be a number above 0', { tone: 'error' });
+        if (!staged) redraw();   // the status and filters follow the new quantity
       });
       td.appendChild(input);
+      if (model.statusOf(item) === 'changed' || model.quantityDiffers(item)) td.classList.add('pub-cmp-qty-diff');   // will update Fusion Manage
       return td;
     }
-    const td = el('td', 'num pub-cmp-qty', fromFm(item) ? item.fm.quantity : item.design.quantity);
-    if (item.status === 'changed') {
-      td.classList.add('pub-cmp-qty-diff');
-      td.appendChild(el('span', 'pub-cmp-qty-fm', ' (FM ' + item.fm.quantity + ')'));
-    }
-    return td;
+    return el('td', 'num pub-cmp-qty', fromFm(item) ? item.fm.quantity : item.design.quantity);
   }
 
   /** Icon buttons on the Fusion Manage line of a differing pair: keep both lines, or remove this one. A kept line has them too, to undo the choice. */
@@ -434,7 +469,7 @@
     seenStaged = new Set(items.filter(function (item) { return item.stagedId !== undefined; }).map(function (item) { return item.stagedId; }));
     items.forEach(function (item, i) {
       const fresh = item.stagedId !== undefined && !seenBefore.has(item.stagedId);   // picked since the last draw
-      const tr = el('tr', 'pub-cmp-row pub-cmp-' + item.status + (item.hidden ? ' pub-cmp-is-hidden' : '') + (fresh ? ' pub-cmp-fresh' : ''));
+      const tr = el('tr', 'pub-cmp-row pub-cmp-' + model.statusOf(item) + (item.hidden ? ' pub-cmp-is-hidden' : '') + (fresh ? ' pub-cmp-fresh' : ''));
       const isAssembly = !!(items[i + 1] && items[i + 1].level > item.level);
       const toggle = chevronLevels[item.level] ? el('button', 'pub-tree-toggle') : null;
       if (toggle) toggle.type = 'button';
@@ -452,11 +487,13 @@
 
       // A line only Fusion Manage has is drawn from its own side; every other row from the design's.
       const fmOnly = fromFm(item);
-      const actions = item.status === 'kept' ? actionButtons(item, redraw) : item.status === 'linked' ? unstageActions(item, redraw) : null;
+      const actions = withRevert(item.status === 'kept' ? actionButtons(item, redraw) : item.status === 'linked' ? unstageActions(item, redraw)
+        : item.status === 'extra' ? removeAction(item, redraw) : null, item, redraw);
+      if (item.status === 'extra' && decisions[item.key] === 'remove') tr.classList.add('pub-cmp-removing');
       tr.appendChild(itemCell(fmOnly ? item.fm : item.design, item, isAssembly, toggle, actions));
       tr.appendChild(presenceCell(!fmOnly, 'the design'));
       tr.appendChild(presenceCell(!['new', 'mismatch', 'added', 'linked'].includes(item.status), 'Fusion Manage'));
-      tr.appendChild(quantityCell(item));
+      tr.appendChild(quantityCell(item, redraw));
       tr.appendChild(statusCell(item, false));
       if (item.component && (item.root || item.component.id !== '')) {
         tr.classList.add('pub-cmp-pick');

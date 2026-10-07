@@ -17,6 +17,8 @@
   const FINISHED = ['done', 'error', 'cancelled'];
 
   let jobs = [];
+  let onFinished = null;   // called with a watched job once it has ended
+  let notified = '';       // id of the job onFinished was last called for
   let timer = null;
   let confirming = false;   // the dialog asks whether to cancel the publish
   let watched = '';   // id of the job the progress dialog follows ("" = no dialog)
@@ -193,7 +195,12 @@
     const job = watchedJob();
     if (!job) { closeProgress(); return false; }
     showProgress(describe(job), job);
-    return !isFinished(job);
+    if (!isFinished(job)) return true;
+    if (notified !== job.id) {   // once per job, so the panel can read what the run changed
+      notified = job.id;
+      if (onFinished) onFinished(job);
+    }
+    return false;
   }
 
   function handle(r) {
@@ -222,7 +229,8 @@
     bridge.send('start_publish', payload);
   }
 
-  function init() {
+  function init(options) {
+    onFinished = options && options.onFinished;
     ACTIONS.forEach(function (name) { bridge.on(name, name === 'start_publish' ? handleStart : handle); });
     bridge.on('open_publish_folder', function () {});
     if ($('pub-progress')) {

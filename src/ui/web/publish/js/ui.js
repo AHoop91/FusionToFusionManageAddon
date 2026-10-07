@@ -57,6 +57,23 @@
 
   // ---- Loading, empty and error states ------------------------------------------
 
+  const SLOW_MS = 15000;          // a wait this long gets a "taking longer" note
+  const slowTimers = new WeakMap();   // caption -> its timer
+
+  /**
+   * Start timing a wait: ``caption`` shows ``text`` now and, if the loader is still on screen after
+   * ``SLOW_MS``, adds that it is taking longer than expected. Call again to restart (a loader shown again).
+   */
+  function warnWhenSlow(caption, text) {
+    clearTimeout(slowTimers.get(caption));
+    caption.textContent = text;
+    slowTimers.set(caption, setTimeout(function () {
+      if (caption.isConnected && !caption.closest('[hidden]')) {
+        caption.textContent = text + ' This is taking longer than expected: the Manufacturing Data Model is slow to respond. Still trying...';
+      }
+    }, SLOW_MS));
+  }
+
   /** Bouncing balls with a caption. */
   function loaderNode() {
     const box = el('div', 'loader');
@@ -65,7 +82,9 @@
     balls.setAttribute('aria-label', 'Loading');
     for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
     box.appendChild(balls);
-    box.appendChild(el('p', 'muted', 'Loading...'));
+    const caption = el('p', 'muted');
+    box.appendChild(caption);
+    warnWhenSlow(caption, 'Loading...');
     return box;
   }
 
@@ -94,6 +113,6 @@
 
   ns.pubUi = {
     el: el, svg: svg, treeIcon: treeIcon, chevron: chevron, setChevron: setChevron,
-    loaderNode: loaderNode, errorState: errorState, emptyState: emptyState,
+    loaderNode: loaderNode, warnWhenSlow: warnWhenSlow, errorState: errorState, emptyState: emptyState,
   };
 })(window.MfgUi);

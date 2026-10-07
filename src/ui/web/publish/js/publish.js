@@ -13,6 +13,7 @@
   const jobs = ns.pubJobs;
 
   const POLL_INTERVAL_MS = 700;
+  const STALE_MS = 60000;   // the panel shown again after this long reads Fusion Manage afresh
   const SECTIONS = ['properties', 'structure'];   // loaded for the open design once its summary is in
 
   let currentSummary = null;   // summary of the open design
@@ -59,6 +60,7 @@
   function showLoading(on) {
     $('pub-loader').hidden = !on;
     $('pub-content').hidden = on;
+    if (on) ui.warnWhenSlow($('pub-loader').querySelector('p'), 'Loading item...');
   }
 
   // ---- Bill of materials panel ---------------------------------------------------
@@ -259,7 +261,7 @@
         loadSection('properties');
       },
     });
-    jobs.init();
+    jobs.init({ onFinished: function () { lastLoad = 0; refresh(true); } });   // Fusion Manage changed: compare again
     $('pub-publish').addEventListener('click', publish);
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
@@ -268,7 +270,10 @@
     // The palette stays open while the user switches designs. Clicking into it
     // also fires focus, so reload only when a different design is open.
     bridge.on('get_publish_model_key', function (r) {
-      if (r.ok && r.result.key !== loadedKey) refresh(false);
+      if (!r.ok) return;
+      // Another design, or the same one shown again after a while (Fusion Manage may have changed).
+      if (r.result.key !== loadedKey) refresh(false);
+      else if (Date.now() - lastLoad > STALE_MS) refresh(true);
     });
     window.addEventListener('focus', function () {
       if (!$('view-app').hidden && !inflight.summary) bridge.send('get_publish_model_key');
