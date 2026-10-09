@@ -9,8 +9,9 @@ import json
 import logging
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
-from typing import Any, Dict, NamedTuple
+from typing import Any, Dict, NamedTuple, Tuple
 
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
@@ -39,6 +40,19 @@ LOOKUPS = "/api/v3/lookups"
 def last_segment(link: Any) -> str:
     """The id at the end of a link such as ``/api/v3/workspaces/242/views/1/fields/TITLE`` ("" if not text)."""
     return link.rstrip("/").rsplit("/", 1)[-1] if isinstance(link, str) else ""
+
+
+class _KeepSignInHere(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect, but sends the access token only to the host it was meant for."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urllib.parse.urlparse(newurl).netloc != urllib.parse.urlparse(req.full_url).netloc:
+            new.remove_header("Authorization")
+        return new
+
+
+_OPENER = urllib.request.build_opener(_KeepSignInHere)
 
 
 class SendResult(NamedTuple):
@@ -120,6 +134,21 @@ class FmClient:
                       exc.read()[:1000].decode("utf-8", "replace"))
             raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
         except (OSError, ValueError) as exc:
+            raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
+
+    def get_bytes(self, path: str, timeout: int = REQUEST_TIMEOUT_SECONDS) -> Tuple[bytes, str]:
+        """GET ``path`` (an image or a file) and return ``(body, content type)``. Raises ``FmApiError`` on failure.
+
+        A file is often served from another host after a redirect; the sign-in is not sent there.
+        """
+        token = self._auth.get_access_token(self._settings)
+        request = urllib.request.Request(f"{self.base_url}{path}", headers={"Accept": "*/*", "Authorization": f"Bearer {token}"})
+        try:
+            with _OPENER.open(request, timeout=timeout) as response:
+                return response.read(), str(response.headers.get("Content-Type") or "")
+        except urllib.error.HTTPError as exc:
+            raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
+        except OSError as exc:
             raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
 
     def send_json(self, method: str, path: str, body: Any = None) -> SendResult:

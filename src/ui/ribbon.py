@@ -36,6 +36,7 @@ class RibbonCommand:
     tooltip: str
     on_click: Callable[[], None]
     resource_folder: str = ""
+    promoted: bool = True   # a button on the panel; False puts it in the panel's dropdown
 
 
 class _ExecuteHandler(adsk.core.CommandEventHandler):
@@ -73,6 +74,18 @@ class _CreatedHandler(adsk.core.CommandCreatedEventHandler):
             self._keep_alive.append(handler)
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Failed to wire command: %s", self._command.command_id)
+
+
+def define_command(ui: adsk.core.UserInterface, command: RibbonCommand, handlers: List[object]) -> adsk.core.CommandDefinition:
+    """Create (or reuse) the command definition of ``command`` and hook its click; ``handlers`` keeps the handler alive."""
+    definition = ui.commandDefinitions.itemById(command.command_id)
+    if definition is None:
+        definition = ui.commandDefinitions.addButtonDefinition(
+            command.command_id, command.name, command.tooltip, command.resource_folder)
+    handler = _CreatedHandler(ui, command, handlers)
+    definition.commandCreated.add(handler)
+    handlers.append(handler)
+    return definition
 
 
 @dataclass(frozen=True)
@@ -126,8 +139,9 @@ class Ribbon:
                 for definition in definitions[ribbon_panel.panel_id]:
                     control = panel.controls.itemById(definition.id) or panel.controls.addCommand(definition)
                     # Promoted controls show as buttons on the panel; the others go into its dropdown.
-                    control.isPromotedByDefault = True
-                    control.isPromoted = True
+                    command = next(c for c in ribbon_panel.commands if c.command_id == definition.id)
+                    control.isPromotedByDefault = command.promoted
+                    control.isPromoted = command.promoted
 
     def unregister(self) -> None:
         """Remove tabs, panels and command definitions. Safe to call repeatedly."""
@@ -150,11 +164,4 @@ class Ribbon:
 
     def _define(self, command: RibbonCommand) -> adsk.core.CommandDefinition:
         """Create (or reuse) the command definition and hook its click."""
-        definition = self._ui.commandDefinitions.itemById(command.command_id)
-        if definition is None:
-            definition = self._ui.commandDefinitions.addButtonDefinition(
-                command.command_id, command.name, command.tooltip, command.resource_folder)
-        handler = _CreatedHandler(self._ui, command, self._handlers)
-        definition.commandCreated.add(handler)
-        self._handlers.append(handler)
-        return definition
+        return define_command(self._ui, command, self._handlers)

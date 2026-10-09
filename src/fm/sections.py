@@ -9,10 +9,10 @@ fields) belong to the section too.
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from ..core.logging_setup import get_logger
-from .client import WORKSPACES, FmApiError, FmClient
+from .client import WORKSPACES, FmApiError, FmClient, last_segment
 
 log = get_logger("fm.sections")
 
@@ -53,6 +53,7 @@ class SectionService:
     """Reads a workspace's sections through an ``FmClient``."""
 
     _cache: Dict[Tuple[str, str], Tuple[float, Dict[str, str]]] = {}   # (tenant, workspace id) -> (read at, map)
+    _details_cache: Dict[Tuple[str, str], Tuple[float, List[Dict[str, Any]]]] = {}   # (tenant, workspace id) -> (read at, sections)
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -67,13 +68,28 @@ class SectionService:
         self._cache[key] = (time.monotonic(), fields)
         return fields
 
-    def _read(self, workspace_id: str) -> Dict[str, str]:
+    def layouts(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:
+        """``{section id: the section as the workspace lays it out}``: its fields and its matrices (grids of fields)."""
+        return {last_segment(_link(s)): s for s in self._details(workspace_id) if _link(s)}
+
+    def _details(self, workspace_id: str) -> List[Dict[str, Any]]:
+        """Every section of the workspace with its fields and matrices (read once, then shared for a few minutes)."""
+        key = (self._client.tenant, workspace_id)
+        cached = self._details_cache.get(key)
+        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
+            return cached[1]
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")
         listed = (data.get("sections") or data.get("items") or []) if isinstance(data, dict) else data
         entries = [e for e in listed if isinstance(e, dict)] if isinstance(listed, list) else []
         # The list holds links only; a section carrying its fields already needs no second read.
         with ThreadPoolExecutor(max_workers=READERS) as pool:
             details = list(pool.map(lambda e: e if "fields" in e or not _link(e) else self._client.get_json(_link(e)), entries))
+        self._details_cache[key] = (time.monotonic(), details)
+        return details
+
+    def _read(self, workspace_id: str) -> Dict[str, str]:
+        details = self._details(workspace_id)
+        data = details
         fields = parse_sections(details)
         if not fields:   # say so now, instead of every item failing with "not in any section"
             log.error("No fields found in the sections of workspace %s: %r", workspace_id, str(data)[:500])

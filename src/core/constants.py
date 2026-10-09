@@ -14,14 +14,20 @@ PUBLISH_TITLE = "Publish Item"
 JOBS_COMMAND_ID = "MfgToFm_PublishJobsCmd"
 JOBS_PALETTE_ID = "MfgToFm_PublishJobsPalette"
 JOBS_TITLE = "Job Queue"
+ITEM_COMMAND_ID = "MfgToFm_OpenItemCmd"
+ITEM_PALETTE_ID = "MfgToFm_ItemPalette"
+ITEM_TITLE = "Fusion Manage Item"
+ITEM_COMMAND_NAME = "Open Fusion Manage Item"
+MENU_OPEN_COMMAND_ID = "MfgToFm_MenuOpenCmd"   # the right-click menu has commands of its own
+MENU_PUBLISH_COMMAND_ID = "MfgToFm_MenuPublishCmd"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
 RIBBON_TAB_NAME = "Fusion Manage"
 RIBBON_PANEL_ID = "MfgToFm_SettingsPanel"
-RIBBON_PANEL_NAME = "Settings"
+RIBBON_PANEL_NAME = "Administration"
 RIBBON_PUBLISH_PANEL_ID = "MfgToFm_PublishPanel"
-RIBBON_PUBLISH_PANEL_NAME = "Publish"
+RIBBON_PUBLISH_PANEL_NAME = "Item"
 
 # Workspaces that get the ribbon tab: Design and Drawing.
 RIBBON_WORKSPACE_IDS = ["FusionSolidEnvironment", "FusionDrawingEnvironment"]
@@ -29,5 +35,7 @@ RIBBON_WORKSPACE_IDS = ["FusionSolidEnvironment", "FusionDrawingEnvironment"]
 # Palette geometry (pixels).
 PALETTE_WIDTH = 480
 PALETTE_HEIGHT = 720
+ITEM_WIDTH = 900
+ITEM_HEIGHT = 720
 JOBS_WIDTH = 440
 JOBS_HEIGHT = 520

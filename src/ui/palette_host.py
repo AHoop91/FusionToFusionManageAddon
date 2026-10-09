@@ -77,6 +77,12 @@ class PaletteHost:
         palette.isVisible = True
         log.info("Palette shown (visible=%s)", palette.isVisible)
 
+    def send(self, action: str, data: str = "{}") -> None:
+        """Tell the open page something happened (its ``bridge.on(action)`` callback runs). Main thread only."""
+        palette = self._ui.palettes.itemById(self._palette_id)
+        if palette:
+            palette.sendInfoToHTML(action, data)
+
     def dispose(self) -> None:
         """Remove the palette from Fusion. Safe to call repeatedly."""
         palette = self._ui.palettes.itemById(self._palette_id)

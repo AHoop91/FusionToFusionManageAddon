@@ -150,9 +150,9 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
             return dict(sections.get(slot) or _entry(slot, message=f"Unknown section: {slot}"))
 
     def open_url(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Open a link in the system browser (a palette cannot open one itself). https only."""
+        """Open a link in the system browser (a palette cannot open one itself). https, or http to this computer (Vault)."""
         url = str(payload.get("url", ""))
-        if not url.lower().startswith("https://"):
+        if not url.lower().startswith(("https://", "http://localhost/", "http://127.0.0.1/")):
             raise ValueError("Only https links can be opened.")
         webbrowser.open(url)
         return {}

@@ -28,16 +28,25 @@ from src.ui.actions import register_actions  # noqa: E402
 from src.ui.file_dialogs import FileDialogs  # noqa: E402
 from src.ui.message_bridge import MessageBridge  # noqa: E402
 from src.ui.job_alerts import JobAlerts  # noqa: E402
+from src.ui.item_panel import ItemContextMenu, ItemPanel  # noqa: E402
 from src.ui.jobs_badge import JobsBadge  # noqa: E402
 from src.ui.palette_host import PaletteHost  # noqa: E402
 from src.ui.ui_thread import UiThread  # noqa: E402
 from src.core.constants import (  # noqa: E402
     COMMAND_ID,
+    ITEM_COMMAND_ID,
+    ITEM_COMMAND_NAME,
+    ITEM_HEIGHT,
+    ITEM_PALETTE_ID,
+    ITEM_TITLE,
+    ITEM_WIDTH,
     JOBS_COMMAND_ID,
     JOBS_HEIGHT,
     JOBS_PALETTE_ID,
     JOBS_TITLE,
     JOBS_WIDTH,
+    MENU_OPEN_COMMAND_ID,
+    MENU_PUBLISH_COMMAND_ID,
     PUBLISH_COMMAND_ID,
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
@@ -62,6 +71,9 @@ _ui = None
 _palette_host = None
 _publish_host = None
 _jobs_host = None
+_item_host = None
+_item_panel = None
+_item_menu = None
 _ribbon = None
 _tasks = None
 
@@ -70,32 +82,49 @@ _tasks = None
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _ui, _palette_host, _publish_host, _jobs_host, _ribbon, _tasks
+    global _ui, _palette_host, _publish_host, _jobs_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks
     try:
         _ui = adsk.core.Application.get().userInterface
 
         bridge = MessageBridge()
         _tasks = UiThread()
         badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, JOBS_TOOLTIP, os.path.join(_ADDIN_DIR, "resources"))
-        register_actions(bridge, ConfigService(), AuthService(), FileDialogs(_ui), badge, JobAlerts(_ui, _tasks))
+        config, auth = ConfigService(), AuthService()
+        register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks))
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
         _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, PUBLISH_TITLE, "publish")
         _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, JOBS_TITLE, "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
         # Panels appear in this order. Add further buttons or panels here; the
         # ribbon needs no other changes.
+        _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
+        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth)
+        _item_menu = ItemContextMenu(_ui, [
+            RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
+                          "Open the Fusion Manage item of the selected component.",
+                          _item_panel.open_selected,
+                          os.path.join(_ADDIN_DIR, "resources", "item")),
+            RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
+                          "Preview what will be published to Fusion Manage for the current item.",
+                          _publish_host.show,
+                          os.path.join(_ADDIN_DIR, "resources", "publish")),
+        ])
         _ribbon = Ribbon(_ui, RIBBON_WORKSPACE_IDS, [
             RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [
-                RibbonCommand(PUBLISH_COMMAND_ID, "Publish Item",
+                RibbonCommand(ITEM_COMMAND_ID, "Open Fusion Manage Item",
+                              "Open the Fusion Manage item of the selected component, or of the open design.",
+                              _item_panel.open_selected,
+                              os.path.join(_ADDIN_DIR, "resources", "item")),
+                RibbonCommand(PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                               "Preview what will be published to Fusion Manage for the current item.",
                               _publish_host.show,
                               os.path.join(_ADDIN_DIR, "resources", "publish")),
+            ]),
+            RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
                 RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
                               _jobs_host.show,
                               os.path.join(_ADDIN_DIR, "resources", "jobs")),
-            ]),
-            RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
-                RibbonCommand(COMMAND_ID, "Settings",
+                RibbonCommand(COMMAND_ID, "Preferences",
                               "Open the Fusion Manage panel: connection and settings.",
                               _palette_host.show,
                               os.path.join(_ADDIN_DIR, "resources", "settings")),
@@ -118,6 +147,10 @@ def stop(context) -> None:
             _publish_host.dispose()
         if _jobs_host:
             _jobs_host.dispose()
+        if _item_host:
+            _item_host.dispose()
+        if _item_menu:
+            _item_menu.dispose()
         if _tasks:
             _tasks.dispose()
         if _ribbon:
