@@ -259,35 +259,57 @@
       list.hidden = !open;
       button.setAttribute('aria-expanded', String(open));
     }
-    button.addEventListener('click', function (event) { event.stopPropagation(); setOpen(list.hidden); });
+
     document.addEventListener('click', function () { setOpen(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
-    const upload = list.querySelector('[data-action="add_step_file"]');
+    const upload = list.querySelector('[data-upload]');   // uploads the STEP file of a design, or the PDF of a drawing: Python says which
+    const uploadIcon = upload.querySelector('.item-menu-icon');
+    const uploadLabel = upload.querySelector('.item-menu-label');
+    let uploading = false;
+    let uploadReady = true;
     let stepTimer = 0;
-    const card = ns.stepProgress.mount($('progress-card'));
-    /** The progress dialog and the Upload entry for ``state`` (``active``, ``stage``, ``percent`` or null while unknown). */
-    function showStep(state) {
-      $('progress').hidden = !state.active;
-      upload.disabled = !!state.active;
-      if (!state.active) return;
-      card.show(state);
+    const card = ns.uploadProgress.mount($('progress-card'));
+    function syncUpload() { upload.disabled = uploading || !uploadReady; }
+    /** The Upload entry for what the open document uploads (``action``, ``label``, ``ext`` of the file, ``ready``). */
+    function setUpload(context) {
+      $('item-actions-menu').hidden = !context.action;   // no action: no three dots
+      if (!context.action) { setOpen(false); return; }
+      upload.dataset.action = context.action;
+      uploadLabel.textContent = context.label;
+      uploadIcon.replaceChildren(ns.itemFiles.icon(context.ext));   // the icon the Files tab shows for that kind of file
+      uploadReady = context.ready;
+      upload.title = context.ready ? '' : 'The drawing is still loading';
+      syncUpload();
     }
-    function pollStep() { clearTimeout(stepTimer); bridge.send('step_status'); }
-    list.querySelectorAll('[data-ext]').forEach(function (slot) {   // the icon the Files tab shows for that kind of file
-      slot.replaceWith(ns.itemFiles.icon(slot.dataset.ext));
-    });
+    /** The progress dialog over the panel for ``state`` (``active``, and while it is, what ``upload-progress.js`` shows). */
+    function showStep(state) {
+      uploading = !!state.active;
+      $('progress').hidden = !uploading;
+      syncUpload();
+      if (uploading) card.show(state);
+    }
+    function pollStep() { clearTimeout(stepTimer); bridge.send('upload_status'); }
+    function toggleMenu(open) {
+      setOpen(open);
+      if (open) bridge.send('upload_context');   // the document may have changed since the last time
+    }
+    button.addEventListener('click', function (event) { event.stopPropagation(); toggleMenu(list.hidden); });
     list.querySelectorAll('[data-action]').forEach(function (entry) {
       entry.addEventListener('click', function () {
         setOpen(false);
         if (!currentView) return;
-        if (entry === upload) showStep({ active: true, stage: 'Creating the STEP file', percent: null });   // at once: Python is busy for a while
+        if (entry === upload) showStep({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
         bridge.send(entry.dataset.action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: entry.dataset.action });
       });
     });
-    bridge.on('add_step_file', function (r) {
+    function started(r) {
       if (r.ok && r.result && r.result.started) pollStep(); else showStep({ active: false });   // not started: declined, or one is under way
-    });
-    bridge.on('step_status', function (r) {
+    }
+    bridge.on('add_step_file', started);
+    bridge.on('upload_drawing', started);
+    bridge.on('upload_context', function (r) { if (r.ok) setUpload(r.result); });
+    window.addEventListener('focus', function () { if (currentView) bridge.send('upload_context'); });   // the open document may have changed
+    bridge.on('upload_status', function (r) {
       if (!r.ok) { showStep({ active: false }); return; }
       showStep(r.result);
       if (r.result.active) stepTimer = setTimeout(pollStep, STEP_POLL_MS);
@@ -297,7 +319,7 @@
 
   function render(view) {
     setLoading(false);
-    $('item-actions-menu').hidden = false;
+    bridge.send('upload_context');   // the three dots show once there is something in them
     renderHeader(view);
     currentView = view;
     labelTabs(view);

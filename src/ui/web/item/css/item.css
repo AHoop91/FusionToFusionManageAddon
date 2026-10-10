@@ -166,6 +166,7 @@
 .item-menu-btn { color: #000; }
 .item-menu-btn[aria-expanded="true"] { background: var(--bg); border-color: var(--border); }
 
+.item-menu-icon { display: inline-flex; flex-shrink: 0; }
 .item-menu-item .item-file-icon { margin-right: 0; flex-shrink: 0; }
 
 .item-menu-list {

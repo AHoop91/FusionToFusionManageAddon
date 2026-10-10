@@ -1,5 +1,5 @@
 /**
- * The window of a STEP upload started from the right-click menu: asks Python how far it has got (``step_status``)
+ * The window of an upload started from the right-click menu or the ribbon: asks Python how far it has got (``upload_status``)
  * and shows it on the shared card. Python closes the window when the upload ends.
  */
 (function (ns) {
@@ -7,15 +7,19 @@
 
   const bridge = ns.bridge;
   const POLL_MS = 250;
+  const ready = document.getElementById('getting-ready');   // the spinner shown until the first status arrives
 
-  function poll() { bridge.send('step_status'); }
+  function poll() { bridge.send('upload_status'); }
 
   (function start() {
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
-    const card = ns.stepProgress.mount(document.getElementById('step-card'));
-    bridge.on('step_status', function (r) {
-      if (r.ok && r.result) card.show(r.result);
+    const card = ns.uploadProgress.mount(document.getElementById('upload-card'));
+    bridge.on('upload_status', function (r) {
+      if (r.ok && r.result && r.result.active) {
+        card.show(r.result);
+        ready.remove();   // the card has something to show now
+      }
       setTimeout(poll, POLL_MS);
     });
     poll();

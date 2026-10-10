@@ -32,11 +32,13 @@ from ..fm.item_view import ItemViewService
 from ..fm.items import ItemService, pick_hit
 from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.where_used import WhereUsedService
+from . import drawing_source
+from .attachment_upload import AttachmentUpload, UploadJob
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
-from .step_upload import StepUpload
 from .ui_thread import UiThread
+from .upload_jobs import DRAWING_JOB, STEP_JOB
 
 log = get_logger("item_panel")
 
@@ -66,10 +68,13 @@ def _answer(**changes: Any) -> Dict[str, Any]:
 
 def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
     """The component an entity of the selection belongs to: the component or occurrence itself, else the one holding the body, face, sketch or feature."""
-    occurrence = adsk.fusion.Occurrence.cast(entity)
-    if occurrence is not None:
-        return occurrence.component
-    component = adsk.fusion.Component.cast(entity)
+    try:
+        occurrence = adsk.fusion.Occurrence.cast(entity)
+        if occurrence is not None:
+            return occurrence.component
+        component = adsk.fusion.Component.cast(entity)
+    except (TypeError, RuntimeError):   # an object this API has no type for, such as the top of a drawing's tree
+        return None
     if component is not None:
         return component
     for hop in (lambda e: e.assemblyContext.component if e.assemblyContext else None,   # a body or face seen through an occurrence
@@ -84,14 +89,25 @@ def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
     return None
 
 
-def _selected_part_number() -> str:
-    """Part number of the selected component, else of the open design ("" if neither has one). Runs on the UI thread."""
+_menu_selection: List[Any] = []   # what was selected when the right-click menu last opened: choosing an entry may have cleared the selection by then
+
+
+def _selected_part_number(from_menu: bool = False) -> str:
+    """Part number of the selected component, else of the open design ("" if neither has one). In a drawing the same: a component
+    of the tree gives its own number, and the top of the tree (or nothing) the number of the design the drawing shows, which is
+    "" until that has loaded. ``from_menu`` reads what was selected when the right-click menu opened. Runs on the UI thread."""
     app = adsk.core.Application.get()
-    selections = app.userInterface.activeSelections
-    for index in range(selections.count):
-        component = _component_of(selections.item(index).entity)
+    if from_menu:
+        entities = list(_menu_selection)
+    else:
+        selections = app.userInterface.activeSelections
+        entities = [selections.item(index).entity for index in range(selections.count)]
+    for entity in entities:
+        component = _component_of(entity)
         if component is not None:
             return str(component.partNumber or "").strip()
+    if drawing_source.active_drawing() is not None:
+        return drawing_source.top_level_number()[0]
     design = adsk.fusion.Design.cast(app.activeProduct)
     return str(design.rootComponent.partNumber or "").strip() if design is not None else ""
 
@@ -112,7 +128,7 @@ class ItemPanel:
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, bridge: MessageBridge,
                  config: ConfigService, auth: AuthService, progress: PaletteHost) -> None:
         self._ui = ui
-        self._uploads = StepUpload(ui, tasks, host, progress, config, auth, self._reload)
+        self._uploads = AttachmentUpload(ui, tasks, host, progress, config, auth, self._reload)
         self._tasks = tasks
         self._host = host
         self._config = config
@@ -120,7 +136,9 @@ class ItemPanel:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
         self._number = ""   # the item number the panel shows, for Refresh
-        bridge.register("step_status", lambda _payload: self._uploads.status())
+        bridge.register("upload_status", lambda _payload: self._uploads.status())
+        bridge.register("upload_context", self._upload_context)
+        bridge.register("upload_drawing", self._upload_drawing)
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
         bridge.register("open_attachment", self._open_attachment)
@@ -198,7 +216,13 @@ class ItemPanel:
 
     def open_selected(self) -> None:
         """Show the item of the selected component, or of the open design when nothing is selected. UI thread."""
-        number = _selected_part_number()
+        self._open(_selected_part_number())
+
+    def open_from_menu(self) -> None:
+        """Show the item of the component the right-click menu was opened on. UI thread."""
+        self._open(_selected_part_number(from_menu=True))
+
+    def _open(self, number: str) -> None:
         if not number:
             self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
             return
@@ -223,18 +247,41 @@ class ItemPanel:
 
     def _add_step_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open design as the STEP file of the item shown (the Actions menu). UI thread."""
+        return self._upload_for_item(STEP_JOB, payload)
+
+    def _upload_drawing(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Upload the open drawing as the PDF of the item shown (the Actions menu). UI thread."""
+        return self._upload_for_item(DRAWING_JOB, payload)
+
+    def _upload_for_item(self, job: UploadJob, payload: Dict[str, Any]) -> Dict[str, Any]:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         if not self._number:
             raise ValueError("No item is shown.")
-        return self._uploads.from_panel(workspace_id, item_id, self._number)
+        return self._uploads.from_panel(job, workspace_id, item_id, self._number)
+
+    def _upload_context(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
+        """What the Actions menu uploads for the open document: the STEP file of a design, the PDF of a drawing, else nothing (``action`` is "")."""
+        if drawing_source.active_drawing() is not None:
+            return {"action": "upload_drawing", "label": "Upload Drawing Representation", "ext": ".pdf", "ready": bool(drawing_source.cached_number())}
+        if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
+            return {"action": "add_step_file", "label": "Upload STEP File", "ext": ".step", "ready": True}
+        return {"action": ""}   # neither a design nor a drawing is open: nothing to offer
 
     def upload_selected_step(self) -> None:
         """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
-        number = _selected_part_number()
+        number = _selected_part_number(from_menu=True)
         if not number:
             self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
             return
-        self._uploads.from_selection(number)
+        self._uploads.from_number(STEP_JOB, number)
+
+    def upload_drawing(self) -> None:
+        """Upload the open drawing as the PDF of the item of the design it shows (the ribbon button). UI thread."""
+        number, reason = drawing_source.top_level_number()
+        if not number:
+            self._ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
+            return
+        self._uploads.from_number(DRAWING_JOB, number)
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""
@@ -316,9 +363,10 @@ def _selects_root(entities: Any) -> bool:
 
 
 class _MenuHandler(adsk.core.MarkingMenuEventHandler):
-    """Adds the commands to the right-click menu when a component is selected, under one line.
+    """Adds the commands to the right-click menu when something is selected, under one line.
 
-    A command marked ``root_only`` is offered only when the root component is selected.
+    In a design the menu appears for a selected component; in a drawing, for any selection. A command with a ``context`` is offered
+    only in that kind of document, and one marked ``root_only`` only when the top of the tree is selected.
     """
 
     def __init__(self, commands: Sequence[RibbonCommand]) -> None:
@@ -328,16 +376,22 @@ class _MenuHandler(adsk.core.MarkingMenuEventHandler):
     def notify(self, args) -> None:
         try:
             event = adsk.core.MarkingMenuEventArgs.cast(args)
-            if not any(_component_of(e) is not None for e in event.selectedEntities):
+            entities = list(event.selectedEntities)
+            _menu_selection[:] = entities
+            context = "drawing" if drawing_source.active_drawing() is not None else "design"
+            if context == "drawing":
+                if not entities:
+                    return
+            elif not any(_component_of(e) is not None for e in entities):
                 return
             definitions = adsk.core.Application.get().userInterface.commandDefinitions
             controls = event.linearMarkingMenu.controls
-            is_root = _selects_root(event.selectedEntities)
+            is_root = drawing_source.selects_top_level(entities) if context == "drawing" else _selects_root(entities)
             if controls.itemById(LINE_ID) is None and controls.itemById(self._commands[0].command_id) is None:
                 controls.addSeparator(LINE_ID)   # one line above the group, none between its entries
             for command in self._commands:
                 shown = controls.itemById(command.command_id)
-                if command.root_only and not is_root:
+                if (command.context and command.context != context) or (command.root_only and not is_root):
                     if shown is not None:   # left over from the last time the menu opened
                         shown.deleteMe()
                     continue

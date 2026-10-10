@@ -5,15 +5,22 @@
   <title>Upload STEP File</title>
   <link rel="stylesheet" href="../shared/css/base.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
-  <link rel="stylesheet" href="../shared/css/step-progress.css">
+  <link rel="stylesheet" href="../shared/css/upload-progress.css">
   <link rel="stylesheet" href="css/progress-page.css">
+  <style>
+    /* Inline, so it draws before the stylesheets above are read. */
+    #getting-ready { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #fff; color: #444; font: 14px "Segoe UI", sans-serif; }
+    #getting-ready .spinner { width: 36px; height: 36px; border: 4px solid #e2e2e2; border-top-color: #0696d7; border-radius: 50%; animation: getting-ready-spin 0.9s linear infinite; }
+    @keyframes getting-ready-spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-  <!-- The progress of a STEP upload started from the right-click menu, in a small window of its own (the item panel shows the same card). -->
-  <main id="step-card"></main>
+  <!-- The progress of a file upload started from the right-click menu or the ribbon, in a small window of its own (the item panel shows the same card). -->
+  <div id="getting-ready" role="status"><div class="spinner"></div>Getting things ready...</div>
+  <main id="upload-card"></main>
   <script src="../shared/js/dom.js"></script>
   <script src="../shared/js/bridge.js"></script>
-  <script src="../shared/js/step-progress.js"></script>
+  <script src="../shared/js/upload-progress.js"></script>
   <script src="js/progress-page.js"></script>
 </body>
 </html>

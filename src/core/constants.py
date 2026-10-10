@@ -21,6 +21,8 @@ ITEM_COMMAND_NAME = "Open Fusion Manage Item"
 MENU_OPEN_COMMAND_ID = "MfgToFm_MenuOpenCmd"   # the right-click menu has commands of its own
 MENU_PUBLISH_COMMAND_ID = "MfgToFm_MenuPublishCmd"
 MENU_UPLOAD_STEP_COMMAND_ID = "MfgToFm_MenuUploadStepCmd"
+MENU_UPLOAD_DRAWING_COMMAND_ID = "MfgToFm_MenuUploadDrawingCmd"
+UPLOAD_DRAWING_COMMAND_ID = "MfgToFm_UploadDrawingCmd"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
@@ -31,15 +33,16 @@ RIBBON_PUBLISH_PANEL_ID = "MfgToFm_PublishPanel"
 RIBBON_PUBLISH_PANEL_NAME = "Item"
 
 # Workspaces that get the ribbon tab: Design and Drawing.
-RIBBON_WORKSPACE_IDS = ["FusionSolidEnvironment", "FusionDrawingEnvironment"]
+RIBBON_DESIGN_WORKSPACE = "FusionSolidEnvironment"
+RIBBON_DRAWING_WORKSPACE = "FusionDocumentationEnvironment"
 
 # Palette geometry (pixels).
 PALETTE_WIDTH = 480
 PALETTE_HEIGHT = 720
 ITEM_WIDTH = 900
 ITEM_HEIGHT = 720
-STEP_PROGRESS_PALETTE_ID = "MfgToFm_StepProgressPalette"
-STEP_PROGRESS_WIDTH = 460
-STEP_PROGRESS_HEIGHT = 190
+UPLOAD_PROGRESS_PALETTE_ID = "MfgToFm_UploadProgressPalette"
+UPLOAD_PROGRESS_WIDTH = 460
+UPLOAD_PROGRESS_HEIGHT = 190
 JOBS_WIDTH = 440
 JOBS_HEIGHT = 520

@@ -1,8 +1,8 @@
 """Native Fusion ribbon: an add-in tab with panels of command buttons.
 
-The tab is created in each configured workspace. Buttons are declared as
+The tab is created in each configured workspace, with the panels given for it. Buttons are declared as
 ``RibbonCommand`` values grouped in ``RibbonPanel`` values, so adding a
-command or panel is one entry in the list passed to ``Ribbon``; no Fusion
+command or panel is one entry in the lists passed to ``Ribbon``; no Fusion
 plumbing changes.
 
 Fusion creates a new command instance on every click and raises
@@ -13,7 +13,7 @@ garbage-collects them and the button silently stops working.
 
 import traceback
 from dataclasses import dataclass
-from typing import Callable, List, Sequence
+from typing import Callable, Dict, List, Sequence
 
 import adsk.core
 
@@ -38,7 +38,9 @@ class RibbonCommand:
     resource_folder: str = ""
     promoted: bool = True   # a button on the panel; False puts it in the panel's dropdown
     needs_setup: bool = False   # greyed out until the settings are complete (see ``SetupGate``)
-    root_only: bool = False   # a right-click entry that is offered only when the root component of the design is selected
+    root_only: bool = False   # a right-click entry offered only when the top of the tree is selected (a design's root, the top of what a drawing shows)
+    needs_drawing: bool = False   # greyed out until the open drawing has loaded enough to say which item it is of (see ``SetupGate``)
+    context: str = ""   # a right-click entry offered only in "design" or "drawing" documents; "" in either
 
 
 class _ExecuteHandler(adsk.core.CommandEventHandler):
@@ -100,13 +102,11 @@ class RibbonPanel:
 
 
 class Ribbon:
-    """Creates and removes the add-in ribbon tab in the given workspaces."""
+    """Creates and removes the add-in ribbon tab, with the panels of each workspace (a drawing does not get what a design does)."""
 
-    def __init__(self, ui: adsk.core.UserInterface, workspace_ids: Sequence[str],
-                 panels: Sequence[RibbonPanel]) -> None:
+    def __init__(self, ui: adsk.core.UserInterface, panels_by_workspace: Dict[str, Sequence[RibbonPanel]]) -> None:
         self._ui = ui
-        self._workspace_ids = list(workspace_ids)
-        self._panels = list(panels)
+        self._panels_by_workspace = {workspace_id: list(panels) for workspace_id, panels in panels_by_workspace.items()}
         self._handlers: List[object] = []
 
     # ---- Ids ---------------------------------------------------------------
@@ -121,47 +121,54 @@ class Ribbon:
     def _panel_id(panel: RibbonPanel, workspace_id: str) -> str:
         return f"{panel.panel_id}_{workspace_id}"
 
+    def commands(self) -> List[RibbonCommand]:
+        """Every command of every workspace, each once (one definition serves a button in several workspaces)."""
+        found: Dict[str, RibbonCommand] = {}
+        for panels in self._panels_by_workspace.values():
+            for panel in panels:
+                for command in panel.commands:
+                    found.setdefault(command.command_id, command)
+        return list(found.values())
+
     # ---- Lifecycle ---------------------------------------------------------
 
     def register(self) -> None:
         """Create the command definitions, then the tab and panels per workspace."""
-        definitions = {panel.panel_id: [self._define(c) for c in panel.commands]
-                       for panel in self._panels}
-        for workspace_id in self._workspace_ids:
+        definitions = {command.command_id: self._define(command) for command in self.commands()}
+        for workspace_id, panels in self._panels_by_workspace.items():
             workspace = self._ui.workspaces.itemById(workspace_id)
             if workspace is None:
-                log.warning("Workspace not found, no ribbon added: %s", workspace_id)
+                log.warning("Workspace not found, no ribbon added: %s (Fusion has: %s)", workspace_id,
+                            ", ".join(self._ui.workspaces.item(i).id for i in range(self._ui.workspaces.count)))
                 continue
             tab = workspace.toolbarTabs.itemById(self._tab_id(workspace_id)) \
                 or workspace.toolbarTabs.add(self._tab_id(workspace_id), RIBBON_TAB_NAME)
-            for ribbon_panel in self._panels:
-                panel_id = self._panel_id(ribbon_panel, workspace_id)
-                panel = tab.toolbarPanels.itemById(panel_id) \
-                    or tab.toolbarPanels.add(panel_id, ribbon_panel.name)
-                for definition in definitions[ribbon_panel.panel_id]:
+            for ribbon_panel in panels:
+                panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id)) \
+                    or tab.toolbarPanels.add(self._panel_id(ribbon_panel, workspace_id), ribbon_panel.name)
+                for command in ribbon_panel.commands:
+                    definition = definitions[command.command_id]
                     control = panel.controls.itemById(definition.id) or panel.controls.addCommand(definition)
                     # Promoted controls show as buttons on the panel; the others go into its dropdown.
-                    command = next(c for c in ribbon_panel.commands if c.command_id == definition.id)
                     control.isPromotedByDefault = command.promoted
                     control.isPromoted = command.promoted
 
     def unregister(self) -> None:
         """Remove tabs, panels and command definitions. Safe to call repeatedly."""
-        for workspace_id in self._workspace_ids:
+        for workspace_id, panels in self._panels_by_workspace.items():
             workspace = self._ui.workspaces.itemById(workspace_id)
             tab = workspace.toolbarTabs.itemById(self._tab_id(workspace_id)) if workspace else None
             if tab is None:
                 continue
-            for ribbon_panel in self._panels:
+            for ribbon_panel in panels:
                 panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id))
                 if panel:
                     panel.deleteMe()
             tab.deleteMe()
-        for ribbon_panel in self._panels:
-            for command in ribbon_panel.commands:
-                definition = self._ui.commandDefinitions.itemById(command.command_id)
-                if definition:
-                    definition.deleteMe()
+        for command in self.commands():
+            definition = self._ui.commandDefinitions.itemById(command.command_id)
+            if definition:
+                definition.deleteMe()
         self._handlers.clear()
 
     def _define(self, command: RibbonCommand) -> adsk.core.CommandDefinition:

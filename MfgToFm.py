@@ -24,8 +24,9 @@ for _name in [m for m in sys.modules if m == "src" or m.startswith("src.")]:
 from src.auth.auth_service import AuthService  # noqa: E402
 from src.config.config_service import ConfigService  # noqa: E402
 from src.core.logging_setup import get_logger, shutdown_logging  # noqa: E402
+from src.ui import drawing_source  # noqa: E402
 from src.ui.actions import register_actions  # noqa: E402
-from src.ui.availability import SetupGate  # noqa: E402
+from src.ui.availability import GateWatcher, SetupGate  # noqa: E402
 from src.ui.file_dialogs import FileDialogs  # noqa: E402
 from src.ui.message_bridge import MessageBridge  # noqa: E402
 from src.ui.job_alerts import JobAlerts  # noqa: E402
@@ -41,9 +42,6 @@ from src.core.constants import (  # noqa: E402
     ITEM_PALETTE_ID,
     ITEM_TITLE,
     ITEM_WIDTH,
-    STEP_PROGRESS_HEIGHT,
-    STEP_PROGRESS_PALETTE_ID,
-    STEP_PROGRESS_WIDTH,
     JOBS_COMMAND_ID,
     JOBS_HEIGHT,
     JOBS_PALETTE_ID,
@@ -51,17 +49,23 @@ from src.core.constants import (  # noqa: E402
     JOBS_WIDTH,
     MENU_OPEN_COMMAND_ID,
     MENU_PUBLISH_COMMAND_ID,
+    MENU_UPLOAD_DRAWING_COMMAND_ID,
     MENU_UPLOAD_STEP_COMMAND_ID,
     PUBLISH_COMMAND_ID,
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
+    RIBBON_DESIGN_WORKSPACE,
+    RIBBON_DRAWING_WORKSPACE,
     RIBBON_PANEL_ID,
     RIBBON_PANEL_NAME,
     RIBBON_PUBLISH_PANEL_ID,
     RIBBON_PUBLISH_PANEL_NAME,
-    RIBBON_WORKSPACE_IDS,
     SETTINGS_PALETTE_ID,
     SETTINGS_TITLE,
+    UPLOAD_DRAWING_COMMAND_ID,
+    UPLOAD_PROGRESS_HEIGHT,
+    UPLOAD_PROGRESS_PALETTE_ID,
+    UPLOAD_PROGRESS_WIDTH,
 )
 from src.ui.ribbon import Ribbon, RibbonCommand, RibbonPanel  # noqa: E402
 
@@ -83,13 +87,15 @@ _item_menu = None
 _ribbon = None
 _tasks = None
 _gate = None
+_watcher = None
+
 
 
 # ---- Fusion lifecycle -------------------------------------------------------
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate
+    global _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
     try:
         _ui = adsk.core.Application.get().userInterface
 
@@ -105,49 +111,60 @@ def run(context) -> None:
         # Panels appear in this order. Add further buttons or panels here; the
         # ribbon needs no other changes.
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
-        _progress_host = PaletteHost(_ui, bridge, STEP_PROGRESS_PALETTE_ID, "Upload STEP File", "progress", False, STEP_PROGRESS_WIDTH, STEP_PROGRESS_HEIGHT)
+        _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, "Upload", "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host)
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
                           "Open the Fusion Manage item of the selected component.",
-                          _item_panel.open_selected,
+                          _item_panel.open_from_menu,
                           os.path.join(_ADDIN_DIR, "resources", "item"), needs_setup=True),
             RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                           "Preview what will be published to Fusion Manage for the current item.",
                           _publish_host.show,
-                          os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True, root_only=True),
+                          os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True, root_only=True, context="design"),
             RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, "Upload STEP File To Fusion Manage Item",
                           "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component.",
                           _item_panel.upload_selected_step,
-                          os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True),
+                          os.path.join(_ADDIN_DIR, "resources", "upload_step"), needs_setup=True, context="design"),
+            RibbonCommand(MENU_UPLOAD_DRAWING_COMMAND_ID, "Upload Drawing Representation To Fusion Manage Item",
+                          "Create a PDF of the open drawing and attach it to the Fusion Manage item of the design it shows.",
+                          _item_panel.upload_drawing,
+                          os.path.join(_ADDIN_DIR, "resources", "upload_drawing"), needs_setup=True, needs_drawing=True, root_only=True, context="drawing"),
         ]
         _item_menu = ItemContextMenu(_ui, menu_commands)
-        _ribbon_panels = [
-            RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [
-                RibbonCommand(ITEM_COMMAND_ID, "Open Fusion Manage Item",
-                              "Open the Fusion Manage item of the selected component, or of the open design.",
-                              _item_panel.open_selected,
-                              os.path.join(_ADDIN_DIR, "resources", "item"), needs_setup=True),
-                RibbonCommand(PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
-                              "Preview what will be published to Fusion Manage for the current item.",
-                              _publish_host.show,
-                              os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True),
-            ]),
-            RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
-                RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
-                              _jobs_host.show,
-                              os.path.join(_ADDIN_DIR, "resources", "jobs"), needs_setup=True),
-                RibbonCommand(COMMAND_ID, "Preferences",
-                              "Open the Fusion Manage panel: connection and settings.",
-                              _palette_host.show,
-                              os.path.join(_ADDIN_DIR, "resources", "settings")),
-            ]),
-        ]
-        _ribbon = Ribbon(_ui, RIBBON_WORKSPACE_IDS, _ribbon_panels)
+        open_item = RibbonCommand(ITEM_COMMAND_ID, "Open Fusion Manage Item",
+                                  "Open the Fusion Manage item of the selected component, or of the open design or drawing.",
+                                  _item_panel.open_selected,
+                                  os.path.join(_ADDIN_DIR, "resources", "item"), needs_setup=True)
+        publish_item = RibbonCommand(PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
+                                     "Preview what will be published to Fusion Manage for the current item.",
+                                     _publish_host.show,
+                                     os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True)
+        upload_drawing = RibbonCommand(UPLOAD_DRAWING_COMMAND_ID, "Upload Drawing Representation To Fusion Manage Item",
+                                       "Create a PDF of the open drawing and attach it to the Fusion Manage item of the design it shows.",
+                                       _item_panel.upload_drawing,
+                                       os.path.join(_ADDIN_DIR, "resources", "upload_drawing"), needs_setup=True, needs_drawing=True)
+        administration = RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
+            RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
+                          _jobs_host.show,
+                          os.path.join(_ADDIN_DIR, "resources", "jobs"), needs_setup=True),
+            RibbonCommand(COMMAND_ID, "Preferences",
+                          "Open the Fusion Manage panel: connection and settings.",
+                          _palette_host.show,
+                          os.path.join(_ADDIN_DIR, "resources", "settings")),
+        ])
+        # A drawing is not published (that is for the design), so it has no Publish, and uploads its PDF in place of a STEP file.
+        panels = {
+            RIBBON_DESIGN_WORKSPACE: [RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item, publish_item]), administration],
+            RIBBON_DRAWING_WORKSPACE: [RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item, upload_drawing]), administration],
+        }
+        _ribbon = Ribbon(_ui, panels)
         _ribbon.register()
-        # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is
-        _gate = SetupGate(_ui, menu_commands + [c for p in _ribbon_panels for c in p.commands], config.items_setup_problem)
+        # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
+        # needs the drawing loaded, which is looked at again every few seconds.
+        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), config.items_setup_problem, drawing_source.problem)
         _gate.refresh()
+        _watcher = GateWatcher(_tasks, _gate)
         config.on_change(lambda: _tasks.post(_gate.refresh))   # saving the settings can come from any thread
         log.info("Add-in started")
     except Exception:  # noqa: BLE001 - report to the user instead of failing silently
@@ -171,6 +188,8 @@ def stop(context) -> None:
             _item_host.dispose()
         if _item_menu:
             _item_menu.dispose()
+        if _watcher:
+            _watcher.dispose()
         if _tasks:
             _tasks.dispose()
         if _ribbon:
