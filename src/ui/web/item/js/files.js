@@ -48,11 +48,6 @@
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  function formatDate(stamp) {
-    const date = new Date(stamp);
-    return stamp && !isNaN(date) ? date.toLocaleString() : '';
-  }
-
   function icon(ext) {
     const lower = String(ext).toLowerCase();
     const kind = KINDS.find(function (k) { return k.exts.indexOf(lower) >= 0; });
@@ -73,7 +68,7 @@
   function shown(file, column) {
     switch (column.key) {
       case 'size': return formatSize(file.size);
-      case 'updated': return formatDate(file.updated);
+      case 'updated': return tree.formatDate(file.updated);
       default: return String(file[column.key] || '');
     }
   }
@@ -82,16 +77,6 @@
     const value = file[column.key];
     if (column.number) return Number(value) || 0;
     return String(value || '').toLowerCase();
-  }
-
-  /** A large icon and a line of text in the middle of ``target``, for a tab with nothing to list. */
-  function centred(target, text, isError, hint) {
-    target.classList.add('item-centred');
-    const icon = el('span', 'item-empty-icon item-empty-icon-large');
-    icon.innerHTML = EMPTY_FOLDER;
-    target.appendChild(icon);
-    target.appendChild(el('p', 'item-empty-text' + (isError ? ' error' : ''), text));
-    if (hint) target.appendChild(el('p', 'item-empty-hint', hint));
   }
 
   /** A handle on a heading's right edge: dragging it sets the width of its column. */
@@ -208,10 +193,7 @@
     wrap.appendChild(table);
     target.appendChild(wrap);
     if (!files.length) {   // the columns stay, and the empty message fills the space under them
-      target.classList.add('item-files-stack');
-      const empty = el('div', 'item-files-empty');
-      centred(empty, 'No files attached', false, 'Files attached to this item in Fusion Manage will be listed here.');
-      target.appendChild(empty);
+      tree.emptyUnder(target, EMPTY_FOLDER, 'No files attached', 'Files attached to this item in Fusion Manage will be listed here.');
     }
   }
 

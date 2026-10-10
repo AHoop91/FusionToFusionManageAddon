@@ -98,6 +98,12 @@
     });
   }
 
+  /** A date and time of Fusion Manage's (an ISO stamp) in the user's own format ("" when there is none). */
+  function formatDate(stamp) {
+    const date = new Date(stamp);
+    return stamp && !isNaN(date) ? date.toLocaleString() : '';
+  }
+
   /** A line of text (and a hint under it) in the middle of ``target``. */
   function centred(target, className, text, isError, hint) {
     target.className = 'view-scroll item-centred ' + className;
@@ -166,5 +172,5 @@
     return td;
   }
 
-  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, resizable: resizable };
+  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, resizable: resizable };
 })(window.MfgUi);

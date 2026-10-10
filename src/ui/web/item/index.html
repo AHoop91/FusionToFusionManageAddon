@@ -67,13 +67,13 @@
       </div>
     </header>
 
-    <!-- Tabs of an item in Fusion Manage. Item, Files, Bill of Materials and Where Used are built so far. -->
+    <!-- Tabs of an item in Fusion Manage. Item, Files, Bill of Materials, Where Used and Change Processes are built so far. -->
     <nav class="item-tabs item-part">
       <button id="item-tab-item" class="item-tab item-tab-active" type="button" data-tab="item"></button>
       <button id="item-tab-files" class="item-tab" type="button" data-tab="files"></button>
       <button id="item-tab-bom" class="item-tab" type="button" data-tab="bom"></button>
       <button id="item-tab-whereused" class="item-tab" type="button" data-tab="whereused"></button>
-      <button id="item-tab-changes" class="item-tab" type="button" disabled title="Not available yet."></button>
+      <button id="item-tab-changes" class="item-tab" type="button" data-tab="changes"></button>
     </nav>
 
     <!-- The item's sections: fields as label and value, matrices as grids. -->
@@ -82,6 +82,7 @@
       <div id="item-files" class="view-scroll item-files" hidden></div>
       <div id="item-bom" class="view-scroll item-bom" hidden></div>
       <div id="item-whereused" class="view-scroll item-where-used" hidden></div>
+      <div id="item-changes" class="view-scroll item-changes" hidden></div>
     </div>
   </div>
 
@@ -101,6 +102,7 @@
   <script src="js/tree.js"></script>
   <script src="js/files.js"></script>
   <script src="js/where-used.js"></script>
+  <script src="js/changes.js"></script>
   <script src="js/bom.js"></script>
   <script src="js/item.js"></script>
 </body>

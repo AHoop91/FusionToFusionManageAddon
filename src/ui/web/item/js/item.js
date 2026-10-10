@@ -40,7 +40,8 @@
     $('item-empty').hidden = false;
   }
 
-  const loaded = { files: false, bom: false, whereused: false };   // tabs read for the item shown
+  const LAZY_TABS = ['files', 'bom', 'whereused', 'changes'];
+  const loaded = { files: false, bom: false, whereused: false, changes: false };   // tabs read for the item shown
 
   /** Read a lazy tab the first time it is opened for the item shown. */
   function loadTab(name) {
@@ -52,8 +53,10 @@
       });
     } else if (name === 'bom') {
       ns.itemBom.render($('item-bom'), currentView);
-    } else {
+    } else if (name === 'whereused') {
       ns.itemWhereUsed.render($('item-whereused'), currentView);
+    } else {
+      ns.itemChanges.render($('item-changes'), currentView);
     }
   }
 
@@ -65,19 +68,19 @@
       button.hidden = !tab;
       if (!tab) return;
       button.textContent = tab.allowed && tab.count ? tab.label + ' (' + tab.count + ')' : tab.label;
-      if (!tab.allowed) button.title = 'Insufficient permissions';
-      if (key === 'changes') return;   // not built yet: stays disabled
       button.disabled = !tab.allowed;
       if (tab.allowed) button.removeAttribute('title');
+      else button.title = 'Insufficient permissions';
     });
   }
 
-  /** Show one tab ('item', 'files', 'bom' or 'whereused') and mark its button. */
+  /** Show one tab ('item', 'files', 'bom', 'whereused' or 'changes') and mark its button. */
   function showTab(name) {
     $('item-body').hidden = name !== 'item';
     $('item-files').hidden = name !== 'files';
     $('item-bom').hidden = name !== 'bom';
     $('item-whereused').hidden = name !== 'whereused';
+    $('item-changes').hidden = name !== 'changes';
     loadTab(name);
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
       tab.classList.toggle('item-tab-active', tab.dataset.tab === name);
@@ -254,8 +257,8 @@
     labelTabs(view);
     if (document.querySelector('.item-tab-active').disabled) showTab('item');   // the tab open for the last item is not allowed for this one
     // these are read from Fusion Manage only when their tab is opened
-    ['files', 'bom', 'whereused'].forEach(function (name) {
-      const tab = $(name === 'files' ? 'item-files' : 'item-' + name);
+    LAZY_TABS.forEach(function (name) {
+      const tab = $('item-' + name);
       loaded[name] = false;
       tab.replaceChildren();
       if (!tab.hidden) loadTab(name);   // the tab was open when the item changed
