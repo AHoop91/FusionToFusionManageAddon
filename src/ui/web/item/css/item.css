@@ -159,6 +159,59 @@
   cursor: pointer;
 }
 
+/* The Actions drop-down: a button that opens a list of commands under it. */
+.item-actions { align-items: center; }
+.item-menu { position: relative; }
+
+.item-menu-btn { color: #000; }
+.item-menu-btn[aria-expanded="true"] { background: var(--bg); border-color: var(--border); }
+
+.item-menu-item .item-file-icon { margin-right: 0; flex-shrink: 0; }
+.item-menu-glyph {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.item-menu-item:hover .item-menu-glyph, .item-menu-item:focus-visible .item-menu-glyph { stroke: var(--accent); }
+
+
+.item-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.item-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.item-menu-item:hover, .item-menu-item:focus-visible { background: var(--bg); outline: none; }
+
 .item-icon-btn:hover { color: var(--text); background: var(--bg); border-color: var(--border); }
 .item-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
@@ -401,3 +454,6 @@ a.item-bom-attachments:hover { color: var(--accent); }
 .item-bom-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 12px; color: var(--text); cursor: pointer; }
 .item-bom-menu label:hover { background: #eceef0; }
 
+
+.item-menu-item:disabled { opacity: 0.5; cursor: default; }
+.item-menu-item:disabled:hover { background: none; }

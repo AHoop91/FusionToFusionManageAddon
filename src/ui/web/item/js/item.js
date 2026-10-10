@@ -9,6 +9,7 @@
   const $ = ns.$;
   const el = ns.el;
   const POLL_INTERVAL_MS = 400;
+  const STEP_POLL_MS = 300;   // how often the progress of a STEP upload is asked for
   const LABEL_COLUMN_WIDTH = '16%';   // the row labels; the other columns share the rest equally
   const MIN_COLUMN_PX = 50;
   const MIN_MATRIX_COLUMN_PX = 120;   // a matrix column is never squeezed below this by a narrow panel
@@ -250,8 +251,54 @@
     $('item-open').hidden = !itemUrl;
   }
 
+  /** The Actions drop-down: opens under its button, closes on a choice, a click elsewhere or Escape. */
+  function initActions() {
+    const button = $('item-actions-btn');
+    const list = $('item-actions-list');
+    function setOpen(open) {
+      list.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+    }
+    button.addEventListener('click', function (event) { event.stopPropagation(); setOpen(list.hidden); });
+    document.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+    const upload = list.querySelector('[data-action="add_step_file"]');
+    let stepTimer = 0;
+    const card = ns.stepProgress.mount($('progress-card'));
+    /** The progress dialog and the Upload entry for ``state`` (``active``, ``stage``, ``percent`` or null while unknown). */
+    function showStep(state) {
+      $('progress').hidden = !state.active;
+      upload.disabled = !!state.active;
+      if (!state.active) return;
+      card.show(state);
+    }
+    function pollStep() { clearTimeout(stepTimer); bridge.send('step_status'); }
+    list.querySelectorAll('[data-ext]').forEach(function (slot) {   // the icon the Files tab shows for that kind of file
+      slot.replaceWith(ns.itemFiles.icon(slot.dataset.ext));
+    });
+    list.querySelectorAll('[data-action]').forEach(function (entry) {
+      entry.addEventListener('click', function () {
+        setOpen(false);
+        if (!currentView) return;
+        if (entry === upload) showStep({ active: true, stage: 'Creating the STEP file', percent: null });   // at once: Python is busy for a while
+        bridge.send(entry.dataset.action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: entry.dataset.action });
+      });
+    });
+    bridge.on('add_step_file', function (r) {
+      if (r.ok && r.result && r.result.started) pollStep(); else showStep({ active: false });   // not started: declined, or one is under way
+    });
+    bridge.on('step_status', function (r) {
+      if (!r.ok) { showStep({ active: false }); return; }
+      showStep(r.result);
+      if (r.result.active) stepTimer = setTimeout(pollStep, STEP_POLL_MS);
+    });
+    bridge.on('publish_item', function () {});
+    bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
+  }
+
   function render(view) {
     setLoading(false);
+    $('item-actions-menu').hidden = false;
     renderHeader(view);
     currentView = view;
     labelTabs(view);
@@ -308,6 +355,7 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
     $('item-open').addEventListener('click', function () { if (itemUrl) bridge.send('open_url', { url: itemUrl }); });
+    initActions();
     ns.auth.onChange(function (signedIn) { if (signedIn) poll(); });   // read the item once signed in
     ns.auth.refresh();
     poll();

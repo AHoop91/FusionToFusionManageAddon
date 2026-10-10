@@ -107,7 +107,7 @@
         const row = node.row;
         const tr = el('tr');
         tr.appendChild(tree.itemCell({
-          iconX: xs[entry.depth], number: entry.number, row: row, kind: 'assembly', room: chevronDepths[entry.depth],
+          quiet: true, iconX: xs[entry.depth], number: entry.number, row: row, kind: 'assembly', room: chevronDepths[entry.depth],
           chevron: row.up ? { open: node.open, title: node.open ? 'Collapse' : 'Show where this is used', onClick: function () { toggle(node); } } : null,
           loading: node.loading, error: node.error,
         }));

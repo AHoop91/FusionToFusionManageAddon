@@ -210,7 +210,7 @@
       input.addEventListener('change', function () {
         const typed = input.value;
         input.value = staged ? model.setStagedQuantity(item.stagedId, typed) : model.setQuantity(item, typed);
-        if (Number(typed) !== Number(input.value)) ns.pubToast.show('Quantity must be a number above 0', { tone: 'error' });
+        if (Number(typed) !== Number(input.value)) ns.toast.show('Quantity must be a number above 0', { tone: 'error' });
         if (!staged) redraw();   // the status and filters follow the new quantity
       });
       td.appendChild(input);

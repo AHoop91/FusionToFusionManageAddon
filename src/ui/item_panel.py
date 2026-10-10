@@ -29,12 +29,13 @@ from ..fm.bom_view import BomViewService
 from ..fm.associated_workflows import AssociatedWorkflowService
 from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
-from ..fm.items import ItemService
+from ..fm.items import ItemService, pick_hit
 from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.where_used import WhereUsedService
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
+from .step_upload import StepUpload
 from .ui_thread import UiThread
 
 log = get_logger("item_panel")
@@ -64,8 +65,23 @@ def _answer(**changes: Any) -> Dict[str, Any]:
 
 
 def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
+    """The component an entity of the selection belongs to: the component or occurrence itself, else the one holding the body, face, sketch or feature."""
     occurrence = adsk.fusion.Occurrence.cast(entity)
-    return occurrence.component if occurrence is not None else adsk.fusion.Component.cast(entity)
+    if occurrence is not None:
+        return occurrence.component
+    component = adsk.fusion.Component.cast(entity)
+    if component is not None:
+        return component
+    for hop in (lambda e: e.assemblyContext.component if e.assemblyContext else None,   # a body or face seen through an occurrence
+                lambda e: e.parentComponent,                                          # a body, sketch, feature or joint
+                lambda e: e.body.parentComponent):                                    # a face, edge or vertex
+        try:
+            found = hop(entity)
+        except (AttributeError, RuntimeError):
+            continue
+        if found is not None:
+            return found
+    return None
 
 
 def _selected_part_number() -> str:
@@ -94,8 +110,10 @@ class ItemPanel:
     """Finds an item by number and shows it in the item palette."""
 
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, bridge: MessageBridge,
-                 config: ConfigService, auth: AuthService) -> None:
+                 config: ConfigService, auth: AuthService, publish: Callable[[], None], progress: PaletteHost) -> None:
         self._ui = ui
+        self._publish = publish   # opens the Publish panel
+        self._uploads = StepUpload(ui, tasks, host, progress, config, auth, self._reload)
         self._tasks = tasks
         self._host = host
         self._config = config
@@ -103,9 +121,12 @@ class ItemPanel:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
         self._number = ""   # the item number the panel shows, for Refresh
+        bridge.register("step_status", lambda _payload: self._uploads.status())
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
         bridge.register("open_attachment", self._open_attachment)
+        bridge.register("add_step_file", self._add_step_file)
+        bridge.register("publish_item", self._publish_item)
         bridge.register("where_used_load", self._where_used_load)
         bridge.register("where_used_result", self._lookup_result)
         bridge.register("files_load", self._files_load)
@@ -202,6 +223,32 @@ class ItemPanel:
         threading.Thread(target=self._download, args=(*ids, str(payload.get("name") or "")), daemon=True).start()
         return {"started": True}
 
+    def _publish_item(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Open the Publish panel (the Actions menu). UI thread."""
+        self._publish()
+        return {"started": True}
+
+    def _add_step_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Upload the open design as the STEP file of the item shown (the Actions menu). UI thread."""
+        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        if not self._number:
+            raise ValueError("No item is shown.")
+        return self._uploads.from_panel(workspace_id, item_id, self._number)
+
+    def upload_selected_step(self) -> None:
+        """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
+        number = _selected_part_number()
+        if not number:
+            self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
+            return
+        self._uploads.from_selection(number)
+
+    def _reload(self) -> None:
+        """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""
+        if self._number:
+            self._start()
+            self._host.send("item_changed")
+
     def _download(self, workspace_id: str, item_id: str, attachment_id: str, name: str) -> None:
         try:
             client = FmClient(self._config.effective_settings(), self._auth)
@@ -256,7 +303,7 @@ class ItemPanel:
             raise ItemNotFound(number)
         if len(hits) > 1:
             log.warning("Item number %s matches %d items; showing the first", number, len(hits))
-        return ItemViewService(client).read(cfg.workspace_id, hits[0]["id"], held)
+        return ItemViewService(client).read(cfg.workspace_id, pick_hit(hits, number)["id"], held)
 
 
 LINE_ID = "MfgToFm_MenuLine"

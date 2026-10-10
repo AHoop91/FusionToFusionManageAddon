@@ -35,30 +35,6 @@ def catch_up() -> None:
     adsk.doEvents()
 
 
-def go_offline() -> bool:
-    """Put Fusion in offline mode (STEP exports are much faster without cloud fetches); True when this changed it."""
-    app = _app()
-    try:
-        if app.isOffLine:
-            return False
-        app.isOffLine = True
-        catch_up()
-        log.info("Fusion set offline for the exports.")
-        return True
-    except Exception:
-        log.exception("Could not set Fusion offline; exporting online")
-        return False
-
-
-def go_online() -> None:
-    try:
-        _app().isOffLine = False
-        catch_up()
-        log.info("Fusion back online.")
-    except Exception:
-        log.exception("Could not set Fusion back online: use Work Offline in Fusion to switch it")
-
-
 def _timed(label: str, action: Any) -> Any:
     """Run action() and log how long it took, so a slow step shows in the log (a step that never returns logs only its start)."""
     log.info("%s ...", label)

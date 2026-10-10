@@ -1,5 +1,5 @@
 /**
- * Publish Item panel: toasts (Material "snackbars"), as ``ns.pubToast``.
+ * Toasts (Material "snackbars"), shared by the panels, as ``ns.toast``.
  * ``show(message, opts)`` slides a short message up from the bottom of the panel and removes it after a few seconds;
  * ``opts``: ``tone`` ('success', 'error' or 'info', default 'info'), ``duration`` in ms (0 keeps it until closed),
  * ``max`` (toasts shown at once, default 3: the oldest goes first) and ``onClose`` (called once it has gone).
@@ -8,8 +8,21 @@
 (function (ns) {
   'use strict';
 
-  const ui = ns.pubUi;
-  const el = ui.el;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const el = ns.el;
+
+  /** A 24x24 icon drawn from path strings; the stylesheet sizes it. */
+  function svg(paths) {
+    const node = document.createElementNS(SVG_NS, 'svg');
+    node.setAttribute('viewBox', '0 0 24 24');
+    node.setAttribute('aria-hidden', 'true');
+    paths.forEach(function (d) {
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', d);
+      node.appendChild(path);
+    });
+    return node;
+  }
 
   const MAX_TOASTS = 3;
   const DURATION_MS = 4000;
@@ -24,7 +37,7 @@
 
   function hostNode() {
     if (!host) {
-      host = el('div', 'pub-toasts');
+      host = el('div', 'toasts');
       host.setAttribute('role', 'status');
       host.setAttribute('aria-live', 'polite');
       document.body.appendChild(host);
@@ -50,13 +63,13 @@
     const max = options.max || MAX_TOASTS;
     while (container.children.length >= max) container.firstChild.remove();
 
-    const node = el('div', 'pub-toast pub-toast-' + tone);
-    const icon = el('span', 'pub-toast-icon');
-    icon.appendChild(ui.svg(ICONS[tone]));
+    const node = el('div', 'toast toast-' + tone);
+    const icon = el('span', 'toast-icon');
+    icon.appendChild(svg(ICONS[tone]));
     node.appendChild(icon);
-    node.appendChild(el('span', 'pub-toast-text', message));
-    const close = el('button', 'pub-toast-close');
-    close.appendChild(ui.svg(['M6 6l12 12', 'M18 6L6 18']));
+    node.appendChild(el('span', 'toast-text', message));
+    const close = el('button', 'toast-close');
+    close.appendChild(svg(['M6 6l12 12', 'M18 6L6 18']));
     close.type = 'button';
     close.title = 'Dismiss';
     close.setAttribute('aria-label', 'Dismiss');
@@ -75,5 +88,5 @@
   /** How many toasts are on screen. */
   function open() { return host ? host.children.length : 0; }
 
-  ns.pubToast = { show: show, open: open };
+  ns.toast = { show: show, open: open };
 })(window.MfgUi);

@@ -13,7 +13,8 @@
   <link rel="stylesheet" href="css/bom.css">
   <link rel="stylesheet" href="css/details.css">
   <link rel="stylesheet" href="css/add-items.css">
-  <link rel="stylesheet" href="css/toast.css">
+  <link rel="stylesheet" href="../shared/css/toast.css">
+  <link rel="stylesheet" href="../shared/css/progress.css">
 </head>
 <body>
   <!-- Shared top bar, filled in by shell.js. -->
@@ -90,25 +91,25 @@
   </div>
 
   <!-- Progress of the publish just queued, filled in by publish-jobs.js. It can be closed; the run continues. -->
-  <div id="pub-progress" class="pub-progress-backdrop" hidden>
-    <div class="pub-progress" role="dialog" aria-modal="true" aria-labelledby="pub-progress-title" aria-describedby="pub-progress-status">
-      <h2 id="pub-progress-title" class="pub-progress-title"></h2>
-      <p id="pub-progress-status" class="pub-progress-status"></p>
-      <div id="pub-progress-bar" class="pub-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
-        <div id="pub-progress-fill" class="pub-progress-fill"></div>
+  <div id="progress" class="progress-backdrop" hidden>
+    <div class="progress" role="dialog" aria-modal="true" aria-labelledby="progress-title" aria-describedby="progress-status">
+      <h2 id="progress-title" class="progress-title"></h2>
+      <p id="progress-status" class="progress-status"></p>
+      <div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div id="progress-fill" class="progress-fill"></div>
       </div>
-      <p id="pub-progress-count" class="muted pub-progress-count"></p>
-      <p id="pub-progress-note" class="muted pub-progress-note"></p>
-      <div id="pub-progress-confirm" class="pub-progress-confirm" role="alertdialog" aria-labelledby="pub-progress-confirm-text" hidden>
-        <p id="pub-progress-confirm-text">Cancel this publish? Items already processed are kept in the folder; the rest will not be published.</p>
-        <div class="pub-progress-actions">
-          <button id="pub-progress-keep" class="btn btn-secondary" type="button">Keep publishing</button>
-          <button id="pub-progress-stop" class="btn pub-progress-danger" type="button">Yes, cancel publish</button>
+      <p id="progress-count" class="muted progress-count"></p>
+      <p id="progress-note" class="muted progress-note"></p>
+      <div id="progress-confirm" class="progress-confirm" role="alertdialog" aria-labelledby="progress-confirm-text" hidden>
+        <p id="progress-confirm-text">Cancel this publish? Items already processed are kept in the folder; the rest will not be published.</p>
+        <div class="progress-actions">
+          <button id="progress-keep" class="btn btn-secondary" type="button">Keep publishing</button>
+          <button id="progress-stop" class="btn progress-danger" type="button">Yes, cancel publish</button>
         </div>
       </div>
-      <div id="pub-progress-actions" class="pub-progress-actions">
-        <button id="pub-progress-cancel" class="btn btn-secondary" type="button">Cancel publish</button>
-        <button id="pub-progress-close" class="btn" type="button">Close</button>
+      <div id="progress-actions" class="progress-actions">
+        <button id="progress-cancel" class="btn btn-secondary" type="button">Cancel publish</button>
+        <button id="progress-close" class="btn" type="button">Close</button>
       </div>
     </div>
   </div>
@@ -121,7 +122,7 @@
   <script src="../shared/js/auth.js"></script>
   <!-- Publish panel -->
   <script src="js/ui.js"></script>
-  <script src="js/toast.js"></script>
+  <script src="../shared/js/toast.js"></script>
   <script src="js/bom-model.js"></script>
   <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>

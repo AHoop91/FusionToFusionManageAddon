@@ -1,0 +1,22 @@
+/* A progress dialog: a card over a dimmed panel with a title, a line of status and a bar (publish-jobs.js, item.js). */
+.progress-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.35); }
+.progress-backdrop[hidden] { display: none; }
+.progress { width: 100%; max-width: 420px; padding: 20px 22px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
+.progress-title { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+.progress-status { margin: 0 0 14px; font-size: 13px; overflow-wrap: anywhere; }
+.progress-bar { position: relative; height: 6px; overflow: hidden; border-radius: 3px; background: var(--border); }
+.progress-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.4s ease; }
+.progress-bar.indeterminate .progress-fill { position: absolute; width: 35%; transition: none; animation: progress-slide 1.2s ease-in-out infinite; }
+.progress-ok .progress-fill { background: var(--ok); }
+.progress-error .progress-fill { background: var(--danger); }
+.progress-count { margin: 6px 0 0; min-height: 16px; font-size: 12px; }
+.progress-note { margin: 12px 0 0; font-size: 12px; line-height: 1.45; }
+.progress-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.progress-actions [hidden] { display: none; }
+.progress-confirm { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--danger); border-radius: 6px; font-size: 12px; line-height: 1.45; }
+.progress-confirm[hidden] { display: none; }
+.progress-confirm p { margin: 0; }
+.progress-confirm .progress-actions { margin-top: 12px; }
+.progress-danger { background: var(--danger); border-color: var(--danger); }
+@keyframes progress-slide { from { left: -35%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .progress-bar.indeterminate .progress-fill { animation-duration: 3s; } .progress-fill { transition: none; } }

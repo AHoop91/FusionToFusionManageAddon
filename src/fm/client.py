@@ -11,7 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, NamedTuple, Tuple
+from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
@@ -28,6 +28,8 @@ FM_HOST_SUFFIX =".autodeskplm360.net"
 DEBUG_BODY = 20000   # characters of a request or answer kept in a verbose log
 REQUEST_TIMEOUT_SECONDS = 15
 WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
+UPLOAD_TIMEOUT_SECONDS = 300   # a STEP of an assembly can be large
+UPLOAD_CHUNK_BYTES = 64 * 1024   # a file goes out in pieces this big, so progress can be shown
 READ_ATTEMPTS = 3
 RETRY_STATUSES = (429, 502, 503, 504)   # worth another try; a timeout or lost connection (status 0) is too
 RETRY_SECONDS = 2   # wait before the second try, twice that before the third
@@ -60,6 +62,14 @@ class SendResult(NamedTuple):
     status: int
     headers: Dict[str, str]
     data: Any
+
+
+def _chunks(content: bytes, progress: Callable[[float], None]) -> Iterator[bytes]:
+    """``content`` in pieces; ``progress`` is told the fraction handed over after each."""
+    size = max(len(content), 1)
+    for start in range(0, len(content), UPLOAD_CHUNK_BYTES):
+        yield content[start:start + UPLOAD_CHUNK_BYTES]
+        progress(min(1.0, (start + UPLOAD_CHUNK_BYTES) / size))
 
 
 class FmApiError(Exception):
@@ -150,6 +160,31 @@ class FmClient:
             raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
         except OSError as exc:
             raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
+
+    @staticmethod
+    def put_bytes(url: str, content: bytes, headers: Optional[Dict[str, str]] = None, timeout: int = UPLOAD_TIMEOUT_SECONDS,
+                  progress: Optional[Callable[[float], None]] = None) -> int:
+        """PUT ``content`` to a signed https ``url`` (it carries its own access, so no sign-in is sent); return the status.
+
+        ``progress(fraction)`` is called as the bytes go out (0 to 1).
+        """
+        if not url.lower().startswith("https://"):
+            raise FmApiError("The upload address Fusion Manage gave is not https.")
+        body: Any = content
+        if progress is not None:   # sent in pieces so the caller can see how far it has got
+            body = _chunks(content, progress)
+        request = urllib.request.Request(url, data=body, method="PUT", headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(content)), **(headers or {})})
+        began = time.monotonic()
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                log.info("PUT of %d bytes -> %s in %.1fs", len(content), response.status, time.monotonic() - began)
+                return response.status
+        except urllib.error.HTTPError as exc:
+            said = exc.read()[:1000].decode("utf-8", "replace")
+            log.error("Upload HTTP %s: %s", exc.code, said)
+            raise FmApiError(f"The upload returned {exc.code}: {said[:300]}", exc.code) from exc
+        except OSError as exc:
+            raise FmApiError(f"The upload failed: {exc}") from exc
 
     def send_json(self, method: str, path: str, body: Any = None) -> SendResult:
         """POST, PATCH or DELETE ``path`` with ``body`` as JSON; return the status, headers and parsed answer.

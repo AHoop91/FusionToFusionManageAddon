@@ -197,5 +197,5 @@
     }
   }
 
-  ns.itemFiles = { render: render };
+  ns.itemFiles = { render: render, icon: icon };
 })(window.MfgUi);

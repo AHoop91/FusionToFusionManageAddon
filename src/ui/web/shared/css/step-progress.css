@@ -1,0 +1,16 @@
+/* The STEP upload card (step-progress.js): a heading, a bar and the three stages. */
+
+.step-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.step-icon { flex: none; width: 32px; height: 32px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.step-title { margin: 0; font-size: 15px; font-weight: 600; }
+.step-status { margin: 2px 0 0; font-size: 12px; }
+.step-count { margin-left: auto; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.step-stages { display: flex; justify-content: space-between; margin: 14px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.step-stages li { display: flex; align-items: center; gap: 6px; }
+.step-stages li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.step-stages li.current { color: var(--text); font-weight: 600; }
+.step-stages li.current::before { background: var(--accent); }
+.step-stages li.done { color: var(--text); }
+.step-stages li.done::before { background: var(--ok); }
+.step-card { width: 100%; max-width: 420px; }

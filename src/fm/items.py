@@ -68,6 +68,15 @@ def _hits(data: Any) -> List[Dict[str, str]]:
     return hits
 
 
+def pick_hit(hits: List[Dict[str, str]], number: str) -> Dict[str, str]:
+    """The hit whose descriptor starts with exactly ``number`` (``9410-306 - STEP``), else the first; ``hits`` must not be empty."""
+    wanted = number.strip().lower()
+    for hit in hits:
+        if hit["descriptor"].split(" - ", 1)[0].strip().lower() == wanted:
+            return hit
+    return hits[0]
+
+
 class ItemService:
     """Finds and reads items of a workspace through an ``FmClient``."""
 

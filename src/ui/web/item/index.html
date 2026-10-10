@@ -8,13 +8,15 @@
   <link rel="stylesheet" href="../shared/css/layout.css">
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/toast.css">
+  <link rel="stylesheet" href="../shared/css/progress.css">
+  <link rel="stylesheet" href="../shared/css/step-progress.css">
   <!-- Item panel styles -->
   <link rel="stylesheet" href="css/item.css">
 </head>
 <body>
   <!-- Shared top bar, filled in by shell.js. -->
   <header id="app-header" class="app-header"></header>
-
   <!-- ===== Signed-out view: sign-in only ================================ -->
   <div id="view-login" class="view">
     <div id="login-form" class="view-scroll" hidden>
@@ -64,6 +66,21 @@
         <button id="item-refresh" class="item-icon-btn" type="button" title="Refresh" aria-label="Read the item again from Fusion Manage">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg>
         </button>
+        <div id="item-actions-menu" class="item-menu" hidden>
+          <button id="item-actions-btn" class="item-icon-btn item-menu-btn" type="button" title="Actions" aria-label="Actions" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3.5"/></svg>
+          </button>
+          <div id="item-actions-list" class="item-menu-list" role="menu" hidden>
+            <button class="item-menu-item" type="button" role="menuitem" data-action="publish_item">
+              <svg class="item-menu-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+              <span>Publish Fusion Manage Item</span>
+            </button>
+            <button class="item-menu-item" type="button" role="menuitem" data-action="add_step_file">
+              <span class="item-menu-icon" data-ext=".step"></span>
+              <span>Upload STEP File</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -91,10 +108,17 @@
     <img id="item-lightbox-img" alt="">
   </div>
 
+  <!-- Progress of the STEP upload, over the panel while it runs. -->
+  <div id="progress" class="progress-backdrop" hidden>
+    <div id="progress-card" class="progress" role="dialog" aria-modal="true" aria-label="Uploading STEP File"></div>
+  </div>
+
   <!-- Shared shell -->
   <script src="../shared/js/dom.js"></script>
   <script src="../shared/js/bridge.js"></script>
   <script src="../shared/js/shell.js"></script>
+  <script src="../shared/js/toast.js"></script>
+  <script src="../shared/js/step-progress.js"></script>
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
   <!-- Item panel -->

@@ -149,41 +149,41 @@
   }
 
   function showProgress(view, job) {
-    const box = $('pub-progress');
-    const bar = $('pub-progress-bar');
+    const box = $('progress');
+    const bar = $('progress-bar');
     const active = !!job && !isFinished(job);
-    box.firstElementChild.classList.remove('pub-progress-ok', 'pub-progress-error');
-    if (view.tone) box.firstElementChild.classList.add('pub-progress-' + view.tone);
-    $('pub-progress-title').textContent = view.title;
-    $('pub-progress-status').textContent = view.status;
-    $('pub-progress-count').textContent = view.count || '';
+    box.firstElementChild.classList.remove('progress-ok', 'progress-error');
+    if (view.tone) box.firstElementChild.classList.add('progress-' + view.tone);
+    $('progress-title').textContent = view.title;
+    $('progress-status').textContent = view.status;
+    $('progress-count').textContent = view.count || '';
     bar.classList.toggle('indeterminate', view.percent === null);
     if (view.percent === null) bar.removeAttribute('aria-valuenow'); else bar.setAttribute('aria-valuenow', String(view.percent));
-    $('pub-progress-fill').style.width = view.percent === null ? '' : view.percent + '%';
-    $('pub-progress-note').textContent = active
+    $('progress-fill').style.width = view.percent === null ? '' : view.percent + '%';
+    $('progress-note').textContent = active
       ? 'You can close this window. Publishing continues in the background and you can follow it in Job Queue on the Fusion Manage tab.'
       : (job ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
     if (!active) confirming = false;
-    $('pub-progress-confirm').hidden = !confirming;
-    $('pub-progress-actions').hidden = confirming;
-    $('pub-progress-cancel').hidden = !active;
+    $('progress-confirm').hidden = !confirming;
+    $('progress-actions').hidden = confirming;
+    $('progress-cancel').hidden = !active;
     box.hidden = false;
-    if (!confirming) $('pub-progress-close').focus();
+    if (!confirming) $('progress-close').focus();
   }
 
   function closeProgress() {
     watched = '';
     confirming = false;
     clearTimeout(timer);
-    $('pub-progress').hidden = true;
+    $('progress').hidden = true;
   }
 
   /** Show or hide the "cancel this publish?" question; the job keeps running until it is answered yes. */
   function askCancel(on) {
     confirming = on;
-    $('pub-progress-confirm').hidden = !on;
-    $('pub-progress-actions').hidden = on;
-    $(on ? 'pub-progress-keep' : 'pub-progress-close').focus();
+    $('progress-confirm').hidden = !on;
+    $('progress-actions').hidden = on;
+    $(on ? 'progress-keep' : 'progress-close').focus();
   }
 
   function watchedJob() {
@@ -233,16 +233,16 @@
     onFinished = options && options.onFinished;
     ACTIONS.forEach(function (name) { bridge.on(name, name === 'start_publish' ? handleStart : handle); });
     bridge.on('open_publish_folder', function () {});
-    if ($('pub-progress')) {
-      $('pub-progress-close').addEventListener('click', closeProgress);
-      $('pub-progress-cancel').addEventListener('click', function () { askCancel(true); });
-      $('pub-progress-keep').addEventListener('click', function () { askCancel(false); });
-      $('pub-progress-stop').addEventListener('click', function () {
+    if ($('progress')) {
+      $('progress-close').addEventListener('click', closeProgress);
+      $('progress-cancel').addEventListener('click', function () { askCancel(true); });
+      $('progress-keep').addEventListener('click', function () { askCancel(false); });
+      $('progress-stop').addEventListener('click', function () {
         bridge.send('cancel_publish', { id: watched });
         askCancel(false);
       });
       document.addEventListener('keydown', function (e) {
-        if (e.key !== 'Escape' || $('pub-progress').hidden) return;
+        if (e.key !== 'Escape' || $('progress').hidden) return;
         if (confirming) askCancel(false); else closeProgress();
       });
     }

@@ -16,6 +16,8 @@ TAB_PERMISSIONS = {"item": "view_items", "files": "view_attachments", "bom": "vi
                    "workflows": "view_associated_workflow"}
 # the tabs the page shows, by the name Fusion Manage gives them
 TABS = {"item": "ITEM_DETAILS", "files": "PART_ATTACHMENTS", "bom": "BOM_LIST", "whereused": "BOM_WHERE_USED", "workflows": "WORKFLOW_REFERENCES"}
+# a tab counts only the entries it lists: the Files tab lists the item's own files, not the ones related items bring (those are in the total)
+COUNTED = {"PART_ATTACHMENTS": "PART_ATTACHMENTS/DIRECT_ATTACHMENTS"}
 
 
 def parse_labels(data: Any) -> Dict[str, str]:
@@ -30,11 +32,14 @@ def parse_labels(data: Any) -> Dict[str, str]:
 
 
 def parse_counts(data: Any) -> Dict[str, int]:
-    """``{workspaceTabName: totalCount}`` from the item's tab counts."""
+    """``{workspaceTabName: totalCount}`` from the item's tab counts, and ``{"TAB/SECTION": count}`` for each section a tab has."""
     counts = {}
     for tab in data.get("tabs") if isinstance(data, dict) and isinstance(data.get("tabs"), list) else []:
         if isinstance(tab, dict) and tab.get("name"):
             counts[str(tab["name"])] = int(tab.get("totalCount") or 0)
+            for section in tab.get("sectionCounts") if isinstance(tab.get("sectionCounts"), list) else []:
+                if isinstance(section, dict) and section.get("name"):
+                    counts[f"{tab['name']}/{section['name']}"] = int(section.get("totalCount") or 0)
     return counts
 
 
@@ -51,7 +56,7 @@ class TabService:
         the user's permissions (``held``) let them see it. Raises ``FmApiError`` when the names or counts cannot be read."""
         labels = self._labels(workspace_id)
         counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
-        return {key: {"label": labels[name], "count": counts.get(name, 0), "allowed": TAB_PERMISSIONS[key] in held}
+        return {key: {"label": labels[name], "count": counts.get(COUNTED.get(name, ""), counts.get(name, 0)), "allowed": TAB_PERMISSIONS[key] in held}
                 for key, name in TABS.items() if name in labels}
 
     def _labels(self, workspace_id: str) -> Dict[str, str]:

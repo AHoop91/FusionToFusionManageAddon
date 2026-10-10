@@ -41,6 +41,9 @@ from src.core.constants import (  # noqa: E402
     ITEM_PALETTE_ID,
     ITEM_TITLE,
     ITEM_WIDTH,
+    STEP_PROGRESS_HEIGHT,
+    STEP_PROGRESS_PALETTE_ID,
+    STEP_PROGRESS_WIDTH,
     JOBS_COMMAND_ID,
     JOBS_HEIGHT,
     JOBS_PALETTE_ID,
@@ -48,6 +51,7 @@ from src.core.constants import (  # noqa: E402
     JOBS_WIDTH,
     MENU_OPEN_COMMAND_ID,
     MENU_PUBLISH_COMMAND_ID,
+    MENU_UPLOAD_STEP_COMMAND_ID,
     PUBLISH_COMMAND_ID,
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
@@ -72,6 +76,7 @@ _ui = None
 _palette_host = None
 _publish_host = None
 _jobs_host = None
+_progress_host = None
 _item_host = None
 _item_panel = None
 _item_menu = None
@@ -84,7 +89,7 @@ _gate = None
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _ui, _palette_host, _publish_host, _jobs_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate
+    global _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate
     try:
         _ui = adsk.core.Application.get().userInterface
 
@@ -100,7 +105,8 @@ def run(context) -> None:
         # Panels appear in this order. Add further buttons or panels here; the
         # ribbon needs no other changes.
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
-        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth)
+        _progress_host = PaletteHost(_ui, bridge, STEP_PROGRESS_PALETTE_ID, "Upload STEP File", "progress", False, STEP_PROGRESS_WIDTH, STEP_PROGRESS_HEIGHT)
+        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _publish_host.show, _progress_host)
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
                           "Open the Fusion Manage item of the selected component.",
@@ -109,6 +115,10 @@ def run(context) -> None:
             RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                           "Preview what will be published to Fusion Manage for the current item.",
                           _publish_host.show,
+                          os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True),
+            RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, "Upload STEP File To Fusion Manage Item",
+                          "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component.",
+                          _item_panel.upload_selected_step,
                           os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True),
         ]
         _item_menu = ItemContextMenu(_ui, menu_commands)
@@ -153,6 +163,8 @@ def stop(context) -> None:
             _palette_host.dispose()
         if _publish_host:
             _publish_host.dispose()
+        if _progress_host:
+            _progress_host.dispose()
         if _jobs_host:
             _jobs_host.dispose()
         if _item_host:

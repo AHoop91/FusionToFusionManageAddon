@@ -20,6 +20,7 @@ ITEM_TITLE = "Fusion Manage Item"
 ITEM_COMMAND_NAME = "Open Fusion Manage Item"
 MENU_OPEN_COMMAND_ID = "MfgToFm_MenuOpenCmd"   # the right-click menu has commands of its own
 MENU_PUBLISH_COMMAND_ID = "MfgToFm_MenuPublishCmd"
+MENU_UPLOAD_STEP_COMMAND_ID = "MfgToFm_MenuUploadStepCmd"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
@@ -37,5 +38,8 @@ PALETTE_WIDTH = 480
 PALETTE_HEIGHT = 720
 ITEM_WIDTH = 900
 ITEM_HEIGHT = 720
+STEP_PROGRESS_PALETTE_ID = "MfgToFm_StepProgressPalette"
+STEP_PROGRESS_WIDTH = 460
+STEP_PROGRESS_HEIGHT = 190
 JOBS_WIDTH = 440
 JOBS_HEIGHT = 520

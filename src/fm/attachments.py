@@ -7,10 +7,10 @@ that list, so a download asks the attachment's own ``/file`` link, which needs t
 import os
 import re
 import tempfile
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.logging_setup import get_logger
-from .client import WORKSPACES, FmApiError, FmClient
+from .client import WORKSPACES, FmApiError, FmClient, last_segment
 
 log = get_logger("fm.attachments")
 
@@ -64,6 +64,41 @@ class AttachmentService:
             file["url"] = (f"{self._client.base_url}/plm/fileViewer?itemUrn={item_urn}&fileUrn={file['urn']}&vectorPdf=false"
                            if item_urn and file["urn"] else "")
         return files
+
+    def _existing(self, path: str, name: str) -> Tuple[str, Optional[Dict[str, str]]]:
+        """``(id, folder)`` of the file already attached under ``name`` ("" when there is none); ``folder`` is ``{"id"}`` or None for the top."""
+        data = self._client.get_json(f"{path}?asc=name", accept=LIST_MEDIA_TYPE)
+        for row in data.get("attachments") if isinstance(data, dict) and isinstance(data.get("attachments"), list) else []:
+            if isinstance(row, dict) and row.get("name") == name and row.get("id"):
+                folder = row.get("folder") if isinstance(row.get("folder"), dict) else None
+                return str(row["id"]), ({"id": folder["id"]} if folder and folder.get("id") else None)
+        return "", None
+
+    def upload(self, workspace_id: str, item_id: str, name: str, content: bytes, description: str = "",
+               progress: Optional[Callable[[float], None]] = None) -> str:
+        """Attach a file to the item, or a new version of the file already attached under ``name``; returns ``"version"`` or ``"new"``.
+
+        The v3 API takes three steps: register it (the answer holds a signed address), put the bytes at that address,
+        then check it in. A new version is registered by posting to the existing attachment instead of the list.
+        """
+        path = f"{WORKSPACES}/{workspace_id}/items/{item_id}/attachments"
+        existing_id, folder = self._existing(path, name)
+        body = {"name": name, "resourceName": name, "description": description or name, "folder": folder, "size": len(content)}
+        if existing_id:
+            body.update(fileName=name, fileTypeString="file/type")
+        made = self._client.send_json("POST", f"{path}/{existing_id}" if existing_id else path, body)
+        data = made.data if isinstance(made.data, dict) else {}
+        attachment_id = str(data.get("id") or last_segment(made.headers.get("Location")))
+        address = str(data.get("url") or "")
+        if not (attachment_id and address):
+            log.error("The attachment answer held no id or upload address: %s %s", made.headers, made.data)
+            raise FmApiError("Fusion Manage did not give an address to upload the file to.")
+        extra = data.get("extraHeaders") if isinstance(data.get("extraHeaders"), dict) else {}   # signed into the address, so sent exactly as given
+        self._client.put_bytes(address, content, {str(k): str(v) for k, v in extra.items()}, progress=progress)
+        self._client.send_json("PATCH", f"{path}/{attachment_id}", {"status": {"name": "CheckIn"}})   # the file is complete
+        kind = "version" if existing_id else "new"
+        log.info("Uploaded %s (%d bytes) to item %s as %s attachment %s", name, len(content), item_id, kind, attachment_id)
+        return kind
 
     def download(self, workspace_id: str, item_id: str, attachment_id: str, name: str) -> str:
         """Save the attachment under the temp folder and return its path."""
