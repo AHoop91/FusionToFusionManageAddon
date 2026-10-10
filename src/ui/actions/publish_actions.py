@@ -12,11 +12,12 @@ from typing import Any, Dict, List, Tuple
 from ...auth.auth_service import AuthService
 from ...auth.errors import AuthError
 from ...config.config_service import ConfigService
-from ...config.workspace_models import PHYSICAL_PREFIX, WorkspaceConfig
+from ...config.workspace_models import ITEMS_KIND, KINDS_BY_ID, PHYSICAL_PREFIX, WorkspaceConfig
 from ...core.logging_setup import get_logger
 from ...fm.bom import BomService
 from ...fm.client import FmApiError, FmClient
 from ...fm.items import ItemService
+from ...fm.permissions import denial
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
 from ...sync.bom_compare import compare_bom
@@ -26,8 +27,19 @@ from ..message_bridge import MessageBridge
 
 log = get_logger("publish_actions")
 
-ITEMS_KIND = "items"
 VALIDATION_WORKERS = 5   # Fusion Manage searches in flight at once
+
+
+class PublishDenied(Exception):
+    """The user's permissions in the Items workspace do not allow publishing."""
+
+
+def publish_denial(fm: FmClient, cfg: WorkspaceConfig) -> str:
+    """Why the user may not publish to the Items workspace ("" when they may, or when none is set up yet)."""
+    if not cfg or not cfg.workspace_id:
+        return ""
+    kind = KINDS_BY_ID[ITEMS_KIND]
+    return denial(fm, cfg.workspace_id, kind.required_permissions, kind.title)
 
 
 def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: WorkspaceConfig,
@@ -77,7 +89,7 @@ def _model_ref() -> Tuple[str, str]:
 
 def _entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     """A section's state: loading (``pending``), done (``ok`` with ``data``) or failed (``message``)."""
-    entry: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "key": ""}
+    entry: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": ""}
     entry.update(changes)
     return entry
 
@@ -97,6 +109,10 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
     def run(slot: str, name: str, key: str, client: MfgGraphQlClient, fm: FmClient, cfg: WorkspaceConfig,
             model_id: str, time: str, component: Dict[str, str], chosen: str) -> None:
         try:
+            if name == "summary":   # the first section: when it is denied nothing else is asked for
+                message = publish_denial(fm, cfg)
+                if message:
+                    raise PublishDenied(message)
             with lock:
                 summary = dict(sections["summary"]["data"] or {}) if sections["summary"]["key"] == key else {}
             physical = any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in cfg.mappings) if cfg else False
@@ -109,6 +125,9 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                 data = {"compare": compare_item(data["properties"], component, cfg, fm, chosen), "drawings": data["drawings"]}
             log.info("Loaded %s of %s", slot, model_id)
             outcome = _entry(slot, ok=True, data=data, key=key)
+        except PublishDenied as exc:   # not an error: the panel says so, in place of the item
+            log.info("No permission to publish: %s", exc)
+            outcome = _entry(slot, message=str(exc), denied=str(exc), key=key)
         except Exception as exc:  # never leave the panel waiting
             log.exception("Loading %s failed", slot)
             outcome = _entry(slot, message=str(exc) or type(exc).__name__, key=key)

@@ -7,6 +7,8 @@
   'use strict';
 
   const el = ns.el;
+  const tree = ns.itemTree;
+  const CLASS = 'item-files';
   const MIN_COLUMN_PX = 50;
   const LAST_COLUMN_MIN_PX = 200;   // the description column
 
@@ -117,11 +119,23 @@
     return handle;
   }
 
-  /** Fill ``target`` with the table of ``view.files``; ``open(file)`` runs when a file name is clicked. */
+  let current = 0;   // the tab being drawn; an answer for an older item is ignored
+
+  /** Read the files of the item of ``view`` and fill ``target`` with them; ``open(file)`` runs when a file name is clicked. */
   function render(target, view, open) {
+    const mine = ++current;
+    tree.loading(target, CLASS, 'Reading the files...');
+    tree.load('files_load', 'files_result', { workspace_id: view.workspace_id, item_id: view.item_id, item_urn: view.item_urn }, function (error, files) {
+      if (mine !== current) return;
+      if (error) { tree.centred(target, CLASS, 'Could not read the files: ' + error, true); return; }
+      draw(target, files, open);
+    });
+  }
+
+  /** Fill ``target`` with the table of ``files``. */
+  function draw(target, files, open) {
+    target.className = 'view-scroll ' + CLASS;
     target.replaceChildren();
-    target.classList.remove('item-centred', 'item-files-stack');
-    if (view.files_error) { centred(target, 'Could not read the files: ' + view.files_error, true); return; }
 
     let sortKey = 'name';
     let ascending = true;
@@ -162,7 +176,7 @@
 
     function draw() {
       const column = COLUMNS.find(function (c) { return c.key === sortKey; });
-      const rows = view.files.slice().sort(function (a, b) {
+      const rows = files.slice().sort(function (a, b) {
         const x = sortValue(a, column);
         const y = sortValue(b, column);
         return (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
@@ -193,7 +207,7 @@
     const wrap = el('div', 'item-files-wrap');   // a wide table scrolls sideways
     wrap.appendChild(table);
     target.appendChild(wrap);
-    if (!view.files.length) {   // the columns stay, and the empty message fills the space under them
+    if (!files.length) {   // the columns stay, and the empty message fills the space under them
       target.classList.add('item-files-stack');
       const empty = el('div', 'item-files-empty');
       centred(empty, 'No files attached', false, 'Files attached to this item in Fusion Manage will be listed here.');

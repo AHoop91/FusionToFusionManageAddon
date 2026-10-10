@@ -60,7 +60,15 @@
   function showLoading(on) {
     $('pub-loader').hidden = !on;
     $('pub-content').hidden = on;
+    $('pub-denied').hidden = true;
     if (on) ui.warnWhenSlow($('pub-loader').querySelector('p'), 'Loading item...');
+  }
+
+  /** Say, in the middle of the panel and in place of the item, that the user's permissions do not allow publishing. */
+  function showDenied(message) {
+    $('pub-content').hidden = true;
+    $('pub-denied-text').textContent = message;
+    $('pub-denied').hidden = false;
   }
 
   // ---- Bill of materials panel ---------------------------------------------------
@@ -200,6 +208,7 @@
     }
     if (name === 'summary') {
       showLoading(false);
+      if (entry.denied) { showDenied(entry.denied); return; }
       if (!entry.ok) { setThumbnail(''); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
       loadedKey = entry.key;
       loaded.summary = true;

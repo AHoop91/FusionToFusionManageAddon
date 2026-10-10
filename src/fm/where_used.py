@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient
-from .item_view import _page_url, _tenant_of
+from .pages import item_page
 
 log = get_logger("fm.where_used")
 
@@ -60,7 +60,6 @@ def parse_where_used(data: Any, base_url: str) -> Dict[str, Any]:
         if found is None:
             continue
         node, item = found
-        link = str(item.get("link") or "").rstrip("/").split("/")
         fields = _fields(node)
         for title in fields:
             if title not in columns:
@@ -74,7 +73,7 @@ def parse_where_used(data: Any, base_url: str) -> Dict[str, Any]:
             "name": name,
             "version": str(item.get("version") or ""),
             "fields": fields,
-            "url": _page_url(base_url, _tenant_of(item), link[-3], link[-1]) if len(link) >= 3 and _tenant_of(item) else "",
+            "url": item_page(base_url, item),
             "up": _one_level(up),
         })
     return {"rows": rows, "columns": columns}

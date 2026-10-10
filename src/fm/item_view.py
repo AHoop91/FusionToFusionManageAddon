@@ -16,10 +16,11 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..core.logging_setup import get_logger
-from .attachments import AttachmentService
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .items import display_text
+from .pages import field_id, item_page, link_page, tenant_of
 from .sections import SectionService
+from .tabs import TabService
 
 log = get_logger("fm.item_view")
 
@@ -29,30 +30,24 @@ HEADER_FIELDS = ("TYPE",)   # read for the line under the title, shown or not
 MAX_IMAGE_BYTES = 2_000_000
 CACHE_SECONDS = 300   # a workspace's field list rarely changes
 _TAG = re.compile(r"<[a-zA-Z][^>]*>")
-_FIELD_ID = re.compile(r"/fields/([^/]+)/?$")
-_TENANT = re.compile(r"[:.]([^.:]+)\.\d+\.\d+$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
 
 ImageLoader = Callable[[str], str]
 PageLoader = Callable[[str], str]   # an item's API link -> its page in Fusion Manage ("" for a link that is not an item)
-_ITEM_LINK = re.compile(r"/workspaces/(d+)/items/(d+)")
 
 
-def _field_id(node: Any) -> str:
-    """The id of a field reference (a dict with a link, or None for an empty matrix cell)."""
-    if not isinstance(node, dict):
-        return ""
-    for key in ("__self__", "link", "urn"):
-        match = _FIELD_ID.search(str(node.get(key) or ""))
-        if match:
-            return match.group(1)
+def no_image(_link: str) -> str:
     return ""
 
 
-def _cell(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dict[str, Any]:
+def no_page(_link: str) -> str:
+    return ""
+
+
+def cell_of(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dict[str, Any]:
     """``{"id", "title", "kind", "value"}`` of an item's field; kind is ``text``, ``html``, ``image`` or ``links`` (a list of ``{"title", "url"}``)."""
     raw = node.get("value")
     kind = (node.get("type") or {}).get("title", "") if isinstance(node.get("type"), dict) else ""
-    cell = {"id": _field_id(node), "title": str(node.get("title") or node.get("name") or _field_id(node)), "kind": "text", "value": ""}
+    cell = {"id": field_id(node), "title": str(node.get("title") or node.get("name") or field_id(node)), "kind": "text", "value": ""}
     if kind == "Image":
         link = str(raw.get("link") or "") if isinstance(raw, dict) else ""
         cell.update(kind="image", value=images(link) if link else "")
@@ -83,7 +78,7 @@ def _not_shown(node: Any, hidden: Set[str]) -> bool:
     visibility = str(node.get("visibility") or "").upper()
     if visibility not in VISIBLE_ALWAYS and (visibility in HIDDEN or ("CREATE" in visibility and "ONLY" in visibility)):
         return True
-    return node.get("visible") is False or node.get("hidden") is True or _field_id(node) in hidden
+    return node.get("visible") is False or node.get("hidden") is True or field_id(node) in hidden
 
 
 def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Set[str]) -> Dict[str, Any]:
@@ -95,14 +90,14 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
     if not grid:
         return {}
     width = max(len(r) for r in grid)
-    gone = [[_not_shown(ref, hidden) or bool(_field_id(ref) and _field_id(ref) not in cells) for ref in row] + [False] * (width - len(row))
+    gone = [[_not_shown(ref, hidden) or bool(field_id(ref) and field_id(ref) not in cells) for ref in row] + [False] * (width - len(row))
             for row in grid]
     keep_cols = [c for c in range(width) if not all(g[c] for g in gone)]
     keep_rows = [r for r, g in enumerate(gone) if not all(g[c] for c in keep_cols)] if keep_cols else []
     if not keep_rows:
         return {}
     empty = {"kind": "text", "value": ""}
-    rows = [[cells.get(_field_id(grid[r][c]), empty) if c < len(grid[r]) and not gone[r][c] else empty for c in keep_cols]
+    rows = [[cells.get(field_id(grid[r][c]), empty) if c < len(grid[r]) and not gone[r][c] else empty for c in keep_cols]
             for r in keep_rows]
     width = len(keep_cols)
 
@@ -131,25 +126,6 @@ def _header(item: Dict[str, Any], fields: Dict[str, Dict[str, str]]) -> List[str
     return [t for t in (version, lifecycle, kind) if t]
 
 
-def _page_url(base_url: str, tenant: str, workspace_id: str, item_id: str, page: str = "itemDetails", tab: str = "details") -> str:
-    """The page of an item in Fusion Manage's own web UI: the Item tab, or (``page="attachments"``, ``tab="attachments"``) its files."""
-    urn = f"urn`adsk,plm`tenant,workspace,item`{tenant},{workspace_id},{item_id}"
-    return (f"{base_url}/plm/workspaces/{workspace_id}/items/{page}?view=full&tab={tab}&mode=view&itemId="
-            + urn.replace("`", "%60").replace(",", "%2C"))
-
-
-def _tenant_of(item: Dict[str, Any]) -> str:
-    found = _TENANT.search(str(item.get("urn") or ""))
-    return found.group(1) if found else ""
-
-
-def _external_url(base_url: str, item: Dict[str, Any]) -> str:
-    """The item's page in Fusion Manage's own web UI ("" when its urn is not understood)."""
-    workspace_id, item_id = last_segment(str(item.get("__self__", "")).rsplit("/items/", 1)[0]), last_segment(item.get("__self__"))
-    tenant = _tenant_of(item)
-    return _page_url(base_url, tenant, workspace_id, item_id) if workspace_id and item_id and tenant else ""
-
-
 def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoader, base_url: str = "",
                hidden: Optional[Set[str]] = None) -> Dict[str, Any]:
     """The header and sections of an item answer; ``layouts`` maps a section id to the workspace's layout of it.
@@ -158,11 +134,10 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
     """
     item = item if isinstance(item, dict) else {}
     hidden = hidden or set()
-    tenant = _tenant_of(item)
+    tenant = tenant_of(item)
 
     def pages(link: str) -> str:
-        found = _ITEM_LINK.search(link)
-        return _page_url(base_url, tenant, found.group(1), found.group(2)) if found and tenant and base_url else ""
+        return link_page(base_url, tenant, link)
 
     workspace = item.get("workspace") if isinstance(item.get("workspace"), dict) else {}
     sections: List[Dict[str, Any]] = []
@@ -171,17 +146,17 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
         if not isinstance(node, dict):
             continue
         found = [f for f in node.get("fields") or [] if isinstance(f, dict)]
-        shown.update({c["id"]: c for c in (_cell(f, images, pages) for f in found if _field_id(f) in HEADER_FIELDS) if c["id"]})
-        cells = {c["id"]: c for c in (_cell(f, images, pages) for f in found if not _not_shown(f, hidden)) if c["id"]}
+        shown.update({c["id"]: c for c in (cell_of(f, images, pages) for f in found if field_id(f) in HEADER_FIELDS) if c["id"]})
+        cells = {c["id"]: c for c in (cell_of(f, images, pages) for f in found if not _not_shown(f, hidden)) if c["id"]}
         layout = layouts.get(last_segment(str(node.get("link") or node.get("__self__") or "")), {})
         matrices = [m for m in (_matrix(m, cells, hidden) for m in layout.get("matrices") or [] if isinstance(m, dict)) if m]
-        in_matrix = {_field_id(ref) for m in layout.get("matrices") or [] if isinstance(m, dict)
+        in_matrix = {field_id(ref) for m in layout.get("matrices") or [] if isinstance(m, dict)
                      for row in m.get("fields") or [] if isinstance(row, list) for ref in row}
         fields = [c for i, c in cells.items() if i not in in_matrix]
         if fields or matrices:
             sections.append({"title": str(node.get("title") or ""), "fields": fields, "matrices": matrices})
     return {"title": str(item.get("title") or ""), "workspace": str(workspace.get("title") or ""),
-            "header": _header(item, shown), "url": _external_url(base_url, item), "sections": sections}
+            "header": _header(item, shown), "url": item_page(base_url, item), "sections": sections}
 
 
 class ItemViewService:
@@ -192,7 +167,8 @@ class ItemViewService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
-    def read(self, workspace_id: str, item_id: str) -> Dict[str, Any]:
+    def read(self, workspace_id: str, item_id: str, held: Set[str]) -> Dict[str, Any]:
+        """The item laid out for display; ``held`` is the user's permissions in the workspace (they decide which tabs can be opened)."""
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
         if not isinstance(data, dict):
             raise FmApiError(f"Fusion Manage gave no item {item_id} in workspace {workspace_id}.")
@@ -202,21 +178,14 @@ class ItemViewService:
             log.warning("Could not read the section layout of workspace %s: %s", workspace_id, exc)
             layouts = {}
         for layout in list(layouts.values())[:3]:
-            log.info("Section %s layout keys: %s; matrices: %s", last_segment(str(layout.get("__self__") or layout.get("link") or "")),
+            log.debug("Section %s layout keys: %s; matrices: %s", last_segment(str(layout.get("__self__") or layout.get("link") or "")),
                      sorted(layout), [sorted(m) for m in (layout.get("matrices") or [])[:1] if isinstance(m, dict)])
         view = build_view(data, layouts, self._image, self._client.base_url, self._hidden_fields(workspace_id))
         if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
             log.error("No sections could be built for item %s: %s", item_id, str(data)[:3000])
-        try:   # the Files tab; a failure shows there and leaves the Item tab alone
-            view["files"], view["files_error"] = AttachmentService(self._client).files(workspace_id, item_id), ""
-            item_urn = str(data.get("urn") or "")
-            for file in view["files"]:   # the file's page in Fusion Manage's own viewer
-                file["url"] = (f"{self._client.base_url}/plm/fileViewer?itemUrn={item_urn}&fileUrn={file['urn']}&vectorPdf=false"
-                               if item_urn and file["urn"] else "")
-        except (FmApiError, OSError) as exc:
-            log.warning("Could not read the attachments of item %s: %s", item_id, exc)
-            view["files"], view["files_error"] = [], str(exc)
-        view["item_id"], view["workspace_id"] = item_id, workspace_id
+        # the other tabs are read when they are opened; only their names and counts come with the item
+        view["tabs"] = TabService(self._client).read(workspace_id, item_id, held)
+        view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
         return view
 
     def _hidden_fields(self, workspace_id: str) -> Set[str]:
@@ -233,7 +202,7 @@ class ItemViewService:
         rows = data.get("fields") if isinstance(data, dict) else data
         rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
         hidden = {last_segment(r.get("__self__")) for r in rows if _not_shown(r, set())}
-        log.info("Workspace %s: %d field(s), %d hidden; visibility values %s", workspace_id, len(rows), len(hidden),
+        log.debug("Workspace %s: %d field(s), %d hidden; visibility values %s", workspace_id, len(rows), len(hidden),
                  sorted({str(r.get("visibility")) for r in rows}))
         self._hidden_cache[key] = (time.monotonic(), hidden)
         return hidden

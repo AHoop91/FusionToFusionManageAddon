@@ -48,6 +48,12 @@
       <p class="muted">Loading item...</p>
     </div>
 
+    <!-- Shown, centred, in place of the item, when the user may not publish to the Items workspace. -->
+    <div id="pub-denied" class="loader pub-denied" hidden>
+      <svg class="pub-denied-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+      <p id="pub-denied-text" class="pub-denied-text"></p>
+    </div>
+
     <div id="pub-content" class="view" hidden>
       <!-- Summary of the open model, filled in by publish.js. -->
       <div class="pub-summary">

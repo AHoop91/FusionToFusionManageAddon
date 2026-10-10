@@ -44,11 +44,11 @@
       <p id="item-loader-text" class="muted">Loading item...</p>
     </div>
 
-    <!-- Shown, centred, when no item has the number. -->
+    <!-- Shown, centred, in place of the item: when no item has the number, or the user may not view the workspace. -->
     <div id="item-empty" class="loader item-empty" hidden>
-      <svg class="item-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M13 3l6 6v2M13 3v4a2 2 0 0 0 2 2h4"/><circle cx="16" cy="16.5" r="3.5"/><path d="M18.6 19.1 21 21.5"/></svg>
+      <svg id="item-empty-icon" class="item-empty-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
       <p id="item-empty-text" class="item-empty-text"></p>
-      <p class="item-empty-hint">Check the part number, or publish the item to Fusion Manage first.</p>
+      <p id="item-empty-hint" class="item-empty-hint"></p>
     </div>
 
     <!-- Header: the item's title, its life cycle line, and its actions. -->
@@ -69,11 +69,11 @@
 
     <!-- Tabs of an item in Fusion Manage. Item, Files, Bill of Materials and Where Used are built so far. -->
     <nav class="item-tabs item-part">
-      <button id="item-tab-item" class="item-tab item-tab-active" type="button" data-tab="item">Item</button>
-      <button id="item-tab-files" class="item-tab" type="button" data-tab="files">Files</button>
-      <button id="item-tab-bom" class="item-tab" type="button" data-tab="bom">Bill of Materials</button>
-      <button id="item-tab-whereused" class="item-tab" type="button" data-tab="whereused">Where Used</button>
-      <button class="item-tab" type="button" disabled title="Not available yet.">Related Change Processes</button>
+      <button id="item-tab-item" class="item-tab item-tab-active" type="button" data-tab="item"></button>
+      <button id="item-tab-files" class="item-tab" type="button" data-tab="files"></button>
+      <button id="item-tab-bom" class="item-tab" type="button" data-tab="bom"></button>
+      <button id="item-tab-whereused" class="item-tab" type="button" data-tab="whereused"></button>
+      <button id="item-tab-changes" class="item-tab" type="button" disabled title="Not available yet."></button>
     </nav>
 
     <!-- The item's sections: fields as label and value, matrices as grids. -->
@@ -98,8 +98,8 @@
   <script src="../shared/js/auth.js"></script>
   <!-- Item panel -->
   <script src="js/safe-html.js"></script>
-  <script src="js/files.js"></script>
   <script src="js/tree.js"></script>
+  <script src="js/files.js"></script>
   <script src="js/where-used.js"></script>
   <script src="js/bom.js"></script>
   <script src="js/item.js"></script>

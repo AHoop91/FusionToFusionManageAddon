@@ -10,6 +10,7 @@ from typing import Any, Dict, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
+from ...config.workspace_models import ITEMS_KIND
 from ...core.logging_setup import get_logger
 from ...fm.client import FmClient
 from ...fm.linkable import LinkableService
@@ -17,7 +18,6 @@ from ..message_bridge import MessageBridge
 
 log = get_logger("linkable_actions")
 
-ITEMS_KIND = "items"
 KEPT_ANSWERS = 30   # answers kept for the panel to poll; older tokens are dropped
 
 

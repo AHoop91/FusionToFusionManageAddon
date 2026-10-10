@@ -11,7 +11,7 @@ from typing import Any, Dict
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger, log_directory
-from ...fm.client import FmClient
+from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
 from ...publish.runner import PublishRun
@@ -22,7 +22,7 @@ from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
-from .publish_actions import ITEMS_KIND, _model_ref
+from .publish_actions import ITEMS_KIND, _model_ref, publish_denial
 
 log = get_logger("publish_run")
 
@@ -129,6 +129,12 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         model_id, time = _model_ref()
         if not model_id:
             return {"error": "Could not find the Data Model id of the open design."}
+        try:   # the panel is blocked without these permissions; this covers a page that was open when they changed
+            denied = publish_denial(FmClient(config.effective_settings(), auth), cfg)
+        except FmApiError as exc:
+            return {"error": f"Could not check your permissions in Fusion Manage: {exc}"}
+        if denied:
+            return {"error": denied}
         job = {"summary": payload.get("summary") or {}, "items": list(payload.get("items") or []),
                "operations": list(payload.get("operations") or []), "root_number": str(payload.get("root_number") or "")}
         folder = PublishFolder(publish_root(), job["root_number"])   # the files stay as a record of what was sent

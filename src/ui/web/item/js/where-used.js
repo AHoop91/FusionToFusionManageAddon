@@ -7,8 +7,8 @@
 
   const el = ns.el;
   const tree = ns.itemTree;
-  const ITEM_COLUMN_PX = 380;
-  const COLUMN_PX = 120;
+  const ITEM_COLUMN_PX = tree.ITEM_COLUMN_PX;
+  const COLUMN_PX = tree.COLUMN_PX;
   const DEFAULT_COLUMNS = ['QUANTITY', 'UNITS', 'LIFECYCLE'];
   // An assembly: a parent box over two parts, joined by lines. Static markup.
   const ASSEMBLY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="3" width="7" height="5" rx="1"/><rect x="2.5" y="16" width="7" height="5" rx="1"/><rect x="14.5" y="16" width="7" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>';
@@ -23,15 +23,13 @@
 
   function titleOf(key) { return key.charAt(0) + key.slice(1).toLowerCase(); }   // QUANTITY -> Quantity
 
-  /** Fill ``target`` with the parents of the item of ``view``; ``onCount(n)`` gets how many there are. */
-  function render(target, view, onCount) {
+  /** Fill ``target`` with the parents of the item of ``view``. */
+  function render(target, view) {
     const mine = ++current;
-    onCount(null);
     tree.loading(target, CLASS, 'Reading where this item is used...');
     load(view, '', function (error, result) {
       if (mine !== current) return;
       if (error) { tree.centred(target, CLASS, 'Could not read where this item is used: ' + error, true); return; }
-      onCount(result.rows.length);
       draw(target, view, result);
     });
   }
@@ -125,14 +123,7 @@
     wrap.appendChild(table);
     target.replaceChildren(wrap);
     if (!roots.length) {   // the columns stay, and the message is centred in the space under them
-      target.classList.add('item-files-stack');
-      const empty = el('div', 'item-files-empty');
-      empty.classList.add('item-centred');
-      const icon = el('span', 'item-empty-icon item-empty-icon-large');
-      icon.innerHTML = ASSEMBLY_ICON;
-      empty.append(icon, el('p', 'item-empty-text', 'Not used in any assembly'),
-                   el('p', 'item-empty-hint', 'Assemblies in Fusion Manage that hold this item will be listed here.'));
-      target.appendChild(empty);
+      tree.emptyUnder(target, ASSEMBLY_ICON, 'Not used in any assembly', 'Assemblies in Fusion Manage that hold this item will be listed here.');
     }
   }
 

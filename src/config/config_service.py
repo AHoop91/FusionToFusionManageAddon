@@ -8,12 +8,12 @@ can show the option without it being usable.
 
 import json
 import os
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
 from .models import MODE_COMPANY, MODE_LOCAL, AppConfig, ConnectionSettings
-from .workspace_models import WorkspaceSettings
+from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceSettings
 
 log = get_logger("config")
 
@@ -36,10 +36,20 @@ class ConfigService:
     def __init__(self, path: Optional[str] = None) -> None:
         self._path = path or config_path()
         self._config = self._read()
+        self._listeners: List[Callable[[], None]] = []
 
     @property
     def config(self) -> AppConfig:
         return self._config
+
+    def on_change(self, callback: Callable[[], None]) -> None:
+        """Call ``callback`` after the settings are saved (from whichever thread saved them)."""
+        self._listeners.append(callback)
+
+    def items_setup_problem(self) -> str:
+        """Why the Items workspace cannot be used yet ("" when its settings are complete)."""
+        kind = KINDS_BY_ID[ITEMS_KIND]
+        return self._config.workspaces.get(kind.kind_id).setup_problem(kind.title)
 
     def _read(self) -> AppConfig:
         """Read config from disk; a missing or corrupt file yields defaults."""
@@ -73,6 +83,11 @@ class ConfigService:
         self._config = AppConfig(mode=mode, local=local, workspaces=workspaces,
                                  company_source=company_source)
         self.save()
+        for callback in self._listeners:
+            try:
+                callback()
+            except Exception:  # noqa: BLE001 - a listener must not undo a save
+                log.exception("A settings listener failed")
         return []
 
     def effective_settings(self) -> ConnectionSettings:

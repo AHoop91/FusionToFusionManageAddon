@@ -12,8 +12,9 @@ from typing import Any, Dict, List, Optional, Set
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient
-from .item_view import _cell, _field_id, _page_url, _tenant_of
+from .item_view import cell_of, no_image, no_page
 from .linkable import BOM_VIEW_ID
+from .pages import ITEM_LINK, field_id, item_page, link_page, tenant_of
 from .where_used import split_title
 
 log = get_logger("fm.bom_view")
@@ -25,7 +26,7 @@ _VIEWDEF = re.compile(r"^(.*/views/[^/]+/viewdef/[^/]+)/fields/[^/]+/?$")
 TITLE_KEYS = ("displayName", "name")
 # Columns the page draws as an icon, by the field's own id in the workspace
 ATTACHMENTS, CHANGE, PIN = "ATTACHMENTS", "WORKING_CHANGE_ORDER", "PIN"
-_ITEM_LINK = re.compile(r"/workspaces/(\d+)/items/(\d+)")
+ICON_FIELDS = (ATTACHMENTS, CHANGE, PIN)
 
 
 def _fields_of(holder: Any) -> Dict[str, Dict[str, Any]]:
@@ -34,7 +35,7 @@ def _fields_of(holder: Any) -> Dict[str, Dict[str, Any]]:
     for field in holder.get("fields") if isinstance(holder, dict) and isinstance(holder.get("fields"), list) else []:
         if not isinstance(field, dict):
             continue
-        fid = _field_id(field.get("metaData"))
+        fid = field_id(field.get("metaData"))
         kind = (field.get("type") or {}).get("title") if isinstance(field.get("type"), dict) else ""
         if fid and kind != "Image":
             found[fid] = field
@@ -65,7 +66,8 @@ def parse_viewdef(data: Any) -> Dict[str, str]:
 
 def parse_kinds(data: Any) -> Dict[str, str]:
     """``{view definition field id: field id}`` (``ATTACHMENTS``, ``PIN`` ...) from the answer of ``.../viewdef/{id}/fields``."""
-    return {str(e["viewDefFieldId"]): str(e.get("fieldId") or "") for e in data if isinstance(e, dict) and e.get("viewDefFieldId")}         if isinstance(data, list) else {}
+    entries = [e for e in data if isinstance(e, dict) and e.get("viewDefFieldId")] if isinstance(data, list) else []
+    return {str(e["viewDefFieldId"]): str(e.get("fieldId") or "") for e in entries}
 
 
 def _truthy(value: Any) -> bool:
@@ -75,7 +77,7 @@ def _truthy(value: Any) -> bool:
 def _first_item_link(value: Any) -> str:
     """The API link of the item a field points at (a link, or a list of them), else ""."""
     for option in value if isinstance(value, list) else [value]:
-        if isinstance(option, dict) and _ITEM_LINK.search(str(option.get("link") or "")):
+        if isinstance(option, dict) and ITEM_LINK.search(str(option.get("link") or "")):
             return str(option["link"])
     return ""
 
@@ -84,42 +86,30 @@ def _icon_cell(kind: str, field: Dict[str, Any], base_url: str, item: Dict[str, 
     """The cell of an icon column: ``attachments`` (a count, linking to the item's attachments), ``change`` (linking to the
     change) or ``pin``. ``value`` is empty when there is nothing to draw."""
     raw = field.get("value")
-    log.info("BOM %s field of %s: value=%r content=%r", kind, item.get("title"), raw, field.get("content"))
+    log.debug("BOM %s field of %s: value=%r content=%r", kind, item.get("title"), raw, field.get("content"))
     if kind == ATTACHMENTS:
         count = int(raw) if str(raw).strip().isdigit() else 0
         return {"kind": "attachments", "value": str(count) if count else "", "url": files_page if count else ""}
     if kind == PIN:
         return {"kind": "pin", "value": "pinned" if _truthy(raw) else "", "url": ""}
-    link = _first_item_link(raw)
-    found = _ITEM_LINK.search(link)
-    url = _page_url(base_url, _tenant_of(item), found.group(1), found.group(2)) if found and _tenant_of(item) else ""
+    url = link_page(base_url, tenant_of(item), _first_item_link(raw))
     return {"kind": "change", "value": "pending" if _truthy(raw) else "", "url": url}
-
-
-def _no_image(_link: str) -> str:
-    return ""
-
-
-def _no_page(_link: str) -> str:
-    return ""
 
 
 def _line(edge: Dict[str, Any], node: Dict[str, Any], base_url: str, hidden: Set[str], kinds: Dict[str, str]) -> Dict[str, Any]:
     item = node.get("item") if isinstance(node.get("item"), dict) else {}
     title = str(item.get("title") or "")
     number, name = split_title(title)
-    link = str(item.get("link") or "").rstrip("/").split("/")
-    page = _page_url(base_url, _tenant_of(item), link[-3], link[-1]) if len(link) >= 3 and _tenant_of(item) else ""
-    files_page = (_page_url(base_url, _tenant_of(item), link[-3], link[-1], "attachments", "attachments")
-                  if len(link) >= 3 and _tenant_of(item) else "")
+    page = item_page(base_url, item)
+    files_page = item_page(base_url, item, "attachments", "attachments")
     cells = {}
     for fid, field in {**_fields_of(node), **_fields_of(edge)}.items():   # a field of the line wins over the item's
         if fid in hidden:
             continue
-        if kinds.get(fid) in (ATTACHMENTS, CHANGE, PIN):
+        if kinds.get(fid) in ICON_FIELDS:
             cells[fid] = _icon_cell(kinds[fid], field, base_url, item, files_page)
         else:
-            cell = _cell(field, _no_image, _no_page)
+            cell = cell_of(field, no_image, no_page)
             cells[fid] = {"kind": cell["kind"], "value": cell["value"]}
     return {"title": title, "number": number, "name": name, "version": str(item.get("version") or ""), "url": page,
             "cells": cells, "children": []}
@@ -166,7 +156,7 @@ def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, k
 
     collect(rows)
     order = {fid: i for i, fid in enumerate(titles)}
-    columns = [{"id": fid, "title": titles[fid], "icon": kinds.get(fid) if kinds.get(fid) in (ATTACHMENTS, CHANGE, PIN) else ""}   # an icon column is headed by its icon, not its name
+    columns = [{"id": fid, "title": titles[fid], "icon": kinds.get(fid) if kinds.get(fid) in ICON_FIELDS else ""}   # an icon column is headed by its icon, not its name
                for fid in sorted((f for f in used if f in titles), key=order.get)]
     return {"rows": rows, "columns": columns}
 

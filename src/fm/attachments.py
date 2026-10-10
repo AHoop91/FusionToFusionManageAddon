@@ -15,9 +15,9 @@ from .client import WORKSPACES, FmApiError, FmClient
 log = get_logger("fm.attachments")
 
 LIST_MEDIA_TYPE = "application/vnd.autodesk.plm.attachments.bulk+json"   # the list; plain application/json is answered with a link
-DOWNLOAD_FOLDER ="MfgToFm_attachments"
+DOWNLOAD_FOLDER = "MfgToFm_attachments"
 DOWNLOAD_TIMEOUT_SECONDS = 120   # a big file takes a while
-_UNSAFE = re.compile(r'[<>:"/\|?*\x00-\x1f]')   # characters a file name cannot hold on Windows
+_UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')   # characters a file name cannot hold on Windows
 
 
 def parse_files(data: Any) -> List[Dict[str, Any]]:
@@ -48,8 +48,9 @@ class AttachmentService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
-    def files(self, workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
-        """The item's files. Raises ``FmApiError`` when the answer is not a list of attachments."""
+    def files(self, workspace_id: str, item_id: str, item_urn: str = "") -> List[Dict[str, Any]]:
+        """The item's files, each with the ``url`` of its page in Fusion Manage's viewer (needs ``item_urn``).
+        Raises ``FmApiError`` when the answer is not a list of attachments."""
         path = f"{WORKSPACES}/{workspace_id}/items/{item_id}/attachments?asc=name"
         data = self._client.get_json(path, accept=LIST_MEDIA_TYPE)
         if data is None:   # 204: nothing is attached
@@ -58,7 +59,11 @@ class AttachmentService:
             log.error("%s did not answer with a list of attachments; it held: %s", path,
                       sorted(data) if isinstance(data, dict) else type(data).__name__)
             raise FmApiError("Fusion Manage did not return the list of files for this item.")
-        return parse_files(data)
+        files = parse_files(data)
+        for file in files:
+            file["url"] = (f"{self._client.base_url}/plm/fileViewer?itemUrn={item_urn}&fileUrn={file['urn']}&vectorPdf=false"
+                           if item_urn and file["urn"] else "")
+        return files
 
     def download(self, workspace_id: str, item_id: str, attachment_id: str, name: str) -> str:
         """Save the attachment under the temp folder and return its path."""

@@ -26,32 +26,53 @@
     document.querySelectorAll('.item-part').forEach(function (part) { part.hidden = on; });
   }
 
-  /** Say, in the middle of the panel, that no item has this number. */
-  function showMissing(number) {
+  // The icons of the two empty states. Static markup.
+  const ICON_MISSING = '<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M13 3l6 6v2M13 3v4a2 2 0 0 0 2 2h4"/><circle cx="16" cy="16.5" r="3.5"/><path d="M18.6 19.1 21 21.5"/>';
+  const ICON_DENIED = '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>';
+
+  /** Say, in the middle of the panel and in place of the item, ``text`` with a ``hint`` under it. */
+  function showEmpty(icon, text, hint) {
     setLoading(false);
     document.querySelectorAll('.item-part').forEach(function (part) { part.hidden = true; });
-    $('item-empty-text').textContent = 'No item exists for ' + number;
+    $('item-empty-icon').innerHTML = icon;   // static markup
+    $('item-empty-text').textContent = text;
+    $('item-empty-hint').textContent = hint;
     $('item-empty').hidden = false;
   }
 
-  /** Show one tab ('item' or 'files') and mark its button. */
-  const loaded = { bom: false, whereused: false };   // tabs read for the item shown
+  const loaded = { files: false, bom: false, whereused: false };   // tabs read for the item shown
 
   /** Read a lazy tab the first time it is opened for the item shown. */
   function loadTab(name) {
     if (!currentView || loaded[name] !== false) return;
     loaded[name] = true;
-    if (name === 'bom') {
-      ns.itemBom.render($('item-bom'), currentView, function (count) {
-        $('item-tab-bom').textContent = count ? 'Bill of Materials (' + count + ')' : 'Bill of Materials';
+    if (name === 'files') {
+      ns.itemFiles.render($('item-files'), currentView, function (file) {
+        if (file.url) bridge.send('open_url', { url: file.url });   // the file's page in Fusion Manage
       });
+    } else if (name === 'bom') {
+      ns.itemBom.render($('item-bom'), currentView);
     } else {
-      ns.itemWhereUsed.render($('item-whereused'), currentView, function (count) {
-        $('item-tab-whereused').textContent = count ? 'Where Used (' + count + ')' : 'Where Used';
-      });
+      ns.itemWhereUsed.render($('item-whereused'), currentView);
     }
   }
 
+  /** Name each tab as Fusion Manage does, with how many entries it holds; a tab the workspace does not have is hidden. */
+  function labelTabs(view) {
+    ['item', 'files', 'bom', 'whereused', 'changes'].forEach(function (key) {
+      const tab = view.tabs[key];
+      const button = $('item-tab-' + key);
+      button.hidden = !tab;
+      if (!tab) return;
+      button.textContent = tab.allowed && tab.count ? tab.label + ' (' + tab.count + ')' : tab.label;
+      if (!tab.allowed) button.title = 'Insufficient permissions';
+      if (key === 'changes') return;   // not built yet: stays disabled
+      button.disabled = !tab.allowed;
+      if (tab.allowed) button.removeAttribute('title');
+    });
+  }
+
+  /** Show one tab ('item', 'files', 'bom' or 'whereused') and mark its button. */
   function showTab(name) {
     $('item-body').hidden = name !== 'item';
     $('item-files').hidden = name !== 'files';
@@ -230,18 +251,15 @@
     setLoading(false);
     renderHeader(view);
     currentView = view;
-    $('item-tab-files').textContent = view.files && view.files.length ? 'Files (' + view.files.length + ')' : 'Files';
-    ns.itemFiles.render($('item-files'), view, function (file) {
-      if (file.url) bridge.send('open_url', { url: file.url });   // the file's page in Fusion Manage
+    labelTabs(view);
+    if (document.querySelector('.item-tab-active').disabled) showTab('item');   // the tab open for the last item is not allowed for this one
+    // these are read from Fusion Manage only when their tab is opened
+    ['files', 'bom', 'whereused'].forEach(function (name) {
+      const tab = $(name === 'files' ? 'item-files' : 'item-' + name);
+      loaded[name] = false;
+      tab.replaceChildren();
+      if (!tab.hidden) loadTab(name);   // the tab was open when the item changed
     });
-    // these two are read from Fusion Manage only when their tab is opened
-    loaded.bom = loaded.whereused = false;
-    $('item-bom').replaceChildren();
-    $('item-whereused').replaceChildren();
-    $('item-tab-bom').textContent = 'Bill of Materials';
-    $('item-tab-whereused').textContent = 'Where Used';
-    if (!$('item-bom').hidden) loadTab('bom');   // the tab was open when the item changed
-    if (!$('item-whereused').hidden) loadTab('whereused');
     const body = $('item-body');
     body.replaceChildren();
     if (!view.sections.length) { message('This item has no fields to show.'); return; }
@@ -258,7 +276,8 @@
       return;
     }
     shownSeq = entry.seq;
-    if (entry.missing) { showMissing(entry.missing); return; }
+    if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
+    if (entry.missing) { showEmpty(ICON_MISSING, 'No item exists for ' + entry.missing, 'Check the part number, or publish the item to Fusion Manage first.'); return; }
     if (!entry.seq) { message('Select a component and choose Open Fusion Manage Item.'); return; }
     if (!entry.ok) { message(entry.message || 'Could not read the item.', true); return; }
     render(entry.view);

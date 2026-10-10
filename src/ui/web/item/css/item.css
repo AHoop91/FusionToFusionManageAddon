@@ -385,11 +385,11 @@ a.item-bom-attachments:hover { color: var(--accent); }
 .item-bom-tool:hover:enabled { background: #eceef0; }
 .item-bom-tool.item-bom-on { background: #dfe3e6; }
 .item-bom-tool svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.item-bom-solid svg path { stroke: #fff; stroke-width: 2; }   /* the sign cut out of a solid box */
+.item-bom-collapse svg path, .item-bom-expand svg path { stroke: #fff; stroke-width: 2; }   /* the sign cut out of a solid box */
 .item-bom-tool svg rect, .item-bom-columns svg path { stroke: none; }   /* solid shapes need no outline */
 .item-bom-tool svg path { stroke-width: 2; }
-.item-bom-nested svg rect { stroke: none; }
 .item-bom-pair { display: flex; }
+.item-bom-fold { margin-right: auto; }
 .item-bom-pair .item-bom-tool:first-child { border-radius: 4px 0 0 4px; }
 .item-bom-pair .item-bom-tool:last-child { border-radius: 0 4px 4px 0; border-left: 0; }
 .item-bom-menu-host { position: relative; }

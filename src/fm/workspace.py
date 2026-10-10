@@ -17,10 +17,10 @@ from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceKind
 from ..core.logging_setup import get_logger
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
+from .permissions import missing, parse_granted, title
 
 log = get_logger("fm.workspace")
 
-PERMISSION_PREFIX = "permission.shortname."
 OPTIONS_PAGE = 100   # picklist options requested per call
 MAX_OPTIONS = 2000   # stop reading a picklist after this many options
 READERS = 4          # picklists read at once
@@ -45,7 +45,7 @@ class WorkspaceService:
             if not isinstance(workspace, dict) or workspace.get("deleted"):
                 result["message"] = f"Workspace {workspace_id} was not found or has been deleted."
                 return result
-            granted = self._granted(self._client.get_json(f"{base}/users/@me/permissions"))
+            granted = parse_granted(self._client.get_json(f"{base}/users/@me/permissions"))
         except FmApiError as exc:
             log.warning("Workspace %s validation failed: %s", workspace_id, exc)
             result["message"] = self._explain(exc, workspace_id)
@@ -54,10 +54,10 @@ class WorkspaceService:
             result["message"] = f"Not signed in: {exc}"
             return result
 
-        missing = [p for p in kind.required_permissions if p not in granted]
-        if missing:
+        lacking = missing(kind.required_permissions, granted)
+        if lacking:
             result["message"] = (f"You need these permissions on '{workspace.get('name', workspace_id)}': "
-                                 + ", ".join(self._title(p) for p in missing) + ".")
+                                 + ", ".join(title(p) for p in lacking) + ".")
             return result
 
         result["valid"] = True
@@ -125,22 +125,6 @@ class WorkspaceService:
             log.warning("Could not load picklist %s: %s", lookup, exc)
             return []
         return options
-
-    @staticmethod
-    def _granted(data: Any) -> set:
-        """Short permission names (``add_items``) the user holds."""
-        rows = data.get("permissions") if isinstance(data, dict) else None
-        names = set()
-        for row in rows if isinstance(rows, list) else []:
-            name = row.get("name") if isinstance(row, dict) else None
-            if isinstance(name, str):
-                names.add(name[len(PERMISSION_PREFIX):] if name.startswith(PERMISSION_PREFIX) else name)
-        return names
-
-    @staticmethod
-    def _title(permission: str) -> str:
-        """``add_items`` -> ``Add Items``."""
-        return permission.replace("_", " ").title()
 
     @staticmethod
     def _explain(exc: FmApiError, workspace_id: str) -> str:

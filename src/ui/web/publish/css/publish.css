@@ -103,3 +103,8 @@
 .pub-progress-danger { background: var(--danger); border-color: var(--danger); }
 @keyframes pub-progress-slide { from { left: -35%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .pub-progress-bar.indeterminate .pub-progress-fill { animation-duration: 3s; } .pub-progress-fill { transition: none; } }
+
+/* No permission to publish: an icon and a line, centred */
+.pub-denied { text-align: center; }
+.pub-denied-icon { width: 88px; height: 88px; fill: none; stroke: #a9b2bb; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.pub-denied-text { max-width: 320px; font-size: 16px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }

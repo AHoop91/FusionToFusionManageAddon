@@ -37,6 +37,7 @@ class RibbonCommand:
     on_click: Callable[[], None]
     resource_folder: str = ""
     promoted: bool = True   # a button on the panel; False puts it in the panel's dropdown
+    needs_setup: bool = False   # greyed out until the settings are complete (see ``SetupGate``)
 
 
 class _ExecuteHandler(adsk.core.CommandEventHandler):

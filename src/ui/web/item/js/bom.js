@@ -8,8 +8,8 @@
   const el = ns.el;
   const bridge = ns.bridge;
   const tree = ns.itemTree;
-  const ITEM_COLUMN_PX = 380;
-  const COLUMN_PX = 120;
+  const ITEM_COLUMN_PX = tree.ITEM_COLUMN_PX;
+  const COLUMN_PX = tree.COLUMN_PX;
   const ICON_COLUMN_PX = 48;   // a column that only holds an icon
   const EMPTY_COLUMNS = ['Version', 'Quantity', 'Lifecycle'];   // shown under no lines, where the real columns are not known
   const CLASS = 'item-bom';
@@ -44,16 +44,14 @@
   });
   const hidden = {};   // column id -> true when the user turned it off
 
-  /** Fill ``target`` with the bill of materials of the item of ``view``; ``onCount(n)`` gets how many lines are at its top. */
-  function render(target, view, onCount) {
+  /** Fill ``target`` with the bill of materials of the item of ``view``. */
+  function render(target, view) {
     const mine = ++current;
-    onCount(null);
     function read(first) {
       if (!first) { tree.loading(target, CLASS, 'Reading the Bill of Materials...'); }
       tree.load('bom_load', 'bom_result', { workspace_id: view.workspace_id, item_id: view.item_id, view_id: chosen[view.workspace_id] || '', flat: flat }, function (error, result) {
         if (mine !== current) return;
         if (error) { tree.centred(target, CLASS, 'Could not read the Bill of Materials: ' + error, true); return; }
-        onCount(result.rows.length ? result.rows[0].children.length : 0);   // the lines under the item
         draw(target, result, function (id) { if (id) chosen[view.workspace_id] = id; read(false); }, view);
       });
     }
@@ -70,18 +68,15 @@
   }
 
   /** The bar: the views of the workspace, nested or flat, and which columns show. */
-  function bar(bom, view, onView, redraw, onOpenAll) {
+  function bar(bom, onView, redraw, onOpenAll) {
     const row = el('div', 'item-bom-bar');
-    const fold = el('div', 'item-bom-pair');
+    const fold = el('div', 'item-bom-pair item-bom-fold');
     const close = tool('collapse', 'Collapse all');
     const open = tool('expand', 'Expand all');
     close.disabled = open.disabled = flat;   // a flat list has nothing to fold
     close.addEventListener('click', function () { onOpenAll(false); });
     open.addEventListener('click', function () { onOpenAll(true); });
-    close.classList.add('item-bom-solid');
-    open.classList.add('item-bom-solid');
     fold.append(close, open);
-    fold.style.marginRight = 'auto';
     row.appendChild(fold);
     row.appendChild(el('label', '', 'Views:'));
     const select = el('select');
@@ -104,7 +99,6 @@
     plain.addEventListener('click', function () { if (!flat) { flat = true; onView(''); } });
     pair.append(nested, plain);
     row.appendChild(pair);
-
 
     const host = el('div', 'item-bom-menu-host');
     const gear = tool('columns', 'Choose the columns');
@@ -231,16 +225,9 @@
     drawRows();
     const wrap = el('div', 'item-files-wrap');
     wrap.appendChild(table);
-    target.replaceChildren(bar(full, view, onView, function () { draw(target, full, onView, view); }, setAll), wrap);
+    target.replaceChildren(bar(full, onView, function () { draw(target, full, onView, view); }, setAll), wrap);
     if (!bom.rows.length || !bom.rows[0].children.length) {   // the columns stay, and the message is centred in the space under them
-      target.classList.add('item-files-stack');
-      const empty = el('div', 'item-files-empty');
-      empty.classList.add('item-centred');
-      const icon = el('span', 'item-empty-icon item-empty-icon-large');
-      icon.innerHTML = LIST_ICON;
-      empty.append(icon, el('p', 'item-empty-text', 'No Bill of Materials'),
-                   el('p', 'item-empty-hint', 'Items that make up this item in Fusion Manage will be listed here.'));
-      target.appendChild(empty);
+      tree.emptyUnder(target, LIST_ICON, 'No Bill of Materials', 'Items that make up this item in Fusion Manage will be listed here.');
     }
   }
 

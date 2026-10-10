@@ -66,6 +66,7 @@ WORKSPACE_KINDS = [
 ]
 
 KINDS_BY_ID = {k.kind_id: k for k in WORKSPACE_KINDS}
+ITEMS_KIND = "items"   # the kind the Item panel, the publish and the BOM work with
 
 SOURCE_FIELDS = [
     SourceField("part_number", "Part number"),
@@ -159,6 +160,13 @@ class WorkspaceConfig:
     static_values: List[StaticValue] = field(default_factory=list)
     # The Fusion Manage field that links an item to its component ("" = not linked).
     component_field: str = ""
+
+    def setup_problem(self, title: str) -> str:
+        """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings with a key."""
+        if not self.workspace_id:
+            return f"The {title} workspace ID is not set."
+        problems = self.validate(title)
+        return problems[0] if problems else ""
 
     def validate(self, title: str) -> List[str]:
         """Return human-readable problems; ``title`` names the workspace."""

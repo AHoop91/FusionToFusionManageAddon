@@ -9,6 +9,8 @@
   const el = ns.el;
   const POLL_INTERVAL_MS = 300;
   const MIN_COLUMN_PX = 40;
+  const ITEM_COLUMN_PX = 380;   // the first column of a tree table
+  const COLUMN_PX = 120;   // the others
   const SLOT_PX = 28;   // width of the chevron box, and how far each level steps in
   const CHEVRON_CLOSED = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><polyline points="10 6 16 12 10 18"/></svg>';
   const CHEVRON_OPEN = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><polyline points="6 10 12 16 18 10"/></svg>';
@@ -103,6 +105,16 @@
     if (hint) target.appendChild(el('p', 'item-empty-hint', hint));
   }
 
+  /** Under a table that shows only its columns: an icon (static markup), a line of text and a hint, centred in the space left. */
+  function emptyUnder(target, iconMarkup, text, hint) {
+    target.classList.add('item-files-stack');
+    const empty = el('div', 'item-files-empty item-centred');
+    const icon = el('span', 'item-empty-icon item-empty-icon-large');
+    icon.innerHTML = iconMarkup;   // static markup
+    empty.append(icon, el('p', 'item-empty-text', text), el('p', 'item-empty-hint', hint));
+    target.appendChild(empty);
+  }
+
   /** The bouncing balls and a caption in the middle of ``target``. */
   function loading(target, className, text) {
     target.className = 'view-scroll item-centred ' + className;
@@ -154,5 +166,5 @@
     return td;
   }
 
-  ns.itemTree = { load: load, centred: centred, loading: loading, itemCell: itemCell, iconXs: iconXs, resizable: resizable };
+  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, resizable: resizable };
 })(window.MfgUi);

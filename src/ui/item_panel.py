@@ -21,6 +21,7 @@ import adsk.fusion
 from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
+from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
@@ -28,6 +29,7 @@ from ..fm.bom_view import BomViewService
 from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
 from ..fm.items import ItemService
+from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.where_used import WhereUsedService
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
@@ -36,7 +38,6 @@ from .ui_thread import UiThread
 
 log = get_logger("item_panel")
 
-ITEMS_KIND = "items"
 LOOKUPS_KEPT = 200   # answers held for the page to read before the oldest finished ones are dropped
 RUNNABLE = (".exe", ".com", ".bat", ".cmd", ".msi", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".scr", ".lnk", ".jar", ".hta", ".reg", ".dll", ".cpl", ".py", ".sh", ".app", ".command")
 
@@ -47,6 +48,18 @@ class ItemNotFound(Exception):
     def __init__(self, number: str) -> None:
         super().__init__(f"No item exists for {number}.")
         self.number = number
+
+
+class NoAccess(Exception):
+    """The user may not view the Items workspace."""
+
+    def __init__(self) -> None:
+        super().__init__(f"Insufficient permissions to view the {KINDS_BY_ID[ITEMS_KIND].title} workspace.")
+
+
+def _answer(**changes: Any) -> Dict[str, Any]:
+    """An answer of the page's poll: nothing found yet, with ``changes`` (``missing`` is an item number with no item, ``denied`` a message)."""
+    return {"pending": False, "ok": False, "message": "", "view": None, "missing": "", "denied": "", **changes}
 
 
 def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
@@ -87,30 +100,37 @@ class ItemPanel:
         self._config = config
         self._auth = auth
         self._lock = threading.Lock()
-        self._state: Dict[str, Any] = {"seq": 0, "pending": False, "ok": False, "message": "", "view": None, "missing": ""}
+        self._state: Dict[str, Any] = _answer(seq=0)
         self._number = ""   # the item number the panel shows, for Refresh
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
         bridge.register("open_attachment", self._open_attachment)
         bridge.register("where_used_load", self._where_used_load)
         bridge.register("where_used_result", self._lookup_result)
+        bridge.register("files_load", self._files_load)
+        bridge.register("files_result", self._lookup_result)
         bridge.register("bom_load", self._bom_load)
         bridge.register("bom_result", self._lookup_result)
         self._lookups: Dict[str, Dict[str, Any]] = {}   # request id (from the page) -> its answer
 
     def _where_used_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the parents of an item (or of one of those parents, given its ``up`` link); the page polls for them."""
-        workspace_id, item_id, up = self._ids(payload), str(payload.get("item_id") or ""), str(payload.get("up") or "")
+        workspace_id, item_id, up = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("up") or "")
         return self._lookup(payload, lambda client: WhereUsedService(client).read(workspace_id, item_id, up))
+
+    def _files_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Start reading the item's files; the page polls for them."""
+        workspace_id, item_id, item_urn = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("item_urn") or "")
+        return self._lookup(payload, lambda client: AttachmentService(client).files(workspace_id, item_id, item_urn))
 
     def _bom_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the item's bill of materials; the page polls for it."""
-        workspace_id, item_id = self._ids(payload), str(payload.get("item_id") or "")
+        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         view_id, flat = str(payload.get("view_id") or ""), bool(payload.get("flat"))
         return self._lookup(payload, lambda client: BomViewService(client).read(workspace_id, item_id, view_id, flat))
 
     @staticmethod
-    def _ids(payload: Dict[str, Any]) -> str:
+    def _workspace_id(payload: Dict[str, Any]) -> str:
         """The workspace id of a look-up (the item id is checked with it)."""
         workspace_id, item_id = str(payload.get("workspace_id") or ""), str(payload.get("item_id") or "")
         if not (str(payload.get("request") or "") and workspace_id and item_id):
@@ -187,27 +207,39 @@ class ItemPanel:
     def _start(self) -> None:
         with self._lock:
             seq = self._state["seq"] + 1
-            self._state = {"seq": seq, "pending": True, "ok": False, "message": "", "view": None, "missing": ""}
+            self._state = _answer(seq=seq, pending=True)
         threading.Thread(target=self._load, args=(seq, self._number), daemon=True).start()
 
     def _load(self, seq: int, number: str) -> None:
         try:
-            state = {"pending": False, "ok": True, "message": "", "view": self._read(number), "missing": ""}
+            state = _answer(ok=True, view=self._read(number))
         except ItemNotFound as exc:   # not an error: the panel says there is no such item
             log.info("No Fusion Manage item for %s", exc.number)
-            state = {"pending": False, "ok": False, "message": str(exc), "view": None, "missing": exc.number}
+            state = _answer(message=str(exc), missing=exc.number)
+        except NoAccess as exc:   # not an error either: the panel says so, in place of the item
+            log.info("No permission to view the items workspace")
+            state = _answer(message=str(exc), denied=str(exc))
         except Exception as exc:  # shown in the panel, never raised into a thread nobody watches
             log.exception("Could not read the Fusion Manage item")
-            state = {"pending": False, "ok": False, "message": str(exc) or type(exc).__name__, "view": None, "missing": ""}
+            state = _answer(message=str(exc) or type(exc).__name__)
         with self._lock:
             if self._state["seq"] == seq:   # a newer open replaces this one
                 self._state.update(state)
 
     def _read(self, number: str) -> Dict[str, Any]:
+        problem = self._config.items_setup_problem()   # the ribbon greys the command out too; this covers the other ways in
+        if problem:
+            raise ValueError(f"{problem} Complete it in Preferences.")
         cfg = self._config.config.workspaces.get(ITEMS_KIND)
-        if not cfg or not cfg.workspace_id:
-            raise ValueError("No Fusion Manage workspace is set for items. Choose one in Settings.")
         client = FmClient(self._config.effective_settings(), self._auth)
+        try:
+            held = granted_permissions(client, cfg.workspace_id)
+        except FmApiError as exc:
+            if exc.status in (401, 403):
+                raise NoAccess() from exc
+            raise ValueError(f"Could not check your permissions in Fusion Manage: {exc}") from exc
+        if VIEW_ITEMS not in held:   # nothing else is looked at: no access overrides everything
+            raise NoAccess()
         try:
             hits = ItemService(client).search(cfg.workspace_id, number)
         except (FmApiError, AuthError) as exc:
@@ -216,7 +248,7 @@ class ItemPanel:
             raise ItemNotFound(number)
         if len(hits) > 1:
             log.warning("Item number %s matches %d items; showing the first", number, len(hits))
-        return ItemViewService(client).read(cfg.workspace_id, hits[0]["id"])
+        return ItemViewService(client).read(cfg.workspace_id, hits[0]["id"], held)
 
 
 LINE_ID = "MfgToFm_MenuLine"
