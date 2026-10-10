@@ -15,7 +15,7 @@
     { title: 'Status', width: 110, text: function (r) { return r.state; } },
     { title: 'Last Action', width: 110, text: function (r) { return r.last.action; } },
     { title: 'By User', width: 120, text: function (r) { return r.last.user; } },
-    { title: 'Last Updated', width: 160, text: function (r) { return tree.formatDate(r.last.date); } },
+    { title: 'Last Updated', width: 190, text: function (r) { return tree.formatDate(r.last.date); } },
     { title: 'Comments', width: 200, text: function (r) { return r.last.comments; } },
   ];
   // A page with a tick: a change that is being worked through. Static markup.
