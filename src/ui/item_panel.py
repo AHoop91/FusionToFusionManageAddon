@@ -42,6 +42,7 @@ from .upload_jobs import DRAWING_JOB, STEP_JOB
 
 log = get_logger("item_panel")
 
+LINE_ID = "MfgToFm_MenuLine"   # the line above the add-in's entries in the right-click menu
 LOOKUPS_KEPT = 200   # answers held for the page to read before the oldest finished ones are dropped
 RUNNABLE = (".exe", ".com", ".bat", ".cmd", ".msi", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".scr", ".lnk", ".jar", ".hta", ".reg", ".dll", ".cpl", ".py", ".sh", ".app", ".command")
 
@@ -92,23 +93,30 @@ def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
 _menu_selection: List[Any] = []   # what was selected when the right-click menu last opened: choosing an entry may have cleared the selection by then
 
 
-def _selected_part_number(from_menu: bool = False) -> str:
-    """Part number of the selected component, else of the open design ("" if neither has one). In a drawing the same: a component
-    of the tree gives its own number, and the top of the tree (or nothing) the number of the design the drawing shows, which is
-    "" until that has loaded. ``from_menu`` reads what was selected when the right-click menu opened. Runs on the UI thread."""
-    app = adsk.core.Application.get()
-    if from_menu:
-        entities = list(_menu_selection)
-    else:
-        selections = app.userInterface.activeSelections
-        entities = [selections.item(index).entity for index in range(selections.count)]
+def _selected_component_number(entities: Any) -> str:
+    """Part number of the first component the entities belong to ("" when none does, or it has no number)."""
     for entity in entities:
         component = _component_of(entity)
         if component is not None:
             return str(component.partNumber or "").strip()
+    return ""
+
+
+def _active_selection() -> List[Any]:
+    selections = adsk.core.Application.get().userInterface.activeSelections
+    return [selections.item(index).entity for index in range(selections.count)]
+
+
+def _selected_part_number(from_menu: bool = False) -> str:
+    """Part number of the selected component, else of the open design ("" if neither has one). In a drawing the same: a component
+    of the tree gives its own number, and the top of the tree (or nothing) the number of the design the drawing shows, which is
+    "" until that has loaded. ``from_menu`` reads what was selected when the right-click menu opened. Runs on the UI thread."""
+    number = _selected_component_number(_menu_selection if from_menu else _active_selection())
+    if number:
+        return number
     if drawing_source.active_drawing() is not None:
         return drawing_source.top_level_number()[0]
-    design = adsk.fusion.Design.cast(app.activeProduct)
+    design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
     return str(design.rootComponent.partNumber or "").strip() if design is not None else ""
 
 
@@ -120,6 +128,20 @@ def _open_file(path: str) -> None:
         os.startfile(path)   # Windows
     else:
         subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])
+
+
+class _SelectionHandler(adsk.core.ActiveSelectionEventHandler):
+    """Tells the panel when the selection changes."""
+
+    def __init__(self, on_change: Callable[[], None]) -> None:
+        super().__init__()
+        self._on_change = on_change
+
+    def notify(self, args) -> None:
+        try:
+            self._on_change()
+        except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
+            log.exception("Could not follow the selection")
 
 
 class ItemPanel:
@@ -136,6 +158,8 @@ class ItemPanel:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
         self._number = ""   # the item number the panel shows, for Refresh
+        self._selection_handler = _SelectionHandler(self._follow_selection)   # kept, or Fusion drops it
+        ui.activeSelectionChanged.add(self._selection_handler)
         bridge.register("upload_status", lambda _payload: self._uploads.status())
         bridge.register("upload_context", self._upload_context)
         bridge.register("upload_drawing", self._upload_drawing)
@@ -218,18 +242,38 @@ class ItemPanel:
         """Show the item of the selected component, or of the open design when nothing is selected. UI thread."""
         self._open(_selected_part_number())
 
+    def _follow_selection(self) -> None:
+        """While the panel is open, show the item of a component just selected. A selection with no component leaves the panel as it is."""
+        if not self._host.visible:
+            return
+        number = _selected_component_number(_active_selection())
+        if number and number != self._number:
+            self._open(number, show=False)   # it is open already
+
+    def dispose(self) -> None:
+        try:
+            self._ui.activeSelectionChanged.remove(self._selection_handler)
+        except RuntimeError:
+            pass
+
     def open_from_menu(self) -> None:
         """Show the item of the component the right-click menu was opened on. UI thread."""
         self._open(_selected_part_number(from_menu=True))
 
-    def _open(self, number: str) -> None:
-        if not number:
-            self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
+    def _open(self, number: str, show: bool = True) -> None:
+        if not self._has_number(number):
             return
         self._number = number
         self._start()
-        self._host.show()
+        if show:
+            self._host.show()
         self._host.send("item_changed")   # an open page starts polling again
+
+    def _has_number(self, number: str) -> bool:
+        """Whether ``number`` names something to look up; when not, say what to select."""
+        if not number:
+            self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
+        return bool(number)
 
     def _refresh(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """Read the item shown again (the page's Refresh button)."""
@@ -270,10 +314,8 @@ class ItemPanel:
     def upload_selected_step(self) -> None:
         """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
         number = _selected_part_number(from_menu=True)
-        if not number:
-            self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
-            return
-        self._uploads.from_number(STEP_JOB, number)
+        if self._has_number(number):
+            self._uploads.from_number(STEP_JOB, number)
 
     def upload_drawing(self) -> None:
         """Upload the open drawing as the PDF of the item of the design it shows (the ribbon button). UI thread."""
@@ -344,9 +386,6 @@ class ItemPanel:
         if len(hits) > 1:
             log.warning("Item number %s matches %d items; showing the first", number, len(hits))
         return ItemViewService(client).read(cfg.workspace_id, pick_hit(hits, number)["id"], held)
-
-
-LINE_ID = "MfgToFm_MenuLine"
 
 
 def _selects_root(entities: Any) -> bool:

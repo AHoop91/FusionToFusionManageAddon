@@ -9,7 +9,7 @@
   const $ = ns.$;
   const el = ns.el;
   const POLL_INTERVAL_MS = 400;
-  const STEP_POLL_MS = 300;   // how often the progress of a STEP upload is asked for
+  const UPLOAD_POLL_MS = 300;   // how often the progress of an upload is asked for
   const LABEL_COLUMN_WIDTH = '16%';   // the row labels; the other columns share the rest equally
   const MIN_COLUMN_PX = 50;
   const MIN_MATRIX_COLUMN_PX = 120;   // a matrix column is never squeezed below this by a narrow panel
@@ -267,7 +267,7 @@
     const uploadLabel = upload.querySelector('.item-menu-label');
     let uploading = false;
     let uploadReady = true;
-    let stepTimer = 0;
+    let uploadTimer = 0;
     const card = ns.uploadProgress.mount($('progress-card'));
     function syncUpload() { upload.disabled = uploading || !uploadReady; }
     /** The Upload entry for what the open document uploads (``action``, ``label``, ``ext`` of the file, ``ready``). */
@@ -282,13 +282,13 @@
       syncUpload();
     }
     /** The progress dialog over the panel for ``state`` (``active``, and while it is, what ``upload-progress.js`` shows). */
-    function showStep(state) {
+    function showUpload(state) {
       uploading = !!state.active;
       $('progress').hidden = !uploading;
       syncUpload();
       if (uploading) card.show(state);
     }
-    function pollStep() { clearTimeout(stepTimer); bridge.send('upload_status'); }
+    function pollUpload() { clearTimeout(uploadTimer); bridge.send('upload_status'); }
     function toggleMenu(open) {
       setOpen(open);
       if (open) bridge.send('upload_context');   // the document may have changed since the last time
@@ -298,21 +298,21 @@
       entry.addEventListener('click', function () {
         setOpen(false);
         if (!currentView) return;
-        if (entry === upload) showStep({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
+        if (entry === upload) showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
         bridge.send(entry.dataset.action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: entry.dataset.action });
       });
     });
     function started(r) {
-      if (r.ok && r.result && r.result.started) pollStep(); else showStep({ active: false });   // not started: declined, or one is under way
+      if (r.ok && r.result && r.result.started) pollUpload(); else showUpload({ active: false });   // not started: declined, or one is under way
     }
     bridge.on('add_step_file', started);
     bridge.on('upload_drawing', started);
     bridge.on('upload_context', function (r) { if (r.ok) setUpload(r.result); });
     window.addEventListener('focus', function () { if (currentView) bridge.send('upload_context'); });   // the open document may have changed
     bridge.on('upload_status', function (r) {
-      if (!r.ok) { showStep({ active: false }); return; }
-      showStep(r.result);
-      if (r.result.active) stepTimer = setTimeout(pollStep, STEP_POLL_MS);
+      if (!r.ok) { showUpload({ active: false }); return; }
+      showUpload(r.result);
+      if (r.result.active) uploadTimer = setTimeout(pollUpload, UPLOAD_POLL_MS);
     });
     bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
   }
@@ -365,7 +365,10 @@
     ns.account.init();
     ns.auth.init();
     bridge.on('get_item_view', handle);
-    bridge.on('item_changed', poll);   // Python opened another item in this palette
+    bridge.on('item_changed', function () {   // Python opened another item in this palette
+      setLoading(true, 'Finding the Fusion Manage item...');   // at once, not after the answer to the poll
+      poll();
+    });
     bridge.on('refresh_item_view', handle);
     bridge.on('open_url', function () {});
     bridge.on('open_attachment', function () {});

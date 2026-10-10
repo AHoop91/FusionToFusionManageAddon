@@ -7,7 +7,7 @@ so one cannot undo the other.
 """
 
 import threading
-from typing import Callable, Sequence
+from typing import Callable, Dict, Sequence
 
 import adsk.core
 
@@ -27,7 +27,7 @@ class SetupGate:
         self._commands = [c for c in commands if c.needs_setup or c.needs_drawing]
         self._problem = problem
         self._drawing_problem = drawing_problem
-        self._shown = {}   # command id -> the reason last applied, so only a change is written
+        self._shown: Dict[str, str] = {}   # command id -> the reason last applied, so only a change is written
 
     def refresh(self) -> None:
         """Apply the present state of the settings and of the open drawing. Call it after either may have changed. Main thread."""
