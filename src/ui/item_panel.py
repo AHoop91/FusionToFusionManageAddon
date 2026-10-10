@@ -110,9 +110,8 @@ class ItemPanel:
     """Finds an item by number and shows it in the item palette."""
 
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, bridge: MessageBridge,
-                 config: ConfigService, auth: AuthService, publish: Callable[[], None], progress: PaletteHost) -> None:
+                 config: ConfigService, auth: AuthService, progress: PaletteHost) -> None:
         self._ui = ui
-        self._publish = publish   # opens the Publish panel
         self._uploads = StepUpload(ui, tasks, host, progress, config, auth, self._reload)
         self._tasks = tasks
         self._host = host
@@ -126,7 +125,6 @@ class ItemPanel:
         bridge.register("refresh_item_view", self._refresh)
         bridge.register("open_attachment", self._open_attachment)
         bridge.register("add_step_file", self._add_step_file)
-        bridge.register("publish_item", self._publish_item)
         bridge.register("where_used_load", self._where_used_load)
         bridge.register("where_used_result", self._lookup_result)
         bridge.register("files_load", self._files_load)
@@ -223,11 +221,6 @@ class ItemPanel:
         threading.Thread(target=self._download, args=(*ids, str(payload.get("name") or "")), daemon=True).start()
         return {"started": True}
 
-    def _publish_item(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Open the Publish panel (the Actions menu). UI thread."""
-        self._publish()
-        return {"started": True}
-
     def _add_step_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open design as the STEP file of the item shown (the Actions menu). UI thread."""
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
@@ -309,25 +302,47 @@ class ItemPanel:
 LINE_ID = "MfgToFm_MenuLine"
 
 
-class _MenuHandler(adsk.core.MarkingMenuEventHandler):
-    """Adds the commands to the right-click menu when a component is selected, under one line."""
+def _selects_root(entities: Any) -> bool:
+    """Whether the root component of the open design is among the selected entities."""
+    design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+    if design is None:
+        return False
+    root = design.rootComponent.entityToken
+    for entity in entities:
+        component = adsk.fusion.Component.cast(entity)   # the component itself, not a body or occurrence inside it
+        if component is not None and component.entityToken == root:
+            return True
+    return False
 
-    def __init__(self, command_ids: Sequence[str]) -> None:
+
+class _MenuHandler(adsk.core.MarkingMenuEventHandler):
+    """Adds the commands to the right-click menu when a component is selected, under one line.
+
+    A command marked ``root_only`` is offered only when the root component is selected.
+    """
+
+    def __init__(self, commands: Sequence[RibbonCommand]) -> None:
         super().__init__()
-        self._command_ids = list(command_ids)
+        self._commands = list(commands)
 
     def notify(self, args) -> None:
         try:
             event = adsk.core.MarkingMenuEventArgs.cast(args)
             if not any(_component_of(e) is not None for e in event.selectedEntities):
                 return
-            commands = adsk.core.Application.get().userInterface.commandDefinitions
+            definitions = adsk.core.Application.get().userInterface.commandDefinitions
             controls = event.linearMarkingMenu.controls
-            if controls.itemById(LINE_ID) is None and controls.itemById(self._command_ids[0]) is None:
+            is_root = _selects_root(event.selectedEntities)
+            if controls.itemById(LINE_ID) is None and controls.itemById(self._commands[0].command_id) is None:
                 controls.addSeparator(LINE_ID)   # one line above the group, none between its entries
-            for command_id in self._command_ids:
-                definition = commands.itemById(command_id)
-                if definition and controls.itemById(command_id) is None:
+            for command in self._commands:
+                shown = controls.itemById(command.command_id)
+                if command.root_only and not is_root:
+                    if shown is not None:   # left over from the last time the menu opened
+                        shown.deleteMe()
+                    continue
+                definition = definitions.itemById(command.command_id)
+                if definition and shown is None:
                     controls.addCommand(definition)
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Could not add the Fusion Manage menu entries")
@@ -342,7 +357,7 @@ class ItemContextMenu:
         self._handlers: List[object] = []   # kept, or Fusion drops them
         for command in self._commands:
             define_command(ui, command, self._handlers)
-        self._handler = _MenuHandler([c.command_id for c in self._commands])
+        self._handler = _MenuHandler(self._commands)
         ui.markingMenuDisplaying.add(self._handler)
 
     def dispose(self) -> None:

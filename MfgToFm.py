@@ -106,7 +106,7 @@ def run(context) -> None:
         # ribbon needs no other changes.
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, STEP_PROGRESS_PALETTE_ID, "Upload STEP File", "progress", False, STEP_PROGRESS_WIDTH, STEP_PROGRESS_HEIGHT)
-        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _publish_host.show, _progress_host)
+        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host)
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
                           "Open the Fusion Manage item of the selected component.",
@@ -115,7 +115,7 @@ def run(context) -> None:
             RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                           "Preview what will be published to Fusion Manage for the current item.",
                           _publish_host.show,
-                          os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True),
+                          os.path.join(_ADDIN_DIR, "resources", "publish"), needs_setup=True, root_only=True),
             RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, "Upload STEP File To Fusion Manage Item",
                           "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component.",
                           _item_panel.upload_selected_step,

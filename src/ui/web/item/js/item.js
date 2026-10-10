@@ -292,7 +292,6 @@
       showStep(r.result);
       if (r.result.active) stepTimer = setTimeout(pollStep, STEP_POLL_MS);
     });
-    bridge.on('publish_item', function () {});
     bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
   }
 

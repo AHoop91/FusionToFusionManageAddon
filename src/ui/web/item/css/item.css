@@ -167,19 +167,6 @@
 .item-menu-btn[aria-expanded="true"] { background: var(--bg); border-color: var(--border); }
 
 .item-menu-item .item-file-icon { margin-right: 0; flex-shrink: 0; }
-.item-menu-glyph {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.item-menu-item:hover .item-menu-glyph, .item-menu-item:focus-visible .item-menu-glyph { stroke: var(--accent); }
-
 
 .item-menu-list {
   position: absolute;
