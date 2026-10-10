@@ -29,7 +29,7 @@ class PermissionTests(unittest.TestCase):
         self.assertEqual(tabs["files"], {"label": "Files", "count": 3, "allowed": True})
         self.assertEqual(tabs["bom"]["label"], "Bill of Materials")
         self.assertFalse(tabs["whereused"]["allowed"])   # no view_where_used
-        self.assertNotIn("changes", tabs)   # the workspace lists no such tab
+        self.assertNotIn("workflows", tabs)   # the workspace lists no such tab
 
 
 if __name__ == "__main__":

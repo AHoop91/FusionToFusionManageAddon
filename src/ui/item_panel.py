@@ -26,7 +26,7 @@ from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
 from ..fm.bom_view import BomViewService
-from ..fm.change_processes import ChangeProcessService
+from ..fm.associated_workflows import AssociatedWorkflowService
 from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
 from ..fm.items import ItemService
@@ -110,8 +110,8 @@ class ItemPanel:
         bridge.register("where_used_result", self._lookup_result)
         bridge.register("files_load", self._files_load)
         bridge.register("files_result", self._lookup_result)
-        bridge.register("changes_load", self._changes_load)
-        bridge.register("changes_result", self._lookup_result)
+        bridge.register("workflows_load", self._workflows_load)
+        bridge.register("workflows_result", self._lookup_result)
         bridge.register("bom_load", self._bom_load)
         bridge.register("bom_result", self._lookup_result)
         self._lookups: Dict[str, Dict[str, Any]] = {}   # request id (from the page) -> its answer
@@ -126,10 +126,10 @@ class ItemPanel:
         workspace_id, item_id, item_urn = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("item_urn") or "")
         return self._lookup(payload, lambda client: AttachmentService(client).files(workspace_id, item_id, item_urn))
 
-    def _changes_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading the change processes that reference the item; the page polls for them."""
+    def _workflows_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Start reading the associated workflows that reference the item; the page polls for them."""
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
-        return self._lookup(payload, lambda client: ChangeProcessService(client).read(workspace_id, item_id))
+        return self._lookup(payload, lambda client: AssociatedWorkflowService(client).read(workspace_id, item_id))
 
     def _bom_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the item's bill of materials; the page polls for it."""

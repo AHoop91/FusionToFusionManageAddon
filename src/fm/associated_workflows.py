@@ -1,4 +1,4 @@
-"""The change processes an item is in: the workflow items (such as change orders) that reference it.
+"""The workflows associated with an item: the workflow items (such as change orders) that reference it.
 
 ``GET /api/v3/workspaces/{ws}/items/{id}/views/2`` answers with a list, one entry per workflow item, giving its
 current state and the last step of its workflow history.
@@ -21,12 +21,12 @@ def _step(history: Any) -> Dict[str, str]:
             "action": str(transition.get("title") or ""), "comments": str(history.get("comments") or "")}
 
 
-def parse_change_processes(data: Any, base_url: str) -> List[Dict[str, Any]]:
-    """The rows of the Change Processes tab from a view answer."""
+def parse_associated_workflows(data: Any, base_url: str) -> List[Dict[str, Any]]:
+    """The rows of the Associated Workflows tab from a view answer."""
     if data is None:   # 204: no workflow item references the item
         return []
     if not isinstance(data, list):
-        raise FmApiError("Fusion Manage did not return the change processes of this item.")
+        raise FmApiError("Fusion Manage did not return the associated workflows of this item.")
     rows = []
     for entry in data:
         item = entry.get("item") if isinstance(entry, dict) and isinstance(entry.get("item"), dict) else None
@@ -38,12 +38,12 @@ def parse_change_processes(data: Any, base_url: str) -> List[Dict[str, Any]]:
     return rows
 
 
-class ChangeProcessService:
-    """Reads the change processes of an item through an ``FmClient``."""
+class AssociatedWorkflowService:
+    """Reads the associated workflows of an item through an ``FmClient``."""
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
     def read(self, workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/views/{REFERENCES_VIEW}")
-        return parse_change_processes(data, self._client.base_url)
+        return parse_associated_workflows(data, self._client.base_url)

@@ -13,9 +13,9 @@ from .client import WORKSPACES, FmClient
 CACHE_SECONDS = 300   # a workspace's tabs rarely change
 # the permission that lets the user see each tab
 TAB_PERMISSIONS = {"item": "view_items", "files": "view_attachments", "bom": "view_bom", "whereused": "view_where_used",
-                   "changes": "view_associated_workflow"}
+                   "workflows": "view_associated_workflow"}
 # the tabs the page shows, by the name Fusion Manage gives them
-TABS = {"item": "ITEM_DETAILS", "files": "PART_ATTACHMENTS", "bom": "BOM_LIST", "whereused": "BOM_WHERE_USED", "changes": "WORKFLOW_REFERENCES"}
+TABS = {"item": "ITEM_DETAILS", "files": "PART_ATTACHMENTS", "bom": "BOM_LIST", "whereused": "BOM_WHERE_USED", "workflows": "WORKFLOW_REFERENCES"}
 
 
 def parse_labels(data: Any) -> Dict[str, str]:

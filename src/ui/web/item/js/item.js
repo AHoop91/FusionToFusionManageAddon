@@ -40,8 +40,8 @@
     $('item-empty').hidden = false;
   }
 
-  const LAZY_TABS = ['files', 'bom', 'whereused', 'changes'];
-  const loaded = { files: false, bom: false, whereused: false, changes: false };   // tabs read for the item shown
+  const LAZY_TABS = ['files', 'bom', 'whereused', 'workflows'];
+  const loaded = { files: false, bom: false, whereused: false, workflows: false };   // tabs read for the item shown
 
   /** Read a lazy tab the first time it is opened for the item shown. */
   function loadTab(name) {
@@ -56,13 +56,13 @@
     } else if (name === 'whereused') {
       ns.itemWhereUsed.render($('item-whereused'), currentView);
     } else {
-      ns.itemChanges.render($('item-changes'), currentView);
+      ns.itemWorkflows.render($('item-workflows'), currentView);
     }
   }
 
   /** Name each tab as Fusion Manage does, with how many entries it holds; a tab the workspace does not have is hidden. */
   function labelTabs(view) {
-    ['item', 'files', 'bom', 'whereused', 'changes'].forEach(function (key) {
+    ['item', 'files', 'bom', 'whereused', 'workflows'].forEach(function (key) {
       const tab = view.tabs[key];
       const button = $('item-tab-' + key);
       button.hidden = !tab;
@@ -74,13 +74,13 @@
     });
   }
 
-  /** Show one tab ('item', 'files', 'bom', 'whereused' or 'changes') and mark its button. */
+  /** Show one tab ('item', 'files', 'bom', 'whereused' or 'workflows') and mark its button. */
   function showTab(name) {
     $('item-body').hidden = name !== 'item';
     $('item-files').hidden = name !== 'files';
     $('item-bom').hidden = name !== 'bom';
     $('item-whereused').hidden = name !== 'whereused';
-    $('item-changes').hidden = name !== 'changes';
+    $('item-workflows').hidden = name !== 'workflows';
     loadTab(name);
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
       tab.classList.toggle('item-tab-active', tab.dataset.tab === name);

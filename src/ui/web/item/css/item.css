@@ -310,9 +310,9 @@
 .item-files-empty.item-centred { min-height: 240px; }
 
 /* The Where Used tab: the same table, as a tree. Headings do not sort, so no pointer or hover. */
-#item-whereused, #item-bom, #item-changes { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
-#item-whereused.item-centred, #item-bom.item-centred, #item-changes.item-centred { min-height: 240px; }
-.item-changes .item-tree-table td { padding-top: 10px; padding-bottom: 10px; }   /* roomier rows than the tree tabs */
+#item-whereused, #item-bom, #item-workflows { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
+#item-whereused.item-centred, #item-bom.item-centred, #item-workflows.item-centred { min-height: 240px; }
+.item-workflows .item-tree-table td { padding-top: 10px; padding-bottom: 10px; }   /* roomier rows than the tree tabs */
 .item-tree-table th { cursor: default; }
 .item-tree-table th:hover { background: var(--bg); }
 .item-tree-table td.item-tree-first { padding-left: 0; white-space: nowrap; }

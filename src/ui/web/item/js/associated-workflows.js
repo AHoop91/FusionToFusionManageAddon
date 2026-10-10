@@ -1,6 +1,6 @@
 /**
- * The Change Processes tab: the workflow items (such as change orders) that reference the item, with where each
- * is in its workflow and the last step taken. A title opens the change process in Fusion Manage.
+ * The Associated Workflows tab: the workflow items (such as change orders) that reference the item, with where each
+ * is in its workflow and the last step taken. A title opens the workflow in Fusion Manage.
  */
 (function (ns) {
   'use strict';
@@ -8,10 +8,10 @@
   const bridge = ns.bridge;
   const el = ns.el;
   const tree = ns.itemTree;
-  const CLASS = 'item-changes';
-  // heading, width, and how to read the text of a cell from a row; the title column links to the change process
+  const CLASS = 'item-workflows';
+  // heading, width, and how to read the text of a cell from a row; the title column links to the workflow
   const COLUMNS = [
-    { title: 'Change Process', width: 260, link: true, text: function (r) { return r.title; } },
+    { title: 'Workflow', width: 260, link: true, text: function (r) { return r.title; } },
     { title: 'Status', width: 110, text: function (r) { return r.state; } },
     { title: 'Last Action', width: 110, text: function (r) { return r.last.action; } },
     { title: 'By User', width: 120, text: function (r) { return r.last.user; } },
@@ -19,17 +19,17 @@
     { title: 'Comments', width: 200, text: function (r) { return r.last.comments; } },
   ];
   // A page with a tick: a change that is being worked through. Static markup.
-  const CHANGE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 14l2 2 4-4"/></svg>';
+  const WORKFLOW_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 14l2 2 4-4"/></svg>';
 
   let current = 0;   // the tab being drawn; an answer for an older item is ignored
 
-  /** Read the change processes of the item of ``view`` and fill ``target`` with them. */
+  /** Read the associated workflows of the item of ``view`` and fill ``target`` with them. */
   function render(target, view) {
     const mine = ++current;
-    tree.loading(target, CLASS, 'Reading the change processes...');
-    tree.load('changes_load', 'changes_result', { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, rows) {
+    tree.loading(target, CLASS, 'Reading the associated workflows...');
+    tree.load('workflows_load', 'workflows_result', { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, rows) {
       if (mine !== current) return;
-      if (error) { tree.centred(target, CLASS, 'Could not read the change processes: ' + error, true); return; }
+      if (error) { tree.centred(target, CLASS, 'Could not read the associated workflows: ' + error, true); return; }
       draw(target, rows);
     });
   }
@@ -79,9 +79,9 @@
     wrap.appendChild(table);
     target.replaceChildren(wrap);
     if (!rows.length) {   // the columns stay, and the message is centred in the space under them
-      tree.emptyUnder(target, CHANGE_ICON, 'Not in any change process', 'Change processes in Fusion Manage that reference this item will be listed here.');
+      tree.emptyUnder(target, WORKFLOW_ICON, 'No associated workflows', 'Workflows in Fusion Manage that reference this item will be listed here.');
     }
   }
 
-  ns.itemChanges = { render: render };
+  ns.itemWorkflows = { render: render };
 })(window.MfgUi);
