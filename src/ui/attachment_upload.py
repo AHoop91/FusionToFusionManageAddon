@@ -33,6 +33,7 @@ from .ui_thread import UiThread
 log = get_logger("attachment_upload")
 
 TEMP_FOLDER = "MfgToFm_upload"   # under the temp folder, while a file waits to be attached
+Progress = Callable[[Optional[int]], None]   # told the percent done of a stage, or None while that is not known
 FIND, MAKE, SEND = 0, 1, 2   # the stages of an upload, by position in ``UploadJob.steps``
 
 
@@ -44,7 +45,7 @@ class UploadJob:
     label: str   # "STEP file": how the messages name it
     extension: str   # ".step"
     steps: Tuple[str, str, str]   # the short names of the stages: find, make, upload
-    make: Callable[[str], None]   # write the file at the path given (UI thread)
+    make: Callable[[str, str, Progress], None]   # write the file at the path given, for the item number given, reporting how far it is (UI thread)
     confirm: Callable[[adsk.core.UserInterface, str], bool]   # whether the open document may be attached as the file of this item number (UI thread)
 
     def stage(self, step: int) -> str:
@@ -75,7 +76,7 @@ class AttachmentUpload:
             return {"started": False}
         if not self._begin(job, MAKE):
             return {"started": False, "busy": True}
-        self._tasks.post(lambda: self._make(job, workspace_id, item_id, f"{safe_name(number)}{job.extension}"))   # after this call returns, so the page is not left waiting
+        self._tasks.post(lambda: self._make(job, workspace_id, item_id, number))   # after this call returns, so the page is not left waiting
         return {"started": True}
 
     def from_number(self, job: UploadJob, number: str) -> None:
@@ -101,20 +102,21 @@ class AttachmentUpload:
             log.exception("Could not find the item of %s to attach a %s to", number, job.label)
             self._fail(f"Could not attach a {job.label}:\n{exc}")
             return
-        name, item_id = f"{safe_name(number)}{job.extension}", pick_hit(hits, number)["id"]
-        self._tasks.post(lambda: self._make(job, workspace_id, item_id, name))
+        item_id = pick_hit(hits, number)["id"]
+        self._tasks.post(lambda: self._make(job, workspace_id, item_id, number))
 
     # ---- Doing ----------------------------------------------------------------------
 
-    def _make(self, job: UploadJob, workspace_id: str, item_id: str, name: str) -> None:
+    def _make(self, job: UploadJob, workspace_id: str, item_id: str, number: str) -> None:
         """Write the file and send it off to be attached. UI thread."""
+        name = f"{safe_name(number)}{job.extension}"
         folder = os.path.join(tempfile.gettempdir(), TEMP_FOLDER, uuid.uuid4().hex)
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, name)
         try:
             self._stage(job, MAKE)
             catch_up()   # let the progress window draw before Fusion is busy
-            job.make(path)
+            job.make(path, number, lambda percent: self._stage(job, MAKE, percent))
             with open(path, "rb") as handle:
                 content = handle.read()
         except Exception as exc:  # shown to the user, never raised into Fusion

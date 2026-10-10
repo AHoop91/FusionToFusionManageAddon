@@ -38,7 +38,7 @@ from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
 from .ui_thread import UiThread
-from .upload_jobs import DRAWING_JOB, STEP_JOB
+from .upload_jobs import DRAWING_JOB, STEP_JOB, pick
 
 log = get_logger("item_panel")
 
@@ -301,6 +301,7 @@ class ItemPanel:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         if not self._number:
             raise ValueError("No item is shown.")
+        pick(_active_selection())
         return self._uploads.from_panel(job, workspace_id, item_id, self._number)
 
     def _upload_context(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -315,6 +316,7 @@ class ItemPanel:
         """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
         number = _selected_part_number(from_menu=True)
         if self._has_number(number):
+            pick(_menu_selection)
             self._uploads.from_number(STEP_JOB, number)
 
     def upload_drawing(self) -> None:
