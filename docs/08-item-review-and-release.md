@@ -2,11 +2,12 @@
 title: Item Review & Release
 ---
 
-# 7. Item Review & Release
+# Item Review & Release
 
 The **Item panel** lets you review an item's Fusion Manage record next to the design it came from, so you can check a publish and see where the item stands in its lifecycle without switching to the browser.
 
-> **Release happens in Fusion Manage.** The panel is for reviewing. It does not move an item through its workflow. When an item is ready to be released, use the **Open in browser** button in the panel header to jump to the item in Fusion Manage and run the workflow transition there.
+!!! note "Release happens in Fusion Manage"
+    The panel is for reviewing. It does not move an item through its workflow. When an item is ready to be released, use the **Open in browser** button in the panel header to jump to the item in Fusion Manage and run the workflow transition there.
 
 ## Open the Item panel
 
@@ -14,8 +15,6 @@ The **Item panel** lets you review an item's Fusion Manage record next to the de
 - With nothing selected, the panel shows the item of the open design (or, in a drawing, of the design the drawing shows).
 
 The add-in looks the item up in the Items workspace by the component's part number. The panel is drawn by the add-in from the item's own sections and fields, so it needs no separate web sign-in. **The panel follows your selection:** while it is open, selecting another component shows that component's item.
-
-**[Screenshot: the Item panel showing the Item tab]**
 
 If no item has the number, the panel says **No item exists for …** and suggests checking the part number or publishing the item first. If you may not view the workspace, it tells you so.
 
@@ -26,7 +25,7 @@ If no item has the number, the panel says **No item exists for …** and suggest
 | Title and status line | The item's title and its type and life-cycle line. |
 | **Open in browser** | Opens the item in Fusion Manage in your web browser. |
 | **Refresh** | Reads the item again from Fusion Manage. |
-| **Actions** (⋯) | Uploads the technical representation: **Upload STEP File** in a design, or the drawing PDF in a drawing. See [Technical Representation](06-technical-representation.md). |
+| **Actions** (⋯) | Uploads the technical representation: **Upload STEP File** in a design, or the drawing PDF in a drawing. See [Technical Representation](07-technical-representation.md). |
 
 ## Tabs
 

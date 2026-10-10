@@ -2,7 +2,7 @@
 title: Technical Representation
 ---
 
-# 6. Technical Representation
+# Technical Representation
 
 Besides item data, the add-in can attach a technical representation of a design to its Fusion Manage item:
 
@@ -21,8 +21,6 @@ The file is named after the item number (for example `PN-1001.step`).
    - Open the item in the Item panel and choose **Actions ▸ Upload STEP File**.
 3. A small **Uploading STEP File** window shows three stages: **Find item**, **Create STEP** and **Upload**, with a percentage where one can be measured.
 4. When it finishes you see a confirmation: `<name> was attached to the item in Fusion Manage`, or `A new version of <name> was uploaded to the item in Fusion Manage`.
-
-**[Screenshot: the Uploading STEP File progress window]**
 
 ### Which geometry is exported
 
@@ -61,4 +59,4 @@ Fusion can report an export as successful straight after a drawing opens while w
 
 ## Seeing the result
 
-Attached files appear on the **Files** tab of the item in the Item panel (see [Item Review & Release](07-item-review-and-release.md)). If the panel is open it shows a success toast and re-reads the item, so the file count updates.
+Attached files appear on the **Files** tab of the item in the Item panel (see [Item Review & Release](08-item-review-and-release.md)). If the panel is open it shows a success toast and re-reads the item, so the file count updates.

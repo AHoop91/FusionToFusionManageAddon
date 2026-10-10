@@ -1,41 +1,57 @@
 site_name: Fusion Manage Add-in for Fusion
 site_description: Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.
+site_url: https://ahoop91.github.io/FusionToFusionManageAddon/
+repo_url: https://github.com/AHoop91/FusionToFusionManageAddon
+repo_name: AHoop91/FusionToFusionManageAddon
 docs_dir: docs
 
 theme:
   name: material
   features:
-    - navigation.tabs
     - navigation.top
     - navigation.footer
+    - navigation.instant
+    - toc.follow
     - content.code.copy
     - search.suggest
     - search.highlight
   palette:
     - scheme: default
+      primary: indigo
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
+      primary: indigo
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
+  - pymdownx.details
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
   - Home: index.md
-  - 1. Overview: 01-overview.md
-  - 2. Installation and Authentication: 02-installation-and-authentication.md
-  - 3. Manufacturing Data Model: 03-manufacturing-data-model.md
-  - 4. Publishing Enterprise Items: 04-publishing-enterprise-items.md
-  - 5. BOM Synchronisation: 05-bom-synchronisation.md
-  - 6. Technical Representation: 06-technical-representation.md
-  - 7. Item Review & Release: 07-item-review-and-release.md
-  - 8. Troubleshooting and Limitations: 08-troubleshooting-and-limitations.md
+  - Overview: 01-overview.md
+  - End-to-End Workflow: 02-end-to-end-workflow.md
+  - Installation and Authentication: 03-installation-and-authentication.md
+  - Manufacturing Data Model: 04-manufacturing-data-model.md
+  - Publishing Enterprise Items: 05-publishing-enterprise-items.md
+  - BOM Synchronisation: 06-bom-synchronisation.md
+  - Technical Representation: 07-technical-representation.md
+  - Item Review & Release: 08-item-review-and-release.md
+  - Troubleshooting and Limitations: 09-troubleshooting-and-limitations.md

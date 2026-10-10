@@ -2,7 +2,7 @@
 title: Troubleshooting and Limitations
 ---
 
-# 8. Troubleshooting and Limitations
+# Troubleshooting and Limitations
 
 ## Sign-in problems
 
@@ -21,7 +21,7 @@ title: Troubleshooting and Limitations
 
 Hover over the button: the tooltip ends with *Not available:* and the reason.
 
-- Messages such as *The Items workspace ID is not set.* or *Items: tick Key on one mapping so existing items in Fusion Manage can be matched.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Manufacturing Data Model](03-manufacturing-data-model.md)).
+- Messages such as *The Items workspace ID is not set.* or *Items: tick Key on one mapping so existing items in Fusion Manage can be matched.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Manufacturing Data Model](04-manufacturing-data-model.md)).
 - For the drawing PDF, *The drawing has no references yet.*, *… none of the designs is loaded yet.* and *The top-level component of … has no part number.* mean the drawing is not ready. Wait for it to finish loading, or give the top-level component a part number. The add-in rechecks every couple of seconds.
 
 ## Publishing
@@ -72,7 +72,8 @@ Uploads write their STEP or PDF to a temporary folder (`MfgToFm_upload` under th
 
 For support, you can turn on verbose logging by setting the environment variable `MFGTOFM_DEBUG=1`, or by creating an empty file named `debug.flag` in the logs folder. Restart the add-in after changing it.
 
-> **Warning:** verbose logs include full request and response bodies, which may contain business data. Review them before sharing. Tokens are never written to logs.
+!!! warning "Verbose logs may contain business data"
+    Verbose logs include full request and response bodies, which may contain business data. Review them before sharing. Tokens are never written to logs.
 
 ## Limitations
 

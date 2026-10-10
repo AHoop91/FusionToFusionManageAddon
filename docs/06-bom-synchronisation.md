@@ -2,7 +2,7 @@
 title: BOM Synchronisation
 ---
 
-# 5. BOM Synchronisation
+# BOM Synchronisation
 
 The Publish panel compares the design's BOM with the BOM already in Fusion Manage, line by line, and sends only the differences. You decide how to handle anything that is in Fusion Manage but not in the design.
 
@@ -20,8 +20,6 @@ For each parent assembly, the lines of the design are matched to the Fusion Mana
 If a parent does not exist in Fusion Manage yet, every child is **New**.
 
 Fusion Manage often extends the design BOM with manufacturing lines such as oil or panels. For that reason lines found only in Fusion Manage are never deleted automatically.
-
-**[Screenshot: BOM table with New, Changed and Fusion Manage Only rows]**
 
 ## Filters
 
@@ -61,4 +59,4 @@ Each change becomes one request against the parent item's BOM:
 
 They are ordered so a line is freed before another takes its number: remove, renumber, update, add.
 
-All BOM requests are sent **after** every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding an item the BOM already has is reported by Fusion Manage as a duplicate and is recorded against that parent. See [Publishing Enterprise Items](04-publishing-enterprise-items.md) for retrying.
+All BOM requests are sent **after** every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding an item the BOM already has is reported by Fusion Manage as a duplicate and is recorded against that parent. See [Publishing Enterprise Items](05-publishing-enterprise-items.md) for retrying.

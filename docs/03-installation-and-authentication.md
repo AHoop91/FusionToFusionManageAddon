@@ -2,7 +2,7 @@
 title: Installation and Authentication
 ---
 
-# 2. Installation and Authentication
+# Installation and Authentication
 
 ## Install the add-in
 
@@ -11,8 +11,6 @@ title: Installation and Authentication
 3. Select **MfgToFm** in the list and click **Run**. Tick **Run on Startup** if you want it to load with Fusion.
 
 The manifest declares support for Windows and macOS. Once running, a **Fusion Manage** tab appears in the Design and Drawing workspaces.
-
-**[Screenshot: Scripts and Add-Ins dialog with MfgToFm selected]**
 
 ## Connection settings
 
@@ -35,9 +33,12 @@ A Client ID, a Tenant, a valid port and at least one scope are required before y
 
 ### Registering the APS application
 
-> **To be confirmed before publishing.** The steps for creating the APS application (application type, how to obtain the Client ID, any account or admin prerequisites) are not described in the add-in's source and have not been verified here. Add them from the Autodesk Platform Services documentation.
->
-> What the add-in itself requires of that application: it signs in with the OAuth 2.0 authorization-code flow with PKCE, **sends no client secret**, and redirects to the callback URL above, which must be registered exactly. The `data:read`, `data:write` and `data:search` scopes must be allowed.
+You need an application registered with Autodesk Platform Services (APS) to obtain a Client ID. See the [APS documentation](https://aps.autodesk.com/) for how to create one.
+
+!!! info "What the add-in requires of the APS application"
+    - It signs in with the OAuth 2.0 authorization-code flow with PKCE and **sends no client secret**.
+    - The callback URL shown above must be registered exactly.
+    - The `data:read`, `data:write` and `data:search` scopes must be allowed.
 
 ## Signing in
 
@@ -47,8 +48,6 @@ A Client ID, a Tenant, a valid port and at least one scope are required before y
 4. Back in Fusion the panel unlocks its tabs.
 
 Sign-in waits up to 180 seconds; click **Cancel** to abort it sooner. The add-in listens on `127.0.0.1` only, for that one redirect, and checks the `state` value to reject forged redirects. Access tokens are refreshed automatically shortly before they expire.
-
-**[Screenshot: the Sign in card in Preferences]**
 
 ### Where tokens are kept
 

@@ -2,7 +2,7 @@
 title: Manufacturing Data Model
 ---
 
-# 3. Manufacturing Data Model
+# Manufacturing Data Model
 
 The Manufacturing Data Model is where Fusion stores your design's components and their properties in the cloud. The add-in reads it through the Autodesk Platform Services Manufacturing Data Model GraphQL API, and **maps** each property you care about onto a field of a Fusion Manage workspace. That mapping is configured on the **Workspaces** tab of **Preferences**.
 
@@ -17,8 +17,6 @@ The add-in currently works with one workspace kind, **Items** ("Manufacturing it
 5. **Static values**: fields set to a fixed value on every published item.
 
 Click **Save** when you are done. Saving is refused while the settings have problems, and the message says what to fix.
-
-**[Screenshot: Workspaces tab with a validated Items workspace]**
 
 ## Field mapping
 
@@ -55,7 +53,7 @@ Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Man
 
 ### Picklist and number fields
 
-If the target field is a picklist, the add-in looks up the picklist's options and sends the matching option. A value with no matching option is left out and reported (see [Troubleshooting and Limitations](08-troubleshooting-and-limitations.md)). Numeric values are rounded to the precision the Fusion Manage field takes.
+If the target field is a picklist, the add-in looks up the picklist's options and sends the matching option. A value with no matching option is left out and reported (see [Troubleshooting and Limitations](09-troubleshooting-and-limitations.md)). Numeric values are rounded to the precision the Fusion Manage field takes.
 
 ## Static values
 
