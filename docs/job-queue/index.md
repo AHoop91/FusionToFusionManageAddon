@@ -8,11 +8,10 @@ Every publish is a **job**. The Job Queue shows the jobs that are waiting, runni
 
 Open it with **Fusion Manage ▸ Administration ▸ Job Queue**.
 
-## In this section
+## Request Files and Retry
 
-| Topic | What it covers |
-|---|---|
-| [Request Files and Retry](request-files-and-retry.md) | What each run keeps on disk, and how to send a folder again |
+What each run keeps on disk, and how to send a folder again. [Read more](request-files-and-retry.md).
+
 
 ## How jobs run
 

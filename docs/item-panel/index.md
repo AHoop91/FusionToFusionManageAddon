@@ -9,12 +9,14 @@ The **Item Panel** shows an item's Fusion Manage record inside Fusion, next to t
 !!! note "It is for reviewing"
     The panel reads the item. It does not move it through its workflow, and its only change to the item is attaching files you choose to upload. Release happens in Fusion Manage. See [Review and Release](review-and-release.md).
 
-## In this section
+## Tabs
 
-| Topic | What it covers |
-|---|---|
-| [Tabs](tabs.md) | Item, Files, Bill of Materials, Where Used and Associated Workflows |
-| [Review and Release](review-and-release.md) | A routine for reviewing after a publish, and how the item is released |
+Item, Files, Bill of Materials, Where Used and Associated Workflows. [Read more](tabs.md).
+
+## Review and Release
+
+A routine for reviewing after a publish, and how the item is released. [Read more](review-and-release.md).
+
 
 ## Open the Item Panel
 

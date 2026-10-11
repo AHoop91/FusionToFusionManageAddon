@@ -6,17 +6,29 @@ title: Publishing
 
 Publishing is how a released design becomes manufacturing items in Fusion Manage. This section covers everything the add-in sends, from creating and updating items to the BOM and the technical representations.
 
-## What publishing covers
-
-| Topic | What it covers |
-|---|---|
-| [Item Creation](item-creation.md) | What happens when no item exists yet for a component |
-| [Item Update](item-update.md) | What happens when the item already exists, and what is left alone |
-| [Bill of Materials](bill-of-materials.md) | Comparing and synchronising the BOM, and choosing what to keep |
-| [STEP File](step-file.md) | Attaching a STEP file of a component, manually |
-| [Drawing Representation](drawing-representation.md) | Attaching a PDF of a drawing, manually |
 
 Items and BOMs are sent by **Publish**. STEP files and drawing PDFs are different: they are **never sent by a publish** and are uploaded one at a time by you. See [Technical representations are manual](#technical-representations-are-manual).
+
+## Item Creation
+
+What happens when no item exists yet for a component. [Read more](item-creation.md).
+
+## Item Update
+
+What happens when the item already exists, and what is left alone. [Read more](item-update.md).
+
+## Bill of Materials
+
+Comparing and synchronising the BOM, and choosing what to keep. [Read more](bill-of-materials.md).
+
+## STEP File
+
+Attaching a STEP file of a component, manually. [Read more](step-file.md).
+
+## Drawing Representation
+
+Attaching a PDF of a drawing, manually. [Read more](drawing-representation.md).
+
 
 Runs are tracked in the [Job Queue](../job-queue/index.md), and the result can be reviewed in the [Item Panel](../item-panel/index.md).
 

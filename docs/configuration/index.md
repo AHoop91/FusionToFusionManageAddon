@@ -6,12 +6,14 @@ title: Configuration
 
 Configuration tells the add-in where design data comes from and where in Fusion Manage it goes. Do it once, before the first publish.
 
-## In this section
+## Manufacturing Data Model
 
-| Topic | What it covers |
-|---|---|
-| [Manufacturing Data Model](data-model.md) | What the add-in reads from the design: components, part numbers, properties, physical properties and thumbnails |
-| [Workspace and Field Mapping](field-mapping.md) | The Items workspace, the default fields, the Type picklist, static values and how component properties map to Fusion Manage fields |
+What the add-in reads from the design: components, part numbers, properties, physical properties and thumbnails. [Read more](data-model.md).
+
+## Workspace and Field Mapping
+
+The Items workspace, the default fields, the Type picklist, static values and how component properties map to Fusion Manage fields. [Read more](field-mapping.md).
+
 
 ## Order of work
 
