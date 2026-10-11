@@ -1,0 +1,4 @@
+/* Use the full width of the window: navigation on the left, contents on the right. */
+.md-grid {
+  max-width: none;
+}

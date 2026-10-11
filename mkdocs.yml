@@ -3,6 +3,9 @@ site_description: Publish Manufacturing Data Model items, BOMs and files from Fu
 site_url: https://ahoop91.github.io/FusionToFusionManageAddon/
 docs_dir: docs
 
+extra_css:
+  - stylesheets/extra.css
+
 theme:
   name: material
   features:
