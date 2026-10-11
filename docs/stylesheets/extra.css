@@ -28,3 +28,14 @@
   max-width: 100%;
   height: auto;
 }
+
+/* Wider left menu so long titles fit on one line. */
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary {
+    width: 16rem;
+  }
+
+  .md-sidebar--primary .md-sidebar__scrollwrap {
+    width: 16rem;
+  }
+}
