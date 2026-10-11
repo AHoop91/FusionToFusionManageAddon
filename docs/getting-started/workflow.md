@@ -46,8 +46,8 @@ flowchart TB
     M3 --> M4
     E2 -. "later engineering change: publish again" .-> B1
 
-    classDef eng fill:transparent,stroke:#6366f1,stroke-width:2px
-    classDef bridge fill:transparent,stroke:#4f46e5,stroke-width:4px
+    classDef eng fill:transparent,stroke:#3b82c4,stroke-width:2px
+    classDef bridge fill:transparent,stroke:#1d4f91,stroke-width:4px
     classDef mfg fill:transparent,stroke:#059669,stroke-width:2px
     class E1,E2 eng
     class B1,B2 bridge

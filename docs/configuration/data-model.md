@@ -18,7 +18,7 @@ flowchart TB
     M -->|"Read only"| A["<b>Fusion Manage add-in</b>"]
 
     classDef source fill:transparent,stroke:#94a3b8,stroke-width:2px
-    classDef addin fill:transparent,stroke:#4f46e5,stroke-width:4px
+    classDef addin fill:transparent,stroke:#1d4f91,stroke-width:4px
     class F,M source
     class A addin
 ```

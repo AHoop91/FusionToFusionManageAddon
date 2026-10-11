@@ -42,7 +42,7 @@ flowchart TB
     ADDIN <-->|"4. Compared, then created or updated"| FM
 
     classDef source fill:transparent,stroke:#94a3b8,stroke-width:2px
-    classDef addin fill:transparent,stroke:#4f46e5,stroke-width:4px
+    classDef addin fill:transparent,stroke:#1d4f91,stroke-width:4px
     classDef target fill:transparent,stroke:#059669,stroke-width:2px
     class DESIGN,MDM source
     class ADDIN addin
