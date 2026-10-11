@@ -120,7 +120,7 @@ How values are prepared:
 
 Every component is created or updated first, **then** the BOM lines are sent. A BOM line needs both the parent and the child to exist, so BOMs always go last. See [Bill of Materials](#bill-of-materials).
 
-If an item fails to be created, the other items carry on. The failed item's BOM is skipped, because the item is not there for it. You can retry from the [Job Queue](../job-queue/index.md#): what Fusion Manage already accepted is skipped, so nothing is created twice.
+If an item fails to be created, the other items carry on. The failed item's BOM is skipped, because the item is not there for it. You can retry from the [Job Queue](../job-queue/index.md#request-files-and-retry): what Fusion Manage already accepted is skipped, so nothing is created twice.
 
 ### Permission needed
 
