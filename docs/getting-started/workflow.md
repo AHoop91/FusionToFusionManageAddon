@@ -74,7 +74,7 @@ Linking the two is the **part number**. A component's part number in Fusion is t
 One-time setup:
 
 - The add-in is installed and you are signed in ([Installation and Authentication](installation.md)).
-- The Items workspace is configured, with field mappings and a match key ([Workspace and Field Mapping](../configuration/field-mapping.md)).
+- The Items workspace is configured, with field mappings and a match key ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
 - Every user who publishes holds the Fusion Manage permissions listed in [Installation and Authentication](installation.md#permissions-in-fusion-manage).
 
 ---
@@ -161,7 +161,7 @@ Each group checks the item against the design. In Fusion, open the **Item panel*
 | Manufacturing: is the package complete? | **Bill of Materials** tab, including the manufacturing lines; **Where Used** for the assemblies that hold the item. |
 | Everyone: is anything already in flight? | **Associated Workflows** tab for change orders that reference the item and their current state. |
 
-See [Item Panel Tabs](../item-panel/tabs.md) for what each tab shows, and [Review and Release](../item-panel/review-and-release.md) for the routine.
+See [Item Panel Tabs](../item-panel/index.md#) for what each tab shows, and [Review and Release](../item-panel/index.md#) for the routine.
 
 If the review finds a problem, correct it at its source. A design problem is fixed in Fusion, released, and published again. A manufacturing problem is fixed in Fusion Manage. Then review again.
 

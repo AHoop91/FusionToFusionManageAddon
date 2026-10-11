@@ -25,7 +25,7 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
     Install the add-in, sign in, and map your properties to Fusion Manage fields.
 
     [Installation and Authentication](getting-started/installation.md) ·
-    [Workspace and Field Mapping](configuration/field-mapping.md)
+    [Workspace and Field Mapping](configuration/index.md#workspace-and-field-mapping)
 
 -   **Publishing**
 
@@ -58,8 +58,8 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
 
 **Configuration**
 
-- [Manufacturing Data Model](configuration/data-model.md)
-- [Workspace and Field Mapping](configuration/field-mapping.md)
+- [Manufacturing Data Model](configuration/index.md#manufacturing-data-model)
+- [Workspace and Field Mapping](configuration/index.md#workspace-and-field-mapping)
 
 **Publishing**
 
@@ -73,13 +73,13 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
 **Item Panel**
 
 - [Item Panel](item-panel/index.md)
-- [Tabs](item-panel/tabs.md)
-- [Review and Release](item-panel/review-and-release.md)
+- [Tabs](item-panel/index.md#)
+- [Review and Release](item-panel/index.md#)
 
 **Job Queue**
 
 - [Job Queue](job-queue/index.md)
-- [Request Files and Retry](job-queue/request-files-and-retry.md)
+- [Request Files and Retry](job-queue/index.md#)
 
 **Reference**
 

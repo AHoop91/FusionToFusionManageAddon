@@ -14,7 +14,7 @@ Runs are tracked in the [Job Queue](../job-queue/index.md), and the result can b
 
 ## Before you start
 
-- You are signed in and the Items workspace is configured ([Installation and Authentication](../getting-started/installation.md), [Workspace and Field Mapping](../configuration/field-mapping.md)).
+- You are signed in and the Items workspace is configured ([Installation and Authentication](../getting-started/installation.md), [Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
 - The design is saved and its components have part numbers. The part number becomes the item number.
 - Your Fusion Manage user holds the permissions listed in the Items workspace: View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM. Otherwise the panel shows a "no access" message naming what is missing.
 
@@ -73,7 +73,7 @@ When the run ends you get a message box with **Total Items Processed**, **Total 
 
     Save the image as `docs/images/publish-complete.png`, then replace this box with `![Publish complete message](../images/publish-complete.png)`.
 
-The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/request-files-and-retry.md).
+The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/index.md#).
 
 ## Technical representations are manual
 
@@ -97,7 +97,7 @@ For each component in the Publish panel, the add-in searches the Items workspace
 
     Save the image as `docs/images/item-new.png`, then replace this box with `![Publish panel with a component marked New](../images/item-new.png)`.
 
-The search is by item number only. Make sure your workspace maps the part number to the item number field (`NUMBER` in the default mapping). See [Workspace and Field Mapping](../configuration/field-mapping.md#default-fields).
+The search is by item number only. Make sure your workspace maps the part number to the item number field (`NUMBER` in the default mapping). See [Workspace and Field Mapping](../configuration/index.md#default-fields).
 
 ### What a new item receives
 
@@ -105,14 +105,14 @@ A new item is created with:
 
 | Content | Where it comes from |
 |---|---|
-| Every **mapped property** that has a value | The Manufacturing Data Model, through your [field mapping](../configuration/field-mapping.md) |
+| Every **mapped property** that has a value | The Manufacturing Data Model, through your [field mapping](../configuration/index.md#workspace-and-field-mapping) |
 | Every **static value** | Your workspace settings. Static values are set on every new item |
 | The **thumbnail** | The Data Model, when the thumbnail is mapped to an image field |
 | The **component link** | The Fusion Manage component for the part, when a linking field is chosen |
 
 How values are prepared:
 
-- **Picklist fields** receive the matching option. A value that matches no option is left out and recorded, and the rest of the item is still created. See the `Type` example in [Default fields](../configuration/field-mapping.md#the-type-field-and-its-picklist).
+- **Picklist fields** receive the matching option. A value that matches no option is left out and recorded, and the rest of the item is still created. See the `Type` example in [Default fields](../configuration/index.md#the-type-field-and-its-picklist).
 - **Number fields** are rounded to the precision the Fusion Manage field takes.
 - **Empty values** are not sent. The run records *No value in the Data Model, not sent*, with the field names.
 
@@ -120,7 +120,7 @@ How values are prepared:
 
 Every component is created or updated first, **then** the BOM lines are sent. A BOM line needs both the parent and the child to exist, so BOMs always go last. See [Bill of Materials](#bill-of-materials).
 
-If an item fails to be created, the other items carry on. The failed item's BOM is skipped, because the item is not there for it. You can retry from the [Job Queue](../job-queue/request-files-and-retry.md): what Fusion Manage already accepted is skipped, so nothing is created twice.
+If an item fails to be created, the other items carry on. The failed item's BOM is skipped, because the item is not there for it. You can retry from the [Job Queue](../job-queue/index.md#): what Fusion Manage already accepted is skipped, so nothing is created twice.
 
 ### Permission needed
 
@@ -323,7 +323,7 @@ Only one upload runs at a time. Starting another reports that a file is already 
 
 ### Seeing the result
 
-The file appears on the **Files** tab of the item in the [Item Panel](../item-panel/tabs.md#files). If the panel is open it shows a success toast and re-reads the item, so the file count updates.
+The file appears on the **Files** tab of the item in the [Item Panel](../item-panel/index.md#files). If the panel is open it shows a success toast and re-reads the item, so the file count updates.
 
 ## Drawing Representation
 
@@ -375,4 +375,4 @@ Fusion can report an export as successful straight after a drawing opens while w
 
 ### Seeing the result
 
-The PDF appears on the **Files** tab of the item in the [Item Panel](../item-panel/tabs.md#files). If the panel is open it shows a success toast and re-reads the item, so the file count updates.
+The PDF appears on the **Files** tab of the item in the [Item Panel](../item-panel/index.md#files). If the panel is open it shows a success toast and re-reads the item, so the file count updates.
