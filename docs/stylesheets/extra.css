@@ -5,12 +5,12 @@
 .md-tabs__list,
 .md-footer__inner,
 .md-footer-meta__inner {
-  max-width: none;
+  max-width: none !important;
 }
 
 .md-content,
 .md-content__inner {
-  max-width: none;
+  max-width: none !important;
 }
 
 /* Let every page's tables and images use the width, not only the home page's cards. */
