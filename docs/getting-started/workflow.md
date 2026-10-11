@@ -120,7 +120,7 @@ What crosses, and what does not:
 !!! tip "Keep engineering and manufacturing state separate"
     Mapping Fusion's **Revision** or **Lifecycle state** is optional. If you do, map them to informational fields, for example a text field recording the engineering revision, and not to the field that drives the item's own lifecycle. Otherwise the two lifecycles are tied together again.
 
-For the full procedure see [Publishing](../publishing/index.md) and [Bill of Materials](../publishing/bill-of-materials.md).
+For the full procedure see [Publishing](../publishing/index.md) and [Bill of Materials](../publishing/index.md#bill-of-materials).
 
 **Outcome:** every component exists as a manufacturing item in the Items workspace, with its properties, thumbnail and BOM.
 
@@ -135,9 +135,9 @@ The published item is the foundation. This stage adds what the supply chain need
 
 | Task | How |
 |---|---|
-| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([STEP File](../publishing/step-file.md)). |
-| Attach a PDF of the drawing | Open the drawing and choose **Upload Drawing Representation To Fusion Manage Item** ([Drawing Representation](../publishing/drawing-representation.md)). |
-| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([Bill of Materials](../publishing/bill-of-materials.md#add-items)). |
+| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([STEP File](../publishing/index.md#step-file)). |
+| Attach a PDF of the drawing | Open the drawing and choose **Upload Drawing Representation To Fusion Manage Item** ([Drawing Representation](../publishing/index.md#drawing-representation)). |
+| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([Bill of Materials](../publishing/index.md#add-items)). |
 | Keep or change manufacturing lines that only Fusion Manage has | Review the **Fusion Manage Only** lines. They are kept unless you remove them. |
 | Complete information that engineering does not supply | Edit it in Fusion Manage. |
 

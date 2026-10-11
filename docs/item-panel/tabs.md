@@ -25,7 +25,7 @@ The item's sections and fields as label and value, and matrices as grids. Sectio
 
     Save the image as `docs/images/tab-files.png`, then replace this box with `![Files tab](../images/tab-files.png)`.
 
-The files attached to the item, with a type icon, sortable by any column. This is where you check that a [STEP file](../publishing/step-file.md) or [drawing PDF](../publishing/drawing-representation.md) arrived. Empty state: *No files attached*.
+The files attached to the item, with a type icon, sortable by any column. This is where you check that a [STEP file](../publishing/index.md#step-file) or [drawing PDF](../publishing/index.md#drawing-representation) arrived. Empty state: *No files attached*.
 
 ## Bill of Materials
 
@@ -34,7 +34,7 @@ The files attached to the item, with a type icon, sortable by any column. This i
 
     Save the image as `docs/images/tab-bom.png`, then replace this box with `![Bill of Materials tab](../images/tab-bom.png)`.
 
-The item's lines as a tree, with the same columns as Fusion Manage's own BOM view, a **Views** selector and a column chooser. Use it to check the BOM you published. See [Bill of Materials](../publishing/bill-of-materials.md). Empty state: *No Bill of Materials*.
+The item's lines as a tree, with the same columns as Fusion Manage's own BOM view, a **Views** selector and a column chooser. Use it to check the BOM you published. See [Bill of Materials](../publishing/index.md#bill-of-materials). Empty state: *No Bill of Materials*.
 
 ## Where Used
 

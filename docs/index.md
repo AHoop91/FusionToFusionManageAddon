@@ -64,11 +64,11 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
 **Publishing**
 
 - [Publishing](publishing/index.md)
-- [Item Creation](publishing/item-creation.md)
-- [Item Update](publishing/item-update.md)
-- [Bill of Materials](publishing/bill-of-materials.md)
-- [STEP File](publishing/step-file.md)
-- [Drawing Representation](publishing/drawing-representation.md)
+- [Item Creation](publishing/index.md#item-creation)
+- [Item Update](publishing/index.md#item-update)
+- [Bill of Materials](publishing/index.md#bill-of-materials)
+- [STEP File](publishing/index.md#step-file)
+- [Drawing Representation](publishing/index.md#drawing-representation)
 
 **Item Panel**
 

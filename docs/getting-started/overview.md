@@ -18,8 +18,8 @@ Technically, it reads the design's components, properties and thumbnails from th
 | Read components, properties and BOMs from the Manufacturing Data Model | [Manufacturing Data Model](../configuration/data-model.md) |
 | Map those properties to Fusion Manage fields | [Workspace and Field Mapping](../configuration/field-mapping.md) |
 | Create and update items in a Fusion Manage workspace | [Publishing](../publishing/index.md) |
-| Compare and synchronise the design BOM with the Fusion Manage BOM | [Bill of Materials](../publishing/bill-of-materials.md) |
-| Attach a STEP file or a drawing PDF to an item, manually and only when you choose to | [STEP File](../publishing/step-file.md), [Drawing Representation](../publishing/drawing-representation.md) |
+| Compare and synchronise the design BOM with the Fusion Manage BOM | [Bill of Materials](../publishing/index.md#bill-of-materials) |
+| Attach a STEP file or a drawing PDF to an item, manually and only when you choose to | [STEP File](../publishing/index.md#step-file), [Drawing Representation](../publishing/index.md#drawing-representation) |
 | Browse an item's fields, files, BOM, where-used and workflows inside Fusion | [Item Panel](../item-panel/index.md) |
 | Follow publishes that are waiting, running and finished, and retry a failed one | [Job Queue](../job-queue/index.md) |
 

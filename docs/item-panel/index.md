@@ -51,7 +51,7 @@ If no item has the number, the panel says **No item exists for …** and suggest
 | Title and status line | The item's title, and a line with its version, lifecycle state and Type. |
 | **Open in browser** | Opens the item in Fusion Manage in your web browser. |
 | **Refresh** | Reads the item again from Fusion Manage. |
-| **Actions** (⋯) | Uploads the technical representation: **Upload STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/step-file.md) and [Drawing Representation](../publishing/drawing-representation.md). |
+| **Actions** (⋯) | Uploads the technical representation: **Upload STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). |
 
 ## Required permission
 
