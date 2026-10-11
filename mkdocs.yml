@@ -53,8 +53,22 @@ nav:
   - Overview: getting-started/overview.md
   - End-to-End Workflow: getting-started/workflow.md
   - Installation and Authentication: getting-started/installation.md
-  - Configuration: configuration/index.md
-  - Publishing: publishing/index.md
-  - Item Panel: item-panel/index.md
-  - Job Queue: job-queue/index.md
+  - Configuration:
+      - configuration/index.md
+      - Manufacturing Data Model: configuration/data-model.md
+      - Workspace and Field Mapping: configuration/field-mapping.md
+  - Publishing:
+      - publishing/index.md
+      - Item Creation: publishing/item-creation.md
+      - Item Update: publishing/item-update.md
+      - Bill of Materials: publishing/bill-of-materials.md
+      - STEP File: publishing/step-file.md
+      - Drawing Representation: publishing/drawing-representation.md
+  - Item Panel:
+      - item-panel/index.md
+      - Tabs: item-panel/tabs.md
+      - Review and Release: item-panel/review-and-release.md
+  - Job Queue:
+      - job-queue/index.md
+      - Request Files and Retry: job-queue/request-files-and-retry.md
   - Troubleshooting and Limitations: reference/troubleshooting.md
