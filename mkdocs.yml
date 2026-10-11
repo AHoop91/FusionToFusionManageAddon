@@ -50,9 +50,10 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Overview: getting-started/overview.md
-  - End-to-End Workflow: getting-started/workflow.md
-  - Installation and Authentication: getting-started/installation.md
+  - Getting Started:
+      - Overview: getting-started/overview.md
+      - End-to-End Workflow: getting-started/workflow.md
+      - Installation and Authentication: getting-started/installation.md
   - Configuration: configuration/index.md
   - Publishing: publishing/index.md
   - Item Panel: item-panel/index.md
