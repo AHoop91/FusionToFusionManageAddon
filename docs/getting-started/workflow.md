@@ -52,9 +52,9 @@ flowchart LR
     B2 ==> M2
     E2 -. "later engineering change:<br/>publish again" .-> B1
 
-    classDef eng fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
-    classDef bridge fill:#4f46e5,stroke:#3730a3,color:#ffffff
-    classDef mfg fill:#ecfdf5,stroke:#059669,color:#064e3b
+    classDef eng fill:transparent,stroke:#6366f1,stroke-width:2px
+    classDef bridge fill:transparent,stroke:#4f46e5,stroke-width:4px
+    classDef mfg fill:transparent,stroke:#059669,stroke-width:2px
     class E1,E2 eng
     class B1,B2 bridge
     class M1,M2,M3,M4 mfg
@@ -79,9 +79,9 @@ Linking the two is the **part number**. A component's part number in Fusion is t
 
 One-time setup:
 
-- The add-in is installed and you are signed in ([Installation and Authentication](03-installation-and-authentication.md)).
-- The Items workspace is configured, with field mappings and a match key ([Workspace and Field Mapping](05-workspace-and-field-mapping.md)).
-- Every user who publishes holds the Fusion Manage permissions listed in [Installation and Authentication](03-installation-and-authentication.md#permissions-in-fusion-manage).
+- The add-in is installed and you are signed in ([Installation and Authentication](installation.md)).
+- The Items workspace is configured, with field mappings and a match key ([Workspace and Field Mapping](../configuration/field-mapping.md)).
+- Every user who publishes holds the Fusion Manage permissions listed in [Installation and Authentication](installation.md#permissions-in-fusion-manage).
 
 ---
 
@@ -126,7 +126,7 @@ What crosses, and what does not:
 !!! tip "Keep engineering and manufacturing state separate"
     Mapping Fusion's **Revision** or **Lifecycle state** is optional. If you do, map them to informational fields, for example a text field recording the engineering revision, and not to the field that drives the item's own lifecycle. Otherwise the two lifecycles are tied together again.
 
-For the full procedure see [Publishing Enterprise Items](06-publishing-enterprise-items.md) and [BOM Synchronisation](07-bom-synchronisation.md).
+For the full procedure see [Publishing](../publishing/index.md) and [Bill of Materials](../publishing/bill-of-materials.md).
 
 **Outcome:** every component exists as a manufacturing item in the Items workspace, with its properties, thumbnail and BOM.
 
@@ -141,9 +141,9 @@ The published item is the foundation. This stage adds what the supply chain need
 
 | Task | How |
 |---|---|
-| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([Technical Representation](08-technical-representation.md)). |
-| Attach a PDF of the drawing | Open the drawing and choose **Upload Drawing Representation To Fusion Manage Item**. |
-| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([BOM Synchronisation](07-bom-synchronisation.md#add-items)). |
+| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([STEP File](../publishing/step-file.md)). |
+| Attach a PDF of the drawing | Open the drawing and choose **Upload Drawing Representation To Fusion Manage Item** ([Drawing Representation](../publishing/drawing-representation.md)). |
+| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([Bill of Materials](../publishing/bill-of-materials.md#add-items)). |
 | Keep or change manufacturing lines that only Fusion Manage has | Review the **Fusion Manage Only** lines. They are kept unless you remove them. |
 | Complete information that engineering does not supply | Edit it in Fusion Manage. |
 
@@ -167,7 +167,7 @@ Each group checks the item against the design. In Fusion, open the **Item panel*
 | Manufacturing: is the package complete? | **Bill of Materials** tab, including the manufacturing lines; **Where Used** for the assemblies that hold the item. |
 | Everyone: is anything already in flight? | **Associated Workflows** tab for change orders that reference the item and their current state. |
 
-See [Item Review & Release](09-item-review-and-release.md) for what each tab shows.
+See [Item Panel Tabs](../item-panel/tabs.md) for what each tab shows, and [Review and Release](../item-panel/review-and-release.md) for the routine.
 
 If the review finds a problem, correct it at its source. A design problem is fixed in Fusion, released, and published again. A manufacturing problem is fixed in Fusion Manage. Then review again.
 

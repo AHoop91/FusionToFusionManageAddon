@@ -4,9 +4,9 @@ title: Workspace and Field Mapping
 
 # Workspace and Field Mapping
 
-The add-in reads each component's properties from the [Manufacturing Data Model](04-manufacturing-data-model.md). This page explains how you tell it where to put them: which Fusion Manage workspace to write to, and which Data Model property fills which Fusion Manage field. That is called the **mapping**, and you set it on the **Workspaces** tab of **Preferences**.
+The add-in reads each component's properties from the [Manufacturing Data Model](data-model.md). This page explains how you tell it where to put them: which Fusion Manage workspace to write to, and which Data Model property fills which Fusion Manage field. That is called the **mapping**, and you set it on the **Workspaces** tab of **Preferences**.
 
-You normally set it up once, then share it with colleagues by export and import ([Installation and Authentication](03-installation-and-authentication.md#sharing-a-setup-with-colleagues)).
+You normally set it up once, then share it with colleagues by export and import ([Installation and Authentication](../getting-started/installation.md#sharing-a-setup-with-colleagues)).
 
 ## The Items workspace
 
@@ -45,7 +45,7 @@ Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Man
 
 ### Picklist and number fields
 
-If the target field is a picklist, the add-in looks up the picklist's options and sends the matching option. A value with no matching option is left out and reported (see [Troubleshooting and Limitations](10-troubleshooting-and-limitations.md)). Numeric values are rounded to the precision the Fusion Manage field takes.
+If the target field is a picklist, the add-in looks up the picklist's options and sends the matching option. A value with no matching option is left out and reported (see [Troubleshooting and Limitations](../reference/troubleshooting.md)). Numeric values are rounded to the precision the Fusion Manage field takes.
 
 ## Default fields
 
@@ -69,7 +69,7 @@ If the target field is a picklist, the add-in looks up the picklist's options an
 | 9 | Physical Length | `LENGTH` | Bounding box |
 | 10 | Physical Mass | `ITEM_WEIGHT` | Converted to kilograms |
 
-Dimensions are sent as plain numbers in the unit the Data Model reports. Only mass is converted, to kilograms, because that is the unit of the Fusion Manage weight field. Physical properties are only available once the Data Model has finished calculating them ([Manufacturing Data Model](04-manufacturing-data-model.md#physical-properties)).
+Dimensions are sent as plain numbers in the unit the Data Model reports. Only mass is converted, to kilograms, because that is the unit of the Fusion Manage weight field. Physical properties are only available once the Data Model has finished calculating them ([Manufacturing Data Model](data-model.md#physical-properties)).
 
 ### Fields your workspace must have
 
@@ -94,8 +94,8 @@ flowchart LR
     end
     P -->|"value must match<br/>an option exactly"| F
 
-    classDef src fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
-    classDef dst fill:#ecfdf5,stroke:#059669,color:#064e3b
+    classDef src fill:transparent,stroke:#94a3b8,stroke-width:2px
+    classDef dst fill:transparent,stroke:#059669,stroke-width:2px
     class P src
     class F dst
 ```
@@ -143,7 +143,7 @@ These are the values in use. Both systems must have every one of them:
 
 - **Spell each value the same way in both systems.** The add-in ignores capital letters and spaces at either end when it compares, so `raw material` still matches `Raw Material`. Any other difference, such as `Raw Materials` or `Spare Parts`, does not match. Do not rely on the leniency: copy the value exactly.
 - **Order does not matter.** Only the set of values does.
-- **A value in Fusion that is not in Fusion Manage** is not sent. The rest of the item still is, and the run records *'…' is not an option of TYPE in Fusion Manage, so it was not sent*. See [Troubleshooting and Limitations](10-troubleshooting-and-limitations.md).
+- **A value in Fusion that is not in Fusion Manage** is not sent. The rest of the item still is, and the run records *'…' is not an option of TYPE in Fusion Manage, so it was not sent*. See [Troubleshooting and Limitations](../reference/troubleshooting.md).
 - **A value in Fusion Manage that is not in Fusion** can never be chosen by a designer, so it never arrives from a publish. It can only be set in Fusion Manage by hand.
 
 !!! warning "Check both lists before you publish"

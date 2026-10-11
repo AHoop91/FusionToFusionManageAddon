@@ -1,13 +1,13 @@
 site_name: Fusion Manage Add-in for Fusion
 site_description: Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.
 site_url: https://ahoop91.github.io/FusionToFusionManageAddon/
-repo_url: https://github.com/AHoop91/FusionToFusionManageAddon
-repo_name: AHoop91/FusionToFusionManageAddon
 docs_dir: docs
 
 theme:
   name: material
   features:
+    - navigation.sections
+    - navigation.indexes
     - navigation.top
     - navigation.footer
     - navigation.instant
@@ -46,13 +46,26 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Overview: 01-overview.md
-  - End-to-End Workflow: 02-end-to-end-workflow.md
-  - Installation and Authentication: 03-installation-and-authentication.md
-  - Manufacturing Data Model: 04-manufacturing-data-model.md
-  - Workspace and Field Mapping: 05-workspace-and-field-mapping.md
-  - Publishing Enterprise Items: 06-publishing-enterprise-items.md
-  - BOM Synchronisation: 07-bom-synchronisation.md
-  - Technical Representation: 08-technical-representation.md
-  - Item Review & Release: 09-item-review-and-release.md
-  - Troubleshooting and Limitations: 10-troubleshooting-and-limitations.md
+  - Getting Started:
+      - Overview: getting-started/overview.md
+      - End-to-End Workflow: getting-started/workflow.md
+      - Installation and Authentication: getting-started/installation.md
+  - Configuration:
+      - Manufacturing Data Model: configuration/data-model.md
+      - Workspace and Field Mapping: configuration/field-mapping.md
+  - Publishing:
+      - publishing/index.md
+      - Item Creation: publishing/item-creation.md
+      - Item Update: publishing/item-update.md
+      - Bill of Materials: publishing/bill-of-materials.md
+      - STEP File: publishing/step-file.md
+      - Drawing Representation: publishing/drawing-representation.md
+  - Item Panel:
+      - item-panel/index.md
+      - Tabs: item-panel/tabs.md
+      - Review and Release: item-panel/review-and-release.md
+  - Job Queue:
+      - job-queue/index.md
+      - Request Files and Retry: job-queue/request-files-and-retry.md
+  - Reference:
+      - Troubleshooting and Limitations: reference/troubleshooting.md

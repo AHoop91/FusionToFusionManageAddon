@@ -1,8 +1,8 @@
 ---
-title: BOM Synchronisation
+title: Bill of Materials
 ---
 
-# BOM Synchronisation
+# Bill of Materials
 
 The Publish panel compares the design's BOM with the BOM already in Fusion Manage, line by line, and sends only the differences. You decide how to handle anything that is in Fusion Manage but not in the design.
 
@@ -59,4 +59,4 @@ Each change becomes one request against the parent item's BOM:
 
 They are ordered so a line is freed before another takes its number: remove, renumber, update, add.
 
-All BOM requests are sent **after** every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding an item the BOM already has is reported by Fusion Manage as a duplicate and is recorded against that parent. See [Publishing Enterprise Items](06-publishing-enterprise-items.md) for retrying.
+All BOM requests are sent **after** every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding an item the BOM already has is reported by Fusion Manage as a duplicate and is recorded against that parent. See [Publishing Enterprise Items](index.md) for retrying.

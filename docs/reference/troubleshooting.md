@@ -21,7 +21,7 @@ title: Troubleshooting and Limitations
 
 Hover over the button: the tooltip ends with *Not available:* and the reason.
 
-- Messages such as *The Items workspace ID is not set.* or *Items: tick Key on one mapping so existing items in Fusion Manage can be matched.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Workspace and Field Mapping](05-workspace-and-field-mapping.md)).
+- Messages such as *The Items workspace ID is not set.* or *Items: tick Key on one mapping so existing items in Fusion Manage can be matched.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Workspace and Field Mapping](../configuration/field-mapping.md)).
 - For the drawing PDF, *The drawing has no references yet.*, *… none of the designs is loaded yet.* and *The top-level component of … has no part number.* mean the drawing is not ready. Wait for it to finish loading, or give the top-level component a part number. The add-in rechecks every couple of seconds.
 
 ## Publishing
@@ -34,8 +34,8 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 | **Could not find the Data Model id of the open design.** | The design is not saved to the cloud, or its Data Model reference is not available yet. Save the design and try again. |
 | **n items match … Choose one.** (status **Choose item**) | More than one Fusion Manage item has this item number. Pick the right one in the Details Panel. |
 | **No value in the Data Model, not sent: …** | A mapped property is empty in the Data Model, so the field is left alone. Fill the property in Fusion if you want it published. |
-| **'…' is not an option of … in Fusion Manage, so it was not sent.** | The target field is a picklist and the value matches none of its options. Add the option in Fusion Manage or correct the value. For `Type`, make sure both picklists have the same values (see [Default fields](05-workspace-and-field-mapping.md#the-type-field-and-its-picklist)). The rest of the item is still sent. |
-| A row is missing after **Add default fields** | The workspace has no field with that field ID, and defaults for missing fields are skipped without a warning. Add the field in Fusion Manage with the exact ID (see [Default fields](05-workspace-and-field-mapping.md#default-fields)), validate the workspace, and load the defaults again. |
+| **'…' is not an option of … in Fusion Manage, so it was not sent.** | The target field is a picklist and the value matches none of its options. Add the option in Fusion Manage or correct the value. For `Type`, make sure both picklists have the same values (see [Default fields](../configuration/field-mapping.md#the-type-field-and-its-picklist)). The rest of the item is still sent. |
+| A row is missing after **Add default fields** | The workspace has no field with that field ID, and defaults for missing fields are skipped without a warning. Add the field in Fusion Manage with the exact ID (see [Default fields](../configuration/field-mapping.md#default-fields)), validate the workspace, and load the defaults again. |
 | **No thumbnail** (*The Data Model has no thumbnail for this component yet.*) | The thumbnail has not been generated yet. Open the design and let Fusion finish processing, then publish again. |
 | A "component link" step failed | No component was found for the item. Check the component-linking field and that the component exists in the picklist. The item itself is still published. |
 | Some items failed and others did not | Open the **Job Queue** for the reason of each row. Fix the cause, then use **Send to Fusion Manage** on the run's folder: what Fusion Manage already accepted is skipped. |

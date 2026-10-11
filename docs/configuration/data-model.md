@@ -4,7 +4,7 @@ title: Manufacturing Data Model
 
 # Manufacturing Data Model
 
-The Manufacturing Data Model is the source of everything the add-in publishes. This page explains what it is, what the add-in reads from it, and what has to be true of your design for the data to be there. How that data is then matched to Fusion Manage fields is covered in [Workspace and Field Mapping](05-workspace-and-field-mapping.md).
+The Manufacturing Data Model is the source of everything the add-in publishes. This page explains what it is, what the add-in reads from it, and what has to be true of your design for the data to be there. How that data is then matched to Fusion Manage fields is covered in [Workspace and Field Mapping](field-mapping.md).
 
 ## What it is
 
@@ -17,8 +17,8 @@ flowchart LR
     F["<b>Fusion</b><br/>Design and drawing"] -->|"Save"| M["<b>Manufacturing Data Model</b><br/>Components, properties,<br/>BOM structure, thumbnails"]
     M -->|"Read only"| A["<b>Fusion Manage add-in</b>"]
 
-    classDef source fill:#f1f5f9,stroke:#94a3b8,color:#0f172a
-    classDef addin fill:#4f46e5,stroke:#3730a3,color:#ffffff
+    classDef source fill:transparent,stroke:#94a3b8,stroke-width:2px
+    classDef addin fill:transparent,stroke:#4f46e5,stroke-width:4px
     class F,M source
     class A addin
 ```
@@ -47,7 +47,7 @@ Reading the cloud description, rather than asking the open Fusion document, has 
 
 ### Part number
 
-The **part number** is the key to everything. It becomes the **item number** in Fusion Manage, and it is how the add-in decides whether an item already exists. A component with no part number cannot be published. See [End-to-End Workflow](02-end-to-end-workflow.md).
+The **part number** is the key to everything. It becomes the **item number** in Fusion Manage, and it is how the add-in decides whether an item already exists. A component with no part number cannot be published. See [End-to-End Workflow](../getting-started/workflow.md).
 
 ### Properties
 
@@ -84,4 +84,4 @@ The add-in reads the **design that is open in Fusion**, in the Autodesk hub you 
 
 ## Next step
 
-Tell the add-in which Fusion Manage workspace to write to and which property fills which field: [Workspace and Field Mapping](05-workspace-and-field-mapping.md).
+Tell the add-in which Fusion Manage workspace to write to and which property fills which field: [Workspace and Field Mapping](field-mapping.md).

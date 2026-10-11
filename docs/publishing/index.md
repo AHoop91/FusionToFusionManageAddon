@@ -1,14 +1,28 @@
 ---
-title: Publishing Enterprise Items
+title: Publishing
 ---
 
-# Publishing Enterprise Items
+# Publishing
 
-Publishing creates or updates the Fusion Manage items for a design and every component in it, then synchronises their BOMs.
+Publishing is how a released design becomes manufacturing items in Fusion Manage. This section covers everything the add-in sends, from creating and updating items to the BOM and the technical representations.
+
+## What publishing covers
+
+| Topic | What it covers |
+|---|---|
+| [Item Creation](item-creation.md) | What happens when no item exists yet for a component |
+| [Item Update](item-update.md) | What happens when the item already exists, and what is left alone |
+| [Bill of Materials](bill-of-materials.md) | Comparing and synchronising the BOM, and choosing what to keep |
+| [STEP File](step-file.md) | Attaching a STEP file of a component, manually |
+| [Drawing Representation](drawing-representation.md) | Attaching a PDF of a drawing, manually |
+
+Items and BOMs are sent by **Publish**. STEP files and drawing PDFs are different: they are **never sent by a publish** and are uploaded one at a time by you. See [Technical representations are manual](#technical-representations-are-manual).
+
+Runs are tracked in the [Job Queue](../job-queue/index.md), and the result can be reviewed in the [Item Panel](../item-panel/index.md).
 
 ## Before you start
 
-- You are signed in and the Items workspace is configured ([Installation and Authentication](03-installation-and-authentication.md), [Workspace and Field Mapping](05-workspace-and-field-mapping.md)).
+- You are signed in and the Items workspace is configured ([Installation and Authentication](../getting-started/installation.md), [Workspace and Field Mapping](../configuration/field-mapping.md)).
 - The design is saved and its components have part numbers. The part number becomes the item number.
 - Your Fusion Manage user holds the permissions listed in the Items workspace: View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM. Otherwise the panel shows a "no access" message naming what is missing.
 
@@ -22,8 +36,8 @@ The panel shows the design's thumbnail and summary, and below it the **Bill of M
 
 | Status | Meaning |
 |---|---|
-| **New** | No item exists in Fusion Manage yet; publishing creates it. |
-| **Update** | The Fusion Manage value differs; publishing changes it. |
+| **New** | No item exists in Fusion Manage yet; publishing creates it. See [Item Creation](item-creation.md). |
+| **Update** | The Fusion Manage value differs; publishing changes it. See [Item Update](item-update.md). |
 | **Up to date** | The values already match. |
 | **Choose item** | Several Fusion Manage items have this number; pick the right one. |
 | **Error** | Fusion Manage could not be read for this item. |
@@ -33,7 +47,7 @@ Properties with no mapping are listed as not published. Mapped properties are li
 ## Publish
 
 1. Review the BOM and details. **Refresh** reads the design and Fusion Manage again.
-2. Optionally use **Add Items** to include existing Fusion Manage items in the BOM (see [BOM Synchronisation](07-bom-synchronisation.md)).
+2. Optionally use **Add Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](bill-of-materials.md#add-items)).
 3. Click **Publish**. The button is enabled once the BOM has loaded.
 
 A progress dialog appears. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
@@ -47,21 +61,11 @@ A progress dialog appears. You can close it; the run continues in the background
 
 When the run ends you get a message box with **Total Items Processed**, **Total Items Created** and **Total Items Updated**, and, for any failure, the item and the reason.
 
-## Job Queue
+The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/request-files-and-retry.md).
 
-**Fusion Manage ▸ Administration ▸ Job Queue** lists every run, one row per item, newest first. Runs go through a single queue, one after another. The ribbon button shows whether runs are working or have failed. Each failed row carries the full reason.
+## Technical representations are manual
 
-- **Clear finished** removes finished runs. A run that finished with every item done removes itself.
-- **Send to Fusion Manage** sends a folder you choose (see below).
-
-## Request files and retrying
-
-Every run keeps its files, in a `publishes` folder in your user profile (see [Troubleshooting and Limitations](10-troubleshooting-and-limitations.md) for the path). Inside you will find per-item request JSON, thumbnails, the BOM requests under `bom`, a `manifest.json` summarising the run, and `send-log.json`, which records every request Fusion Manage accepted.
-
-To retry a failed run, or to send a folder after reviewing it, click **Send to Fusion Manage** in the Job Queue and choose the folder. A confirmation shows the tenant and workspace, the items to create and update, the BOM requests, and how many requests an earlier try already sent. **What Fusion Manage already accepted is skipped**, so nothing is created twice. An item whose creation failed is not there for its BOM; the other items carry on.
-
-!!! warning
-    This changes real data in Fusion Manage. Check the tenant and workspace in the confirmation.
+A publish sends item data, the BOM and the thumbnail. It does **not** attach a STEP file or a drawing PDF. Those are uploaded manually, so you decide what goes to the supply chain, for which items, and when. See [STEP File](step-file.md) and [Drawing Representation](drawing-representation.md).
 
 ## What is and is not sent
 

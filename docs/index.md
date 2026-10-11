@@ -6,8 +6,8 @@ title: Home
 
 Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your released engineering designs into independently managed manufacturing items, BOMs and representations for the wider supply chain.
 
-[Get started](03-installation-and-authentication.md){ .md-button .md-button--primary }
-[See the workflow](02-end-to-end-workflow.md){ .md-button }
+[Get started](getting-started/installation.md){ .md-button .md-button--primary }
+[See the workflow](getting-started/workflow.md){ .md-button }
 
 ## Where to start
 
@@ -15,40 +15,72 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
 
 -   **New to the add-in**
 
-    Learn what it does and how the pieces fit together.
+    Learn what it does, and how a component moves from engineering release to a released item.
 
-    [Overview](01-overview.md)
+    [Overview](getting-started/overview.md) ·
+    [End-to-End Workflow](getting-started/workflow.md)
 
 -   **Setting up**
 
-    Install the add-in, sign in and map your properties to Fusion Manage fields.
+    Install the add-in, sign in, and map your properties to Fusion Manage fields.
 
-    [Installation and Authentication](03-installation-and-authentication.md) ·
-    [Workspace and Field Mapping](05-workspace-and-field-mapping.md)
+    [Installation and Authentication](getting-started/installation.md) ·
+    [Workspace and Field Mapping](configuration/field-mapping.md)
 
--   **Day to day**
+-   **Publishing**
 
-    Follow a component from engineering release to enterprise item release.
+    Create and update items, synchronise the BOM, and attach STEP files and drawings.
 
-    [End-to-End Workflow](02-end-to-end-workflow.md)
+    [Publishing](publishing/index.md)
+
+-   **Reviewing and tracking**
+
+    Review an item inside Fusion, and follow your publishes.
+
+    [Item Panel](item-panel/index.md) ·
+    [Job Queue](job-queue/index.md)
 
 -   **Something went wrong**
 
     Find the cause of an error message, and the known limitations.
 
-    [Troubleshooting and Limitations](10-troubleshooting-and-limitations.md)
+    [Troubleshooting and Limitations](reference/troubleshooting.md)
 
 </div>
 
-## All pages
+## Documentation map
 
-1. [Overview](01-overview.md)
-2. [End-to-End Workflow](02-end-to-end-workflow.md)
-3. [Installation and Authentication](03-installation-and-authentication.md)
-4. [Manufacturing Data Model](04-manufacturing-data-model.md)
-5. [Workspace and Field Mapping](05-workspace-and-field-mapping.md)
-6. [Publishing Enterprise Items](06-publishing-enterprise-items.md)
-7. [BOM Synchronisation](07-bom-synchronisation.md)
-8. [Technical Representation](08-technical-representation.md)
-9. [Item Review & Release](09-item-review-and-release.md)
-10. [Troubleshooting and Limitations](10-troubleshooting-and-limitations.md)
+**Getting Started**
+
+- [Overview](getting-started/overview.md)
+- [End-to-End Workflow](getting-started/workflow.md)
+- [Installation and Authentication](getting-started/installation.md)
+
+**Configuration**
+
+- [Manufacturing Data Model](configuration/data-model.md)
+- [Workspace and Field Mapping](configuration/field-mapping.md)
+
+**Publishing**
+
+- [Publishing](publishing/index.md)
+- [Item Creation](publishing/item-creation.md)
+- [Item Update](publishing/item-update.md)
+- [Bill of Materials](publishing/bill-of-materials.md)
+- [STEP File](publishing/step-file.md)
+- [Drawing Representation](publishing/drawing-representation.md)
+
+**Item Panel**
+
+- [Item Panel](item-panel/index.md)
+- [Tabs](item-panel/tabs.md)
+- [Review and Release](item-panel/review-and-release.md)
+
+**Job Queue**
+
+- [Job Queue](job-queue/index.md)
+- [Request Files and Retry](job-queue/request-files-and-retry.md)
+
+**Reference**
+
+- [Troubleshooting and Limitations](reference/troubleshooting.md)

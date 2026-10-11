@@ -230,4 +230,4 @@ Signing in does not grant access by itself. Before publishing, the add-in checks
 
 ### Next step
 
-Configure the Items workspace and field mappings: [Workspace and Field Mapping](05-workspace-and-field-mapping.md).
+Configure the Items workspace and field mappings: [Workspace and Field Mapping](../configuration/field-mapping.md).
