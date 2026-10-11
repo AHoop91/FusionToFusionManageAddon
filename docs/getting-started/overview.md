@@ -30,7 +30,7 @@ To see how these fit together in practice, from engineering release through to r
 The add-in takes what the design says in the Manufacturing Data Model, compares it with Fusion Manage, and sends only the difference.
 
 ```mermaid
-flowchart LR
+flowchart TB
     DESIGN["<b>Fusion</b><br/>Design and drawing"]
     MDM["<b>Manufacturing Data Model</b><br/>Properties, thumbnails,<br/>part numbers"]
     ADDIN["<b>Fusion Manage add-in</b><br/>Preview, compare, publish"]

@@ -13,7 +13,7 @@ When you save a design in Fusion, Autodesk stores a structured description of it
 The add-in uses it as a **read-only** source. It never writes to it.
 
 ```mermaid
-flowchart LR
+flowchart TB
     F["<b>Fusion</b><br/>Design and drawing"] -->|"Save"| M["<b>Manufacturing Data Model</b><br/>Components, properties,<br/>BOM structure, thumbnails"]
     M -->|"Read only"| A["<b>Fusion Manage add-in</b>"]
 

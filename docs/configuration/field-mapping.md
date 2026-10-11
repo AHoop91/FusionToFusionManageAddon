@@ -100,7 +100,7 @@ Check the result after loading: the **Mapped fields** list should show all ten r
 The `Type` default connects two systems, and **the values must be identical in both** for it to map. If they differ, the value cannot be sent.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph FUSION["Fusion hub"]
         P["<b>Custom property: Type</b><br/>Single select picklist<br/>hub Custom Properties tab"]
     end

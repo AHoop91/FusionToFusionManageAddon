@@ -27,7 +27,7 @@ A released component and a manufactured item are not the same thing, so they are
 - The item is released in Fusion Manage through its own workflow, on its own schedule.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph ENG["Engineering lifecycle, in Fusion"]
         direction TB
         E1["Design the component<br/>and its drawing"] --> E2["Release the<br/>component and drawing"]
