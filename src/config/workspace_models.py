@@ -61,7 +61,9 @@ WORKSPACE_KINDS = [
                   ("view_items", "add_items", "edit_items", "view_bom", "add_to_bom", "edit_bom"),
                   (DefaultMapping("part_number", "NUMBER", True), DefaultMapping("name", "TITLE"),
                    DefaultMapping("description", "DESCRIPTION"), DefaultMapping("thumbnail", "IMAGE"),
-                   DefaultMapping("material", "MATERIAL")),
+                   DefaultMapping("material", "MATERIAL"), DefaultMapping("custom:Type", "TYPE"),
+                   DefaultMapping("physical:Height", "HEIGHT"), DefaultMapping("physical:Width", "WIDTH"),
+                   DefaultMapping("physical:Length", "LENGTH"), DefaultMapping("physical:Mass", "ITEM_WEIGHT")),
                   "CUSTOM_LOOKUP_WS_COMPONENTS_ALL_INCLUDING_WORKING"),
 ]
 

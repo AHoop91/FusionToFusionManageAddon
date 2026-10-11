@@ -483,7 +483,10 @@
     defaults.addEventListener('click', function () {
       confirmDefaults(kind, function () {
         rows.innerHTML = '';
+        // Skip defaults whose Manage field is missing from the workspace (when its fields are known).
+        const known = fmFields[kind.id] || [];
         (kind.default_mappings || []).forEach(function (m) {
+          if (known.length && !known.some(function (f) { return f.id === m.fm_field_id; })) return;
           rows.appendChild(mappingRow(kind.id, { source: m.source, fm_field_id: m.fm_field_id, match_key: m.match_key }));
         });
       });
