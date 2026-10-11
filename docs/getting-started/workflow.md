@@ -28,29 +28,23 @@ A released component and a manufactured item are not the same thing, so they are
 
 ```mermaid
 flowchart TB
-    subgraph ENG["Engineering lifecycle, in Fusion"]
-        direction TB
-        E1["Design the component<br/>and its drawing"] --> E2["Release the<br/>component and drawing"]
-    end
+    E1["<b>Engineering, in Fusion</b><br/>Design the component and its drawing"]
+    E2["<b>Engineering, in Fusion</b><br/>Release the component and drawing"]
+    B1["<b>The add-in</b><br/>Publish item, BOM and properties"]
+    B2["<b>The add-in</b><br/>Attach STEP and drawing PDF (optional, manual)"]
+    M1["<b>Manufacturing, in Fusion Manage</b><br/>Manufactured item and BOM"]
+    M2["<b>Manufacturing, in Fusion Manage</b><br/>Complete the manufacturing package"]
+    M3["<b>Review</b><br/>Engineering, Quality and Manufacturing"]
+    M4["<b>Manufacturing, in Fusion Manage</b><br/>Release the item"]
 
-    subgraph BRIDGE["The add-in"]
-        direction TB
-        B1["Publish<br/>item, BOM, properties"]
-        B2["Attach<br/>STEP and drawing PDF"]
-    end
-
-    subgraph MFG["Manufacturing lifecycle, in Fusion Manage"]
-        direction TB
-        M1["Manufactured item<br/>and BOM"] --> M2["Complete the<br/>manufacturing package"]
-        M2 --> M3["Review"]
-        M3 --> M4["Release the item"]
-    end
-
+    E1 --> E2
     E2 ==>|"released definition"| B1
-    E2 ==>|"representations"| B2
-    B1 ==> M1
-    B2 ==> M2
-    E2 -. "later engineering change:<br/>publish again" .-> B1
+    B1 ==> B2
+    B2 ==>|"item exists in Fusion Manage"| M1
+    M1 --> M2
+    M2 --> M3
+    M3 --> M4
+    E2 -. "later engineering change: publish again" .-> B1
 
     classDef eng fill:transparent,stroke:#6366f1,stroke-width:2px
     classDef bridge fill:transparent,stroke:#4f46e5,stroke-width:4px
