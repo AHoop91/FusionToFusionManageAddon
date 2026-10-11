@@ -53,6 +53,11 @@ The **part number** is the key to everything. It becomes the **item number** in 
 
 Properties are read for each component, up to 500 per component.
 
+!!! example "Screenshot placeholder: Component properties in Fusion"
+    **Show:** A component's properties in Fusion with the custom Type property set.
+
+    Save the image as `docs/images/component-properties.png`, then replace this box with `![Component properties in Fusion](../images/component-properties.png)`.
+
 - **Base properties** ship with the Data Model, for example name, description, part number and material.
 - **Custom properties** come from property collections that an administrator has linked to your hub. The properties offered when you map fields are the ones defined for your hub and applicable to components. Hidden and archived properties are not offered.
 

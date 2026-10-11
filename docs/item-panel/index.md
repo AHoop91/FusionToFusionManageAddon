@@ -25,9 +25,24 @@ The add-in looks the item up in the Items workspace by the component's part numb
 
 **The panel follows your selection.** While it is open, selecting another component shows that component's item.
 
+!!! example "Screenshot placeholder: Item Panel showing the Item tab"
+    **Show:** The Item Panel with the header, tabs and the Item tab's sections and fields.
+
+    Save the image as `docs/images/item-panel.png`, then replace this box with `![Item Panel showing the Item tab](../images/item-panel.png)`.
+
 If no item has the number, the panel says **No item exists for …** and suggests checking the part number or publishing the item first. If you may not view the workspace, it tells you so.
 
+!!! example "Screenshot placeholder: Item Panel: no item exists"
+    **Show:** The empty state saying No item exists for the part number.
+
+    Save the image as `docs/images/item-not-found.png`, then replace this box with `![Item Panel: no item exists](../images/item-not-found.png)`.
+
 ## Header
+
+!!! example "Screenshot placeholder: Item Panel header with the Actions menu open"
+    **Show:** The title, status line, Open in browser, Refresh and the Actions menu showing Upload STEP File.
+
+    Save the image as `docs/images/item-actions.png`, then replace this box with `![Item Panel header with the Actions menu open](../images/item-actions.png)`.
 
 | Control | What it does |
 |---|---|

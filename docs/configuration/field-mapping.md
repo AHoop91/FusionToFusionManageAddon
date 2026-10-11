@@ -20,6 +20,11 @@ The add-in currently works with one workspace kind, **Items** ("Manufacturing it
 
 Click **Save** when you are done. Saving is refused while the settings have problems, and the message says what to fix.
 
+!!! example "Screenshot placeholder: Preferences, Workspaces tab with a validated Items workspace"
+    **Show:** The Items card with the workspace ID, the tick after Validate, and the mapping sections.
+
+    Save the image as `docs/images/workspaces-tab.png`, then replace this box with `![Preferences, Workspaces tab with a validated Items workspace](../images/workspaces-tab.png)`.
+
 ## Field mapping
 
 Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Manage field (right):
@@ -51,6 +56,11 @@ If the target field is a picklist, the add-in looks up the picklist's options an
 
 **Add default fields** loads the standard set of mappings in one click, so you do not build them row by row. It is the fastest way to set up a workspace that follows the out-of-the-box layout.
 
+!!! example "Screenshot placeholder: Load default fields confirmation"
+    **Show:** The Add default fields button and the Load default fields? confirmation.
+
+    Save the image as `docs/images/load-defaults-dialog.png`, then replace this box with `![Load default fields confirmation](../images/load-defaults-dialog.png)`.
+
 !!! warning "It replaces your mappings"
     Loading the defaults **replaces all existing field mappings** with the standard set. Any mapping you added or changed is removed. A confirmation (**Load default fields?**) asks first, and you can cancel. Static values and the component-linking field are not part of the defaults.
 
@@ -79,6 +89,11 @@ Each default writes to a Fusion Manage field **by its field ID**, so the workspa
     Once the workspace has been validated, **Add default fields** leaves out any default whose field ID does not exist in your workspace. It does not warn you. If you load the defaults and a row you expected is missing, the field is missing, or its ID is different, in Fusion Manage.
 
 Check the result after loading: the **Mapped fields** list should show all ten rows. If your workspace has been customised, add or correct the missing rows by hand.
+
+!!! example "Screenshot placeholder: Mapped fields after Add default fields"
+    **Show:** The ten default mappings in the Mapped fields list, with the Key on Part number.
+
+    Save the image as `docs/images/mapped-fields-defaults.png`, then replace this box with `![Mapped fields after Add default fields](../images/mapped-fields-defaults.png)`.
 
 ### The Type field and its picklist
 
@@ -110,6 +125,11 @@ flowchart LR
 
 #### 1. Configure the custom property in Fusion
 
+!!! example "Screenshot placeholder: Fusion hub: Type custom property"
+    **Show:** Hub Custom Properties, Edit property for Type, with Single select picklist and its values.
+
+    Save the image as `docs/images/hub-type-property.png`, then replace this box with `![Fusion hub: Type custom property](../images/hub-type-property.png)`.
+
 A hub administrator defines the property once for the whole hub.
 
 1. In your Autodesk hub settings, open the **Custom Properties** tab (the tabs are Hub Settings, Members, Groups, Projects, Numbering and Custom Properties).
@@ -122,6 +142,11 @@ A hub administrator defines the property once for the whole hub.
 #### 2. Configure the field in Fusion Manage
 
 In the Items workspace, add a picklist field named **Type** with field ID **`TYPE`**, and give its picklist **the same options**.
+
+!!! example "Screenshot placeholder: Fusion Manage: Type field and its picklist values"
+    **Show:** The Type field in the Items workspace, field ID TYPE, with its picklist options.
+
+    Save the image as `docs/images/fm-type-field.png`, then replace this box with `![Fusion Manage: Type field and its picklist values](../images/fm-type-field.png)`.
 
 #### 3. Keep the values identical
 
@@ -167,9 +192,19 @@ The Item panel shows an item's Type in the line under its title, next to its ver
 
 A static value sets a Fusion Manage field to the same value on every published item, regardless of the design. Pick the field, then enter or choose the value (a picklist field offers its options). For an existing item, a static value is applied when the item lacks it.
 
+!!! example "Screenshot placeholder: Static values"
+    **Show:** A static value row, with a Fusion Manage field and its value.
+
+    Save the image as `docs/images/static-values.png`, then replace this box with `![Static values](../images/static-values.png)`.
+
 ## Component linking
 
 If your Items workspace has a field that links an item to a record in the Fusion Manage components picklist, choose it under **Component linking** (**Choose the linking field…**). When publishing, the add-in links each item to its component: first through the link stored in the Data Model, and if there is none, by searching the component picklist for the item number. If neither finds it, the item is still published and the step is recorded as a failed "component link" in the run's files.
+
+!!! example "Screenshot placeholder: Component linking field"
+    **Show:** The Choose the linking field picker.
+
+    Save the image as `docs/images/component-linking.png`, then replace this box with `![Component linking field](../images/component-linking.png)`.
 
 ## When the buttons light up
 

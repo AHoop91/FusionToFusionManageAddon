@@ -74,7 +74,17 @@ The add-in adds a **Fusion Manage** tab to the ribbon in the **Design** and **Dr
 
 Most buttons stay greyed out until the Items workspace is configured (see [Workspace and Field Mapping](../configuration/field-mapping.md)). The tooltip of a greyed-out button says why.
 
+!!! example "Screenshot placeholder: Fusion Manage ribbon tab in the Design workspace"
+    **Show:** The Fusion Manage tab with the Item and Administration panels and their buttons.
+
+    Save the image as `docs/images/ribbon-design.png`, then replace this box with `![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png)`.
+
 The same actions are available from the right-click menu of a component in the browser or canvas: **Open Fusion Manage Item**, **Publish Fusion Manage Item** (top-level component only), **Upload STEP File To Fusion Manage Item** and, in a drawing, **Upload Drawing Representation To Fusion Manage Item**.
+
+!!! example "Screenshot placeholder: Right-click menu on a component"
+    **Show:** The right-click menu of a component in the browser, showing the Fusion Manage entries.
+
+    Save the image as `docs/images/context-menu.png`, then replace this box with `![Right-click menu on a component](../images/context-menu.png)`.
 
 ## Requirements
 

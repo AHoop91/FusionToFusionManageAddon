@@ -11,6 +11,11 @@ The add-in can attach a **STEP file** of a component to its Fusion Manage item, 
 
 The item must already exist. Publish it first ([Item Creation](item-creation.md)).
 
+!!! example "Screenshot placeholder: Right-click menu: Upload STEP File To Fusion Manage Item"
+    **Show:** The right-click menu of a component with the STEP upload entry.
+
+    Save the image as `docs/images/step-context-menu.png`, then replace this box with `![Right-click menu: Upload STEP File To Fusion Manage Item](../images/step-context-menu.png)`.
+
 ## Upload a STEP file
 
 The file is named after the item number, for example `PN-1001.step`.
@@ -26,6 +31,11 @@ The file is named after the item number, for example `PN-1001.step`.
 
 If a file of the same name is already attached, the upload creates **a new version** of it instead of a duplicate, and the confirmation says so. You can refresh a STEP file as the design changes without cluttering the item.
 
+!!! example "Screenshot placeholder: Upload confirmation"
+    **Show:** The confirmation that the file was attached, or that a new version was uploaded.
+
+    Save the image as `docs/images/step-uploaded.png`, then replace this box with `![Upload confirmation](../images/step-uploaded.png)`.
+
 ## Which geometry is exported
 
 The STEP file contains the **selected component**, not the whole design.
@@ -35,6 +45,11 @@ The STEP file contains the **selected component**, not the whole design.
 - If Fusion cannot export it directly from the open design, the add-in falls back to the component's own document.
 
 Finding a component by part number can take a while in large designs. The progress window stays responsive and you will see the percentage move.
+
+!!! example "Screenshot placeholder: Uploading STEP File progress window"
+    **Show:** The small window with the Find item, Create STEP and Upload stages and the percentage.
+
+    Save the image as `docs/images/step-progress.png`, then replace this box with `![Uploading STEP File progress window](../images/step-progress.png)`.
 
 ## Messages you may see
 

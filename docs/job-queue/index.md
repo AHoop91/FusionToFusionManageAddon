@@ -22,6 +22,11 @@ Jobs go through a **single queue, one after another**. A publish returns at once
 
 The panel lists every job, newest first, with one row per item. Each row shows a status icon, and hovering it shows the reason when there is one.
 
+!!! example "Screenshot placeholder: Job Queue with a completed and a failed run"
+    **Show:** Job cards with status icons, one row per item, and the Cancel button on an active job.
+
+    Save the image as `docs/images/job-queue-panel.png`, then replace this box with `![Job Queue with a completed and a failed run](../images/job-queue-panel.png)`.
+
 | Status | Meaning |
 |---|---|
 | **Queued** | Waiting for earlier jobs to finish |
@@ -39,6 +44,11 @@ Each BOM sent for a parent assembly also has its own row, after the items.
 - **Send to Fusion Manage** sends a folder you choose. See [Request Files and Retry](request-files-and-retry.md).
 
 ## Knowing when something ends
+
+!!! example "Screenshot placeholder: Job Queue ribbon button states"
+    **Show:** The ribbon button in its idle, running and error looks.
+
+    Save the image as `docs/images/job-queue-button.png`, then replace this box with `![Job Queue ribbon button states](../images/job-queue-button.png)`.
 
 You do not have to watch the panel.
 

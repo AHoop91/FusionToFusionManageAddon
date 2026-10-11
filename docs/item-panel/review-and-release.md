@@ -20,6 +20,11 @@ If the review finds a problem, correct it at its source. A design problem is fix
 
 ## Release happens in Fusion Manage
 
+!!! example "Screenshot placeholder: Item in Fusion Manage with its workflow actions"
+    **Show:** The item open in Fusion Manage in the browser, showing the workflow action used to release it.
+
+    Save the image as `docs/images/fm-item-workflow.png`, then replace this box with `![Item in Fusion Manage with its workflow actions](../images/fm-item-workflow.png)`.
+
 The manufactured item is released through **its own workflow in Fusion Manage**, independent of the engineering release in Fusion. The add-in does not move an item through its workflow.
 
 1. In the Item Panel, click **Open in browser** to go straight to the item.

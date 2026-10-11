@@ -8,6 +8,11 @@ title: Request Files and Retry
 
 Every publish keeps its files, in a `publishes` folder in your user profile. The path is listed in [Troubleshooting and Limitations](../reference/troubleshooting.md#where-files-are-kept). Each run has its own folder, containing:
 
+!!! example "Screenshot placeholder: A run's folder in File Explorer"
+    **Show:** The folder of a run with the request files, bom folder, manifest.json and send-log.json.
+
+    Save the image as `docs/images/publish-folder.png`, then replace this box with `![A run's folder in File Explorer](../images/publish-folder.png)`.
+
 | File | What it holds |
 |---|---|
 | Per-item request JSON | The exact request written for each item, a create or an update |
@@ -19,6 +24,11 @@ Every publish keeps its files, in a `publishes` folder in your user profile. The
 The files are a record of what was sent, and what the retry below works from.
 
 ## Retry a failed run, or send after review
+
+!!! example "Screenshot placeholder: Send to Fusion Manage confirmation"
+    **Show:** The confirmation with the tenant, workspace, creates, updates, BOM requests and already-sent count.
+
+    Save the image as `docs/images/send-confirmation.png`, then replace this box with `![Send to Fusion Manage confirmation](../images/send-confirmation.png)`.
 
 1. Open the [Job Queue](index.md).
 2. Click **Send to Fusion Manage**.

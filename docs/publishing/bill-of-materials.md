@@ -21,6 +21,11 @@ If a parent does not exist in Fusion Manage yet, every child is **New**.
 
 Fusion Manage often extends the design BOM with manufacturing lines such as oil or panels. For that reason lines found only in Fusion Manage are never deleted automatically.
 
+!!! example "Screenshot placeholder: BOM table with New, Changed and Fusion Manage Only rows"
+    **Show:** The BOM table with status chips, and the filter buttons above it.
+
+    Save the image as `docs/images/bom-statuses.png`, then replace this box with `![BOM table with New, Changed and Fusion Manage Only rows](../images/bom-statuses.png)`.
+
 ## Filters
 
 Filter buttons above the table narrow it to rows of one status, such as **New** or **Fusion Manage Only**. Each filter's tooltip explains what it shows.
@@ -28,6 +33,11 @@ Filter buttons above the table narrow it to rows of one status, such as **New** 
 ## Paired rows: a replaced item
 
 When a **New** design line and a **Fusion Manage Only** line sit under the same parent, they are shown **paired**, one above the other, each carrying the other's item number. The item number differs at that position, which may mean an item was replaced, so the add-in asks you to decide rather than guessing. For a pair you can choose:
+
+!!! example "Screenshot placeholder: Paired rows: a replaced item"
+    **Show:** A New row and a Fusion Manage Only row paired, with the Keep and Remove choices.
+
+    Save the image as `docs/images/bom-paired-rows.png`, then replace this box with `![Paired rows: a replaced item](../images/bom-paired-rows.png)`.
 
 - **Keep** the Fusion Manage line, which is renumbered to the end of the BOM, and add the new design line.
 - **Remove** the Fusion Manage line from Fusion Manage and add the design's line.
@@ -41,6 +51,11 @@ A quantity can be edited in the table. An edited cell shows a revert button that
 ## Add Items
 
 **Add Items** (top right of the BOM) opens a picker that lists Fusion Manage items from the Items workspace so you can add items that are not in the design.
+
+!!! example "Screenshot placeholder: Add Items picker"
+    **Show:** The Add Items dialog with its list, filter box and some items ticked.
+
+    Save the image as `docs/images/add-items.png`, then replace this box with `![Add Items picker](../images/add-items.png)`.
 
 - The list loads 100 items at a time as you scroll and stays quick with thousands of items.
 - Type to filter, change the sort direction, and tick the items to add. Selections survive filtering and paging. Items already staged are marked.

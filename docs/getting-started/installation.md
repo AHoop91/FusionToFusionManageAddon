@@ -23,6 +23,11 @@ Setting up the add-in takes four stages. Do them in this order.
 
 The add-in supports Windows and macOS. Once it is running, a **Fusion Manage** tab appears in the Design and Drawing workspaces. Most buttons stay greyed out until setup is complete.
 
+!!! example "Screenshot placeholder: Scripts and Add-Ins dialog with MfgToFm selected"
+    **Show:** The Add-Ins tab with MfgToFm selected, and the Run and Run on Startup options.
+
+    Save the image as `docs/images/scripts-and-addins.png`, then replace this box with `![Scripts and Add-Ins dialog with MfgToFm selected](../images/scripts-and-addins.png)`.
+
 ---
 
 ## 2. Create an APS application and get a Client ID
@@ -77,6 +82,11 @@ Anyone who needs to create the application must be a member of the hub.
 
 ### 2.4 Create the application
 
+!!! example "Screenshot placeholder: APS: choosing the application type"
+    **Show:** The Create application dialog with Desktop, Mobile, Single-Page App chosen, and the callback URL field.
+
+    Save the image as `docs/images/aps-create-application.png`, then replace this box with `![APS: choosing the application type](../images/aps-create-application.png)`.
+
 1. Sign in at [aps.autodesk.com](https://aps.autodesk.com) and open **My Applications**.
 2. Click **Create application**.
 3. When asked for the application type, choose **Desktop, Mobile, Single-Page App**.
@@ -102,6 +112,11 @@ Anyone who needs to create the application must be a member of the hub.
 ### 2.5 Copy the Client ID
 
 Open the application under **My Applications**. Its details page shows the **Client ID**, a 32-character string. Copy it. You will paste it into the add-in in the next stage.
+
+!!! example "Screenshot placeholder: APS application details with the Client ID"
+    **Show:** The application details page showing the Client ID. Hide or blur anything you do not want shown.
+
+    Save the image as `docs/images/aps-client-id.png`, then replace this box with `![APS application details with the Client ID](../images/aps-client-id.png)`.
 
 An application of this type has no client secret that you need. Never type one into the add-in.
 
@@ -140,6 +155,11 @@ http://localhost:8765/callback
 
 A Client ID, a Tenant, a valid port and at least one scope are required before you can sign in. Click **Save**.
 
+!!! example "Screenshot placeholder: Preferences, Connection tab"
+    **Show:** Client ID, Tenant, Callback port and Scopes filled in, with the callback URL shown.
+
+    Save the image as `docs/images/preferences-connection.png`, then replace this box with `![Preferences, Connection tab](../images/preferences-connection.png)`.
+
 ### Sharing a setup with colleagues
 
 On the **Profile** tab, **Export…** saves your mode, connection details, workspace IDs and field mappings to a JSON file. **Import…** loads one, which is the quickest way to configure a new user.
@@ -165,6 +185,11 @@ On the **General** tab:
 4. The panel unlocks its tabs.
 
 Sign-in waits up to 180 seconds; click **Cancel** to abort it sooner. Access tokens are refreshed automatically shortly before they expire.
+
+!!! example "Screenshot placeholder: Preferences, Sign in to Fusion Manage"
+    **Show:** The Sign in card, and the Logging in spinner with the Cancel button.
+
+    Save the image as `docs/images/signin-card.png`, then replace this box with `![Preferences, Sign in to Fusion Manage](../images/signin-card.png)`.
 
 To sign out, use the account menu in the panel header. This removes the stored tokens for the current Client ID.
 

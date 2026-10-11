@@ -32,6 +32,11 @@ With the design open, choose **Fusion Manage ▸ Item ▸ Publish Fusion Manage 
 
 The panel shows the design's thumbnail and summary, and below it the **Bill of Materials** of the design compared with Fusion Manage. Click a row to open the **Details Panel** beside it, which lists each property, the Fusion Manage field it maps to, its current value in Fusion Manage and what publishing will do.
 
+!!! example "Screenshot placeholder: Publish panel with the BOM and Details Panel open"
+    **Show:** The Publish panel: thumbnail, summary, the BOM table and the Details Panel beside it.
+
+    Save the image as `docs/images/publish-panel.png`, then replace this box with `![Publish panel with the BOM and Details Panel open](../images/publish-panel.png)`.
+
 ### Property status in the Details Panel
 
 | Status | Meaning |
@@ -44,6 +49,11 @@ The panel shows the design's thumbnail and summary, and below it the **Bill of M
 
 Properties with no mapping are listed as not published. Mapped properties are listed first so you see what will change.
 
+!!! example "Screenshot placeholder: Details Panel showing New and Update properties"
+    **Show:** Property rows with their Fusion Manage field, current value and status chips.
+
+    Save the image as `docs/images/details-panel.png`, then replace this box with `![Details Panel showing New and Update properties](../images/details-panel.png)`.
+
 ## Publish
 
 1. Review the BOM and details. **Refresh** reads the design and Fusion Manage again.
@@ -51,6 +61,11 @@ Properties with no mapping are listed as not published. Mapped properties are li
 3. Click **Publish**. The button is enabled once the BOM has loaded.
 
 A progress dialog appears. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
+
+!!! example "Screenshot placeholder: Publish progress dialog"
+    **Show:** The progress dialog with the bar, the count, and the Cancel publish and Close buttons.
+
+    Save the image as `docs/images/publish-progress.png`, then replace this box with `![Publish progress dialog](../images/publish-progress.png)`.
 
 ### What a run does
 
@@ -60,6 +75,11 @@ A progress dialog appears. You can close it; the run continues in the background
 4. Once **every** item exists, sends the BOM changes of each parent assembly. BOMs go last so that new parents and children already have IDs.
 
 When the run ends you get a message box with **Total Items Processed**, **Total Items Created** and **Total Items Updated**, and, for any failure, the item and the reason.
+
+!!! example "Screenshot placeholder: Publish complete message"
+    **Show:** The Publish complete message box with Total Items Processed, Created and Updated.
+
+    Save the image as `docs/images/publish-complete.png`, then replace this box with `![Publish complete message](../images/publish-complete.png)`.
 
 The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/request-files-and-retry.md).
 

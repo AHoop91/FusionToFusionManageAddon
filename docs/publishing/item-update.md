@@ -44,6 +44,11 @@ An update never changes:
 
 If more than one Fusion Manage item has the same item number, the add-in does not guess. The row shows **Choose item** and a message such as *3 Fusion Manage items match PN-1001. Choose one.* Pick the item to update in the Details Panel. Until you do, that item cannot be published.
 
+!!! example "Screenshot placeholder: Choose item status"
+    **Show:** A row showing Choose item and the candidate items to pick from.
+
+    Save the image as `docs/images/item-choose.png`, then replace this box with `![Choose item status](../images/item-choose.png)`.
+
 ## Permission needed
 
 Updating an item needs **Edit Items** in the Items workspace.

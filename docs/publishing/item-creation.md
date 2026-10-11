@@ -10,6 +10,11 @@ When a component has no item in Fusion Manage yet, publishing **creates** one.
 
 For each component in the Publish panel, the add-in searches the Items workspace for an item with the component's **item number**, which is its part number in Fusion. If nothing is found, the item is marked **New** and a publish creates it. If an item is found, see [Item Update](item-update.md).
 
+!!! example "Screenshot placeholder: Publish panel with a component marked New"
+    **Show:** A BOM row or property marked New, before publishing.
+
+    Save the image as `docs/images/item-new.png`, then replace this box with `![Publish panel with a component marked New](../images/item-new.png)`.
+
 The search is by item number only. Make sure your workspace maps the part number to the item number field (`NUMBER` in the default mapping). See [Workspace and Field Mapping](../configuration/field-mapping.md#default-fields).
 
 ## What a new item receives
