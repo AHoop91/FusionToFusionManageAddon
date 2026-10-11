@@ -1,4 +1,30 @@
 /* Use the full width of the window: navigation on the left, contents on the right. */
-.md-grid {
+.md-grid,
+.md-main__inner,
+.md-header__inner,
+.md-tabs__list,
+.md-footer__inner,
+.md-footer-meta__inner {
   max-width: none;
+}
+
+.md-content,
+.md-content__inner {
+  max-width: none;
+}
+
+/* Let every page's tables and images use the width, not only the home page's cards. */
+.md-typeset__table {
+  display: block;
+  width: 100%;
+}
+
+.md-typeset table:not([class]) {
+  display: table;
+  width: 100%;
+}
+
+.md-typeset img {
+  max-width: 100%;
+  height: auto;
 }
