@@ -50,8 +50,9 @@ nav:
   - End-to-End Workflow: 02-end-to-end-workflow.md
   - Installation and Authentication: 03-installation-and-authentication.md
   - Manufacturing Data Model: 04-manufacturing-data-model.md
-  - Publishing Enterprise Items: 05-publishing-enterprise-items.md
-  - BOM Synchronisation: 06-bom-synchronisation.md
-  - Technical Representation: 07-technical-representation.md
-  - Item Review & Release: 08-item-review-and-release.md
-  - Troubleshooting and Limitations: 09-troubleshooting-and-limitations.md
+  - Workspace and Field Mapping: 05-workspace-and-field-mapping.md
+  - Publishing Enterprise Items: 06-publishing-enterprise-items.md
+  - BOM Synchronisation: 07-bom-synchronisation.md
+  - Technical Representation: 08-technical-representation.md
+  - Item Review & Release: 09-item-review-and-release.md
+  - Troubleshooting and Limitations: 10-troubleshooting-and-limitations.md

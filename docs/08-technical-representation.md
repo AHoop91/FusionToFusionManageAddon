@@ -9,6 +9,9 @@ Besides item data, the add-in can attach a technical representation of a design 
 - a **STEP file** of a component, from the Design workspace;
 - a **PDF** of the open drawing, from the Drawing workspace.
 
+!!! important "Uploaded by you, never automatic"
+    Publishing an item does not attach a STEP file or a drawing PDF. Representations are uploaded manually, so you stay in control of what is released to the wider supply chain, for which items, and when.
+
 Both go to the item's attachments. If a file of the same name is already attached, the upload creates **a new version** of it instead of a duplicate, and the confirmation says so.
 
 ## Upload a STEP file
@@ -59,4 +62,4 @@ Fusion can report an export as successful straight after a drawing opens while w
 
 ## Seeing the result
 
-Attached files appear on the **Files** tab of the item in the Item panel (see [Item Review & Release](08-item-review-and-release.md)). If the panel is open it shows a success toast and re-reads the item, so the file count updates.
+Attached files appear on the **Files** tab of the item in the Item panel (see [Item Review & Release](09-item-review-and-release.md)). If the panel is open it shows a success toast and re-reads the item, so the file count updates.

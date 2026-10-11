@@ -4,89 +4,153 @@ title: End-to-End Workflow
 
 # End-to-End Workflow
 
-This page follows one component from the engineer's release in Fusion to its release as an enterprise item in Fusion Manage. It shows who does what at each stage, which part the add-in handles, and which parts happen elsewhere.
+## What the add-in is for
+
+Engineering and manufacturing work on the same product, but they do not manage it the same way. Engineers define the product in CAD. Manufacturing, purchasing and the wider supply chain need a managed **item**, a bill of materials, and the documents and representations to build or buy it. Those need their own approvals, their own revisions and their own timing.
+
+This add-in carries a **released engineering definition** from Fusion into **independently managed manufacturing items and BOMs** in Fusion Manage, together with the representations and information the wider supply chain needs. It is inspired by the item management of Autodesk Vault: the engineering file and the manufactured item are separate things, linked by a part number, each with a life of its own. Here that item management is provided by Fusion Manage.
+
+**Fusion and Fusion Manage each keep doing their own job.** The add-in is only the bridge between them.
+
+| | Fusion | The add-in | Fusion Manage |
+|---|---|---|---|
+| **Role** | Engineering definition | Bridge | Manufacturing item and BOM management |
+| **Owns** | The CAD component, the drawing, and their engineering release | Nothing. It carries and compares | The manufactured item, its BOM, its lifecycle and its workflows |
+| **Lifecycle** | Engineering lifecycle | None | Manufacturing lifecycle |
+
+## Two lifecycles, kept separate
+
+A released component and a manufactured item are not the same thing, so they are not forced to move together.
+
+- Engineering can revise a component without the manufactured item changing until Manufacturing chooses to publish.
+- Manufacturing can add to the item, for example extra BOM lines or fields that only make sense for production, without touching the CAD design.
+- The item is released in Fusion Manage through its own workflow, on its own schedule.
 
 ```mermaid
 flowchart LR
-    A["1. Engineering<br/>releases the component"] --> B["2. Manufacturing<br/>publishes the enterprise item"]
-    B --> C["3. Manufacturing package<br/>is completed"]
-    C --> D["4. Engineering, Quality and<br/>Manufacturing review"]
-    D --> E["5. Enterprise item<br/>is released in Fusion Manage"]
-    D -. "changes needed" .-> B
+    subgraph ENG["Engineering lifecycle, in Fusion"]
+        direction TB
+        E1["Design the component<br/>and its drawing"] --> E2["Release the<br/>component and drawing"]
+    end
+
+    subgraph BRIDGE["The add-in"]
+        direction TB
+        B1["Publish<br/>item, BOM, properties"]
+        B2["Attach<br/>STEP and drawing PDF"]
+    end
+
+    subgraph MFG["Manufacturing lifecycle, in Fusion Manage"]
+        direction TB
+        M1["Manufactured item<br/>and BOM"] --> M2["Complete the<br/>manufacturing package"]
+        M2 --> M3["Review"]
+        M3 --> M4["Release the item"]
+    end
+
+    E2 ==>|"released definition"| B1
+    E2 ==>|"representations"| B2
+    B1 ==> M1
+    B2 ==> M2
+    E2 -. "later engineering change:<br/>publish again" .-> B1
+
+    classDef eng fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
+    classDef bridge fill:#4f46e5,stroke:#3730a3,color:#ffffff
+    classDef mfg fill:#ecfdf5,stroke:#059669,color:#064e3b
+    class E1,E2 eng
+    class B1,B2 bridge
+    class M1,M2,M3,M4 mfg
 ```
 
-| Stage | Who | Where | Add-in role |
-|---|---|---|---|
-| [1. Engineering releases the component](#1-engineering-releases-the-component) | Engineering (designers) | Fusion | Reads the result from the Manufacturing Data Model |
-| [2. Manufacturing publishes the enterprise item](#2-manufacturing-publishes-the-enterprise-item) | Manufacturing | Fusion | **Publishes** the item and its BOM |
-| [3. Complete the manufacturing package](#3-complete-the-manufacturing-package) | Manufacturing | Fusion and Fusion Manage | **Attaches** STEP and drawing PDF; **adds** BOM lines |
-| [4. Review](#4-engineering-quality-and-manufacturing-review) | Engineering, Quality, Manufacturing | Fusion or Fusion Manage | **Shows** the item in the Item panel |
-| [5. Release the enterprise item](#5-the-enterprise-item-is-released-in-fusion-manage) | Release approvers | Fusion Manage | None. Release is a Fusion Manage workflow |
+Linking the two is the **part number**. A component's part number in Fusion is the item number in Fusion Manage. If an item with that number exists it is updated; otherwise it is created.
 
-!!! note "What the add-in does not do"
-    The add-in does not enforce this process. It will publish any design you open, whatever its state, and it does not release items or start workflows. The sequence below is the recommended way to use it, and your organisation's own release rules still apply.
+## The five stages
+
+| Stage | Who | Where | What happens |
+|---|---|---|---|
+| [1. Engineering releases the component](#1-engineering-releases-the-component-and-drawing) | Engineering | Fusion | Normal release. Nothing changes for engineers. |
+| [2. Manufacturing publishes the item](#2-manufacturing-publishes-the-enterprise-item) | Design Engineer or Manufacturing Engineer | Fusion, using the add-in | Released definition becomes manufacturing items and BOMs. |
+| [3. Complete the manufacturing package](#3-complete-the-manufacturing-package) | Manufacturing | Fusion and Fusion Manage | Representations are attached and the BOM is completed. |
+| [4. Review](#4-engineering-quality-and-manufacturing-review) | Engineering, Quality, Manufacturing | Fusion or Fusion Manage | Each group checks the item against the design. |
+| [5. Release the item](#5-the-enterprise-item-is-released-in-fusion-manage) | Release approvers | Fusion Manage | The item is released through its own workflow. |
+
+!!! note "The add-in does not enforce this process"
+    It will publish any design you open, whatever its state, and it does not release items or start workflows. The sequence below is how it is meant to be used. Your organisation's own release rules still apply.
 
 ## Before you start
 
-One-time setup, done once per user (or once and shared by export):
+One-time setup:
 
 - The add-in is installed and you are signed in ([Installation and Authentication](03-installation-and-authentication.md)).
-- The Items workspace is configured, with field mappings and a match key ([Manufacturing Data Model](04-manufacturing-data-model.md)).
+- The Items workspace is configured, with field mappings and a match key ([Workspace and Field Mapping](05-workspace-and-field-mapping.md)).
 - Every user who publishes holds the Fusion Manage permissions listed in [Installation and Authentication](03-installation-and-authentication.md#permissions-in-fusion-manage).
 
-## 1. Engineering releases the component
+---
 
-**Who:** Engineering, meaning the designers who do the CAD work. **Where:** Fusion.
+## 1. Engineering releases the component and drawing
 
-Engineers model the component and create its drawing in Fusion, then release both. The add-in is not involved in this step. What matters for the next stage is that the design and its drawing are saved and released, and that each component that should become an item has a **part number**.
+**Who:** Engineering, the designers who do the CAD work. **Where:** Fusion.
 
-The drawing is not published as an item of its own. It is attached later, as a PDF, to the item of the design it shows (see [stage 3](#3-complete-the-manufacturing-package)). The drawing therefore has to reference the released design, and that design's top-level component needs a part number.
+Engineers model the component, create its drawing, and release both **exactly as they normally would**. The add-in asks nothing more of them, and does not take part in this step.
 
-The part number is the **item number** in Fusion Manage. It is how the add-in decides whether to create an item or update an existing one, so check it before handing over.
+What the next stage depends on:
 
-The add-in can carry the release outcome into Fusion Manage. If you map the **Revision** and **Lifecycle state** sources to Fusion Manage fields, the values set by Engineering are published with the item. See [Manufacturing Data Model](04-manufacturing-data-model.md#available-sources).
+- The design and drawing are saved and released.
+- The Manufacturing Data Model has finished processing the design.
+- Every component that should become an item has a **part number**, including the top-level one.
+- The drawing references the released design.
 
-**Hand-over checklist**
-
-- [ ] The design and its drawing are saved and released.
-- [ ] The Manufacturing Data Model has finished processing the design.
-- [ ] The top-level component and every component to publish have part numbers.
-- [ ] The drawing references the released design.
-- [ ] Properties that are mapped to Fusion Manage fields (material, description, custom properties) are filled in.
+!!! tip "Engineers are not blocked"
+    Because the manufactured item has its own lifecycle, engineers release and revise in Fusion without waiting on Fusion Manage. The item is published when the Design Engineer or Manufacturing Engineer is ready.
 
 ## 2. Manufacturing publishes the enterprise item
 
-**Who:** Manufacturing. **Where:** Fusion. **Add-in:** Publish Fusion Manage Item.
+**Who:** the Design Engineer or the Manufacturing Engineer. **Where:** Fusion. **Add-in:** Publish Fusion Manage Item.
+
+This is the step that crosses the bridge. Either role can publish: the Design Engineer who released the component, or the Manufacturing Engineer who takes it on. It needs the Fusion Manage permissions listed under [Before you start](#before-you-start), so whoever publishes must hold them.
 
 1. Open the released design.
 2. Choose **Fusion Manage ▸ Item ▸ Publish Fusion Manage Item**.
 3. Review the BOM and each component's properties in the Details Panel. Anything marked **New** or **Update** will change in Fusion Manage.
 4. Click **Publish**.
 
-The add-in creates an item for each component that does not have one, updates the ones that do, and then synchronises the BOMs. Fusion Manage lines that the design does not have are kept unless you choose to remove them. Progress is shown in the **Job Queue**, and a summary appears when the run ends.
+The add-in creates an item for each component that does not have one, updates those that do, and synchronises the BOMs. Progress is shown in the **Job Queue**.
 
-For the full procedure, see [Publishing Enterprise Items](05-publishing-enterprise-items.md) and [BOM Synchronisation](06-bom-synchronisation.md).
+What crosses, and what does not:
 
-**Outcome:** every component exists as an item in the Items workspace, with its properties, thumbnail and BOM.
+| Crosses from engineering to the item | Stays independent |
+|---|---|
+| The properties you have mapped (part number, name, description, material, custom and physical properties) | Fields you have not mapped, which the add-in never overwrites |
+| The thumbnail | The item's lifecycle state and workflow, which Fusion Manage owns |
+| | STEP files and drawing PDFs, which are never sent by a publish. You upload them yourself in [stage 3](#3-complete-the-manufacturing-package) |
+| The design's BOM structure and quantities | BOM lines that only Fusion Manage has, which are **kept** unless you choose to remove them |
+
+!!! tip "Keep engineering and manufacturing state separate"
+    Mapping Fusion's **Revision** or **Lifecycle state** is optional. If you do, map them to informational fields, for example a text field recording the engineering revision, and not to the field that drives the item's own lifecycle. Otherwise the two lifecycles are tied together again.
+
+For the full procedure see [Publishing Enterprise Items](06-publishing-enterprise-items.md) and [BOM Synchronisation](07-bom-synchronisation.md).
+
+**Outcome:** every component exists as a manufacturing item in the Items workspace, with its properties, thumbnail and BOM.
 
 ## 3. Complete the manufacturing package
 
 **Who:** Manufacturing. **Where:** Fusion and Fusion Manage.
 
-The published item is the foundation. Manufacturing now adds what is needed to make it.
+The published item is the foundation. This stage adds what the supply chain needs to make or buy it.
+
+!!! important "Representations are never added automatically"
+    Publishing an item does **not** attach a STEP file, a drawing PDF or any other representation. Each one is uploaded manually, one at a time, from a menu command. You decide which representations go to the supply chain, for which items, and when. If you never upload one, none is sent.
 
 | Task | How |
 |---|---|
-| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([Technical Representation](07-technical-representation.md)). |
+| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([Technical Representation](08-technical-representation.md)). |
 | Attach a PDF of the drawing | Open the drawing and choose **Upload Drawing Representation To Fusion Manage Item**. |
-| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([BOM Synchronisation](06-bom-synchronisation.md#add-items)). |
+| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([BOM Synchronisation](07-bom-synchronisation.md#add-items)). |
 | Keep or change manufacturing lines that only Fusion Manage has | Review the **Fusion Manage Only** lines. They are kept unless you remove them. |
-| Complete fields that the design does not supply | Edit these in Fusion Manage. Fields that are not mapped are never overwritten by a publish. |
+| Complete information that engineering does not supply | Edit it in Fusion Manage. |
 
-Uploading a file that is already attached creates a **new version** of it rather than a duplicate, so the package can be refreshed as the design changes.
+The drawing is not an item of its own. Its PDF is attached to the item of the design it shows. Uploading a file that is already attached creates a **new version**, so the package can be refreshed as the design changes.
 
-!!! tip "Design changes during this stage"
-    If the design changes, publish again. Items that already match are left alone and only differences are sent, so repeating a publish is safe.
+!!! tip "When engineering changes the design later"
+    Publish again. Items that already match are left alone, only the differences are sent, and what Manufacturing added in Fusion Manage is kept. Repeating a publish is safe.
 
 **Outcome:** each item carries its STEP file, its drawing PDF and a complete BOM.
 
@@ -99,13 +163,13 @@ Each group checks the item against the design. In Fusion, open the **Item panel*
 | Review | Look at |
 |---|---|
 | Engineering: does the item match the design and drawing? | **Item** tab fields against the design's properties; **Bill of Materials** tab against the design BOM. |
-| Quality: is the documentation present? | **Files** tab for the STEP file and drawing PDF. **Item** tab for revision and lifecycle state. |
+| Quality: is the documentation present? | **Files** tab for the STEP file and drawing PDF. **Item** tab for the recorded revision. |
 | Manufacturing: is the package complete? | **Bill of Materials** tab, including the manufacturing lines; **Where Used** for the assemblies that hold the item. |
 | Everyone: is anything already in flight? | **Associated Workflows** tab for change orders that reference the item and their current state. |
 
-See [Item Review & Release](08-item-review-and-release.md) for what each tab shows.
+See [Item Review & Release](09-item-review-and-release.md) for what each tab shows.
 
-If the review finds a problem, correct it at the source: change the design in Fusion and publish again, or change the data in Fusion Manage. Then repeat the review.
+If the review finds a problem, correct it at its source. A design problem is fixed in Fusion, released, and published again. A manufacturing problem is fixed in Fusion Manage. Then review again.
 
 **Outcome:** the item is agreed to be correct and complete.
 
@@ -113,19 +177,21 @@ If the review finds a problem, correct it at the source: change the design in Fu
 
 **Who:** Release approvers. **Where:** Fusion Manage.
 
-Release is a workflow in Fusion Manage and is done there. The add-in does not move an item through its workflow.
+The manufactured item is released through **its own workflow in Fusion Manage**, independent of the engineering release in Fusion. The add-in does not move an item through its workflow.
 
 1. In the Item panel, click **Open in browser** to go straight to the item.
-2. In Fusion Manage, run the workflow action your organisation uses to release the item, for example by creating or advancing the relevant workflow item.
+2. In Fusion Manage, run the workflow action your organisation uses to release the item.
 3. Back in Fusion, click **Refresh** in the Item panel to see the new state, or check the **Associated Workflows** tab for the workflow's progress.
 
-**Outcome:** the item is released and available to the rest of the business.
+**Outcome:** the manufactured item is released and available to the wider supply chain.
+
+---
 
 ## Quick reference
 
 | I want to… | Use |
 |---|---|
-| Create or update items from a design | **Publish Fusion Manage Item** |
+| Create or update items from a released design | **Publish Fusion Manage Item** |
 | See whether a publish succeeded | **Job Queue** |
 | Retry after a failure | **Send to Fusion Manage** in the Job Queue |
 | Attach a STEP file | **Upload STEP File To Fusion Manage Item** |

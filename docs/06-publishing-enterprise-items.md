@@ -8,7 +8,7 @@ Publishing creates or updates the Fusion Manage items for a design and every com
 
 ## Before you start
 
-- You are signed in and the Items workspace is configured ([Installation and Authentication](03-installation-and-authentication.md), [Manufacturing Data Model](04-manufacturing-data-model.md)).
+- You are signed in and the Items workspace is configured ([Installation and Authentication](03-installation-and-authentication.md), [Workspace and Field Mapping](05-workspace-and-field-mapping.md)).
 - The design is saved and its components have part numbers. The part number becomes the item number.
 - Your Fusion Manage user holds the permissions listed in the Items workspace: View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM. Otherwise the panel shows a "no access" message naming what is missing.
 
@@ -33,7 +33,7 @@ Properties with no mapping are listed as not published. Mapped properties are li
 ## Publish
 
 1. Review the BOM and details. **Refresh** reads the design and Fusion Manage again.
-2. Optionally use **Add Items** to include existing Fusion Manage items in the BOM (see [BOM Synchronisation](06-bom-synchronisation.md)).
+2. Optionally use **Add Items** to include existing Fusion Manage items in the BOM (see [BOM Synchronisation](07-bom-synchronisation.md)).
 3. Click **Publish**. The button is enabled once the BOM has loaded.
 
 A progress dialog appears. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
@@ -56,7 +56,7 @@ When the run ends you get a message box with **Total Items Processed**, **Total 
 
 ## Request files and retrying
 
-Every run keeps its files, in a `publishes` folder in your user profile (see [Troubleshooting and Limitations](09-troubleshooting-and-limitations.md) for the path). Inside you will find per-item request JSON, thumbnails, the BOM requests under `bom`, a `manifest.json` summarising the run, and `send-log.json`, which records every request Fusion Manage accepted.
+Every run keeps its files, in a `publishes` folder in your user profile (see [Troubleshooting and Limitations](10-troubleshooting-and-limitations.md) for the path). Inside you will find per-item request JSON, thumbnails, the BOM requests under `bom`, a `manifest.json` summarising the run, and `send-log.json`, which records every request Fusion Manage accepted.
 
 To retry a failed run, or to send a folder after reviewing it, click **Send to Fusion Manage** in the Job Queue and choose the folder. A confirmation shows the tenant and workspace, the items to create and update, the BOM requests, and how many requests an earlier try already sent. **What Fusion Manage already accepted is skipped**, so nothing is created twice. An item whose creation failed is not there for its BOM; the other items carry on.
 
