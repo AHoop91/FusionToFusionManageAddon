@@ -36,7 +36,7 @@ Each BOM sent for a parent assembly also has its own row, after the items.
 
 - **Cancel** stops a job that is waiting or running. Items already processed are kept in the run's folder, and the rest are not published.
 - **Clear finished** removes finished jobs from the list. A job that finished with every row done removes itself.
-- **Send to Fusion Manage** sends a folder you choose. See [Request Files and Retry](#).
+- **Send to Fusion Manage** sends a folder you choose. See [Request Files and Retry](#request-files-and-retry).
 
 ## Knowing when something ends
 

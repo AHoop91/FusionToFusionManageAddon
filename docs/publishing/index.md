@@ -73,7 +73,7 @@ When the run ends you get a message box with **Total Items Processed**, **Total 
 
     Save the image as `docs/images/publish-complete.png`, then replace this box with `![Publish complete message](../images/publish-complete.png)`.
 
-The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/index.md#).
+The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/index.md#request-files-and-retry).
 
 ## Technical representations are manual
 

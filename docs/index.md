@@ -73,13 +73,13 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
 **Item Panel**
 
 - [Item Panel](item-panel/index.md)
-- [Tabs](item-panel/index.md#)
-- [Review and Release](item-panel/index.md#)
+- [Tabs](item-panel/index.md#tabs)
+- [Review and Release](item-panel/index.md#review-and-release)
 
 **Job Queue**
 
 - [Job Queue](job-queue/index.md)
-- [Request Files and Retry](job-queue/index.md#)
+- [Request Files and Retry](job-queue/index.md#request-files-and-retry)
 
 **Reference**
 

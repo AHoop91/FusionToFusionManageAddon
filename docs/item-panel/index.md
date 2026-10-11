@@ -7,7 +7,7 @@ title: Item Panel
 The **Item Panel** shows an item's Fusion Manage record inside Fusion, next to the design it came from. You can check a publish and see where an item stands in its lifecycle without switching to the browser.
 
 !!! note "It is for reviewing"
-    The panel reads the item. It does not move it through its workflow, and its only change to the item is attaching files you choose to upload. Release happens in Fusion Manage. See [Review and Release](#).
+    The panel reads the item. It does not move it through its workflow, and its only change to the item is attaching files you choose to upload. Release happens in Fusion Manage. See [Review and Release](#review-and-release).
 
 
 ## Open the Item Panel
@@ -113,7 +113,7 @@ Open the item in the [Item Panel](#item-panel) and work through the tabs:
 4. Check **Where Used** to confirm the item sits in the right assembly.
 5. Check **Associated Workflows** to see whether a change order already covers the item and where it is.
 
-Each tab is described in [Tabs](#). Anyone without the add-in can review the same item in Fusion Manage directly.
+Each tab is described in [Tabs](#tabs). Anyone without the add-in can review the same item in Fusion Manage directly.
 
 If the review finds a problem, correct it at its source. A design problem is fixed in Fusion, released, and published again. A manufacturing problem is fixed in Fusion Manage. Then review again.
 

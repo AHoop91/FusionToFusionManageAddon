@@ -161,7 +161,7 @@ Each group checks the item against the design. In Fusion, open the **Item panel*
 | Manufacturing: is the package complete? | **Bill of Materials** tab, including the manufacturing lines; **Where Used** for the assemblies that hold the item. |
 | Everyone: is anything already in flight? | **Associated Workflows** tab for change orders that reference the item and their current state. |
 
-See [Item Panel Tabs](../item-panel/index.md#) for what each tab shows, and [Review and Release](../item-panel/index.md#) for the routine.
+See [Item Panel Tabs](../item-panel/index.md#tabs) for what each tab shows, and [Review and Release](../item-panel/index.md#review-and-release) for the routine.
 
 If the review finds a problem, correct it at its source. A design problem is fixed in Fusion, released, and published again. A manufacturing problem is fixed in Fusion Manage. Then review again.
 
