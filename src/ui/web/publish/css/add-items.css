@@ -51,7 +51,6 @@
    select box, item, workspace, lifecycle. */
 .pub-add-list { flex: none; height: clamp(240px, 52vh, 460px); margin-top: 8px; overflow-y: auto; overflow-anchor: none; border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px; }
 .pub-add-row { display: grid; grid-template-columns: 34px minmax(0, 3fr) minmax(0, 1.1fr) minmax(0, 1.1fr); align-items: center; height: 30px; border-bottom: 1px solid rgba(0, 0, 0, .08); font-size: 12px; }
-.pub-add-row[hidden], .pub-add-status[hidden] { display: none; }
 .pub-add-row:not(.pub-add-head) { content-visibility: auto; contain-intrinsic-size: auto 30px; }
 .pub-add-row:not(.pub-add-head):hover { background: rgba(0, 0, 0, .04); }
 /* An item already added to the Bill of Materials: greyed out and locked. */

@@ -45,7 +45,6 @@
   margin-top: 2px; padding: 6px 0 4px; background: var(--surface);
   border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
-.ws-pick-menu[hidden] { display: none; }
 .ws-pick-search {
   display: block; width: calc(100% - 12px); margin: 0 6px 4px; padding: 5px 6px;
   border: 1px solid var(--border); border-radius: 4px; font: inherit;
@@ -57,7 +56,6 @@
 .ws-pick-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; }
 .ws-pick-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.04em; }
 .ws-pick-empty { padding: 6px 10px; font-size: 12px; }
-.ws-pick-section[hidden], .ws-pick-item[hidden], .ws-pick-empty[hidden] { display: none; }
 .ws-pick-item {
   display: block; width: 100%; padding: 5px 10px; border: 0; background: none;
   font: inherit; text-align: left; color: var(--text); cursor: pointer; white-space: normal; overflow-wrap: anywhere;
@@ -89,7 +87,6 @@
 .ws-id-wrap { position: relative; flex: 1; }
 .ws-tick { position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
   color: var(--ok); font-weight: 700; pointer-events: none; }
-.ws-tick[hidden] { display: none; }
 .ws-status { min-height: 0; margin: 4px 0 0; font-size: 12px; }
 .ws-hint { margin: 8px 0; font-size: 12px; }
 .ws-status:empty { display: none; }
@@ -117,7 +114,6 @@
 .ws-panel { position: relative; }
 .ws-busy { position: absolute; inset: 0; z-index: 5; justify-content: center;
   background: rgba(255, 255, 255, 0.85); }
-.ws-busy[hidden] { display: none; }
 .ws-section { margin-bottom: 4px; }
 .ws-panel > .ws-desc { margin: 0; font-size: 12px; }
 
