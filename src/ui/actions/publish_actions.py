@@ -6,29 +6,25 @@ opening, a component being clicked), each on its own worker thread.
 
 import threading
 import webbrowser
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Tuple
 
 from ...auth.auth_service import AuthService
-from ...auth.errors import AuthError
 from ...config.config_service import ConfigService
 from ...config.workspace_models import ITEMS_KIND, KINDS_BY_ID, PHYSICAL_PREFIX, WorkspaceConfig
 from ...core.logging_setup import get_logger
 from ...core.timing import Stopwatch
 from ...fm.bom import BomService
-from ...fm.client import FmApiError, FmClient
+from ...fm.client import FmClient
 from ...fm.items import ItemService
 from ...fm.permissions import denial
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
 from ...sync.bom_compare import compare_bom
 from ...sync.item_compare import compare_with_item, item_number_of, lookup_item
-from ...sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN
 from ..message_bridge import MessageBridge
 
 log = get_logger("publish_actions")
-
-VALIDATION_WORKERS = 5   # Fusion Manage searches in flight at once
 
 
 class PublishDenied(Exception):
@@ -225,63 +221,6 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
         webbrowser.open(url)
         return {}
 
-    # One search per distinct item number, so the panel can flag new and duplicated items up front.
-    validation: Dict[str, Any] = {"key": "", "running": False, "done": 0, "total": 0, "results": {}, "message": ""}
-
-    def check_number(service: ItemService, workspace_id: str, number: str) -> Dict[str, Any]:
-        try:
-            hits = service.search(workspace_id, number)
-        except (FmApiError, AuthError) as exc:
-            return {"state": UNKNOWN, "candidates": [], "message": str(exc)}
-        state = NEW if not hits else (FOUND if len(hits) == 1 else MULTIPLE)
-        return {"state": state, "candidates": hits if len(hits) > 1 else [], "message": ""}
-
-    def validate(key: str, numbers: List[str], fm: FmClient, workspace_id: str) -> None:
-        service = ItemService(fm)
-
-        def record(number: str, result: Dict[str, Any]) -> None:
-            with lock:
-                if validation["key"] == key:   # ignore a run for a design that is no longer open
-                    validation["results"][number] = result
-                    validation["done"] += 1
-
-        try:
-            if numbers:   # first search alone, so any token refresh happens once before the parallel ones
-                record(numbers[0], check_number(service, workspace_id, numbers[0]))
-            with ThreadPoolExecutor(max_workers=VALIDATION_WORKERS) as pool:
-                futures = {pool.submit(check_number, service, workspace_id, n): n for n in numbers[1:]}
-                for future in as_completed(futures):
-                    record(futures[future], future.result())
-        except Exception as exc:  # never leave the panel waiting
-            log.exception("Validating Fusion Manage items failed")
-            with lock:
-                validation["message"] = str(exc) or type(exc).__name__
-        with lock:
-            if validation["key"] == key:
-                validation["running"] = False
-        log.info("Validated %d item number(s) against Fusion Manage", len(numbers))
-
-    def start_fm_validation(payload: Dict[str, Any]) -> Dict[str, Any]:
-        numbers = list(dict.fromkeys(str(n).strip() for n in payload.get("numbers") or [] if str(n).strip()))
-        model_id, time = _model_ref()
-        key = f"{model_id}|{time}"
-        cfg = config.config.workspaces.get(ITEMS_KIND)
-        with lock:
-            if validation["key"] == key and (validation["running"] or validation["done"]) and not payload.get("force"):
-                return dict(validation)
-            validation.update(key=key, running=False, done=0, total=0, results={}, message="")
-            if not model_id or not cfg or not cfg.workspace_id:
-                return dict(validation)
-            validation.update(running=True, total=len(numbers))
-            snapshot = dict(validation)
-        fm = FmClient(config.effective_settings(), auth)
-        threading.Thread(target=validate, args=(key, numbers, fm, cfg.workspace_id), daemon=True).start()
-        return snapshot
-
-    def get_fm_validation(_payload: Dict[str, Any]) -> Dict[str, Any]:
-        with lock:
-            return dict(validation)
-
     def get_publish_model_key(_payload: Dict[str, Any]) -> Dict[str, Any]:
         """Cheap check of which design is open, so the panel reloads only on a change."""
         model_id, time = _model_ref()
@@ -291,5 +230,3 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
     bridge.register("load_publish_section_status", load_publish_section_status)
     bridge.register("get_publish_model_key", get_publish_model_key)
     bridge.register("open_url", open_url)
-    bridge.register("start_fm_validation", start_fm_validation)
-    bridge.register("get_fm_validation", get_fm_validation)

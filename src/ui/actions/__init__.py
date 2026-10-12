@@ -32,8 +32,6 @@ from .workspace_actions import register_workspace_actions
 def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
                      dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
     """Register every palette action on ``bridge``."""
-    # Diagnostic round trip used to verify the palette bridge is alive.
-    bridge.register("ping", lambda _payload: {"message": "pong"})
     register_settings_actions(bridge, config)
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)

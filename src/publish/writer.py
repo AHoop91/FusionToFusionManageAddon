@@ -12,7 +12,7 @@ import threading
 from datetime import datetime
 from typing import Any, Dict, List
 
-OK, SKIPPED, FAILED, PENDING = "ok", "skipped", "error", "pending"
+OK, SKIPPED, FAILED = "ok", "skipped", "error"
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 
 
@@ -64,10 +64,6 @@ class PublishFolder:
         with self._lock:
             self.entries.append(entry)
         return entry
-
-    def settle(self, entry: Dict[str, Any], status: str, detail: str = "", file: str = "") -> None:
-        """Update an entry that was recorded as pending (an export that runs later)."""
-        entry.update(status=status, detail=detail, file=file)
 
     def save_manifest(self, info: Dict[str, Any]) -> None:
         counts: Dict[str, int] = {}

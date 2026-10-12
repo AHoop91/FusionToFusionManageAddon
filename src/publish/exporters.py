@@ -8,7 +8,6 @@ component's own document.
 """
 
 import time
-import urllib.request
 from typing import Any, Dict, List, Optional
 
 from ..core.logging_setup import get_logger
@@ -121,11 +120,3 @@ def export_step(path: str, occurrences: Optional[List[Any]] = None, name: str = 
     except Exception as exc:
         failures.append(f"own document: {exc}")
         raise RuntimeError("; ".join(failures))
-
-
-def download(url: str, timeout: int = 30) -> bytes:
-    """GET a signed url (it carries its own access, so no authorisation header is sent)."""
-    if not url.lower().startswith("https://"):
-        raise ValueError("The thumbnail address is not https.")
-    with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - https checked above
-        return response.read()

@@ -1,9 +1,7 @@
 """Shared constants for the MfgToFm add-in."""
 
 ADDIN_NAME = "MfgToFm"
-ADDIN_TITLE = "Fusion Manage"
 SETTINGS_TITLE = "Fusion Manage Settings"
-ADDIN_VERSION = "0.1.0"
 
 # Fusion UI identifiers. Prefixed so they cannot collide with other add-ins.
 COMMAND_ID = "MfgToFm_ShowPanelCmd"
