@@ -8,23 +8,7 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   const el = ns.el;
-
-  /** A 24x24 icon drawn from path strings; ``size`` (px) is optional, the stylesheet can size it instead. */
-  function svg(paths, size) {
-    const node = document.createElementNS(SVG_NS, 'svg');
-    node.setAttribute('viewBox', '0 0 24 24');
-    node.setAttribute('aria-hidden', 'true');
-    if (size) {
-      node.setAttribute('width', String(size));
-      node.setAttribute('height', String(size));
-    }
-    paths.forEach(function (d) {
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', d);
-      node.appendChild(path);
-    });
-    return node;
-  }
+  const svg = ns.svg;
 
   // ---- Tree icons and chevrons -------------------------------------------------
 

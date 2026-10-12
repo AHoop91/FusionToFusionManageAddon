@@ -25,11 +25,10 @@
 
   function listOpen() { return !!$('pub-jobs-list'); }   // only the Jobs window has the list
 
-  // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a green tick, a red cross.
+  // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a red cross (failed or cancelled; a finished row is not listed).
   const ICONS = {
     queued:    { title: 'Queued', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
     running:   { title: 'Running', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
-    done:      { title: 'Done', paths: ['M5 12.5l4.5 4.5L19 7.5'] },
     error:     { title: 'Failed', paths: ['M6 6l12 12', 'M18 6L6 18'] },
     cancelled: { title: 'Cancelled', paths: ['M6 6l12 12', 'M18 6L6 18'] },
   };
@@ -232,7 +231,6 @@
   function init(options) {
     onFinished = options && options.onFinished;
     ACTIONS.forEach(function (name) { bridge.on(name, name === 'start_publish' ? handleStart : handle); });
-    bridge.on('open_publish_folder', function () {});
     if ($('progress')) {
       $('progress-close').addEventListener('click', closeProgress);
       $('progress-cancel').addEventListener('click', function () { askCancel(true); });

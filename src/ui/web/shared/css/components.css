@@ -26,7 +26,6 @@
 }
 .card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
 .card label { display: block; margin-bottom: 10px; font-weight: 500; }
-.card label.radio { font-weight: 400; margin-bottom: 6px; }
 .card input[type="text"], .card input[type="number"] {
   display: block; width: 100%; margin-top: 4px; padding: 6px 8px;
   border: 1px solid var(--border); border-radius: 4px; font: inherit;

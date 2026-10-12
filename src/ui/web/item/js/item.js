@@ -370,8 +370,6 @@
       poll();
     });
     bridge.on('refresh_item_view', handle);
-    bridge.on('open_url', function () {});
-    bridge.on('open_attachment', function () {});
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
       tab.addEventListener('click', function () { if (currentView) showTab(tab.dataset.tab); });
     });

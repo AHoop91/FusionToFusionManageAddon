@@ -91,5 +91,5 @@
     setupTabs('.tabs[data-group="settings"]', 'tab', 'sub-');
   }
 
-  ns.tabs = { init: init, setup: setupTabs };
+  ns.tabs = { init: init };
 })(window.MfgUi);

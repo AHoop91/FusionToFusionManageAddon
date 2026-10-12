@@ -98,10 +98,7 @@
 .pub-job-status svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pub-job-queued, .pub-job-cancelled { color: #8a8f98; }
 .pub-job-running { color: var(--accent); }
-.pub-job-done { color: #2e9d4a; }
 .pub-job-error { color: var(--danger, #d13438); }
-.pub-run-row { display: flex; justify-content: space-between; margin: 0 0 4px; font-size: 12px; }
-.pub-run-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
 /* No permission to publish: an icon and a line, centred */
 .pub-denied { text-align: center; }

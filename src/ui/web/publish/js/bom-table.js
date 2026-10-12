@@ -16,7 +16,7 @@
 
   // Status chip per row status: tone (colour), label and the tooltip. A differing pair gets its chips in ``pairChip``.
   const STATUS = {
-    match:   { tone: 'match',   label: 'Match',         text: 'Same line and quantity in Fusion Manage' },
+    match:   { label: 'Match',         text: 'Same line and quantity in Fusion Manage' },
     new:     { tone: 'new',     label: 'New',           text: 'Not in Fusion Manage yet: publishing adds it' },
     changed: { tone: 'changed', label: 'Updates',       text: 'Quantity differs from Fusion Manage' },
     added:   { tone: 'new',     label: 'New',           text: 'Publishing adds this line to the Fusion Manage BOM' },

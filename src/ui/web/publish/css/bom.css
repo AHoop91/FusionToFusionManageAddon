@@ -57,7 +57,6 @@
 /* Status chip: a small 4px chip. */
 .pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 76px; padding: 0; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
 .pub-cmp td.pub-cmp-status, .pub-cmp th.pub-cmp-status { text-align: center; }
-.pub-cmp-chip-match { color: #5b6677; background: #eef1f5; }
 .pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
 .pub-cmp-chip-added { color: #1e7a3a; background: #dff3e5; }
 .pub-cmp-chip-changed { color: #a86400; background: #fdf0d8; }
@@ -66,7 +65,6 @@
 .pub-cmp-chip-removed { color: #b3262a; background: #fbe4e5; }
 .pub-cmp-diff { color: #b87300; font-weight: 600; }
 .pub-cmp-qty-diff { font-weight: 600; color: #d98c00; }
-.pub-cmp-qty-fm { font-weight: 400; color: var(--muted); font-size: 11px; }
 
 /* A differing pair is two rows: the design line, then the Fusion Manage line. */
 .pub-cmp-fmline td { border-top-style: dashed; }

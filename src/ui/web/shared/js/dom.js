@@ -16,3 +16,21 @@ window.MfgUi.el = function (tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 };
+
+/** A 24x24 icon drawn from path strings; ``size`` (px) is optional, the stylesheet can size it instead. */
+window.MfgUi.svg = function (paths, size) {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const node = document.createElementNS(namespace, 'svg');
+  node.setAttribute('viewBox', '0 0 24 24');
+  node.setAttribute('aria-hidden', 'true');
+  if (size) {
+    node.setAttribute('width', String(size));
+    node.setAttribute('height', String(size));
+  }
+  paths.forEach(function (d) {
+    const path = document.createElementNS(namespace, 'path');
+    path.setAttribute('d', d);
+    node.appendChild(path);
+  });
+  return node;
+};

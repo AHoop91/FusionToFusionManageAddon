@@ -32,7 +32,6 @@
   function load(startAction, resultAction, payload, done) {
     if (!listening[resultAction]) {
       listening[resultAction] = true;
-      bridge.on(startAction, function () {});
       bridge.on(resultAction, function (r) {
         const entry = r.ok ? r.result : { request: '', pending: false, ok: false, message: r.error };
         const callback = waiting[entry.request];

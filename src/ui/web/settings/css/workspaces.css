@@ -91,7 +91,6 @@
   color: var(--ok); font-weight: 700; pointer-events: none; }
 .ws-tick[hidden] { display: none; }
 .ws-status { min-height: 0; margin: 4px 0 0; font-size: 12px; }
-.ws-status.ok { color: var(--ok); }
 .ws-hint { margin: 8px 0; font-size: 12px; }
 .ws-status:empty { display: none; }
 
@@ -110,7 +109,6 @@
 .ws-tab:hover { color: var(--text); }
 .ws-tab.active { color: var(--text); border-bottom-color: var(--accent); }
 .ws-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.ws-panels .ws-hint { margin: 10px 0 0; }
 .ws-panel .ws-heading { margin: 14px 0 8px; }
 
 /* ---- Workspace tab options ---------------------------------------------- */

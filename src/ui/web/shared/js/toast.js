@@ -1,28 +1,15 @@
 /**
  * Toasts (Material "snackbars"), shared by the panels, as ``ns.toast``.
  * ``show(message, opts)`` slides a short message up from the bottom of the panel and removes it after a few seconds;
- * ``opts``: ``tone`` ('success', 'error' or 'info', default 'info'), ``duration`` in ms (0 keeps it until closed),
- * ``max`` (toasts shown at once, default 3: the oldest goes first) and ``onClose`` (called once it has gone).
- * A toast stays while the pointer is over it. ``open()`` is how many are on screen.
+ * ``opts``: ``tone`` ('success', 'error' or 'info', default 'info'). Three show at once: the oldest goes first.
+ * A toast stays while the pointer is over it.
  */
 (function (ns) {
   'use strict';
 
-  const SVG_NS = 'http://www.w3.org/2000/svg';
   const el = ns.el;
 
-  /** A 24x24 icon drawn from path strings; the stylesheet sizes it. */
-  function svg(paths) {
-    const node = document.createElementNS(SVG_NS, 'svg');
-    node.setAttribute('viewBox', '0 0 24 24');
-    node.setAttribute('aria-hidden', 'true');
-    paths.forEach(function (d) {
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', d);
-      node.appendChild(path);
-    });
-    return node;
-  }
+  const svg = ns.svg;
 
   const MAX_TOASTS = 3;
   const DURATION_MS = 4000;
@@ -50,18 +37,14 @@
     toast.leaving = true;
     clearTimeout(toast.timer);
     toast.node.classList.add('leaving');
-    setTimeout(function () {
-      toast.node.remove();
-      if (toast.onClose) toast.onClose();
-    }, LEAVE_MS);
+    setTimeout(function () { toast.node.remove(); }, LEAVE_MS);
   }
 
   function show(message, opts) {
     const options = opts || {};
     const tone = ICONS[options.tone] ? options.tone : 'info';
     const container = hostNode();
-    const max = options.max || MAX_TOASTS;
-    while (container.children.length >= max) container.firstChild.remove();
+    while (container.children.length >= MAX_TOASTS) container.firstChild.remove();
 
     const node = el('div', 'toast toast-' + tone);
     const icon = el('span', 'toast-icon');
@@ -76,17 +59,13 @@
     node.appendChild(close);
     container.appendChild(node);
 
-    const toast = { node: node, timer: 0, leaving: false, onClose: options.onClose };
-    const duration = options.duration === undefined ? DURATION_MS : options.duration;
-    function arm() { if (duration > 0) toast.timer = setTimeout(function () { dismiss(toast); }, duration); }
+    const toast = { node: node, timer: 0, leaving: false };
+    function arm() { toast.timer = setTimeout(function () { dismiss(toast); }, DURATION_MS); }
     node.addEventListener('mouseenter', function () { clearTimeout(toast.timer); });
     node.addEventListener('mouseleave', arm);
     close.addEventListener('click', function () { dismiss(toast); });
     arm();
   }
 
-  /** How many toasts are on screen. */
-  function open() { return host ? host.children.length : 0; }
-
-  ns.toast = { show: show, open: open };
+  ns.toast = { show: show };
 })(window.MfgUi);
