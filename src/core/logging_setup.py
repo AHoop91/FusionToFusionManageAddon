@@ -13,14 +13,15 @@ from .constants import ADDIN_NAME
 
 _CONFIGURED = False
 
+LOG_DIR_ENV = "MFGTOFM_LOG_DIR"   # puts the logs in this folder instead of the user profile (the tests use it)
 DEBUG_ENV = "MFGTOFM_DEBUG"
 DEBUG_FLAG_FILE = "debug.flag"   # an empty file of this name in the log directory switches verbose logging on
 
 
 def log_directory() -> str:
-    """Return (and create) the per-user log directory."""
-    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/Library/Logs")
-    path = os.path.join(base, ADDIN_NAME, "logs")
+    """Return (and create) the log directory: ``MFGTOFM_LOG_DIR`` when set, else the per-user one."""
+    path = os.environ.get(LOG_DIR_ENV) or os.path.join(
+        os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/Library/Logs"), ADDIN_NAME, "logs")
     os.makedirs(path, exist_ok=True)
     return path
 
