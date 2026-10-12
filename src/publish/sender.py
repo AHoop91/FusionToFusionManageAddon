@@ -2,8 +2,7 @@
 
 A publish run sends each item as soon as its request is written, then the Bill of Materials of each
 parent once every item is there (see ``runner``). ``SendRun`` does the same from a finished folder, a
-job on the same ``JobQueue`` that answers ``snapshot`` like a publish run: it is how a folder is retried
-or sent after review.
+job on the same ``JobQueue`` that answers ``snapshot`` like a publish run: it is how a failed run is retried.
 
 Both go through one ``Dispatcher``, which fills in the ids that only exist once the items do (see
 ``placeholders``) and writes every request Fusion Manage accepts to ``send-log.json`` at once. Sending
@@ -61,15 +60,6 @@ def load_plan(path: str) -> Dict[str, Any]:
             data = _read(os.path.join(bom_dir, name))
             boms.append({"parent": str(data.get("parent", "")), "requests": list(data.get("requests") or [])})
     return {"manifest": manifest, "items": items, "boms": boms}
-
-
-def summarize(path: str, plan: Dict[str, Any]) -> Dict[str, Any]:
-    """What sending the folder would do, for the confirmation: counts, tenant and what an earlier send already did."""
-    methods = [i["request"]["method"] for i in plan["items"]]
-    lines = sum(len(b["requests"]) for b in plan["boms"])
-    return {"root": plan["manifest"].get("root", ""), "tenant": plan["manifest"].get("tenant", ""),
-            "workspace_id": plan["manifest"].get("workspace_id", ""), "creates": methods.count("POST"),
-            "updates": methods.count("PATCH"), "bom_lines": lines, "sent_before": len(_load_log(path))}
 
 
 def _load_log(path: str) -> Dict[str, Any]:

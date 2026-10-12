@@ -35,6 +35,13 @@ class JobQueue:
         log.info("Publish run %s queued: %s", run.id, run.name)
         self._changed()
 
+    def replace(self, old: JobState, new: JobState) -> None:
+        """Queue ``new`` in place of the finished run ``old`` (a retry), so the failure is not listed twice."""
+        with self._lock:
+            if old in self._runs:
+                self._runs.remove(old)
+        self.add(new)
+
     def get(self, run_id: str) -> Optional[JobState]:
         with self._lock:
             return next((r for r in self._runs if r.id == run_id), None)

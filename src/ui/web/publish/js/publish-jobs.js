@@ -12,13 +12,14 @@
   const bridge = ns.bridge;
   const ui = ns.pubUi;
 
-  const ACTIONS = ['start_publish', 'list_publish_jobs', 'cancel_publish', 'clear_publish_jobs', 'send_publish_folder'];
+  const ACTIONS = ['start_publish', 'list_publish_jobs', 'cancel_publish', 'clear_publish_jobs', 'retry_publish'];
   const POLL_MS = 1000;
   const FINISHED = ['done', 'error', 'cancelled'];
 
   let jobs = [];
   let onFinished = null;   // called with a watched job once it has ended
   let notified = '';       // id of the job onFinished was last called for
+  let unseen = '';         // id of a running job whose dialog was closed: still followed, to call onFinished when it ends
   let timer = null;
   let confirming = false;   // the dialog asks whether to cancel the publish
   let watched = '';   // id of the job the progress dialog follows ("" = no dialog)
@@ -65,7 +66,7 @@
     const cell = ui.el('td');
     cell.colSpan = 2;
     const box = ui.el('div', 'pub-job-group-box');
-    box.appendChild(ui.el('span', 'pub-job-name', (job.kind === 'send' ? 'Send to Fusion Manage: ' : 'Publish of ') + job.name));
+    box.appendChild(ui.el('span', 'pub-job-name', (job.kind === 'send' ? 'Retry of ' : 'Publish of ') + job.name));
     const note = job.phase === 'queued' ? 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '')
       : (job.phase === 'cancelled' ? 'Cancelled' : (job.phase === 'error' ? 'Failed' : ''));
     box.appendChild(ui.el('span', 'muted pub-job-count', note));
@@ -74,6 +75,12 @@
       cancel.type = 'button';
       cancel.addEventListener('click', function () { bridge.send('cancel_publish', { id: job.id }); });
       box.appendChild(cancel);
+    } else if (job.phase === 'error' || failedRows(job)) {   // sends the failed requests again; what was accepted is skipped
+      const retry = ui.el('button', 'pub-outline-button', 'Retry');
+      retry.type = 'button';
+      retry.title = 'Send the failed requests to Fusion Manage again. What it already accepted is skipped.';
+      retry.addEventListener('click', function () { retry.disabled = true; bridge.send('retry_publish', { id: job.id }); });
+      box.appendChild(retry);
     }
     cell.appendChild(box);
     tr.appendChild(cell);
@@ -170,11 +177,28 @@
     if (!confirming) $('progress-close').focus();
   }
 
+  /** Close the dialog. A publish still running keeps being followed (``unseen``), so the panel is refreshed when it ends all the same. */
   function closeProgress() {
+    const job = watchedJob();
+    unseen = job && !isFinished(job) ? job.id : '';
     watched = '';
     confirming = false;
     clearTimeout(timer);
     $('progress').hidden = true;
+    if (unseen) schedule();
+  }
+
+  /** Tell the panel that the job closed from the dialog has ended; true while it has not. */
+  function settleUnseen() {
+    if (!unseen) return false;
+    const job = jobs.filter(function (j) { return j.id === unseen; })[0];
+    if (job && !isFinished(job)) return true;
+    unseen = '';
+    if (job && notified !== job.id) {
+      notified = job.id;
+      if (onFinished) onFinished(job);
+    }
+    return false;
   }
 
   /** Show or hide the "cancel this publish?" question; the job keeps running until it is answered yes. */
@@ -207,7 +231,8 @@
     const list = listOpen();
     if (list && r.ok) renderList();
     const following = watched && r.ok ? updateProgress() : !!watched;   // keep polling through a failed read
-    if (list || following) schedule();
+    const waiting = r.ok ? settleUnseen() : !!unseen;
+    if (list || following || waiting) schedule();
   }
 
   function handleStart(r) {
@@ -246,7 +271,6 @@
     }
     if (listOpen()) {
       $('pub-jobs-clear').addEventListener('click', function () { bridge.send('clear_publish_jobs'); });
-      $('pub-jobs-send').addEventListener('click', function () { bridge.send('send_publish_folder'); });
       bridge.send('list_publish_jobs');
     }
   }

@@ -36,7 +36,7 @@ Each BOM sent for a parent assembly also has its own row, after the items.
 
 - **Cancel** stops a job that is waiting or running. Items already processed are kept in the run's folder, and the rest are not published.
 - **Clear finished** removes finished jobs from the list. A job that finished with every row done removes itself.
-- **Send to Fusion Manage** sends a folder you choose. See [Request Files and Retry](#request-files-and-retry).
+- **Retry** appears on a job that failed or has failed rows. It sends the failed requests again. See [Request Files and Retry](#request-files-and-retry).
 
 ## Knowing when something ends
 
@@ -52,7 +52,7 @@ You do not have to watch the panel.
 
 ## A failed job
 
-Open the Job Queue and read the reason on each failed row. Fix the cause, then use **Send to Fusion Manage** on the job's folder to retry. What Fusion Manage already accepted is skipped. For common causes, see [Troubleshooting and Limitations](../reference/troubleshooting.md#publishing).
+Open the Job Queue and read the reason on each failed row. Fix the cause, then click **Retry** on the job. What Fusion Manage already accepted is skipped. For common causes, see [Troubleshooting and Limitations](../reference/troubleshooting.md#publishing).
 
 ## Request Files and Retry
 
@@ -75,34 +75,19 @@ Every publish keeps its files, in a `publishes` folder in your user profile. The
 
 The files are a record of what was sent, and what the retry below works from.
 
-### Retry a failed run, or send after review
-
-!!! example "Screenshot placeholder: Send to Fusion Manage confirmation"
-    **Show:** The confirmation with the tenant, workspace, creates, updates, BOM requests and already-sent count.
-
-    Save the image as `docs/images/send-confirmation.png`, then replace this box with `![Send to Fusion Manage confirmation](../images/send-confirmation.png)`.
+### Retry a failed run
 
 1. Open the [Job Queue](#job-queue).
-2. Click **Send to Fusion Manage**.
-3. Choose the run's folder.
-4. Read the confirmation, then confirm.
+2. Click **Retry** on the failed job.
 
-The confirmation shows:
-
-- the tenant and workspace;
-- how many items will be created and updated;
-- how many BOM requests there are;
-- how many requests an earlier try already sent, which will be skipped.
-
-!!! warning
-    This changes real data in Fusion Manage. Check the tenant and workspace in the confirmation.
+The retry replaces the failed job in the list and sends the run's folder again, as a new job. It does not ask for confirmation, because it sends the same requests the run already wrote.
 
 #### Nothing is sent twice
 
 **What Fusion Manage already accepted is skipped.** The `send-log.json` in the folder records each accepted request, so sending a folder again carries on from where it stopped instead of creating items twice.
 
-An item whose creation failed is not there for its BOM, so that BOM fails too. The other items carry on. After you fix the cause and send the folder again, the item and then its BOM go through.
+An item whose creation failed is not there for its BOM, so that BOM fails too. The other items carry on. After you fix the cause and click **Retry**, the item and then its BOM go through.
 
 #### Folders it will not send
 
-The add-in refuses a folder that is not a publish folder (it has no `manifest.json`), or that was written by an older version. In that case, publish again. A folder with no requests in it reports that there is nothing to send.
+If the run's folder is missing or cannot be read (for example the run failed before it wrote its files), Retry says why in a message box. In that case, publish again.

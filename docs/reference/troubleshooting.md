@@ -43,7 +43,7 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 | A row is missing after **Add default fields** | The workspace has no field with that field ID, and defaults for missing fields are skipped without a warning. Add the field in Fusion Manage with the exact ID (see [Default fields](../configuration/index.md#default-fields)), validate the workspace, and load the defaults again. |
 | **No thumbnail** (*The Data Model has no thumbnail for this component yet.*) | The thumbnail has not been generated yet. Open the design and let Fusion finish processing, then publish again. |
 | A "component link" step failed | No component was found for the item. Check the component-linking field and that the component exists in the picklist. The item itself is still published. |
-| Some items failed and others did not | Open the **Job Queue** for the reason of each row. Fix the cause, then use **Send to Fusion Manage** on the run's folder: what Fusion Manage already accepted is skipped. |
+| Some items failed and others did not | Open the **Job Queue** for the reason of each row. Fix the cause, then use **Retry** on that job: what Fusion Manage already accepted is skipped. |
 | A request fails with `429`, `502`, `503` or `504` | Reads are retried up to three times. If it persists, wait and send the folder again. |
 
 ## Upload

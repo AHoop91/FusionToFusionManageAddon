@@ -74,6 +74,6 @@ class PublishFolder:
     def save_manifest(self, info: Dict[str, Any]) -> None:
         manifest = {"draft": True,
                     "note": "Requests are drafts for review: bodies follow the Fusion Manage v3 API but are unverified. "
-                            "A publish sends them as it goes; sending the folder again retries, and send-log.json records what Fusion Manage accepted.",
+                            "A publish sends them as it goes; Retry in the Job Queue sends the folder again, and send-log.json records what Fusion Manage accepted.",
                     **info, "counts": self.counts(), "items": self.items, "artifacts": self.entries}
         self.write_json("manifest.json", manifest)
