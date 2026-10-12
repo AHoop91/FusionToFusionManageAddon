@@ -9,6 +9,7 @@ from ..core.constants import ITEM_COMMAND_NAME
 from ..publish.exporters import catch_up, export_step
 from . import drawing_source
 from .attachment_upload import Progress, UploadJob
+from .item_numbers import Subject
 
 
 SCAN_CATCH_UP = 5   # occurrences read between two times Fusion is let draw
@@ -53,8 +54,9 @@ def _component_of_number(design: adsk.fusion.Design, number: str, progress: Prog
     return None
 
 
-def _export_design(path: str, number: str, progress: Progress) -> None:
-    """Write a STEP file of the item ``number``: the whole design when that is its top-level component, else the component below it."""
+def _export_design(path: str, subject: Subject, progress: Progress) -> None:
+    """Write a STEP file of the item ``subject``: the whole design when that is its top-level component, else the component below it."""
+    number = subject.part_number
     design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
     if str(design.rootComponent.partNumber or "").strip() == number:
         export_step(path)
@@ -66,8 +68,8 @@ def _export_design(path: str, number: str, progress: Progress) -> None:
     export_step(path, [occurrence], part_number=number)
 
 
-def _confirm_design(ui: adsk.core.UserInterface, number: str) -> bool:
-    """Whether a design is open to make the STEP file of item ``number`` from. Whether it holds that item is found out when the file
+def _confirm_design(ui: adsk.core.UserInterface, subject: Subject) -> bool:
+    """Whether a design is open to make the STEP file of item ``subject`` from. Whether it holds that item is found out when the file
     is made: looking for it here would hold up the click, on Fusion's UI thread."""
     if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is None:
         ui.messageBox("Open the design to publish as a STEP file first.", ITEM_COMMAND_NAME)
@@ -75,17 +77,18 @@ def _confirm_design(ui: adsk.core.UserInterface, number: str) -> bool:
     return True
 
 
-def _confirm_drawing(ui: adsk.core.UserInterface, number: str) -> bool:
-    """Whether the open drawing may be attached as the PDF of item ``number``: it is a drawing of that item, or the user says so."""
+def _confirm_drawing(ui: adsk.core.UserInterface, subject: Subject) -> bool:
+    """Whether the open drawing may be attached as the PDF of item ``subject``: it is a drawing of that item, or the user says so."""
     held, reason = drawing_source.top_level_number()
     if not held:
         ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
         return False
-    if held == number:
+    if held == subject.part_number:
         return True
-    question = f"The open drawing is of {held}, but the item is {number}.\n\nUpload this drawing as {number}.pdf anyway?"
+    question = (f"The open drawing is of {held}, but the item is {subject.item_number} ({subject.part_number}).\n\n"
+                f"Upload this drawing as {subject.item_number}.pdf anyway?")
     return ui.messageBox(question, ITEM_COMMAND_NAME, adsk.core.MessageBoxButtonTypes.YesNoButtonType) == adsk.core.DialogResults.DialogYes
 
 
 STEP_JOB = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), _export_design, _confirm_design)
-DRAWING_JOB = UploadJob("Uploading Drawing Representation", "drawing PDF", ".pdf", ("Find item", "Create PDF", "Upload"), lambda path, _number, _progress: drawing_source.export_pdf(path), _confirm_drawing)
+DRAWING_JOB = UploadJob("Uploading Drawing Representation", "drawing PDF", ".pdf", ("Find item", "Create PDF", "Upload"), lambda path, _subject, _progress: drawing_source.export_pdf(path), _confirm_drawing)

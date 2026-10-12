@@ -61,7 +61,7 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     """
     number = item_number_of(summary)
     log.info("Design structure of %s: %s", number or "(no number)", "; ".join(
-        f"{'  ' * int(r['level'])}{r['item_number'] or r['part_number']} x{r['quantity']}" for r in rows) or "no components")
+        f"{'  ' * int(r['level'])}{r['item_number'] or '(no item number)'} x{r['quantity']}" for r in rows) or "no components")
     if not cfg or not cfg.workspace_id or not number:
         return {"rows": rows, "pick": False}
     if not hits:
@@ -167,6 +167,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                 data = _compare_bom(rows, summary, cfg, fm, chosen, hits)
             else:
                 data = read()
+                if name == "summary" and not item_number_of(data):   # no item number: never published, so nothing here applies
+                    raise PublishDenied("This design has no item number, so it has not been published to Fusion Manage.")
             log.info("Loaded %s of %s", slot, model_id)
             log.debug("TIMING %s: %.2fs in all, %.2fs of it reading the Data Model (physical=%s)", slot, whole.lap(), read_seconds, physical)
             outcome = _entry(slot, ok=True, data=data, key=key)

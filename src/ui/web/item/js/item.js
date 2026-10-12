@@ -329,7 +329,7 @@
     }
     shownSeq = entry.seq;
     if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
-    if (entry.missing) { showEmpty(ICON_MISSING, 'No item exists for ' + entry.missing, 'Check the part number, or publish the item to Fusion Manage first.'); return; }
+    if (entry.missing) { showEmpty(ICON_MISSING, 'No item exists for ' + entry.missing, 'Check the item number, or publish the item to Fusion Manage first.'); return; }
     if (!entry.seq) { message('Select a component and choose Open Fusion Manage Item.'); return; }
     if (!entry.ok) { message(entry.message || 'Could not read the item.', true); return; }
     render(entry.view);

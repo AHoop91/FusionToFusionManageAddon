@@ -1,7 +1,8 @@
 """Show a Fusion Manage item in a palette inside Fusion (the Item panel).
 
-The item is found by item number alone: the part number of the selected component (or of the open
-design when nothing is selected) is searched in the configured items workspace. It can be opened from
+The item is found by item number alone: the item number of the selected component (or of the open
+design when nothing is selected), read from the Data Model, is searched in the configured items workspace.
+A component with no item number has not been published, so it is refused. It can be opened from
 the ribbon or from the right-click menu of a selected component in the browser or canvas.
 
 The page (``web/item``) is drawn by the add-in from the item's sections and fields, not by Fusion
@@ -34,6 +35,7 @@ from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.where_used import WhereUsedService
 from . import drawing_source
 from .attachment_upload import AttachmentUpload, UploadJob
+from .item_numbers import DesignRef, ItemNumbers, NoItemNumber, Subject, active_design_ref, design_ref
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
@@ -120,6 +122,13 @@ def _selected_part_number(from_menu: bool = False) -> str:
     return str(design.rootComponent.partNumber or "").strip() if design is not None else ""
 
 
+def _active_ref() -> DesignRef:
+    """The Data Model reference of the open design, or of the design the open drawing shows. UI thread."""
+    if drawing_source.active_drawing() is not None:
+        return design_ref(drawing_source.referenced_design())
+    return active_design_ref()
+
+
 def _open_file(path: str) -> None:
     """Open a file with its default program; a program or script is not run, its folder is shown instead."""
     if os.path.splitext(path)[1].lower() in RUNNABLE:
@@ -157,7 +166,9 @@ class ItemPanel:
         self._auth = auth
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
+        self._numbers = ItemNumbers(config, auth)
         self._number = ""   # the item number the panel shows, for Refresh
+        self._part = ""   # the part number Fusion gives that component
         self._selection_handler = _SelectionHandler(self._follow_selection)   # kept, or Fusion drops it
         ui.activeSelectionChanged.add(self._selection_handler)
         bridge.register("upload_status", lambda _payload: self._uploads.status())
@@ -240,15 +251,38 @@ class ItemPanel:
 
     def open_selected(self) -> None:
         """Show the item of the selected component, or of the open design when nothing is selected. UI thread."""
-        self._open(_selected_part_number())
+        self._find(_selected_part_number(), lambda subject: self._open(subject))
 
     def _follow_selection(self) -> None:
         """While the panel is open, show the item of a component just selected. A selection with no component leaves the panel as it is."""
         if not self._host.visible:
             return
         number = _selected_component_number(_active_selection())
-        if number and number != self._number:
-            self._open(number, show=False)   # it is open already
+        if number and number != self._part:
+            self._find(number, lambda subject: self._open(subject, show=False), quiet=True)   # it is open already
+
+    def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False) -> None:
+        """Read the item number of the component with ``part_number`` from the Data Model (a worker thread), then call ``then`` with it on the
+        UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log). UI thread."""
+        if not self._has_number(part_number, quiet):
+            return
+        ref = _active_ref()
+
+        def work() -> None:
+            try:
+                subject = self._numbers.resolve(ref, part_number)
+            except Exception as exc:  # shown to the user, never raised into a thread nobody watches
+                if isinstance(exc, NoItemNumber):
+                    log.info("No item number for %s: %s", part_number, exc)
+                else:
+                    log.exception("Could not read the item number of %s", part_number)
+                if not quiet:
+                    message = str(exc) or type(exc).__name__
+                    self._tasks.post(lambda: self._ui.messageBox(message, ITEM_COMMAND_NAME))
+                return
+            self._tasks.post(lambda: then(subject))
+
+        threading.Thread(target=work, daemon=True).start()
 
     def dispose(self) -> None:
         try:
@@ -258,20 +292,19 @@ class ItemPanel:
 
     def open_from_menu(self) -> None:
         """Show the item of the component the right-click menu was opened on. UI thread."""
-        self._open(_selected_part_number(from_menu=True))
+        self._find(_selected_part_number(from_menu=True), lambda subject: self._open(subject))
 
-    def _open(self, number: str, show: bool = True) -> None:
-        if not self._has_number(number):
-            return
-        self._number = number
+    def _open(self, subject: Subject, show: bool = True) -> None:
+        self._number = subject.item_number
+        self._part = subject.part_number
         self._start()
         if show:
             self._host.show()
         self._host.send("item_changed")   # an open page starts polling again
 
-    def _has_number(self, number: str) -> bool:
-        """Whether ``number`` names something to look up; when not, say what to select."""
-        if not number:
+    def _has_number(self, number: str, quiet: bool = False) -> bool:
+        """Whether ``number`` (a part number) names a component to look up; when not, say what to select."""
+        if not number and not quiet:
             self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
         return bool(number)
 
@@ -302,7 +335,7 @@ class ItemPanel:
         if not self._number:
             raise ValueError("No item is shown.")
         pick(_active_selection())
-        return self._uploads.from_panel(job, workspace_id, item_id, self._number)
+        return self._uploads.from_panel(job, workspace_id, item_id, Subject(self._number, self._part))
 
     def _upload_context(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """What the Actions menu uploads for the open document: the STEP file of a design, the PDF of a drawing, else nothing (``action`` is "")."""
@@ -317,7 +350,7 @@ class ItemPanel:
         number = _selected_part_number(from_menu=True)
         if self._has_number(number):
             pick(_menu_selection)
-            self._uploads.from_number(STEP_JOB, number)
+            self._find(number, lambda subject: self._uploads.from_number(STEP_JOB, subject))
 
     def upload_drawing(self) -> None:
         """Upload the open drawing as the PDF of the item of the design it shows (the ribbon button). UI thread."""
@@ -325,7 +358,7 @@ class ItemPanel:
         if not number:
             self._ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
             return
-        self._uploads.from_number(DRAWING_JOB, number)
+        self._find(number, lambda subject: self._uploads.from_number(DRAWING_JOB, subject))
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""

@@ -21,8 +21,8 @@ class ItemLookup(NamedTuple):
 
 
 def item_number_of(summary: Dict[str, Any]) -> str:
-    """The number to look a design or component up by in Fusion Manage: its item number, else its part number."""
-    return str(summary.get("item_number") or summary.get("part_number") or "").strip()
+    """The number to look a design or component up by in Fusion Manage: its item number ("" when it has none: it is not published)."""
+    return str(summary.get("item_number") or "").strip()
 
 
 def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, chosen: str = "") -> ItemLookup:

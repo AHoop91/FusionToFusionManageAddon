@@ -128,7 +128,7 @@
    */
   function buildItems(rows, root) {
     const rootName = root.description || '';
-    const rootPn = root.part_number || root.item_number || '';
+    const rootPn = root.part_number || '';
     const items = [{ level: 0, root: true, sequence: '', status: 'root', hidden: false, component: rootComponent(root),
                      design: { pn: rootPn, name: rootName || (rootPn ? '' : 'This design'), quantity: '', sequence: '' },
                      fm: { pn: rootPn, name: rootName, quantity: '', sequence: '' } }];
@@ -146,7 +146,7 @@
       }
       const item = { level: r.level + 1, root: false, sequence: String(r.sequence), status: r.status || 'unchecked', hidden: !!r.hidden, component: lineComponent(r),
                      design: side(r, r.quantity), fm: side(r, r.status === 'match' ? r.quantity : r.fm_quantity || '', r.fm_edge_id) };
-      if (held && held.pair === String(r.item_number || r.part_number)) {
+      if (held && held.pair === String(r.item_number)) {
         item.status = 'mismatch';
         item.fm = side(held, held.quantity, held.edge_id);
         // Repeats of the same pair of numbers get their own choice: "design|Fusion Manage|n", n counting the repeats.

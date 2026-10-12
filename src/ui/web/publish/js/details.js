@@ -52,7 +52,7 @@
   const colWidths = DEFAULT_WIDTHS.slice();   // as dragged
   const thumbs = {};            // component id -> thumbnail url ('' none, null while being read)
 
-  function choiceKey(item) { return item.item_number || item.part_number || ''; }
+  function choiceKey(item) { return item.item_number || ''; }
 
   /** The Fusion Manage item the user picked for this component ('' when none). */
   function choiceFor(item) { return choices[choiceKey(item)] || ''; }

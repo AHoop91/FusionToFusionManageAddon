@@ -136,7 +136,7 @@
       else { state = 'ok'; text = 'The design matches Fusion Manage.'; }
     }
     const summary = currentSummary || {};
-    report = { state: state, text: text, props: found.props, lines: found.lines, subject: summary.item_number || summary.part_number || 'this design' };
+    report = { state: state, text: text, props: found.props, lines: found.lines, subject: summary.item_number || 'this design' };
     button.dataset.state = state;
     button.title = state === 'checking' ? text : text + ' Click for details.';
     button.setAttribute('aria-label', button.title);
@@ -171,7 +171,7 @@
     const plan = model.publishPlan(currentRows, root);
     jobs.start({
       summary: summary,
-      root_number: summary.item_number || summary.part_number || '',
+      root_number: summary.item_number || '',
       operations: plan.operations,
       items: plan.components.map(function (c) {
         return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '', fm_item: details.choiceFor(c) };

@@ -36,9 +36,9 @@ class LookupTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def test_the_number_is_the_item_number_else_the_part_number(self):
+    def test_the_number_is_the_item_number_never_the_part_number(self):
         self.assertEqual(item_number_of({"item_number": " A ", "part_number": "B"}), "A")
-        self.assertEqual(item_number_of({"item_number": "", "part_number": "B"}), "B")
+        self.assertEqual(item_number_of({"item_number": "", "part_number": "B"}), "")
         self.assertEqual(item_number_of({}), "")
 
     def test_without_a_workspace_nothing_is_asked(self):

@@ -27,6 +27,7 @@ from ..fm.client import FmClient
 from ..fm.items import ItemService, pick_hit
 from ..publish.exporters import catch_up
 from ..publish.writer import safe_name
+from .item_numbers import Subject
 from .palette_host import PaletteHost
 from .ui_thread import UiThread
 
@@ -45,8 +46,8 @@ class UploadJob:
     label: str   # "STEP file": how the messages name it
     extension: str   # ".step"
     steps: Tuple[str, str, str]   # the short names of the stages: find, make, upload
-    make: Callable[[str, str, Progress], None]   # write the file at the path given, for the item number given, reporting how far it is (UI thread)
-    confirm: Callable[[adsk.core.UserInterface, str], bool]   # whether the open document may be attached as the file of this item number (UI thread)
+    make: Callable[[str, Subject, Progress], None]   # write the file at the path given, for the component given, reporting how far it is (UI thread)
+    confirm: Callable[[adsk.core.UserInterface, Subject], bool]   # whether the open document may be attached as the file of this item (UI thread)
 
     def stage(self, step: int) -> str:
         return ("Finding the item", f"Creating the {self.label}", f"Uploading the {self.label}")[step]
@@ -70,26 +71,27 @@ class AttachmentUpload:
 
     # ---- Starting -------------------------------------------------------------------
 
-    def from_panel(self, job: UploadJob, workspace_id: str, item_id: str, number: str) -> Dict[str, Any]:
+    def from_panel(self, job: UploadJob, workspace_id: str, item_id: str, subject: Subject) -> Dict[str, Any]:
         """Upload for the item shown. UI thread. ``started`` is False when declined or one is under way."""
-        if not job.confirm(self._ui, number):
+        if not job.confirm(self._ui, subject):
             return {"started": False}
         if not self._begin(job, MAKE):
             return {"started": False, "busy": True}
-        self._tasks.post(lambda: self._make(job, workspace_id, item_id, number))   # after this call returns, so the page is not left waiting
+        self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject))   # after this call returns, so the page is not left waiting
         return {"started": True}
 
-    def from_number(self, job: UploadJob, number: str) -> None:
-        """Upload for the item of ``number``, asking nothing and showing the progress window. UI thread."""
+    def from_number(self, job: UploadJob, subject: Subject) -> None:
+        """Upload for the item of ``subject``, asking nothing and showing the progress window. UI thread."""
         if not self._begin(job, FIND):
             self._ui.messageBox("A file is already being uploaded.", ITEM_COMMAND_NAME)
             return
         self._window_open = True
         self._window.show_centered()
-        threading.Thread(target=self._find_then_make, args=(job, number), daemon=True).start()
+        threading.Thread(target=self._find_then_make, args=(job, subject), daemon=True).start()
 
-    def _find_then_make(self, job: UploadJob, number: str) -> None:
-        """Find the item of ``number`` in Fusion Manage (a worker thread), then make the file on the UI thread."""
+    def _find_then_make(self, job: UploadJob, subject: Subject) -> None:
+        """Find the item of ``subject`` in Fusion Manage (a worker thread), then make the file on the UI thread."""
+        number = subject.item_number
         try:
             problem = self._config.items_setup_problem()
             if problem:
@@ -103,20 +105,20 @@ class AttachmentUpload:
             self._fail(f"Could not attach a {job.label}:\n{exc}")
             return
         item_id = pick_hit(hits, number)["id"]
-        self._tasks.post(lambda: self._make(job, workspace_id, item_id, number))
+        self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject))
 
     # ---- Doing ----------------------------------------------------------------------
 
-    def _make(self, job: UploadJob, workspace_id: str, item_id: str, number: str) -> None:
+    def _make(self, job: UploadJob, workspace_id: str, item_id: str, subject: Subject) -> None:
         """Write the file and send it off to be attached. UI thread."""
-        name = f"{safe_name(number)}{job.extension}"
+        name = f"{safe_name(subject.item_number)}{job.extension}"
         folder = os.path.join(tempfile.gettempdir(), TEMP_FOLDER, uuid.uuid4().hex)
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, name)
         try:
             self._stage(job, MAKE)
             catch_up()   # let the progress window draw before Fusion is busy
-            job.make(path, number, lambda percent: self._stage(job, MAKE, percent))
+            job.make(path, subject, lambda percent: self._stage(job, MAKE, percent))
             with open(path, "rb") as handle:
                 content = handle.read()
         except Exception as exc:  # shown to the user, never raised into Fusion

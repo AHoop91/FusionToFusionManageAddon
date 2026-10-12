@@ -104,15 +104,21 @@ def selects_top_level(entities: Any) -> bool:
     return False
 
 
-def _top_level_component() -> Optional[Any]:
-    """The top-level component of the design the open drawing shows, or None while it cannot be found."""
+def referenced_design() -> Optional[Any]:
+    """The design the open drawing shows, or None while it cannot be found."""
     document = adsk.core.Application.get().activeDocument
     for reference in document.documentReferences if document is not None else []:
         source = reference.referencedDocument
         design = adsk.fusion.Design.cast(source.products.itemByProductType("DesignProductType")) if source is not None else None
         if design is not None:
-            return design.rootComponent
+            return design
     return None
+
+
+def _top_level_component() -> Optional[Any]:
+    """The top-level component of the design the open drawing shows, or None while it cannot be found."""
+    design = referenced_design()
+    return design.rootComponent if design is not None else None
 
 
 def export_pdf(path: str) -> None:
