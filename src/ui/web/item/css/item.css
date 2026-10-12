@@ -18,7 +18,7 @@
 .item-title { margin: 0; font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
 .item-status { margin: 6px 0 0; font-size: 14px; }
 .item-status-sep { margin: 0 10px; color: var(--border); }
-.item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 .item-tabs {
   display: flex;
@@ -160,7 +160,6 @@
 }
 
 /* The Actions drop-down: a button that opens a list of commands under it. */
-.item-actions { align-items: center; }
 .item-menu { position: relative; }
 
 .item-menu-btn { color: #000; }
@@ -388,14 +387,14 @@
 
 /* Icon columns of the Bill of Materials: a paperclip with its count, a green stamp, a red pin. */
 .item-bom-icon { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
-.item-bom-icon svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.item-bom-icon svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .item-bom-attachments { color: var(--muted); }
 a.item-bom-attachments:hover { color: var(--accent); }
 .item-bom-change { color: #2e9d4f; }
 .item-bom-change svg { fill: rgba(46, 157, 79, 0.18); }
 .item-bom-pin { color: #d13438; }
 .item-bom-pin svg { fill: rgba(209, 52, 56, 0.2); }
-.item-bom-count { font-size: 12px; color: var(--text); }
+.item-bom-count { color: var(--text); }
 .item-bom-icon-cell { text-align: center; }
 
 /* The Bill of Materials names read as plain text, and as a link only under the pointer. */
@@ -406,7 +405,7 @@ a.item-bom-attachments:hover { color: var(--accent); }
 .item-bom-icon svg { width: 20px; height: 20px; }
 .item-bom-change svg { width: 24px; height: 24px; }
 .item-bom-count { font-size: 14px; }
-.item-bom-icon svg, .item-bom-head-icon svg { stroke-width: 1.5; }   /* lighter lines: 2 looked bold at this size */
+.item-bom-head-icon svg { stroke-width: 1.5; }   /* lighter lines: 2 looked bold at this size */
 .item-bom-attachments svg, .item-bom-head-icon.item-bom-attachments svg { stroke-width: 1.25; }
 .item-bom-pin svg, .item-bom-head-icon.item-bom-pin svg { fill: currentColor; stroke-width: 1.25; }
 .item-bom-icon-head { text-align: center; }
