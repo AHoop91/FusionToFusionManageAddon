@@ -20,7 +20,7 @@ SECTIONS = {
 }
 STRUCTURE = "structure"    # the whole BOM tree
 COMPONENT = "component"    # the properties of one component, by id
-THUMBNAIL = "thumbnail"    # the design's thumbnail url, on its own: the Data Model is slow to give it
+THUMBNAIL = "thumbnail"    # the design's thumbnail url, on its own, so a slow one never holds up the rest
 SECTION_NAMES = (*SECTIONS, STRUCTURE, COMPONENT, THUMBNAIL)
 MAX_PAGES = 100   # at 250 relations a page: 25,000 relations; more is an error rather than a BOM cut short
 

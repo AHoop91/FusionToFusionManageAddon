@@ -2,7 +2,8 @@
 
 A summary (the component id, composition, item number, part number and description of the design) is read from the
 Data Model, which takes about two seconds. The key names a version of the design (its model id and the timestamp that
-pins it), and a version does not change, so the same answer is kept and a design opened again needs no read.
+pins it). A version is not expected to change, so its summary is kept and a design opened again needs no read; the
+caller reads it again whenever the user refreshes.
 """
 
 import json

@@ -50,8 +50,8 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 }
 """
 
-# A component's thumbnail alone: the Data Model is slow to give a signed url, so it is never asked for with the rest.
-# The url is short-lived, so a publish asks for it again when it needs it.
+# A component's thumbnail alone, so a slow one never holds up the rest. The url is short-lived, so a publish asks for it
+# again when it needs it.
 THUMBNAIL_QUERY = """
 query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
   component(componentId: $componentId, composition: $composition, time: $time) {
@@ -64,8 +64,9 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 # levels. Each relation names its parent (fromComponent), so the parser rebuilds
 # the tree. Results are paged with a cursor.
 STRUCTURE_DEPTH = 50   # no assembly is assumed to stop at some depth: a read that still reaches this is an error, not a cut-off BOM
-# The most a page may hold is 250 ("PaginationInput.limit must be between 1 and 250"). Each page costs about two seconds
-# whatever its size, so the biggest page is used. If a page of this size is ever refused for its cost, the error says so.
+# The most a page may hold is 250 ("PaginationInput.limit must be between 1 and 250"), and a page of that size costs 467 of
+# the 1000 points a query may cost. Every page has a fixed cost in time (about two seconds with six relations in it), so
+# the biggest page is used. How long a full page takes has not been measured.
 STRUCTURE_PAGE_SIZE = 250
 
 STRUCTURE_QUERY = """
