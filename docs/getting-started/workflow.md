@@ -4,57 +4,80 @@ title: End-to-End Workflow
 
 # End-to-End Workflow
 
-## What the add-in is for
+## The short version
 
-Engineering and manufacturing work on the same product, but they do not manage it the same way. Engineers define the product in CAD. Manufacturing, purchasing and the wider supply chain need a managed **item**, a bill of materials, and the documents and representations to build or buy it. Those need their own approvals, their own revisions and their own timing.
+Engineers design and release a product in **Fusion**. Manufacturing and the supply chain need a managed **item** for that product in **Fusion Manage**: a record with its own bill of materials (BOM), files, approvals and release. The add-in moves the released design across, so nobody has to re-key it.
 
-This add-in carries a **released engineering definition** from Fusion into **independently managed manufacturing items and BOMs** in Fusion Manage, together with the representations and information the wider supply chain needs. It is inspired by the item management of Autodesk Vault: the engineering file and the manufactured item are separate things, linked by a part number, each with a life of its own. Here that item management is provided by Fusion Manage.
+In three sentences:
 
-**Fusion and Fusion Manage each keep doing their own job.** The add-in is only the bridge between them.
+1. **Engineering releases** the component and drawing in Fusion, exactly as before.
+2. **Manufacturing publishes** the released design with the add-in. This creates or updates the matching item and BOM in Fusion Manage.
+3. **Manufacturing completes, reviews and releases** the item in Fusion Manage, on its own schedule.
+
+The add-in does nothing on its own. It only acts when someone chooses to publish or upload.
+
+## Who does what
 
 | | Fusion | The add-in | Fusion Manage |
 |---|---|---|---|
-| **Role** | Engineering definition | Bridge | Manufacturing item and BOM management |
-| **Owns** | The CAD component, the drawing, and their engineering release | Nothing. It carries and compares | The manufactured item, its BOM, its lifecycle and its workflows |
-| **Lifecycle** | Engineering lifecycle | None | Manufacturing lifecycle |
+| **Purpose** | Engineering design | Carries the design across | Manufacturing item management |
+| **Holds** | The CAD component, the drawing and the engineering release | Nothing. It compares and sends | The item, its BOM, its files and its release workflow |
+| **Released by** | Engineering | Not applicable | Manufacturing release approvers |
+
+The two sides are linked by the **part number**. A component's part number in Fusion is the item number in Fusion Manage. If an item with that number exists it is updated. Otherwise it is created.
 
 ## Two lifecycles, kept separate
 
-A released component and a manufactured item are not the same thing, so they are not forced to move together.
+A released component and a manufactured item are not the same thing, so they do not have to move together.
 
-- Engineering can revise a component without the manufactured item changing until Manufacturing chooses to publish.
-- Manufacturing can add to the item, for example extra BOM lines or fields that only make sense for production, without touching the CAD design.
-- The item is released in Fusion Manage through its own workflow, on its own schedule.
+- Engineering can revise a component, and the item does not change until someone publishes.
+- Manufacturing can add to the item, such as extra BOM lines or production-only fields, without touching the CAD design.
+- The item is released through its own workflow in Fusion Manage.
+
+## The workflow at a glance
+
+The diagram shows who acts at each stage, and where the add-in comes in. Read it left to right.
 
 ```mermaid
-flowchart TB
-    E1["<b>Engineering, in Fusion</b><br/>Design the component and its drawing"]
-    E2["<b>Engineering, in Fusion</b><br/>Release the component and drawing"]
-    B1["<b>The add-in</b><br/>Publish item, BOM and properties"]
-    B2["<b>The add-in</b><br/>Attach STEP and drawing PDF (optional, manual)"]
-    M1["<b>Manufacturing, in Fusion Manage</b><br/>Manufactured item and BOM"]
-    M2["<b>Manufacturing, in Fusion Manage</b><br/>Complete the manufacturing package"]
-    M3["<b>Review</b><br/>Engineering, Quality and Manufacturing"]
-    M4["<b>Manufacturing, in Fusion Manage</b><br/>Release the item"]
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 60, "padding": 16}}}%%
+flowchart LR
+    subgraph ENG["ENGINEERING &nbsp;·&nbsp; Fusion"]
+        direction TB
+        E1("<b>1 &nbsp;Release</b><br/>Design and drawing<br/>are released")
+    end
 
-    E1 --> E2
-    E2 ==>|"released definition"| B1
-    B1 ==> B2
-    B2 ==>|"item exists in Fusion Manage"| M1
-    M1 --> M2
-    M2 --> M3
-    M3 --> M4
-    E2 -. "later engineering change: publish again" .-> B1
+    subgraph BRIDGE["MANUFACTURING &nbsp;·&nbsp; Fusion, with the add-in"]
+        direction TB
+        P1("<b>2 &nbsp;Publish</b><br/>Item, BOM and<br/>properties are sent")
+        P2("<b>3 &nbsp;Complete</b><br/>Upload STEP and<br/>drawing PDF, add lines")
+        P1 --> P2
+    end
 
-    classDef eng fill:transparent,stroke:#3b82c4,stroke-width:2px
-    classDef bridge fill:transparent,stroke:#1d4f91,stroke-width:4px
-    classDef mfg fill:transparent,stroke:#059669,stroke-width:2px
-    class E1,E2 eng
-    class B1,B2 bridge
-    class M1,M2,M3,M4 mfg
+    subgraph MFG["MANUFACTURING &nbsp;·&nbsp; Fusion Manage"]
+        direction TB
+        M1("<b>4 &nbsp;Review</b><br/>Engineering, Quality<br/>and Manufacturing check")
+        M2("<b>5 &nbsp;Release</b><br/>Item released by<br/>its own workflow")
+        M1 --> M2
+    end
+
+    E1 ==>|"Publish when the design<br/>is released and ready"| P1
+    P2 ==>|"Item and files<br/>now in Fusion Manage"| M1
+    E1 -.->|"Engineering change:<br/>publish again"| P1
+
+    classDef eng fill:#3b82c426,stroke:#3b82c4,stroke-width:1.5px
+    classDef bridge fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px
+    classDef mfg fill:#0596691f,stroke:#059669,stroke-width:1.5px
+    class E1 eng
+    class P1,P2 bridge
+    class M1,M2 mfg
+    style ENG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
+    style BRIDGE fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
+    style MFG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
+    linkStyle default stroke:#64748b,stroke-width:1.5px
 ```
 
-Linking the two is the **part number**. A component's part number in Fusion is the item number in Fusion Manage. If an item with that number exists it is updated; otherwise it is created.
+!!! tip "When to publish"
+    Publish when the design is **released and ready for manufacturing**. Publish again whenever engineering changes the design and Manufacturing needs the item brought up to date. Repeating a publish is safe: only the differences are sent, and anything Manufacturing added in Fusion Manage is kept.
 
 ## The five stages
 
