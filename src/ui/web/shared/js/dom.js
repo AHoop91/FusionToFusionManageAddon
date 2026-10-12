@@ -34,3 +34,15 @@ window.MfgUi.svg = function (paths, size) {
   });
   return node;
 };
+
+/**
+ * Where the icon of each tree level starts (px, by level): every level steps in by one ``slot`` (a chevron box), so a
+ * chevron sits under its parent's icon. ``room`` is whether the top level has a chevron on any row, so it leaves space for it.
+ */
+window.MfgUi.stepIn = function (levels, room, slot) {
+  const xs = [];
+  levels.forEach(function (level) {
+    if (xs[level] === undefined) xs[level] = level === 0 ? (room ? slot : 0) : (xs[level - 1] || 0) + slot;
+  });
+  return xs;
+};

@@ -52,11 +52,7 @@
    * parent's icon. A level that has a chevron on any row leaves room for it on every row.
    */
   function iconXs(entries, chevronDepths) {
-    const xs = [];
-    entries.forEach(function (entry) {
-      if (xs[entry.depth] === undefined) xs[entry.depth] = entry.depth === 0 ? (chevronDepths[0] ? SLOT_PX : 0) : (xs[entry.depth - 1] || 0) + SLOT_PX;
-    });
-    return xs;
+    return ns.stepIn(entries.map(function (entry) { return entry.depth; }), chevronDepths[0], SLOT_PX);
   }
 
   /**

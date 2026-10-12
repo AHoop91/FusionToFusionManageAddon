@@ -244,13 +244,8 @@
 
   /** Set ``item.iconX`` (where each icon starts): every level steps in by one slot, so a chevron sits under its parent's icon. */
   function layOut(items, chevronLevels) {
-    const iconX = [];
-    items.forEach(function (item) {
-      if (iconX[item.level] === undefined) {
-        iconX[item.level] = item.level === 0 ? (chevronLevels[0] ? SLOT : 0) : (iconX[item.level - 1] || 0) + SLOT;
-      }
-      item.iconX = iconX[item.level];
-    });
+    const iconX = ns.stepIn(items.map(function (item) { return item.level; }), chevronLevels[0], SLOT);
+    items.forEach(function (item) { item.iconX = iconX[item.level]; });
   }
 
   /** Toggle buttons above the table; ``onChange`` runs after one is flipped. */
