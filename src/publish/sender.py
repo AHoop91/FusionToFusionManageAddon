@@ -73,12 +73,19 @@ def summarize(path: str, plan: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _load_log(path: str) -> Dict[str, Any]:
-    try:
-        with open(os.path.join(path, SEND_LOG), encoding="utf-8") as handle:
-            data = json.load(handle)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
+    """What an earlier send did. No log is a folder never sent; an unreadable one is an error, since sending on
+    without it would create the items again."""
+    file = os.path.join(path, SEND_LOG)
+    if not os.path.exists(file):
         return {}
+    try:
+        with open(file, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as exc:
+        raise FolderError(f"Could not read {SEND_LOG}: {exc}. Sending without it could create items twice.") from exc
+    if not isinstance(data, dict):
+        raise FolderError(f"{SEND_LOG} is not a send log. Sending without it could create items twice.")
+    return data
 
 
 def created_id(result: SendResult) -> str:

@@ -143,8 +143,7 @@ class PublishRun(JobState):
         read_time = time.monotonic() - began
 
         component_id = str(summary.get("component_id") or "") if root else str(item["id"])
-        stored = str((summary if root else item).get("thumbnail") or "")
-        image = self._thumbnail(number, folder, component_id, stored)
+        image = self._thumbnail(number, folder, component_id)
         files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
 
         result = compare_with_item(properties, component, self.cfg,
@@ -203,11 +202,7 @@ class PublishRun(JobState):
 
     def _manage_link(self, number: str, component_id: str) -> str:
         """The API link of the Fusion Manage item the Data Model says this component is linked to ("" if it says none)."""
-        try:
-            found = read_manage_item(self._client, self.job["summary"], component_id, self._time)
-        except Exception as exc:   # the picklist is searched instead
-            log.warning("The Data Model would not give the Fusion Manage link of %s: %s", number, exc)
-            return ""
+        found = read_manage_item(self._client, self.job["summary"], component_id, self._time)
         link = manage_link(found["urn"], found["url"])
         log.info("Data Model link of %s: urn %r, url %r -> %s", number, found["urn"], found["url"], link or "none")
         return link
@@ -217,7 +212,12 @@ class PublishRun(JobState):
         field_id = self.cfg.component_field
         if not field_id or fm_info.get("state") not in (FOUND, NEW):
             return None
-        link = self._manage_link(number, component_id)   # the link on the component's Item Number in Fusion
+        try:
+            link = self._manage_link(number, component_id)   # the link on the component's Item Number in Fusion
+        except Exception as exc:   # a failed read is not the same as "not linked": say so, do not guess from the picklist
+            log.warning("The Data Model would not give the Fusion Manage link of %s: %s", number, exc)
+            self.folder.record(number, "component link", FAILED, f"The Data Model would not give the link: {exc}")
+            return None
         reason = ""
         if not link:   # not linked in the Data Model: look for it in the component picklist
             try:
@@ -236,19 +236,15 @@ class PublishRun(JobState):
         except (FmApiError, AuthError) as exc:
             self.folder.record(number, SENT, FAILED, str(exc))
 
-    def _thumbnail(self, number: str, folder: str, component_id: str, stored_url: str) -> str:
+    def _thumbnail(self, number: str, folder: str, component_id: str) -> str:
         """Save the thumbnail and return it as a ``data:image/png;base64,...`` value for an image field ("" if none).
 
-        The signed url expires soon and the run may have waited in the queue, so ask for a fresh one now."""
-        url = stored_url
+        The signed url expires soon and the run may have waited in the queue, so a fresh one is asked for now."""
         try:
-            url = read_thumbnail_url(self._client, self.job["summary"], component_id, self._time) or stored_url
-        except Exception as exc:   # the url from when the panel loaded may still work
-            log.warning("Fresh thumbnail address of %s failed, using the loaded one: %s", number, exc)
-        if not url:
-            self.folder.record(number, "thumbnail", SKIPPED, "The Data Model has no thumbnail for this component yet.")
-            return ""
-        try:
+            url = read_thumbnail_url(self._client, self.job["summary"], component_id, self._time)
+            if not url:
+                self.folder.record(number, "thumbnail", SKIPPED, "The Data Model has no thumbnail for this component yet.")
+                return ""
             data = download(url)
             self.folder.record(number, "thumbnail", OK, f"{len(data)} bytes",
                                self.folder.write_bytes(os.path.join(folder, "thumbnail.png"), data))

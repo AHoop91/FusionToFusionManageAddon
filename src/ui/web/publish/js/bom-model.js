@@ -118,7 +118,7 @@
   }
 
   function lineComponent(r) {
-    return { id: r.id, root: false, item_number: r.item_number, part_number: r.part_number, description: r.description, name: r.name, thumbnail: r.thumbnail || '',
+    return { id: r.id, root: false, item_number: r.item_number, part_number: r.part_number, description: r.description, name: r.name,
              title: [r.part_number, r.name].filter(Boolean).join(' - ') };
   }
 

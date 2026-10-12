@@ -98,7 +98,7 @@
       root_number: summary.item_number || summary.part_number || '',
       operations: plan.operations,
       items: plan.components.map(function (c) {
-        return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '', thumbnail: c.thumbnail || '', fm_item: details.choiceFor(c) };
+        return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '', fm_item: details.choiceFor(c) };
       }),
     });
   }
@@ -250,7 +250,6 @@
     loaded[name] = true;
     if (name === 'thumbnail') {   // no thumbnail (or none yet) just leaves the box empty
       const url = entry.ok ? entry.data.url : '';
-      if (currentSummary) currentSummary.thumbnail = url;   // publishing falls back to it when a fresh one cannot be had
       setThumbnail(url, false);
       return;
     }

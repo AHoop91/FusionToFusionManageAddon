@@ -18,6 +18,10 @@ from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceSettings
 log = get_logger("config")
 
 
+class ConfigError(Exception):
+    """The saved settings file exists but cannot be read."""
+
+
 class CompanyModeUnavailable(Exception):
     """Raised when company mode is selected but cannot be resolved yet."""
 
@@ -52,15 +56,16 @@ class ConfigService:
         return self._config.workspaces.get(kind.kind_id).setup_problem(kind.title)
 
     def _read(self) -> AppConfig:
-        """Read config from disk; a missing or corrupt file yields defaults."""
+        """Read config from disk. A missing file is a first run (defaults); an unreadable one is an error, because
+        starting from defaults would overwrite the user's settings on the next save."""
         if not os.path.exists(self._path):
             return AppConfig()
         try:
             with open(self._path, "r", encoding="utf-8") as handle:
                 return AppConfig.from_dict(json.load(handle))
-        except (OSError, ValueError):
-            log.exception("Config unreadable, using defaults")
-            return AppConfig()
+        except (OSError, ValueError) as exc:
+            log.exception("Config unreadable")
+            raise ConfigError(f"The settings file {self._path} cannot be read ({exc}). Fix or delete it, then start the add-in again.") from exc
 
     def save(self) -> None:
         """Persist atomically so a crash cannot leave a half-written file."""

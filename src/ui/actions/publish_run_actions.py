@@ -152,11 +152,11 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
             return jobs()
         try:
             plan = load_plan(path)
+            about = summarize(path, plan)
         except FolderError as exc:
             log.warning("Send: %s is not sendable: %s", path, exc)
             dialogs.notify("Send to Fusion Manage", str(exc))
             return jobs()
-        about = summarize(path, plan)
         if not about["creates"] and not about["updates"] and not about["bom_lines"]:
             log.info("Send: %s has no requests", path)
             dialogs.notify("Send to Fusion Manage", "This folder has no requests to send.")
