@@ -157,11 +157,13 @@
 
   // ---- Drawing the pane -------------------------------------------------------
 
-  /** Value cell: long text wraps. ``shown`` is the value as Fusion Manage will hold it (a number cut to its field's digits); the tooltip keeps the full value. */
-  function valueCell(value, shown) {
+  /** Value cell: long text wraps, with its unit after it in a muted tone. ``shown`` is the value as Fusion Manage will hold it
+   *  (a number cut to its field's digits); the tooltip is ``original`` (the Data Model's own number and unit) when there is one, else the full value. */
+  function valueCell(value, shown, unit, original) {
     const text = shown || value;
     const td = el('td', text ? '' : 'muted', text || '-');
-    if (value) td.title = value;
+    if (text && unit) td.appendChild(el('span', 'pub-unit', ' ' + unit));
+    if (original || value) td.title = original || value;
     return td;
   }
 
@@ -215,8 +217,8 @@
       const tr = el('tr');
       const hasFm = r.fm_field && r.fm_value;
       [['Property', el('td', '', r.name)],
-       ['Fusion', valueCell(r.value, r.shown)],
-       ['Fusion Manage', el('td', hasFm ? '' : 'muted', hasFm ? r.fm_value : '-')]].forEach(function (c) {
+       ['Fusion', valueCell(r.value, r.shown, r.unit, r.original)],
+       ['Fusion Manage', valueCell(hasFm ? r.fm_value : '', '', r.unit)]].forEach(function (c) {
         c[1].setAttribute('data-label', c[0]);
         tr.appendChild(c[1]);
       });

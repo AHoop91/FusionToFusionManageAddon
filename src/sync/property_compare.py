@@ -58,6 +58,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
     is the same at that precision (0.104455 against 0.104) is a match, not a change.
     """
     values = {_key(p["name"]): p["value"] for p in properties}
+    extras = {_key(p["name"]): {k: p[k] for k in ("unit", "original") if p.get(k)} for p in properties}   # a physical property's unit and original value
     by_name: Dict[str, FieldMapping] = {}
     for mapping in mappings:
         if mapping.source and mapping.fm_field_id:
@@ -90,7 +91,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
             status = MATCH if _same(value, fm_value, fit) else MISMATCH
         shown = fit_number(mapping.fm_field_id, value) if fit_number and value else value
         rows.append({"name": name, "value": value, "shown": shown, "fm_field": mapping.fm_field_id,
-                     "fm_value": fm_value, "status": status})
+                     "fm_value": fm_value, "status": status, **extras.get(_key(name), {})})
     # Mapped rows first, so what will change is at the top.
     order = {MISMATCH: 0, NEW: 1, MULTIPLE: 2, UNKNOWN: 3, MATCH: 4, UNCHECKED: 5, UNMAPPED: 6}
     return sorted(rows, key=lambda r: (order[r["status"]], r["name"].lower()))

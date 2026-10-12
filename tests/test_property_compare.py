@@ -51,6 +51,12 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(status("0.105", to_three), MISMATCH)
         self.assertEqual(status("0.104", None), MISMATCH)
 
+    def test_a_physical_rows_unit_and_original_value_come_through(self):
+        mappings = [FieldMapping("physical:Mass", "MASS")]
+        properties = [{"name": "Physical Mass", "value": "5.43342", "unit": "kg", "original": "5433.42 g"}]
+        row = compare_properties(properties, {}, mappings, None, "new")[0]
+        self.assertEqual((row["unit"], row["original"]), ("kg", "5433.42 g"))
+
     def test_property_names_match_without_case_or_spaces(self):
         mappings = [FieldMapping("custom:Material Name", "MATERIAL")]
         rows = compare_properties(self.properties, self.summary, mappings, None, "new")

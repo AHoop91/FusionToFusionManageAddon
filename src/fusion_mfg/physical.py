@@ -54,28 +54,50 @@ def _unit(node: Dict[str, Any]) -> str:
     return parts[-1].strip("[]()").lower() if len(parts) > 1 else ""
 
 
-def _number(node: Any, kilograms: bool = False) -> str:
-    """A property's value as plain text: the number itself (no units, which a Fusion Manage number field refuses), else its display value.
+_SHORT = {"kilogram": "kg", "gram": "g", "milligram": "mg", "pound": "lb", "ounce": "oz", "millimeter": "mm", "centimeter": "cm",
+          "meter": "m", "inch": "in", "foot": "ft"}
+_POWERS = {"square": "²", "cubic": "³"}
 
+
+def _symbol(unit: str) -> str:
+    """A unit's short form for display: "kilograms per cubic centimeter" is "kg/cm³" (a unit it does not know is shown as it is)."""
+    text = unit.strip().lower().replace("^2", "²").replace("^3", "³")
+    top, per, bottom = text.partition(" per ")
+    if per:
+        return f"{_symbol(top)}/{_symbol(bottom)}"
+    word, _, rest = text.partition(" ")
+    if word in _POWERS and rest:
+        return _symbol(rest) + _POWERS[word]
+    base = text.rstrip("²³")
+    return _SHORT.get(base.rstrip("s"), base) + text[len(base):]
+
+
+def _number(node: Any, kilograms: bool = False) -> Dict[str, str]:
+    """A property's ``value`` as plain text: the number itself (no units, which a Fusion Manage number field refuses), else its display value.
+
+    ``unit`` is the unit of that value and ``original`` the number as the Data Model gave it, with its own unit.
     ``kilograms`` converts a mass to kilograms whatever unit the Data Model gave it in.
     """
     if not isinstance(node, dict):
-        return ""
+        return {"value": "", "unit": "", "original": ""}
     value = node.get("value")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
+        unit = _symbol(_unit(node))
+        original = f"{value:.10g} {unit}".strip()
         if kilograms:
             factor = KILOGRAMS_PER.get(_unit(node))
             if factor is None:
                 log.warning("Mass is in an unknown unit %r (value %s, shown as %r); sent as it is", _unit(node), value, node.get("displayValue"))
             else:
-                value = value * factor
-        return f"{value:.6g}"
+                value, unit = value * factor, "kg"
+        return {"value": f"{value:.6g}", "unit": unit, "original": original}
     shown = node.get("displayValue")
-    return "" if shown is None else str(shown)
+    text = "" if shown is None else str(shown)
+    return {"value": text, "unit": "", "original": text}
 
 
 def parse_physical(data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Property rows (``Physical <name>``) from a ``COMPONENT_WITH_PHYSICAL_QUERY`` answer; none until the Data Model has them ready."""
+    """Property rows (``Physical <name>``, with its ``unit`` and ``original`` value) from a ``COMPONENT_WITH_PHYSICAL_QUERY`` answer; none until the Data Model has them ready."""
     node = (((data.get("component") or {}).get("primaryModel") or {}).get("physicalProperties")) or {}
     if node.get("status") != READY:
         return []
@@ -83,4 +105,4 @@ def parse_physical(data: Dict[str, Any]) -> List[Dict[str, str]]:
     found = {"Mass": node.get("mass"), "Volume": node.get("volume"), "Area": node.get("area"), "Density": node.get("density"),
              "Length": box.get("length"), "Width": box.get("width"), "Height": box.get("height")}
     log.debug("Physical properties as the Data Model gave them: %s", found)
-    return [{"name": "Physical " + name, "value": _number(found[name], kilograms=name == "Mass")} for name in PHYSICAL_NAMES]
+    return [{"name": "Physical " + name, **_number(found[name], kilograms=name == "Mass")} for name in PHYSICAL_NAMES]

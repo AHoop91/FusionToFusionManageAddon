@@ -88,6 +88,7 @@
 .pub-table td { padding: 9px 8px; border-top: 1px solid #eceef0; vertical-align: top; overflow-wrap: anywhere; }
 .pub-table tr:nth-child(2) td { border-top: 0; }
 .pub-table td.muted { color: var(--muted); }
+.pub-unit { color: var(--muted); }
 
 /* Comparison status: a dot at the right of each property. */
 .pub-status { width: 28px; text-align: center; vertical-align: middle; }

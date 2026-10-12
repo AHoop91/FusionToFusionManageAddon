@@ -29,6 +29,17 @@ class PhysicalTests(unittest.TestCase):
                       "mass": {"value": 2.0, "displayValue": "2 lbs"}}}}}
         self.assertEqual({r["name"]: r["value"] for r in parse_physical(by_display)}["Physical Mass"], "0.907185")
 
+    def test_rows_carry_the_unit_and_the_original_value(self):
+        data = {"component": {"primaryModel": {"physicalProperties": {"status": "COMPLETED",
+                "mass": {"value": 5433.42, "displayValue": "5433.42", "definition": {"units": {"name": "Grams"}}},
+                "volume": {"value": 692.156049, "displayValue": "692.156049", "definition": {"units": {"name": "Cubic centimeters"}}},
+                "density": {"value": 0.00785, "displayValue": "0.00785", "definition": {"units": {"name": "Kilograms per Cubic Centimeter"}}}}}}}
+        rows = {r["name"]: r for r in parse_physical(data)}
+        self.assertEqual((rows["Physical Mass"]["unit"], rows["Physical Mass"]["original"]), ("kg", "5433.42 g"))
+        self.assertEqual((rows["Physical Volume"]["unit"], rows["Physical Volume"]["original"]), ("cm³", "692.156049 cm³"))
+        self.assertEqual(rows["Physical Density"]["unit"], "kg/cm³")
+        self.assertEqual(rows["Physical Area"]["unit"], "")
+
     def test_nothing_until_calculated(self):
         pending = {"component": {"primaryModel": {"physicalProperties": {"status": "IN_PROGRESS"}}}}
         self.assertEqual(parse_physical(pending), [])
