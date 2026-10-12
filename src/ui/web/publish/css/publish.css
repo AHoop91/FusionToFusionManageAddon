@@ -15,6 +15,28 @@
   flex: none; width: 88px; height: 88px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--bg, transparent) center / contain no-repeat;
 }
+/* Skeleton of the table while the Bill of Materials loads: rows of bars with the same sweep as the thumbnail. */
+.pub-bom-status { margin: 0 0 10px; }
+.pub-skel-table { padding: 6px 14px; }
+.pub-skel-row { display: flex; align-items: center; gap: 24px; height: 34px; border-bottom: 1px solid var(--border); }
+.pub-skel-row:last-child { border-bottom: 0; }
+.pub-skel {
+  display: block; height: 12px; border-radius: 4px;
+  background-image: linear-gradient(90deg, #eceff1 25%, #f7f8f9 50%, #eceff1 75%);
+  background-size: 200% 100%; background-repeat: repeat-x;
+  animation: pub-thumb-sweep 1.3s linear infinite;
+}
+.pub-skel-wide { flex: 3; } .pub-skel-mid { flex: 2; } .pub-skel-short { flex: 0 0 80px; }
+@media (prefers-reduced-motion: reduce) { .pub-skel { animation: none; } }
+
+/* Skeleton while the thumbnail is on its way: a light band sweeps across the box. */
+.pub-thumb-loading {
+  background-image: linear-gradient(90deg, #eceff1 25%, #f7f8f9 50%, #eceff1 75%);
+  background-size: 200% 100%; background-repeat: repeat-x;
+  animation: pub-thumb-sweep 1.3s linear infinite;
+}
+@keyframes pub-thumb-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .pub-thumb-loading { animation: none; } }
 .pub-summary-text { flex: 1; min-width: 0; }
 .pub-summary .pub-label { width: 90px; }
 

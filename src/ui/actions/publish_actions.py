@@ -5,8 +5,9 @@ opening, a component being clicked), each on its own worker thread.
 """
 
 import threading
+import time as clock
 import webbrowser
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple
 
 from ...auth.auth_service import AuthService
@@ -20,6 +21,7 @@ from ...fm.items import ItemService
 from ...fm.permissions import denial
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
+from ...fusion_mfg.summary_cache import SummaryCache
 from ...sync.bom_compare import compare_bom
 from ...sync.item_compare import compare_item
 from ...sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN
@@ -42,34 +44,57 @@ def publish_denial(fm: FmClient, cfg: WorkspaceConfig) -> str:
     return denial(fm, cfg.workspace_id, kind.required_permissions, kind.title)
 
 
+def _design_number(summary: Dict[str, Any]) -> str:
+    return str(summary.get("item_number") or summary.get("part_number") or "").strip()
+
+
+def _search_design(fm: FmClient, cfg: WorkspaceConfig, summary: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The Fusion Manage items with the design's number (none to look for gives none). Started while the structure is read."""
+    number = _design_number(summary)
+    if not cfg or not cfg.workspace_id or not number:
+        return []
+    return ItemService(fm).search(cfg.workspace_id, number)
+
+
 def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: WorkspaceConfig,
-                 fm: FmClient, chosen: str = "") -> Dict[str, Any]:
+                 fm: FmClient, chosen: str = "", searched_hits: "Future[List[Dict[str, Any]]]" = None) -> Dict[str, Any]:
     """Mark each BOM row against the Fusion Manage BOM of the open design. Runs on a worker thread.
+
+    ``searched_hits`` is the search of the design's number, if it was started already (while the structure was read).
 
     One BOM call, deep enough for the whole tree, covers every assembly. Rows stay
     unchecked (no status) when the design is not compared. When the design matches
     several items and none is chosen, ``pick`` is set and the panel waits for the choice.
     ``fm_item_id`` is the Fusion Manage item compared with, empty when there is none (the Add Items picker needs it).
     """
-    number = str(summary.get("item_number") or summary.get("part_number") or "").strip()
+    number = _design_number(summary)
     log.info("Design structure of %s: %s", number or "(no number)", "; ".join(
         f"{'  ' * int(r['level'])}{r['item_number'] or r['part_number']} x{r['quantity']}" for r in rows) or "no components")
     if not cfg or not cfg.workspace_id or not number:
         return {"rows": rows, "pick": False}
     # A Fusion Manage or sign-in failure is not caught: the section fails and the panel offers Retry,
     # rather than caching a table that looks compared but is not.
-    service = ItemService(fm)
-    hits = service.search(cfg.workspace_id, number)
+    began = clock.monotonic()
+    hits = searched_hits.result() if searched_hits else _search_design(fm, cfg, summary)
+    searched = clock.monotonic() - began   # only the wait: a search started earlier is already done or partly so
     if not hits:
+        log.info("TIMING compare_bom %s: search %.2fs (no item), %d rows", number, searched, len(rows))
         return {"rows": compare_bom(rows, number, {}), "pick": False}   # the design is new, so every line is
     picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
     if not picked:
+        log.info("TIMING compare_bom %s: search %.2fs (%d hits, waiting for a choice)", number, searched, len(hits))
         return {"rows": rows, "pick": True}
     depth = max([int(r["level"]) for r in rows] + [0]) + 1
+    read_began = clock.monotonic()
     fm_bom = BomService(fm).read(cfg.workspace_id, picked["id"], depth)
+    read_seconds = clock.monotonic() - read_began
     log.info("Fusion Manage BOM of %s: %d parent(s), %d line(s)", number, len(fm_bom),
              sum(len(v) for v in fm_bom.values()))
-    return {"rows": compare_bom(rows, number, fm_bom), "pick": False, "fm_item_id": picked["id"]}
+    compare_began = clock.monotonic()
+    compared = compare_bom(rows, number, fm_bom)
+    log.info("TIMING compare_bom %s: waited %.2fs for the search, BOM read %.2fs (depth %d), compare %.3fs, %d rows", number, searched,
+             read_seconds, depth, clock.monotonic() - compare_began, len(rows))
+    return {"rows": compared, "pick": False, "fm_item_id": picked["id"]}
 
 
 def _model_ref() -> Tuple[str, str]:
@@ -89,7 +114,9 @@ def _model_ref() -> Tuple[str, str]:
 
 def _entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     """A section's state: loading (``pending``), done (``ok`` with ``data``) or failed (``message``)."""
-    entry: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": ""}
+    entry: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": "",
+                             "progress": 0,   # while pending: how many relations of the structure are read so far (of a structure of several pages)
+                             "stage": ""}     # while pending: "comparing" once the structure is read and Fusion Manage is being asked
     entry.update(changes)
     return entry
 
@@ -105,25 +132,65 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
     # One slot per section; a component's properties get a slot each ("component:<id>").
     sections: Dict[str, Dict[str, Any]] = {name: _entry(name) for name in SECTION_NAMES}
     lock = threading.Lock()
+    summary_cache = SummaryCache()
 
     def run(slot: str, name: str, key: str, client: MfgGraphQlClient, fm: FmClient, cfg: WorkspaceConfig,
-            model_id: str, time: str, component: Dict[str, str], chosen: str) -> None:
+            model_id: str, time: str, component: Dict[str, str], chosen: str, force: bool) -> None:
         try:
             if name == "summary":   # the first section: when it is denied nothing else is asked for
+                asked = clock.monotonic()
                 message = publish_denial(fm, cfg)
+                log.info("TIMING permission check %.2fs", clock.monotonic() - asked)
                 if message:
                     raise PublishDenied(message)
             with lock:
                 summary = dict(sections["summary"]["data"] or {}) if sections["summary"]["key"] == key else {}
             physical = any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in cfg.mappings) if cfg else False
-            data = read_section(client, name, model_id, time, summary, component.get("id", ""), physical)
-            if name == "properties":
-                data = {"count": len(data), "compare": compare_item(data, summary, cfg, fm, chosen)}
+            began = clock.monotonic()
+            read_seconds = 0.0
+
+            def note(**changes: Any) -> None:
+                with lock:
+                    if sections[slot]["key"] == key and sections[slot]["pending"]:
+                        sections[slot].update(changes)
+
+            def note_progress(count: int) -> None:
+                note(progress=count)
+
+            def read() -> Any:
+                nonlocal read_seconds
+                result = read_section(client, name, model_id, time, summary, component.get("id", ""), physical, note_progress)
+                read_seconds = clock.monotonic() - began
+                return result["properties"] if name == "component" else result
+
+            if name in ("properties", "component"):
+                # Fusion Manage is asked while the Data Model is read, so the two waits overlap.
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    pending = pool.submit(read)
+                    data = {"compare": compare_item(pending, component if name == "component" else summary, cfg, fm, chosen)}
+                if name == "properties":
+                    data["count"] = len(pending.result())
             elif name == "structure":
-                data = _compare_bom(data, summary, cfg, fm, chosen)
-            elif name == "component":
-                data = {"compare": compare_item(data["properties"], component, cfg, fm, chosen), "drawings": data["drawings"]}
+                # The design's number is searched in Fusion Manage while its structure is read.
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    searching = pool.submit(_search_design, fm, cfg, summary)
+                    rows = read()
+                    note(stage="comparing")
+                    data = _compare_bom(rows, summary, cfg, fm, chosen, searching)
+            elif name == "summary":
+                # A version of a design does not change, so its summary is read once; a refresh reads it again.
+                # Without the timestamp that pins the version there is no version to keep it for.
+                data = summary_cache.get(key) if time and not force else None
+                if data is None:
+                    data = read()
+                    if time:
+                        summary_cache.put(key, data)
+                log.info("TIMING summary %s (version %s)", "from the cache" if read_seconds == 0.0 else "read from the Data Model", time or "unpinned")
+            else:
+                data = read()
             log.info("Loaded %s of %s", slot, model_id)
+            log.info("TIMING %s total %.2fs: Manufacturing Data Model read %.2fs (physical=%s), rest %.2fs",
+                     slot, clock.monotonic() - began, read_seconds, physical, clock.monotonic() - began - read_seconds)
             outcome = _entry(slot, ok=True, data=data, key=key)
         except PublishDenied as exc:   # not an error: the panel says so, in place of the item
             log.info("No permission to publish: %s", exc)
@@ -156,11 +223,13 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
         with lock:
             current = sections.get(slot) or _entry(slot)
             if not payload.get("force") and current["key"] == key and (current["pending"] or current["ok"]):
+                log.info("TIMING %s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
                 return dict(current)
+            log.info("TIMING %s requested: starting", slot)
             sections[slot] = _entry(slot, pending=True, key=key)
             snapshot = dict(sections[slot])
-        threading.Thread(target=run, args=(slot, name, key, client, fm, cfg, model_id, time, component, chosen),
-                         daemon=True).start()
+        threading.Thread(target=run, args=(slot, name, key, client, fm, cfg, model_id, time, component, chosen,
+                                           bool(payload.get("force"))), daemon=True).start()
         return snapshot
 
     def load_publish_section_status(payload: Dict[str, Any]) -> Dict[str, Any]:

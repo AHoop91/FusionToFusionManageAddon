@@ -143,7 +143,7 @@ class PublishRun(JobState):
         read_time = time.monotonic() - began
 
         component_id = str(summary.get("component_id") or "") if root else str(item["id"])
-        stored = str(summary.get("thumbnail") if root else item.get("thumbnail") or "")
+        stored = str((summary if root else item).get("thumbnail") or "")
         image = self._thumbnail(number, folder, component_id, stored)
         files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
 

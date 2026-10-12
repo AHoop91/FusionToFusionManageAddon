@@ -5,6 +5,7 @@ covers both), so no second login is needed.
 """
 
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -39,32 +40,44 @@ class MfgGraphQlClient:
         self._settings = settings
         self._auth = auth
 
-    def query(self, text: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def query(self, text: str, variables: Optional[Dict[str, Any]] = None, label: str = "") -> Dict[str, Any]:
         """Run a query and return its ``data`` object.
 
+        ``label`` names the query in the timing log (the first field it asks for when empty).
         Raises ``AuthError`` without a valid session and ``MfgApiError`` for
         network, HTTP or GraphQL errors. A query only reads, so one that failed
         because the service was busy or timed out is tried again a few times.
         """
         for attempt in range(1, ATTEMPTS + 1):
             try:
-                return self._query_once(text, variables)
+                return self._query_once(text, variables, label)
             except MfgApiError as exc:
                 if attempt == ATTEMPTS or not exc.transient:
                     raise
                 log.warning("Manufacturing Data Model query failed (%s), attempt %d of %d", exc, attempt, ATTEMPTS)
                 time.sleep(RETRY_SECONDS * attempt)
 
-    def _query_once(self, text: str, variables: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _query_once(self, text: str, variables: Optional[Dict[str, Any]], label: str = "") -> Dict[str, Any]:
+        began = time.monotonic()
         token = self._auth.get_access_token(self._settings)
+        token_seconds = time.monotonic() - began
         body = json.dumps({"query": text, "variables": variables or {}}).encode("utf-8")
         request = urllib.request.Request(GRAPHQL_URL, data=body, method="POST", headers={
             "Accept": "application/json", "Content-Type": "application/json",
             "Authorization": f"Bearer {token}"})
+        sent = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                payload = json.loads(response.read())
+                waited = time.monotonic() - sent   # until the response headers arrived
+                raw = response.read()
+                payload = json.loads(raw)
+            match = re.search(r"\{\s*(\w+)", text)
+            extensions = payload.get("extensions") if isinstance(payload, dict) else None   # may say what the query cost
+            log.info("TIMING graphql %s: token %.2fs, first byte %.2fs, download %.2fs, %d bytes%s",
+                     label or (match.group(1) if match else "?"), token_seconds, waited, time.monotonic() - sent - waited, len(raw),
+                     f", extensions {json.dumps(extensions)[:300]}" if extensions else "")
         except urllib.error.HTTPError as exc:
+            log.info("TIMING graphql %s failed with HTTP %s after %.2fs", label or "query", exc.code, time.monotonic() - sent)
             detail = exc.read()[:4000].decode("utf-8", "replace")
             log.error("GraphQL HTTP %s from %s: %s", exc.code, GRAPHQL_URL, detail)
             try:

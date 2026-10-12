@@ -12,9 +12,10 @@
   const details = ns.pubDetails;
   const jobs = ns.pubJobs;
 
-  const POLL_INTERVAL_MS = 700;
+  const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
   const STALE_MS = 60000;   // the panel shown again after this long reads Fusion Manage afresh
-  const SECTIONS = ['properties', 'structure'];   // loaded for the open design once its summary is in
+  const SECTIONS = ['structure', 'thumbnail'];    // loaded for the open design once its summary is in
+  const ALL_SECTIONS = ['properties', 'structure', 'thumbnail'];   // properties (the design's own) load when its row is opened
 
   let currentSummary = null;   // summary of the open design
   let loadedKey = null;        // design the panel currently shows
@@ -41,14 +42,17 @@
     children.forEach(function (c) { box.appendChild(c); });
   }
 
-  function setThumbnail(url) {
+  /** Show the thumbnail, or, while ``loading``, a skeleton in its place (it arrives on its own, after the rest). */
+  function setThumbnail(url, loading) {
+    const box = $('pub-thumb');
+    box.classList.toggle('pub-thumb-loading', !!loading);
     // Only http(s) URLs, so nothing else is ever loaded into the style.
-    $('pub-thumb').style.backgroundImage = /^https?:\/\//i.test(url) ? 'url("' + url.replace(/"/g, '%22') + '")' : '';
+    box.style.backgroundImage = !loading && /^https?:\/\//i.test(url) ? 'url("' + url.replace(/"/g, '%22') + '")' : '';
   }
 
   function renderSummary(s) {
     currentSummary = s;
-    setThumbnail(s.thumbnail);
+    setThumbnail('', true);
     setSummary([
       line('Item Number', s.item_number || '-'),
       line('Part Number', s.part_number || '-'),
@@ -127,9 +131,35 @@
     return host;
   }
 
+  /** Rows of grey bars in place of the table while it loads, with a line saying what is happening. */
   function bomLoading() {
-    clearBom().classList.add('pub-loading');
-    $('pub-bom').appendChild(ui.loaderNode());
+    const host = clearBom();
+    const status = ui.el('p', 'muted pub-bom-status');
+    status.id = 'pub-bom-status';
+    host.appendChild(status);
+    const table = ui.el('div', 'card pub-skel-table');
+    table.setAttribute('aria-hidden', 'true');
+    for (let row = 0; row < 8; row++) {
+      const line = ui.el('div', 'pub-skel-row');
+      ['pub-skel-wide', 'pub-skel-mid', 'pub-skel-short'].forEach(function (width) { line.appendChild(ui.el('span', 'pub-skel ' + width)); });
+      table.appendChild(line);
+    }
+    host.appendChild(table);
+    bomStatus({});
+  }
+
+  let bomStatusText = '';
+
+  /** What the Bill of Materials is doing: reading it (and how far, once it takes several pages), then comparing it with Fusion Manage. */
+  function bomStatus(entry) {
+    const note = $('pub-bom-status');
+    if (!note) return;
+    const text = entry.stage === 'comparing' ? 'Comparing with Fusion Manage...'
+      : entry.progress ? 'Reading the Bill of Materials... ' + Number(entry.progress).toLocaleString() + ' lines so far'
+      : 'Reading the Bill of Materials...';
+    if (text === bomStatusText && note.textContent) return;   // the same words must not restart the "taking longer" timer
+    bomStatusText = text;
+    ui.warnWhenSlow(note, text);   // adds a note if nothing new has been said for a long while
   }
 
   function bomMessage(text) {
@@ -196,6 +226,7 @@
     const name = entry.section;
     clearTimeout(timers[name]);
     if (entry.pending) {
+      if (name === 'structure') bomStatus(entry);
       timers[name] = setTimeout(function () {
         bridge.send('load_publish_section_status', { section: name });
       }, POLL_INTERVAL_MS);
@@ -209,7 +240,7 @@
     if (name === 'summary') {
       showLoading(false);
       if (entry.denied) { showDenied(entry.denied); return; }
-      if (!entry.ok) { setThumbnail(''); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
+      if (!entry.ok) { setThumbnail('', false); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
       loadedKey = entry.key;
       loaded.summary = true;
       renderSummary(entry.data);
@@ -217,6 +248,12 @@
       return;
     }
     loaded[name] = true;
+    if (name === 'thumbnail') {   // no thumbnail (or none yet) just leaves the box empty
+      const url = entry.ok ? entry.data.url : '';
+      if (currentSummary) currentSummary.thumbnail = url;   // publishing falls back to it when a fresh one cannot be had
+      setThumbnail(url, false);
+      return;
+    }
     if (name === 'properties') {
       if (entry.ok) details.setRoot(entry.data.compare);
       else details.setRootError(entry.message || 'Unknown error');
@@ -236,7 +273,7 @@
     // Focus, sign-in and the button can all fire together; load once.
     if (Date.now() - lastLoad < 2000) return;
     lastLoad = Date.now();
-    SECTIONS.forEach(function (name) {
+    ALL_SECTIONS.forEach(function (name) {
       loaded[name] = false;
       inflight[name] = false;
       forceNext[name] = !!force;
@@ -255,6 +292,10 @@
   function init() {
     details.init({
       request: request,
+      // The design's row was opened: read its own properties the first time.
+      onRootLoad: function () {
+        if (loaded.summary && !loaded.properties && !inflight.properties) loadSection('properties');
+      },
       // The user picked a Fusion Manage item for the design: compare its properties and BOM again with it.
       onRootChoice: function () {
         inflight.properties = true;

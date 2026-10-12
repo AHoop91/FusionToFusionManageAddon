@@ -11,7 +11,6 @@ query ($input: [BulkModelsQueryInput!]!) {
         itemNumber { id }
         description { value }
         partNumber { value }
-        thumbnail { status signedUrl }
       }
     }
   }
@@ -47,21 +46,12 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
     allProperties(pagination: { limit: 500 }) {
       results { name displayValue }
     }
-    primaryModel {
-      drawings(pagination: { limit: 50 }) {
-        results {
-          id
-          name
-          itemNumber { id }
-          derivatives(derivativeInput: { targetFormat: PDF, generate: false }) { outputFormat status signedUrl }
-        }
-      }
-    }
   }
 }
 """
 
-# A component's thumbnail alone: its signed url is short-lived, so a publish asks for it when it needs it.
+# A component's thumbnail alone: the Data Model is slow to give a signed url, so it is never asked for with the rest.
+# The url is short-lived, so a publish asks for it again when it needs it.
 THUMBNAIL_QUERY = """
 query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
   component(componentId: $componentId, composition: $composition, time: $time) {
@@ -73,8 +63,10 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 # The whole bill of materials: one flat list of relations down to STRUCTURE_DEPTH
 # levels. Each relation names its parent (fromComponent), so the parser rebuilds
 # the tree. Results are paged with a cursor.
-STRUCTURE_DEPTH = 10
-STRUCTURE_PAGE_SIZE = 50
+STRUCTURE_DEPTH = 50   # no assembly is assumed to stop at some depth: a read that still reaches this is an error, not a cut-off BOM
+# The most a page may hold is 250 ("PaginationInput.limit must be between 1 and 250"). Each page costs about two seconds
+# whatever its size, so the biggest page is used. If a page of this size is ever refused for its cost, the error says so.
+STRUCTURE_PAGE_SIZE = 250
 
 STRUCTURE_QUERY = """
 query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime, $depth: Int, $cursor: String, $limit: Int) {
@@ -91,7 +83,6 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime, $d
           name { value }
           description { value }
           partNumber { value }
-          thumbnail { status signedUrl }
         }
       }
     }

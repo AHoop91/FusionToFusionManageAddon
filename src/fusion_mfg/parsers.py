@@ -24,14 +24,12 @@ def _text(node: Any) -> str:
 
 def parse_summary(data: Dict[str, Any]) -> Dict[str, str]:
     component = _component(data)
-    thumb = component.get("thumbnail") or {}
     return {
         "component_id": str(component.get("id") or ""),
         "composition": str(component.get("composition") or ""),
         "item_number": str((component.get("itemNumber") or {}).get("id") or ""),
         "part_number": _text(component.get("partNumber")),
         "description": _text(component.get("description")),
-        "thumbnail": str(thumb.get("signedUrl") or ""),
     }
 
 
@@ -52,19 +50,8 @@ def parse_properties(data: Dict[str, Any]) -> List[Dict[str, str]]:
 
 
 def parse_component(data: Dict[str, Any]) -> Dict[str, Any]:
-    """A component's properties and the drawings of its primary model."""
-    component = data.get("component") or {}
-    model = component.get("primaryModel") or {}
-    drawings = []
-    for row in ((model.get("drawings") or {}).get("results")) or []:
-        if not isinstance(row, dict):
-            continue
-        files = [{"format": str(d.get("outputFormat") or ""), "status": str(d.get("status") or ""),
-                  "url": str(d.get("signedUrl") or "")}
-                 for d in row.get("derivatives") or [] if isinstance(d, dict)]
-        drawings.append({"id": str(row.get("id") or ""), "name": str(row.get("name") or ""),
-                         "item_number": str((row.get("itemNumber") or {}).get("id") or ""), "files": files})
-    return {"properties": _properties(component.get("allProperties")), "drawings": drawings}
+    """A component's properties."""
+    return {"properties": _properties((data.get("component") or {}).get("allProperties"))}
 
 
 def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[str, Any]]:
@@ -77,11 +64,11 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
 
     result: List[Dict[str, Any]] = []
 
-    def walk(parent: str, level: int) -> None:
-        if level > 20:   # guard against a cyclic answer
-            return
+    def walk(parent: str, level: int, ancestors: frozenset) -> None:
         for row in sorted(children.get(parent, []), key=lambda r: r.get("sequenceNumber") or 0):
             child = row["toComponent"]
+            if str(child.get("id") or "") in ancestors:   # a component under itself would never end
+                raise ValueError(f"The Bill of Materials contains a component inside itself ({child.get('id')}).")
             result.append({"level": level,
                            "id": str(child.get("id") or ""),
                            "item_number": str((child.get("itemNumber") or {}).get("id") or ""),
@@ -89,9 +76,8 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
                            "name": _text(child.get("name")),
                            "part_number": _text(child.get("partNumber")) or str((child.get("itemNumber") or {}).get("id") or ""),
                            "description": _text(child.get("description")),
-                           "thumbnail": str((child.get("thumbnail") or {}).get("signedUrl") or ""),
                            "quantity": str((row.get("quantityProperty") or {}).get("displayValue") or "")})
-            walk(str(child.get("id") or ""), level + 1)
+            walk(str(child.get("id") or ""), level + 1, ancestors | {str(child.get("id") or "")})
 
-    walk(root_id, 0)
+    walk(root_id, 0, frozenset([root_id]))
     return result

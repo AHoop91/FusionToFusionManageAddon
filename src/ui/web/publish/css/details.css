@@ -1,7 +1,6 @@
 /* ==========================================================================
    Publish Item panel: the Details Panel beside the bill of materials. It shows one
-   component: a title card with its state, its properties compared with Fusion Manage,
-   and its drawings.
+   component: a title card with its state and its properties compared with Fusion Manage.
    ========================================================================== */
 
 /* ---- The pane --------------------------------------------------------------- */
@@ -73,7 +72,7 @@
 /* Loading balls sit in the middle of a section, both ways. */
 .pub-props-wait { display: flex; align-items: center; justify-content: center; min-height: 120px; }
 
-/* ---- Properties and drawings tables ------------------------------------------------- */
+/* ---- Properties table ------------------------------------------------- */
 .pub-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .pub-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; }
 .pub-table td { padding: 5px 6px; border-top: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
@@ -96,17 +95,9 @@
 .pub-property-table td.pub-status { padding: 0 14px 0 0; text-align: right; vertical-align: middle; }
 .pub-property-table .pub-mark { vertical-align: middle; }
 
-/* Drawings table: room between the columns. */
-.pub-drawings-table th, .pub-drawings-table td { padding-left: 16px; padding-right: 16px; }
-.pub-drawings-table td:nth-child(1), .pub-drawings-table th:nth-child(1) { padding-right: 32px; }
-.pub-drawings-wait { min-height: 120px; }
-.pub-drawing-cell { width: 1%; text-align: right; white-space: nowrap; }
-
-/* Wide window: values are cut on one line; the drawings' Item Number and link fit their content, Name takes the rest. */
+/* Wide window: values are cut on one line. */
 @media (min-width: 901px) {
   .pub-props .pub-table td.pub-cut { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pub-drawings-table th:nth-child(1), .pub-drawings-table td:nth-child(1),
-  .pub-drawings-table th:nth-child(3), .pub-drawings-table td:nth-child(3) { width: 1%; white-space: nowrap; }
   .pub-props .card.pub-empty { padding: 16px; }
 }
 
@@ -124,12 +115,10 @@
   .pub-table td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; }
   .pub-table td[data-label="Property"]::before { content: none; }
   .pub-table td.pub-status { position: absolute; top: 10px; right: 10px; width: auto; padding: 0; }
-  .pub-drawing-cell { width: auto; text-align: left; }
-  .pub-drawings-table td { padding-left: 0; padding-right: 0; }
 }
 
 /* The pane is narrower than the window, so it picks its layout from its own width: under 600px
-   the properties and drawings stack as cards (name on top, then its values) instead of columns. */
+   the properties stack as cards (name on top, then its values) instead of columns. */
 @container details (max-width: 600px) {
   .pub-props .card:not(.pub-props-head):not(.pub-props-wait):not(.pub-empty):not(.pub-pick-card) { padding: 0; border: 0; background: transparent; box-shadow: none; }
   .pub-props .pub-table, .pub-props .pub-table tbody, .pub-props .pub-table tr, .pub-props .pub-table td { display: block; width: 100%; }
@@ -142,12 +131,11 @@
   .pub-props .pub-property-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
   .pub-props .pub-property-table td[data-label="Property"] { grid-column: 1 / -1; font-size: 14px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
   .pub-props .pub-property-table td { min-width: 0; overflow-wrap: anywhere; }
-  .pub-props .pub-table td, .pub-props .pub-drawings-table td { border: 0; padding: 2px 0; }
+  .pub-props .pub-table td { border: 0; padding: 2px 0; }
   .pub-props .pub-table td:first-child, .pub-props .pub-table td:nth-child(3) { width: 100%; white-space: normal; padding-right: 0; }
   .pub-props .pub-table td.pub-cut { max-width: none; overflow: visible; white-space: normal; text-overflow: clip; }
   .pub-props .pub-table td[data-label="Property"] { font-weight: 600; padding-bottom: 4px; }
   .pub-props .pub-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #6b7280); }
   .pub-props .pub-table td[data-label="Property"]::before { content: none; }
   .pub-props .pub-table td.pub-status { position: absolute; top: 12px; right: 12px; width: auto; padding: 0; border: 0; }
-  .pub-props .pub-drawing-cell { width: 100%; text-align: left; padding-top: 4px; }
 }

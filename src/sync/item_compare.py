@@ -1,6 +1,8 @@
 """Compare one design or component with its Fusion Manage item (shared by the panel and by publishing)."""
 
-from typing import Any, Dict, List
+import time
+from concurrent.futures import Future
+from typing import Any, Dict, List, Union
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
@@ -12,9 +14,12 @@ from .property_compare import FOUND, MULTIPLE, NEW, UNKNOWN, compare_properties
 log = get_logger("item_compare")
 
 
-def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig,
+def compare_item(properties: Union[List[Dict[str, str]], "Future[List[Dict[str, str]]]"], summary: Dict[str, Any], cfg: WorkspaceConfig,
                  fm: FmClient, chosen: str = "", with_values: bool = False) -> Dict[str, Any]:
     """Compare the properties with Fusion Manage. Runs on a worker thread.
+
+    ``properties`` may be a future of them: Fusion Manage is asked first, so a read of the properties already
+    under way runs at the same time, and its result (or error) is taken once Fusion Manage has answered.
 
     The item is searched by item number in the Items workspace. When several
     items match, ``chosen`` (an item id the user picked) selects one; until then
@@ -33,10 +38,14 @@ def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg:
     else:
         try:
             service = ItemService(fm)
+            began = time.monotonic()
             hits = service.search(cfg.workspace_id, number)
+            searched = time.monotonic() - began
             picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
             if picked:
                 values = service.read(cfg.workspace_id, picked["id"])
+            log.info("TIMING compare_item %s: search %.2fs (%d hits), read %.2fs", number, searched, len(hits),
+                     time.monotonic() - began - searched)
         except (FmApiError, AuthError) as exc:
             log.warning("Fusion Manage lookup failed: %s", exc)
             info.update(state=UNKNOWN, message=f"Could not read Fusion Manage: {exc}")
@@ -49,6 +58,8 @@ def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg:
                     info.update(state=FOUND, item_id=picked["id"])
                 else:
                     info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items match {number}. Choose one.")
+    if isinstance(properties, Future):   # still being read from the Data Model while Fusion Manage was asked
+        properties = properties.result()
     result = {"fm": info,
               "rows": compare_properties(properties, summary, mappings, display_values(values) if values is not None else None, info["state"])}
     if with_values:

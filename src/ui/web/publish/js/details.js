@@ -1,11 +1,11 @@
 /**
  * Publish Item panel: the Details Panel beside the bill of materials, as ``ns.pubDetails``.
  *
- * It shows one component at a time: its properties compared with Fusion Manage, and its
- * drawings. Components are read when their row is clicked, then kept. The design's own
- * properties are read by publish.js and handed in with ``setRoot``.
+ * It shows one component at a time: its properties compared with Fusion Manage. Components are read when their row is clicked, then kept. The design's own
+ * properties are read by publish.js, when its row is first opened, and handed in with ``setRoot``.
  *
  * ``init`` takes: ``request(slot, payload)`` to ask Python for a component,
+ * ``onRootLoad()`` when the design's row is opened (read its properties unless that is done or under way),
  * ``onRootChoice(itemId)`` when the user picks a Fusion Manage item for the design, and
  * ``onRootRetry()`` to read the design's properties again.
  */
@@ -15,7 +15,6 @@
   const $ = ns.$;
   const ui = ns.pubUi;
   const el = ui.el;
-  const bridge = ns.bridge;
 
   // Tooltip per property status (the dot at the right of a property).
   const STATUS = {
@@ -44,7 +43,6 @@
   let force = false;            // skip the cached copy when reading components
   const compares = {};          // component id -> comparison
   const errors = {};            // component id -> message
-  const drawings = {};          // component id -> drawings of its primary model
   const loading = {};           // component id -> true while being read
   const choices = {};           // item number -> Fusion Manage item id the user picked
   const changing = {};          // item number -> true while the user re-picks an already chosen item
@@ -98,7 +96,6 @@
     loading[id] = false;
     if (entry.ok) {
       compares[id] = entry.data.compare;
-      drawings[id] = entry.data.drawings;
     } else {
       errors[id] = entry.message || 'Unknown error';
     }
@@ -214,42 +211,6 @@
     return card;
   }
 
-  /** The drawings of a component, each with a link to its PDF. */
-  function drawingsBlock(item) {
-    const list = drawings[item.id];
-    if (!list) {
-      if (errorOf(item)) return ui.errorState(errorOf(item), retry);
-      const wait = el('div', 'card pub-props-wait pub-drawings-wait');
-      wait.appendChild(ui.loaderNode());
-      return wait;
-    }
-    if (!list.length) return ui.emptyState('No drawings for this component.');
-    const card = el('div', 'card');
-    const table = el('table', 'pub-table pub-drawings-table');
-    const head = el('tr');
-    ['Item Number', 'Name', ''].forEach(function (h) { head.appendChild(el('th', '', h)); });
-    table.appendChild(head);
-    list.forEach(function (d) {
-      const tr = el('tr');
-      const number = el('td', d.item_number ? '' : 'muted', d.item_number || '-');
-      number.setAttribute('data-label', 'Item Number');
-      const name = el('td', d.name ? '' : 'muted', d.name || '-');
-      name.setAttribute('data-label', 'Name');
-      const link = el('td', 'pub-drawing-cell');
-      const pdf = d.files.filter(function (f) { return f.status === 'SUCCESS' && f.url; })[0];
-      if (pdf) {
-        const open = el('button', 'pub-drawing-open', 'Open');
-        open.type = 'button';
-        open.addEventListener('click', function () { bridge.send('open_url', { url: pdf.url }); });
-        link.appendChild(open);
-      }
-      [number, name, link].forEach(function (td) { tr.appendChild(td); });
-      table.appendChild(tr);
-    });
-    card.appendChild(table);
-    return card;
-  }
-
   /** A sub header with a chevron that shows or hides its content. */
   function section(title, content) {
     const box = el('div', 'pub-section');
@@ -318,7 +279,6 @@
       content.appendChild(ui.loaderNode());
     }
     pane.appendChild(section('Properties', content));
-    if (compare || !errorOf(selected)) pane.appendChild(section('Drawings', drawingsBlock(selected)));
   }
 
   // ---- Opening, closing and feeding the pane -------------------------------------
@@ -329,7 +289,7 @@
     $('pub-detail').hidden = false;
     $('pub-backdrop').hidden = false;
     paint();
-    load(item);
+    if (item.root) hooks.onRootLoad(); else load(item);   // the design's own properties are read by publish.js, once
   }
 
   function close() {
@@ -358,7 +318,7 @@
     rootCompare = null;
     rootError = '';
     force = !!skipCache;
-    [compares, errors, drawings, loading].forEach(function (map) {
+    [compares, errors, loading].forEach(function (map) {
       Object.keys(map).forEach(function (id) { delete map[id]; });
     });
   }

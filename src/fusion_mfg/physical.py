@@ -1,7 +1,7 @@
 """The physical properties of a component: mass, volume, area, density and the bounding box.
 
 They are not in ``allProperties``; the Data Model works them out from the geometry (``status`` says when they
-are ready), so they are read with a query of their own and added to a component's property rows as
+are ready), so they are read next to a component's properties and added to its property rows as
 "Physical Mass", "Physical Length" and so on (the names a ``physical:<name>`` mapping source reads).
 """
 
@@ -9,7 +9,6 @@ from typing import Any, Dict, List
 
 from ..config.workspace_models import PHYSICAL_NAMES
 from ..core.logging_setup import get_logger
-from .graphql_client import MfgGraphQlClient
 
 log = get_logger("physical")
 
@@ -26,10 +25,13 @@ _PHYSICAL = """physicalProperties {
         }
       }"""
 
-# The physical properties belong to the component's primary model.
-PHYSICAL_QUERY = """
+# A component's properties and its physical properties, which belong to its primary model, in one request.
+COMPONENT_WITH_PHYSICAL_QUERY = """
 query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
   component(componentId: $componentId, composition: $composition, time: $time) {
+    allProperties(pagination: { limit: 500 }) {
+      results { name displayValue }
+    }
     primaryModel { %s }
   }
 }
@@ -73,7 +75,7 @@ def _number(node: Any, kilograms: bool = False) -> str:
 
 
 def parse_physical(data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Property rows (``Physical <name>``) from a ``PHYSICAL_QUERY`` answer; none until the Data Model has them ready."""
+    """Property rows (``Physical <name>``) from a ``COMPONENT_WITH_PHYSICAL_QUERY`` answer; none until the Data Model has them ready."""
     node = (((data.get("component") or {}).get("primaryModel") or {}).get("physicalProperties")) or {}
     if node.get("status") != READY:
         return []
@@ -82,12 +84,3 @@ def parse_physical(data: Dict[str, Any]) -> List[Dict[str, str]]:
              "Length": box.get("length"), "Width": box.get("width"), "Height": box.get("height")}
     log.debug("Physical properties as the Data Model gave them: %s", found)
     return [{"name": "Physical " + name, "value": _number(found[name], kilograms=name == "Mass")} for name in PHYSICAL_NAMES]
-
-
-def read_physical(client: MfgGraphQlClient, variables: Dict[str, Any]) -> List[Dict[str, str]]:
-    """The physical property rows of a component, or none when the Data Model will not give them (the rest of its properties still show)."""
-    try:
-        return parse_physical(client.query(PHYSICAL_QUERY, variables))
-    except Exception as exc:
-        log.warning("The Data Model would not give the physical properties: %s", exc)
-        return []

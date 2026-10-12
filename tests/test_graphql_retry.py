@@ -12,7 +12,7 @@ def client(outcomes):
     made = MfgGraphQlClient(None, None)
     calls = iter(outcomes)
 
-    def once(text, variables):
+    def once(text, variables, label=""):
         outcome = next(calls)
         if isinstance(outcome, Exception):
             raise outcome

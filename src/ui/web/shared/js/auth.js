@@ -54,11 +54,14 @@
     $('conn-error').textContent = status.error || '';
     ns.account.renderPresence(signedIn);
 
-    // Load the profile once per session, and clear it when the session ends.
-    if (signedIn && !profileLoaded) { profileLoaded = true; bridge.send('auth_profile'); }
+    // Clear the profile when the session ends.
     if (!signedIn) { profileLoaded = false; ns.account.renderProfile(null); }
 
     changeListeners.forEach(function (callback) { callback(signedIn); });
+
+    // Load the profile once per session. It is asked for after the panels' own requests: Python answers a
+    // message before reading the next, and the profile (a Fusion Manage call) would otherwise hold them up.
+    if (signedIn && !profileLoaded) { profileLoaded = true; bridge.send('auth_profile'); }
 
     // Poll only while a browser sign-in is pending.
     clearTimeout(pollTimer);
