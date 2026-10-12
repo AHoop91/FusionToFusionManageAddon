@@ -1,0 +1,2 @@
+# The repository keeps text files with LF line endings; each checkout converts them as the machine wants.
+* text=auto
