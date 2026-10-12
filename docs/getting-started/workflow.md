@@ -36,42 +36,38 @@ A released component and a manufactured item are not the same thing, so they do 
 
 ## The workflow at a glance
 
-The diagram shows who acts at each stage, and where the add-in comes in. Read it left to right.
+Read the diagram left to right. Engineering designs, reviews and releases in Fusion. The add-in then carries the released design across. Manufacturing reviews and releases the item in Fusion Manage. The five stages below cover the same path.
 
 ```mermaid
 %%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 60, "padding": 16}}}%%
 flowchart LR
-    subgraph ENG["ENGINEERING &nbsp;·&nbsp; Fusion"]
-        direction TB
-        E1("<b>1 &nbsp;Release</b><br/>Design and drawing<br/>are released")
+    subgraph ENG["ENGINEERING &nbsp;·&nbsp; in Fusion"]
+        E1("<b>Design</b><br/>Model the component<br/>and its drawing")
+        E2("<b>Review</b><br/>Engineering checks<br/>the design")
+        E3("<b>Released</b><br/>Component and<br/>drawing released")
     end
 
-    subgraph BRIDGE["MANUFACTURING &nbsp;·&nbsp; Fusion, with the add-in"]
-        direction TB
-        P1("<b>2 &nbsp;Publish</b><br/>Item, BOM and<br/>properties are sent")
-        P2("<b>3 &nbsp;Complete</b><br/>Upload STEP and<br/>drawing PDF, add lines")
-        P1 --> P2
+    subgraph ADD["THE ADD-IN &nbsp;·&nbsp; in Fusion"]
+        A1("<b>Publish</b><br/>Send the released design<br/>when it is ready")
     end
 
-    subgraph MFG["MANUFACTURING &nbsp;·&nbsp; Fusion Manage"]
-        direction TB
-        M1("<b>4 &nbsp;Review</b><br/>Engineering, Quality<br/>and Manufacturing check")
-        M2("<b>5 &nbsp;Release</b><br/>Item released by<br/>its own workflow")
-        M1 --> M2
+    subgraph MFG["MANUFACTURING &nbsp;·&nbsp; in Fusion Manage"]
+        M1("<b>Manufacturing item</b><br/>Item and BOM created,<br/>files attached")
+        M2("<b>Review</b><br/>Engineering, Quality and<br/>Manufacturing check")
+        M3("<b>Released</b><br/>Item released by<br/>its own workflow")
     end
 
-    E1 ==>|"Publish when the design<br/>is released and ready"| P1
-    P2 ==>|"Item and files<br/>now in Fusion Manage"| M1
-    E1 -.->|"Engineering change:<br/>publish again"| P1
+    E1 --> E2 --> E3 ==> A1 ==> M1 --> M2 --> M3
+    E3 -.->|"Engineering change:<br/>publish again"| A1
 
     classDef eng fill:#3b82c426,stroke:#3b82c4,stroke-width:1.5px
-    classDef bridge fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px
+    classDef add fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px
     classDef mfg fill:#0596691f,stroke:#059669,stroke-width:1.5px
-    class E1 eng
-    class P1,P2 bridge
-    class M1,M2 mfg
+    class E1,E2,E3 eng
+    class A1 add
+    class M1,M2,M3 mfg
     style ENG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
-    style BRIDGE fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
+    style ADD fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
     style MFG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
     linkStyle default stroke:#64748b,stroke-width:1.5px
 ```
