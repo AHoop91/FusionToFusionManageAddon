@@ -39,13 +39,6 @@ WORKERS = 5   # items prepared at once
 SENT = "sent to Fusion Manage"   # the artifact of an item that was sent
 
 
-def _same_number(left: str, right: Any) -> bool:
-    try:
-        return float(left) == float(str(right).strip())
-    except ValueError:
-        return False
-
-
 class PublishRun(JobState):
     """State and steps of one run. ``snapshot`` is what the panel polls."""
 
@@ -147,7 +140,8 @@ class PublishRun(JobState):
         files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
 
         result = compare_with_item(properties, component, self.cfg,
-                                   lookup_item(component, self.cfg, self._fm, str(item.get("fm_item") or "")), with_values=True)
+                                   lookup_item(component, self.cfg, self._fm, str(item.get("fm_item") or "")),
+                                   self._picklists.fit_number, with_values=True)
         compare_time = time.monotonic() - began - read_time
         link = self._component(number, component_id, result["fm"])
         rows = self._option_rows(number, result["rows"])
@@ -191,8 +185,6 @@ class PublishRun(JobState):
             link = self._picklists.link(row["fm_field"], value)
             if link is None:   # not a picklist field: a number is rounded to the digits the field takes
                 fitted = self._picklists.fit_number(row["fm_field"], value)
-                if fitted != value and _same_number(fitted, row.get("fm_value", "")):
-                    continue   # the field already holds this number at its precision
                 out.append(dict(row, value=fitted) if fitted != value else row)
             elif link:
                 out.append(dict(row, value=link))

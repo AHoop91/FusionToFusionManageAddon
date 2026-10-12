@@ -12,9 +12,12 @@ from typing import Dict, List, Optional
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
+from .ttl_cache import TtlCache
 from .workspace import WorkspaceService
 
 log = get_logger("fm.picklists")
+
+_fields_cache = TtlCache()   # workspace id -> (field id -> lookup name, field id -> decimal digits), so the panel and a run read the fields once
 
 
 class PicklistResolver:
@@ -31,19 +34,23 @@ class PicklistResolver:
     def _lookup_of(self, field_id: str) -> str:
         """The lookup behind a fixed-list field ("" for any other field, or one that links to another workspace)."""
         if self._lookups is None:
-            lookups: Dict[str, str] = {}
-            try:
-                data = self._client.get_json(f"{WORKSPACES}/{self._workspace_id}/fields")
-            except (FmApiError, AuthError) as exc:
-                log.warning("Could not read the fields of workspace %s: %s", self._workspace_id, exc)
-                return ""   # not remembered, so the next field tries again
-            rows = data.get("fields") if isinstance(data, dict) else data
-            for row in rows if isinstance(rows, list) else []:
-                if isinstance(row, dict) and isinstance(row.get("fieldPrecision"), int) and not isinstance(row["fieldPrecision"], bool):
-                    self._precisions[last_segment(row.get("__self__"))] = row["fieldPrecision"]
-                if isinstance(row, dict) and row.get("picklist") and not row.get("picklistFieldDefinition"):
-                    lookups[last_segment(row.get("__self__"))] = last_segment(row["picklist"])
-            self._lookups = lookups
+            known = _fields_cache.get(self._workspace_id)
+            if known is None:
+                lookups: Dict[str, str] = {}
+                precisions: Dict[str, int] = {}
+                try:
+                    data = self._client.get_json(f"{WORKSPACES}/{self._workspace_id}/fields")
+                except (FmApiError, AuthError) as exc:
+                    log.warning("Could not read the fields of workspace %s: %s", self._workspace_id, exc)
+                    return ""   # not remembered, so the next field tries again
+                rows = data.get("fields") if isinstance(data, dict) else data
+                for row in rows if isinstance(rows, list) else []:
+                    if isinstance(row, dict) and isinstance(row.get("fieldPrecision"), int) and not isinstance(row["fieldPrecision"], bool):
+                        precisions[last_segment(row.get("__self__"))] = row["fieldPrecision"]
+                    if isinstance(row, dict) and row.get("picklist") and not row.get("picklistFieldDefinition"):
+                        lookups[last_segment(row.get("__self__"))] = last_segment(row["picklist"])
+                known = _fields_cache.put(self._workspace_id, (lookups, precisions))
+            self._lookups, self._precisions = known
         return self._lookups.get(field_id, "")
 
     def link(self, field_id: str, text: str) -> Optional[str]:

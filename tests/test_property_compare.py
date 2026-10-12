@@ -42,6 +42,15 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(rows["materialName"]["status"], MISMATCH)
         self.assertEqual(rows["materialName"]["fm_value"], "Brass")
 
+    def test_a_number_the_field_holds_at_its_precision_is_a_match(self):
+        mappings = [FieldMapping("custom:Mass", "MASS")]
+        properties = [{"name": "Mass", "value": "0.104455"}]
+        to_three = lambda field, text: "0.104" if text == "0.104455" else text
+        status = lambda fm, fit: compare_properties(properties, {}, mappings, {"MASS": fm}, FOUND, fit)[0]["status"]
+        self.assertEqual(status("0.104", to_three), MATCH)
+        self.assertEqual(status("0.105", to_three), MISMATCH)
+        self.assertEqual(status("0.104", None), MISMATCH)
+
     def test_property_names_match_without_case_or_spaces(self):
         mappings = [FieldMapping("custom:Material Name", "MATERIAL")]
         rows = compare_properties(self.properties, self.summary, mappings, None, "new")

@@ -14,7 +14,7 @@ current value, and a status telling the user what publishing would do:
 ``fm_state`` is ``found``, ``new`` (no item yet), ``multiple`` (several items, none chosen), ``unknown`` (lookup failed) or ``unchecked``.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..config.workspace_models import FieldMapping, data_model_name
 
@@ -37,14 +37,26 @@ def source_value(source: str, summary: Dict[str, Any], values: Dict[str, str]) -
     return values.get(_key(data_model_name(source)), "")
 
 
-def _same(left: str, right: str) -> bool:
-    return left.strip() == right.strip()
+def _same(left: str, right: str, fit: Optional[Callable[[str], str]] = None) -> bool:
+    """Equal as text, or as numbers once ``fit`` has cut ``left`` to the digits the Fusion Manage field takes."""
+    if left.strip() == right.strip():
+        return True
+    if fit is None:
+        return False
+    try:
+        return float(fit(left)) == float(right.strip())
+    except ValueError:
+        return False
 
 
 def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any],
                        mappings: List[FieldMapping], fm_fields: Optional[Dict[str, str]],
-                       fm_state: str) -> List[Dict[str, Any]]:
-    """One row per property, plus rows for mapped sources that are not listed."""
+                       fm_state: str, fit_number: Optional[Callable[[str, str], str]] = None) -> List[Dict[str, Any]]:
+    """One row per property, plus rows for mapped sources that are not listed.
+
+    ``fit_number(field id, text)`` rounds a number to the digits a Fusion Manage field holds, so a value that
+    is the same at that precision (0.104455 against 0.104) is a match, not a change.
+    """
     values = {_key(p["name"]): p["value"] for p in properties}
     by_name: Dict[str, FieldMapping] = {}
     for mapping in mappings:
@@ -74,7 +86,8 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
         elif fm_state != FOUND:
             status = NEW
         else:
-            status = MATCH if _same(value, fm_value) else MISMATCH
+            fit = (lambda text, field=mapping.fm_field_id: fit_number(field, text)) if fit_number else None
+            status = MATCH if _same(value, fm_value, fit) else MISMATCH
         rows.append({"name": name, "value": value, "fm_field": mapping.fm_field_id,
                      "fm_value": fm_value, "status": status})
     # Mapped rows first, so what will change is at the top.

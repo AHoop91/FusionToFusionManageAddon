@@ -18,6 +18,7 @@ from ...fm.bom import BomService
 from ...fm.client import FmClient
 from ...fm.items import ItemService
 from ...fm.permissions import denial
+from ...fm.picklists import PicklistResolver
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
 from ...sync.bom_compare import compare_bom
@@ -153,7 +154,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                     pending = pool.submit(read)
                     lookup = lookup_item(subject, cfg, fm, chosen)   # Fusion Manage is asked while the Data Model is read
                 properties = pending.result()
-                data = {"compare": compare_with_item(properties, subject, cfg, lookup)}
+                fit = PicklistResolver(fm, cfg.workspace_id).fit_number if cfg and cfg.workspace_id else None
+                data = {"compare": compare_with_item(properties, subject, cfg, lookup, fit)}
                 if name == "properties":
                     data["count"] = len(properties)
             elif name == "structure":
