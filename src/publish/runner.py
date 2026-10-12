@@ -141,7 +141,7 @@ class PublishRun(JobState):
 
         result = compare_with_item(properties, component, self.cfg,
                                    lookup_item(component, self.cfg, self._fm, str(item.get("fm_item") or "")),
-                                   self._picklists.fit_number, with_values=True)
+                                   self._picklists.fit_number, with_values=True, convert_unit=self._picklists.convert_unit)
         compare_time = time.monotonic() - began - read_time
         link = self._component(number, component_id, result["fm"])
         rows = self._option_rows(number, result["rows"])

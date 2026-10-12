@@ -14,7 +14,7 @@ current value, and a status telling the user what publishing would do:
 ``fm_state`` is ``found``, ``new`` (no item yet), ``multiple`` (several items, none chosen), ``unknown`` (lookup failed) or ``unchecked``.
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config.workspace_models import FieldMapping, data_model_name
 
@@ -51,8 +51,12 @@ def _same(left: str, right: str, fit: Optional[Callable[[str], str]] = None) -> 
 
 def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any],
                        mappings: List[FieldMapping], fm_fields: Optional[Dict[str, str]],
-                       fm_state: str, fit_number: Optional[Callable[[str, str], str]] = None) -> List[Dict[str, Any]]:
+                       fm_state: str, fit_number: Optional[Callable[[str, str], str]] = None,
+                       convert_unit: Optional[Callable[[str, str, str], Optional[Tuple[str, str]]]] = None) -> List[Dict[str, Any]]:
     """One row per property, plus rows for mapped sources that are not listed.
+
+    ``convert_unit(field id, number, unit)`` gives a physical value as ``(number, unit)`` in the unit the Fusion Manage
+    field is set to, or None to leave it as it is.
 
     ``fit_number(field id, text)`` rounds a number to the digits a Fusion Manage field holds, so a value that
     is the same at that precision (0.104455 against 0.104) is a match, not a change.
@@ -79,6 +83,11 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
             continue
         # A mapped built-in (part number, description) may be fresher than the property list.
         value = source_value(mapping.source, summary, values) or value
+        extra = dict(extras.get(_key(name), {}))
+        if convert_unit and extra.get("unit") and value:   # a physical value in the unit the field is set to: Fusion's centimetres into millimetres
+            converted = convert_unit(mapping.fm_field_id, value, extra["unit"])
+            if converted:
+                value, extra["unit"] = converted
         fm_value = (fm_fields or {}).get(mapping.fm_field_id, "")
         if fm_state == UNCHECKED:
             status = UNCHECKED
@@ -91,7 +100,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
             status = MATCH if _same(value, fm_value, fit) else MISMATCH
         shown = fit_number(mapping.fm_field_id, value) if fit_number and value else value
         rows.append({"name": name, "value": value, "shown": shown, "fm_field": mapping.fm_field_id,
-                     "fm_value": fm_value, "status": status, **extras.get(_key(name), {})})
+                     "fm_value": fm_value, "status": status, **extra})
     # Mapped rows first, so what will change is at the top.
     order = {MISMATCH: 0, NEW: 1, MULTIPLE: 2, UNKNOWN: 3, MATCH: 4, UNCHECKED: 5, UNMAPPED: 6}
     return sorted(rows, key=lambda r: (order[r["status"]], r["name"].lower()))

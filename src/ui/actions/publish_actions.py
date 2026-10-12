@@ -154,8 +154,9 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                     pending = pool.submit(read)
                     lookup = lookup_item(subject, cfg, fm, chosen)   # Fusion Manage is asked while the Data Model is read
                 properties = pending.result()
-                fit = PicklistResolver(fm, cfg.workspace_id).fit_number if cfg and cfg.workspace_id else None
-                data = {"compare": compare_with_item(properties, subject, cfg, lookup, fit)}
+                resolver = PicklistResolver(fm, cfg.workspace_id) if cfg and cfg.workspace_id else None
+                data = {"compare": compare_with_item(properties, subject, cfg, lookup, resolver.fit_number if resolver else None,
+                                                     convert_unit=resolver.convert_unit if resolver else None)}
                 if name == "properties":
                     data["count"] = len(properties)
             elif name == "structure":

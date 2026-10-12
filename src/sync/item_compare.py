@@ -1,6 +1,6 @@
 """Compare one design or component with its Fusion Manage item (shared by the panel and by publishing)."""
 
-from typing import Any, Callable, Dict, List, NamedTuple, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
@@ -66,13 +66,14 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, cho
 
 
 def compare_with_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig, lookup: ItemLookup,
-                      fit_number: Optional[Callable[[str, str], str]] = None, with_values: bool = False) -> Dict[str, Any]:
+                      fit_number: Optional[Callable[[str, str], str]] = None, with_values: bool = False,
+                      convert_unit: Optional[Callable[[str, str, str], Optional[Tuple[str, str]]]] = None) -> Dict[str, Any]:
     """Compare the properties with the item ``lookup`` found. ``fit_number`` rounds a number to the digits its
-    Fusion Manage field takes (see ``compare_properties``). ``with_values`` adds the item's raw field values
-    to the answer (``values``), so a caller needs no second read."""
+    Fusion Manage field takes and ``convert_unit`` puts it in the field's unit (see ``compare_properties``).
+    ``with_values`` adds the item's raw field values to the answer (``values``), so a caller needs no second read."""
     mappings = [m for m in cfg.mappings if m.source and m.fm_field_id]
     shown = display_values(lookup.values) if lookup.values is not None else None
-    result = {"fm": lookup.info, "rows": compare_properties(properties, summary, mappings, shown, lookup.info["state"], fit_number)}
+    result = {"fm": lookup.info, "rows": compare_properties(properties, summary, mappings, shown, lookup.info["state"], fit_number, convert_unit)}
     if with_values:
         result["values"] = lookup.values
     return result
