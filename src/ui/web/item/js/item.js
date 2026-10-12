@@ -155,26 +155,7 @@
       table.style.width = (others + width) + 'px';
     }
     heads.slice(0, last).forEach(function (th, i) {
-      const grip = el('span', 'item-grip');
-      grip.addEventListener('mousedown', function (event) {
-        event.preventDefault();
-        freeze();
-        const startX = event.clientX;
-        const startWidth = parseFloat(cols[i].style.width);
-        grip.classList.add('item-grip-active');
-        function move(e) {
-          cols[i].style.width = Math.max(MIN_COLUMN_PX, startWidth + e.clientX - startX) + 'px';
-          apply();
-        }
-        function stop() {
-          document.removeEventListener('mousemove', move);
-          document.removeEventListener('mouseup', stop);
-          grip.classList.remove('item-grip-active');
-        }
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', stop);
-      });
-      th.appendChild(grip);
+      th.appendChild(ns.itemTree.grip(cols[i], { min: MIN_COLUMN_PX, onResize: apply, beforeDrag: freeze }));
     });
   }
 

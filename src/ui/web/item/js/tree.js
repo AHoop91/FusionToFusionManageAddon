@@ -60,6 +60,37 @@
   }
 
   /**
+   * A handle on a heading's right edge: dragging it sets the width (px) of ``col``, not below ``options.min``.
+   * ``options.onResize()`` runs after each change; ``options.beforeDrag()`` once when a drag starts (before the width is read);
+   * ``options.stopClick`` keeps the press from reaching the heading (a sortable heading must not sort).
+   */
+  function grip(col, options) {
+    const handle = el('span', 'item-grip');
+    if (options.title) handle.title = options.title;
+    if (options.stopClick) handle.addEventListener('click', function (event) { event.stopPropagation(); });
+    handle.addEventListener('mousedown', function (event) {
+      event.preventDefault();
+      if (options.stopClick) event.stopPropagation();
+      if (options.beforeDrag) options.beforeDrag();
+      const startX = event.clientX;
+      const startWidth = parseFloat(col.style.width);
+      handle.classList.add('item-grip-active');
+      function move(e) {
+        col.style.width = Math.max(options.min, startWidth + e.clientX - startX) + 'px';
+        options.onResize();
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+        handle.classList.remove('item-grip-active');
+      }
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+    return handle;
+  }
+
+  /**
    * Let the user drag the right edge of a heading to resize its column (not below ``MIN_COLUMN_PX``). The last column
    * has no width of its own: it takes what is left, and the table is never narrower than its columns, so a narrow
    * panel scrolls it sideways. ``cols`` and ``heads`` are the table's <col> and <th> elements, with widths set in px.
@@ -74,26 +105,7 @@
     }
     fit();
     heads.slice(0, last).forEach(function (th, i) {
-      const grip = el('span', 'item-grip');
-      grip.title = 'Drag to resize the column';
-      grip.addEventListener('mousedown', function (event) {
-        event.preventDefault();
-        const startX = event.clientX;
-        const startWidth = parseFloat(cols[i].style.width);
-        grip.classList.add('item-grip-active');
-        function move(e) {
-          cols[i].style.width = Math.max(MIN_COLUMN_PX, startWidth + e.clientX - startX) + 'px';
-          fit();
-        }
-        function stop() {
-          document.removeEventListener('mousemove', move);
-          document.removeEventListener('mouseup', stop);
-          grip.classList.remove('item-grip-active');
-        }
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', stop);
-      });
-      th.appendChild(grip);
+      th.appendChild(grip(cols[i], { min: MIN_COLUMN_PX, onResize: fit, title: 'Drag to resize the column' }));
     });
   }
 
@@ -171,5 +183,5 @@
     return td;
   }
 
-  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, resizable: resizable };
+  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable };
 })(window.MfgUi);

@@ -79,31 +79,6 @@
     return String(value || '').toLowerCase();
   }
 
-  /** A handle on a heading's right edge: dragging it sets the width of its column. */
-  function grip(col, fit) {
-    const handle = el('span', 'item-grip');
-    handle.addEventListener('click', function (event) { event.stopPropagation(); });   // not a sort
-    handle.addEventListener('mousedown', function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-      const startX = event.clientX;
-      const startWidth = parseFloat(col.style.width);
-      handle.classList.add('item-grip-active');
-      function move(e) {
-        col.style.width = Math.max(MIN_COLUMN_PX, startWidth + e.clientX - startX) + 'px';
-        fit();
-      }
-      function stop() {
-        document.removeEventListener('mousemove', move);
-        document.removeEventListener('mouseup', stop);
-        handle.classList.remove('item-grip-active');
-      }
-      document.addEventListener('mousemove', move);
-      document.addEventListener('mouseup', stop);
-    });
-    return handle;
-  }
-
   let current = 0;   // the tab being drawn; an answer for an older item is ignored
 
   /** Read the files of the item of ``view`` and fill ``target`` with them; ``open(file)`` runs when a file name is clicked. */
@@ -153,7 +128,7 @@
         sortKey = column.key;
         draw();
       });
-      if (column.width) th.appendChild(grip(cols[COLUMNS.indexOf(column)], fit));
+      if (column.width) th.appendChild(tree.grip(cols[COLUMNS.indexOf(column)], { min: MIN_COLUMN_PX, onResize: fit, stopClick: true }));   // stopClick: not a sort
       head.appendChild(th);
     });
     table.appendChild(el('thead')).appendChild(head);
