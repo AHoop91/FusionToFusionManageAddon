@@ -57,16 +57,18 @@
     // Clear the profile when the session ends.
     if (!signedIn) { profileLoaded = false; ns.account.renderProfile(null); }
 
-    changeListeners.forEach(function (callback) { callback(signedIn); });
+    try {
+      changeListeners.forEach(function (callback) { callback(signedIn); });
+    } finally {   // a listener that fails must not stop the profile from loading or the sign-in from being polled
+      // Load the profile once per session. It is asked for after the panels' own requests: Python answers a
+      // message before reading the next, and the profile (a Fusion Manage call) would otherwise hold them up.
+      if (signedIn && !profileLoaded) { profileLoaded = true; bridge.send('auth_profile'); }
 
-    // Load the profile once per session. It is asked for after the panels' own requests: Python answers a
-    // message before reading the next, and the profile (a Fusion Manage call) would otherwise hold them up.
-    if (signedIn && !profileLoaded) { profileLoaded = true; bridge.send('auth_profile'); }
-
-    // Poll only while a browser sign-in is pending.
-    clearTimeout(pollTimer);
-    if (state === 'signing_in') {
-      pollTimer = setTimeout(function () { bridge.send('auth_status'); }, POLL_INTERVAL_MS);
+      // Poll only while a browser sign-in is pending.
+      clearTimeout(pollTimer);
+      if (state === 'signing_in') {
+        pollTimer = setTimeout(function () { bridge.send('auth_status'); }, POLL_INTERVAL_MS);
+      }
     }
   }
 
