@@ -71,7 +71,7 @@
       : (job.phase === 'cancelled' ? 'Cancelled' : (job.phase === 'error' ? 'Failed' : ''));
     box.appendChild(ui.el('span', 'muted pub-job-count', note));
     if (FINISHED.indexOf(job.phase) < 0) {
-      const cancel = ui.el('button', 'pub-drawing-open', 'Cancel');
+      const cancel = ui.el('button', 'pub-outline-button', 'Cancel');
       cancel.type = 'button';
       cancel.addEventListener('click', function () { bridge.send('cancel_publish', { id: job.id }); });
       box.appendChild(cancel);

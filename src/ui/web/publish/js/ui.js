@@ -96,23 +96,15 @@
     card.appendChild(svg(timedOut ? ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 7v5l3 2'] : ['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
     card.appendChild(el('h4', 'pub-error-title', timedOut ? 'Timed out' : 'Could not load'));
     card.appendChild(el('p', 'muted', timedOut ? 'The Manufacturing Data Model took too long to respond.' : (message || 'Unknown error')));
-    const retry = el('button', 'pub-drawing-open pub-retry', 'Retry');
+    const retry = el('button', 'pub-outline-button pub-retry', 'Retry');
     retry.type = 'button';
     retry.addEventListener('click', onRetry);
     card.appendChild(retry);
     return card;
   }
 
-  /** Centred "nothing here" message with an empty-tray icon, in a white card. */
-  function emptyState(text) {
-    const card = el('div', 'card pub-empty');
-    card.appendChild(svg(['M3 13l3-8h12l3 8v6H3z', 'M3 13h5l1 3h6l1-3h5'], 28));
-    card.appendChild(el('p', 'muted', text));
-    return card;
-  }
-
   ns.pubUi = {
     el: el, svg: svg, treeIcon: treeIcon, chevron: chevron, setChevron: setChevron,
-    loaderNode: loaderNode, warnWhenSlow: warnWhenSlow, errorState: errorState, emptyState: emptyState,
+    loaderNode: loaderNode, warnWhenSlow: warnWhenSlow, errorState: errorState,
   };
 })(window.MfgUi);

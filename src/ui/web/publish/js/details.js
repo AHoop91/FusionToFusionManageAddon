@@ -203,7 +203,7 @@
       card.appendChild(button);
     });
     if (fm.state !== 'multiple') {
-      const cancel = el('button', 'pub-drawing-open pub-retry', 'Cancel');
+      const cancel = el('button', 'pub-outline-button pub-retry', 'Cancel');
       cancel.type = 'button';
       cancel.addEventListener('click', function () { delete changing[choiceKey(item)]; paint(); });
       card.appendChild(cancel);

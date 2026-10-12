@@ -155,7 +155,7 @@
       status.appendChild(ns.pubUi.svg(['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
       status.appendChild(el('h4', 'pub-error-title', 'Could not load items'));
       status.appendChild(el('p', 'muted', failed));
-      const retry = el('button', 'pub-drawing-open pub-retry', 'Retry');
+      const retry = el('button', 'pub-outline-button pub-retry', 'Retry');
       retry.type = 'button';
       retry.addEventListener('click', loadNext);
       status.appendChild(retry);
