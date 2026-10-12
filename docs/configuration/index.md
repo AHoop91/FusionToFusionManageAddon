@@ -52,7 +52,7 @@ Reading the cloud description, rather than asking the open Fusion document, has 
 | **Component summary** | The top-level component's item number, part number, description and name | Identifying the item, and the title of the Publish panel |
 | **Properties** | Every property of a component: base properties that ship with the Data Model and custom properties your organisation has defined | The values you map to Fusion Manage fields |
 | **Physical properties** | Mass, volume, area, density and the bounding box (length, width, height), worked out from the geometry | Mapped fields, when you choose to map them |
-| **BOM structure** | Every component below the top level, with quantities and sequence numbers, down to ten levels | The Bill of Materials comparison and publish |
+| **BOM structure** | Every component below the top level, with quantities and sequence numbers, at any depth up to 50 levels | The Bill of Materials comparison and publish |
 | **Thumbnail** | An image of each component | The item's image field, when mapped |
 | **Fusion Manage link** | The Fusion Manage item a component is already linked to, if its Item Number carries that hyperlink in Fusion | Component linking when publishing |
 

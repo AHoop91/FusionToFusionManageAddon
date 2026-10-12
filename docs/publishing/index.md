@@ -22,7 +22,7 @@ Runs are tracked in the [Job Queue](../job-queue/index.md), and the result can b
 
 With the design open, choose **Fusion Manage ▸ Item ▸ Publish Fusion Manage Item**, or right-click the top-level component and choose **Publish Fusion Manage Item**. The right-click entry is offered for the root component only, because publishing always starts from the top of the design.
 
-The panel shows the design's thumbnail and summary, and below it the **Bill of Materials** of the design compared with Fusion Manage. Click a row to open the **Details Panel** beside it, which lists each property, the Fusion Manage field it maps to, its current value in Fusion Manage and what publishing will do.
+The panel shows the design's thumbnail and summary, and below it the **Bill of Materials** of the design compared with Fusion Manage. The thumbnail arrives a moment after the rest, so you can start on the BOM while it loads. Click a row to open the **Details Panel** beside it, which lists each property, the Fusion Manage field it maps to, its current value in Fusion Manage and what publishing will do. A row's details are read when you open it, and the design's own row reads its properties the first time you open it.
 
 !!! example "Screenshot placeholder: Publish panel with the BOM and Details Panel open"
     **Show:** The Publish panel: thumbnail, summary, the BOM table and the Details Panel beside it.
@@ -192,6 +192,14 @@ The run reports **Total Items Updated**. Open the item in the [Item Panel](../it
 ## Bill of Materials
 
 The Publish panel compares the design's BOM with the BOM already in Fusion Manage, line by line, and sends only the differences. You decide how to handle anything that is in Fusion Manage but not in the design.
+
+### Large designs
+
+The BOM is read from the Manufacturing Data Model a page of 250 lines at a time, so a large assembly takes a few requests, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. If a design is bigger than it can read, the panel says so instead of showing a table:
+
+- More than **25,000 lines**.
+- Nested **50 levels deep or more**.
+- A component that contains itself.
 
 ### How lines are compared
 
