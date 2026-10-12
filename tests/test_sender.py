@@ -5,7 +5,7 @@ import unittest
 
 from src.fm.client import FmApiError, SendResult
 from src.publish.placeholders import Unresolved, key_of, markers, resolve
-from src.publish.states import DONE, ERROR
+from src.publish.states import DONE
 from src.publish.sender import SEND_LOG, SendRun, created_id, load_plan
 
 

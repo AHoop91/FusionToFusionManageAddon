@@ -9,6 +9,7 @@ import json
 import os
 import re
 import threading
+from collections import Counter
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -65,12 +66,14 @@ class PublishFolder:
             self.entries.append(entry)
         return entry
 
+    def counts(self) -> Dict[str, int]:
+        """How many entries have each status."""
+        with self._lock:
+            return dict(Counter(entry["status"] for entry in self.entries))
+
     def save_manifest(self, info: Dict[str, Any]) -> None:
-        counts: Dict[str, int] = {}
-        for entry in self.entries:
-            counts[entry["status"]] = counts.get(entry["status"], 0) + 1
         manifest = {"draft": True,
                     "note": "Requests are drafts for review: bodies follow the Fusion Manage v3 API but are unverified. "
                             "A publish sends them as it goes; sending the folder again retries, and send-log.json records what Fusion Manage accepted.",
-                    **info, "counts": counts, "items": self.items, "artifacts": self.entries}
+                    **info, "counts": self.counts(), "items": self.items, "artifacts": self.entries}
         self.write_json("manifest.json", manifest)

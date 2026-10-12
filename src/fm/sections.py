@@ -6,17 +6,16 @@ sections (link and title); each section's own link gives its fields. Fields insi
 fields) belong to the section too.
 """
 
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Tuple
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
+from .pages import field_id
 
 log = get_logger("fm.sections")
 
-_FIELD_ID = re.compile(r"/fields/([^/]+)/?$")
 READERS = 4   # section details read at once
 CACHE_SECONDS = 300   # a workspace's layout rarely changes; runs queued close together share one read
 
@@ -28,9 +27,9 @@ def parse_sections(data: Any) -> Dict[str, str]:
     def add(node: Any, section: str) -> None:
         if not isinstance(node, dict):
             return
-        match = _FIELD_ID.search(_link(node))
-        if match:
-            out.setdefault(match.group(1), section)
+        field = field_id(node)
+        if field:
+            out.setdefault(field, section)
 
     for section in data:
         link = _link(section)
@@ -89,10 +88,9 @@ class SectionService:
 
     def _read(self, workspace_id: str) -> Dict[str, str]:
         details = self._details(workspace_id)
-        data = details
         fields = parse_sections(details)
         if not fields:   # say so now, instead of every item failing with "not in any section"
-            log.error("No fields found in the sections of workspace %s: %r", workspace_id, str(data)[:500])
+            log.error("No fields found in the sections of workspace %s: %r", workspace_id, str(details)[:500])
             raise FmApiError(f"Could not read the fields of workspace {workspace_id}'s sections "
-                             f"(answer was {type(data).__name__}).")
+                             f"(answer was {type(details).__name__}).")
         return fields

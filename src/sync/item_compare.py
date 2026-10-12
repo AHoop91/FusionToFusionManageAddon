@@ -75,9 +75,3 @@ def compare_with_item(properties: List[Dict[str, str]], summary: Dict[str, Any],
     if with_values:
         result["values"] = lookup.values
     return result
-
-
-def compare_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient,
-                 chosen: str = "", with_values: bool = False) -> Dict[str, Any]:
-    """Compare the properties with the component's Fusion Manage item: ``lookup_item`` then ``compare_with_item``."""
-    return compare_with_item(properties, summary, cfg, lookup_item(summary, cfg, fm, chosen), with_values)

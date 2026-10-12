@@ -22,7 +22,7 @@ from ..fm.picklists import PicklistResolver
 from ..fm.sections import SectionService
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
 from ..fusion_mfg.model_service import read_manage_item, read_section, read_thumbnail_url
-from ..sync.item_compare import compare_item
+from ..sync.item_compare import compare_with_item, item_number_of, lookup_item
 from ..sync.property_compare import FOUND, MISMATCH, NEW
 from .bom_requests import bom_requests
 from .download import download
@@ -61,7 +61,7 @@ class PublishRun(JobState):
         self._dispatcher = Dispatcher(folder.path, fm, cfg.workspace_id) if send else None
         self._client, self._fm, self._model_id, self._time = client, fm, model_id, time
         self.total = len(job["items"])
-        self.rows = [self.row(_number(i), str(i.get("description") or i.get("name") or ""), bool(i.get("root"))) for i in job["items"]]
+        self.rows = [self.row(item_number_of(i), str(i.get("description") or i.get("name") or ""), bool(i.get("root"))) for i in job["items"]]
         self._row_of = {id(i): row for i, row in zip(job["items"], self.rows)}
         self._bom_requests = bom_requests(cfg.workspace_id, job["operations"])
         # A Bill of Materials is sent after the items, so its rows come last and are not counted in the items processed.
@@ -114,7 +114,7 @@ class PublishRun(JobState):
         """One item, on a pool thread; a failure here never stops the others."""
         if self.cancelled:
             return
-        number = _number(item)
+        number = item_number_of(item)
         row = self._row_of[id(item)]
         self._set(current=number)
         row["status"] = RUNNING
@@ -147,7 +147,8 @@ class PublishRun(JobState):
         image = self._thumbnail(number, folder, component_id, stored)
         files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
 
-        result = compare_item(properties, component, self.cfg, self._fm, str(item.get("fm_item") or ""), with_values=True)
+        result = compare_with_item(properties, component, self.cfg,
+                                   lookup_item(component, self.cfg, self._fm, str(item.get("fm_item") or "")), with_values=True)
         compare_time = time.monotonic() - began - read_time
         link = self._component(number, component_id, result["fm"])
         rows = self._option_rows(number, result["rows"])
@@ -276,13 +277,3 @@ class PublishRun(JobState):
         self._save_manifest(message)
         self._end(phase, message)
         log.info("Publish run %s %s: %s (%s)", self.id, phase, self.folder.path, message or "ok")
-
-    def _counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
-        for entry in list(self.folder.entries):
-            counts[entry["status"]] = counts.get(entry["status"], 0) + 1
-        return counts
-
-
-def _number(item: Dict[str, Any]) -> str:
-    return str(item.get("item_number") or item.get("part_number") or "")

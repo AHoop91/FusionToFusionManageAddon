@@ -6,7 +6,7 @@ from unittest import mock
 
 from src.fm.client import FmApiError
 from src.sync import item_compare
-from src.sync.item_compare import compare_item, compare_with_item, item_number_of, lookup_item
+from src.sync.item_compare import item_number_of, lookup_item
 from src.sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN
 
 CFG = SimpleNamespace(workspace_id="242", mappings=[])
@@ -82,17 +82,6 @@ class LookupTests(unittest.TestCase):
             lookup = lookup_item(ITEM, CFG, None)
         self.assertEqual(lookup.info["state"], UNKNOWN)
         self.assertIn("down", lookup.info["message"])
-
-
-class CompareTests(unittest.TestCase):
-    def test_compare_item_is_the_lookup_then_the_comparison(self):
-        rows = [{"name": "Mass", "value": "1"}]
-        with service(hits=[{"id": "7"}]), mock.patch.object(item_compare, "display_values", side_effect=lambda values: values):
-            whole = compare_item(rows, ITEM, CFG, None, with_values=True)
-            lookup = lookup_item(ITEM, CFG, None)
-            parts = compare_with_item(rows, ITEM, CFG, lookup, with_values=True)
-        self.assertEqual(whole, parts)
-        self.assertEqual(whole["values"], {"read": "7"})
 
 
 if __name__ == "__main__":

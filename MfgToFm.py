@@ -37,7 +37,6 @@ from src.ui.ui_thread import UiThread  # noqa: E402
 from src.core.constants import (  # noqa: E402
     COMMAND_ID,
     ITEM_COMMAND_ID,
-    ITEM_COMMAND_NAME,
     ITEM_HEIGHT,
     ITEM_PALETTE_ID,
     ITEM_TITLE,

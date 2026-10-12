@@ -12,6 +12,8 @@ Fusion Manage does not know yet have every child ``new``.
 
 from typing import Any, Dict, List, Set
 
+from .item_compare import item_number_of
+
 NEW, CHANGED, MATCH, EXTRA = "new", "changed", "match", "extra"
 
 
@@ -24,10 +26,6 @@ def _same_quantity(a: str, b: str) -> bool:
         return float(a) == float(b)
     except ValueError:
         return a.strip() == b.strip()
-
-
-def _number(row: Dict[str, Any]) -> str:
-    return str(row.get("item_number") or row.get("part_number") or "")
 
 
 def compare_bom(rows: List[Dict[str, Any]], root_number: str,
@@ -53,7 +51,7 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
         pairs = list(zip(frame["new"], extras))
         for index, line in reversed(pairs):   # last first, so earlier positions stay valid
             out[index]["pair"] = line["number"]
-            out.insert(index, extra(line, _number(out[index])))
+            out.insert(index, extra(line, item_number_of(out[index])))
         out.extend(extra(line) for line in extras[len(pairs):])
 
     for row in rows:
@@ -64,7 +62,7 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
         # Each design line takes the first unused Fusion Manage line with its item number, so repeats pair one to one.
         line = None
         for i, candidate in enumerate(fm_lines.get(_key(frame["number"])) or []):
-            if i not in frame["used"] and _key(candidate["number"]) == _key(_number(row)):
+            if i not in frame["used"] and _key(candidate["number"]) == _key(item_number_of(row)):
                 frame["used"].add(i)
                 line = candidate
                 break
@@ -78,7 +76,7 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
             frame["new"].append(len(out))
         out.append({**row, "status": status, "fm_quantity": line["quantity"] if line else "",
                     "fm_edge_id": line.get("edge_id", "") if line else ""})
-        stack.append({"number": _number(row), "used": set(), "new": []})
+        stack.append({"number": item_number_of(row), "used": set(), "new": []})
     while stack:
         close()
     return out
