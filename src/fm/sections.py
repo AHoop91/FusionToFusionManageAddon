@@ -6,18 +6,17 @@ sections (link and title); each section's own link gives its fields. Fields insi
 fields) belong to the section too.
 """
 
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .pages import field_id
+from .ttl_cache import TtlCache
 
 log = get_logger("fm.sections")
 
 READERS = 4   # section details read at once
-CACHE_SECONDS = 300   # a workspace's layout rarely changes; runs queued close together share one read
 
 
 def parse_sections(data: Any) -> Dict[str, str]:
@@ -51,8 +50,8 @@ def _link(node: Any) -> str:
 class SectionService:
     """Reads a workspace's sections through an ``FmClient``."""
 
-    _cache: Dict[Tuple[str, str], Tuple[float, Dict[str, str]]] = {}   # (tenant, workspace id) -> (read at, map)
-    _details_cache: Dict[Tuple[str, str], Tuple[float, List[Dict[str, Any]]]] = {}   # (tenant, workspace id) -> (read at, sections)
+    _cache = TtlCache()   # (tenant, workspace id) -> {field id: section link}; a workspace's layout rarely changes
+    _details_cache = TtlCache()   # (tenant, workspace id) -> the sections
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -61,11 +60,7 @@ class SectionService:
         """``{field id: section link}`` for every field of the workspace."""
         key = (self._client.tenant, workspace_id)
         cached = self._cache.get(key)
-        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
-            return cached[1]
-        fields = self._read(workspace_id)
-        self._cache[key] = (time.monotonic(), fields)
-        return fields
+        return cached if cached is not None else self._cache.put(key, self._read(workspace_id))
 
     def layouts(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:
         """``{section id: the section as the workspace lays it out}``: its fields and its matrices (grids of fields)."""
@@ -75,16 +70,15 @@ class SectionService:
         """Every section of the workspace with its fields and matrices (read once, then shared for a few minutes)."""
         key = (self._client.tenant, workspace_id)
         cached = self._details_cache.get(key)
-        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
-            return cached[1]
+        if cached is not None:
+            return cached
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")
         listed = (data.get("sections") or data.get("items") or []) if isinstance(data, dict) else data
         entries = [e for e in listed if isinstance(e, dict)] if isinstance(listed, list) else []
         # The list holds links only; a section carrying its fields already needs no second read.
         with ThreadPoolExecutor(max_workers=READERS) as pool:
             details = list(pool.map(lambda e: e if "fields" in e or not _link(e) else self._client.get_json(_link(e)), entries))
-        self._details_cache[key] = (time.monotonic(), details)
-        return details
+        return self._details_cache.put(key, details)
 
     def _read(self, workspace_id: str) -> Dict[str, str]:
         details = self._details(workspace_id)

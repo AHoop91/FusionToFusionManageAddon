@@ -5,12 +5,11 @@ The names are only ever Fusion Manage's own: a tab the workspace does not list i
 ``GET /api/v3/workspaces/{ws}/items/{id}/tabs`` gives each tab's ``totalCount``, so the page can label its tabs without reading them.
 """
 
-import time
-from typing import Any, Dict, Set, Tuple
+from typing import Any, Dict, Set
 
 from .client import WORKSPACES, FmClient
+from .ttl_cache import TtlCache
 
-CACHE_SECONDS = 300   # a workspace's tabs rarely change
 # the permission that lets the user see each tab
 TAB_PERMISSIONS = {"item": "view_items", "files": "view_attachments", "bom": "view_bom", "whereused": "view_where_used",
                    "workflows": "view_associated_workflow"}
@@ -46,7 +45,7 @@ def parse_counts(data: Any) -> Dict[str, int]:
 class TabService:
     """Reads the names and counts of an item's tabs through an ``FmClient``."""
 
-    _labels_cache: Dict[Tuple[str, str], Tuple[float, Dict[str, str]]] = {}   # (tenant, workspace id) -> (read at, labels)
+    _labels_cache = TtlCache()   # (tenant, workspace id) -> labels; a workspace's tabs rarely change
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -62,8 +61,6 @@ class TabService:
     def _labels(self, workspace_id: str) -> Dict[str, str]:
         key = (self._client.tenant, workspace_id)
         cached = self._labels_cache.get(key)
-        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
-            return cached[1]
-        labels = parse_labels(self._client.get_json(f"{WORKSPACES}/{workspace_id}/tabs"))
-        self._labels_cache[key] = (time.monotonic(), labels)
-        return labels
+        if cached is not None:
+            return cached
+        return self._labels_cache.put(key, parse_labels(self._client.get_json(f"{WORKSPACES}/{workspace_id}/tabs")))

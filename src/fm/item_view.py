@@ -12,8 +12,7 @@ uri) or HTML (what a formula field writes; the page sanitises it before showing 
 import base64
 import html
 import re
-import time
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
@@ -21,6 +20,7 @@ from .items import display_text
 from .pages import field_id, item_page, link_page, tenant_of
 from .sections import SectionService
 from .tabs import TabService
+from .ttl_cache import TtlCache
 
 log = get_logger("fm.item_view")
 
@@ -28,7 +28,6 @@ HIDDEN = ("NEVER", "HIDDEN", "NONE")   # visibility values of a field that is no
 VISIBLE_ALWAYS = ("ALWAYS", "VISIBLE")
 HEADER_FIELDS = ("TYPE",)   # read for the line under the title, shown or not
 MAX_IMAGE_BYTES = 2_000_000
-CACHE_SECONDS = 300   # a workspace's field list rarely changes
 _TAG = re.compile(r"<[a-zA-Z][^>]*>")
 
 ImageLoader = Callable[[str], str]
@@ -162,7 +161,7 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
 class ItemViewService:
     """Reads an item through an ``FmClient`` and lays it out for display."""
 
-    _hidden_cache: Dict[Tuple[str, str], Tuple[float, Set[str]]] = {}   # (tenant, workspace id) -> (read at, hidden field ids)
+    _hidden_cache = TtlCache()   # (tenant, workspace id) -> hidden field ids; a workspace's field list rarely changes
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -192,8 +191,8 @@ class ItemViewService:
         """Ids of the workspace's fields that are not to be shown on an item (empty if the field list cannot be read)."""
         key = (self._client.tenant, workspace_id)
         cached = self._hidden_cache.get(key)
-        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
-            return cached[1]
+        if cached is not None:
+            return cached
         try:
             data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/fields")
         except FmApiError as exc:   # every field shows
@@ -204,8 +203,7 @@ class ItemViewService:
         hidden = {last_segment(r.get("__self__")) for r in rows if _not_shown(r, set())}
         log.debug("Workspace %s: %d field(s), %d hidden; visibility values %s", workspace_id, len(rows), len(hidden),
                  sorted({str(r.get("visibility")) for r in rows}))
-        self._hidden_cache[key] = (time.monotonic(), hidden)
-        return hidden
+        return self._hidden_cache.put(key, hidden)
 
     def _image(self, link: str) -> str:
         """An image field's picture as a data uri ("" when it cannot be read or is too big)."""
