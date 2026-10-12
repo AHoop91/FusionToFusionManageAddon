@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
 from ..core.logging_setup import get_logger
+from ..core.timing import Stopwatch
 
 log = get_logger("graphql")
 
@@ -23,6 +24,12 @@ ATTEMPTS = 3
 RETRY_SECONDS = 2   # wait before the second try, twice that before the third
 RETRY_HTTP = (429, 502, 503, 504)
 TRANSIENT_CODES = ("DATA_NOT_READY", "SUBREQUEST_HTTP_ERROR")   # a service behind the gateway was not ready or not answering
+
+
+def _first_field(query_text: str) -> str:
+    """The first field a query asks for (``component`` in ``query (...) { component(...) { ... } }``), to name it in the log."""
+    match = re.search(r"\{\s*(\w+)", query_text)
+    return match.group(1) if match else "query"
 
 
 class MfgApiError(Exception):
@@ -43,7 +50,7 @@ class MfgGraphQlClient:
     def query(self, text: str, variables: Optional[Dict[str, Any]] = None, label: str = "") -> Dict[str, Any]:
         """Run a query and return its ``data`` object.
 
-        ``label`` names the query in the timing log (the first field it asks for when empty).
+        ``label`` names the query in the log (the first field it asks for when empty).
         Raises ``AuthError`` without a valid session and ``MfgApiError`` for
         network, HTTP or GraphQL errors. A query only reads, so one that failed
         because the service was busy or timed out is tried again a few times.
@@ -58,26 +65,24 @@ class MfgGraphQlClient:
                 time.sleep(RETRY_SECONDS * attempt)
 
     def _query_once(self, text: str, variables: Optional[Dict[str, Any]], label: str = "") -> Dict[str, Any]:
-        began = time.monotonic()
+        watch = Stopwatch()
         token = self._auth.get_access_token(self._settings)
-        token_seconds = time.monotonic() - began
+        token_seconds = watch.lap()
         body = json.dumps({"query": text, "variables": variables or {}}).encode("utf-8")
         request = urllib.request.Request(GRAPHQL_URL, data=body, method="POST", headers={
             "Accept": "application/json", "Content-Type": "application/json",
             "Authorization": f"Bearer {token}"})
-        sent = time.monotonic()
+        name = label or _first_field(text)
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                waited = time.monotonic() - sent   # until the response headers arrived
+                first_byte_seconds = watch.lap()   # until the response headers arrived
                 raw = response.read()
                 payload = json.loads(raw)
-            match = re.search(r"\{\s*(\w+)", text)
-            extensions = payload.get("extensions") if isinstance(payload, dict) else None   # may say what the query cost
-            log.info("TIMING graphql %s: token %.2fs, first byte %.2fs, download %.2fs, %d bytes%s",
-                     label or (match.group(1) if match else "?"), token_seconds, waited, time.monotonic() - sent - waited, len(raw),
-                     f", extensions {json.dumps(extensions)[:300]}" if extensions else "")
+            cost = payload.get("extensions") if isinstance(payload, dict) else None   # says what the query cost in points
+            log.debug("graphql %s: token %.2fs, first byte %.2fs, download %.2fs, %d bytes%s", name, token_seconds,
+                      first_byte_seconds, watch.lap(), len(raw), f", extensions {json.dumps(cost)[:300]}" if cost else "")
         except urllib.error.HTTPError as exc:
-            log.info("TIMING graphql %s failed with HTTP %s after %.2fs", label or "query", exc.code, time.monotonic() - sent)
+            log.debug("graphql %s failed with HTTP %s after %.2fs", name, exc.code, watch.lap())
             detail = exc.read()[:4000].decode("utf-8", "replace")
             log.error("GraphQL HTTP %s from %s: %s", exc.code, GRAPHQL_URL, detail)
             try:

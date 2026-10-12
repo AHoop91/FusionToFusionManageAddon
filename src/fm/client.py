@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
 from ..core.logging_setup import get_logger
+from ..core.timing import Stopwatch
 
 log = get_logger("fm.client")
 
@@ -120,22 +121,20 @@ class FmClient:
                 time.sleep(RETRY_SECONDS * attempt)
 
     def _get_once(self, path: str, accept: str) -> Any:
-        asked = time.monotonic()
+        watch = Stopwatch()
         token = self._auth.get_access_token(self._settings)
-        token_seconds = time.monotonic() - asked
+        token_seconds = watch.lap()
         request = urllib.request.Request(
             f"{self.base_url}{path}",
             headers={"Accept": accept, "Authorization": f"Bearer {token}"},
         )
-        began = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                waited = time.monotonic() - began   # until the response headers arrived
+                first_byte_seconds = watch.lap()   # until the response headers arrived
                 body = response.read()
-                log.info("TIMING fm GET %s: token %.2fs, first byte %.2fs, download %.2fs, %d bytes",
-                         path.split("?")[0], token_seconds, waited, time.monotonic() - began - waited, len(body))
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("GET %s -> %s in %.2fs: %s", path, response.status, time.monotonic() - began, _clip(body))
+                    log.debug("GET %s -> %s (token %.2fs, first byte %.2fs, download %.2fs, %d bytes): %s", path, response.status,
+                              token_seconds, first_byte_seconds, watch.lap(), len(body), _clip(body))
                 if response.status == 204 or not body.strip():   # no content, e.g. a search with no hits
                     return None
                 try:

@@ -106,7 +106,7 @@ def _read_structure(client: MfgGraphQlClient, summary: Dict[str, Any], time: str
         raise MfgApiError(f"The Bill of Materials has more than {MAX_PAGES * STRUCTURE_PAGE_SIZE} components, more than can be read.")
     rows = parse_structure(relations, root_id)
     deepest = max((int(r["level"]) for r in rows), default=-1) + 1   # levels below the root
-    log.info("Read the structure: %d relation(s) in %d page(s), %d level(s) deep", len(relations), page, deepest)
+    log.debug("Read the structure: %d relation(s) in %d page(s), %d level(s) deep", len(relations), page, deepest)
     if deepest >= STRUCTURE_DEPTH:   # the read stopped at its depth: there may be more below
         raise MfgApiError(f"The Bill of Materials is nested {STRUCTURE_DEPTH} levels deep or more, more than can be read.")
     return rows
