@@ -377,24 +377,38 @@
     const key = layoutKey();
     const cols = HEADS.map(function () { return el('col'); });
     function widthOf(i) { return dragged[key][i] !== undefined ? dragged[key][i] : DEFAULT_WIDTHS[key][i]; }
+    const last = HEADS.length - 1;
     function apply() {
-      let sum = 0;
+      const fixed = dragged[key][0] !== undefined;   // the Item column has a width of its own
+      let others = 0;
       cols.forEach(function (col, i) {
         const w = widthOf(i);
         col.style.width = w ? w + 'px' : '';
-        sum += w;
+        if (i < last) others += w;
       });
-      // Once the Item column has a width of its own the table is exactly as wide as its columns (it scrolls when that is wider than the panel).
-      table.style.width = dragged[key][0] !== undefined ? sum + 'px' : '';
-      table.style.setProperty('--status-w', widthOf(4) + 'px');   // Qty sticks beside Status
+      // Then the table is as wide as its columns (it scrolls when that is wider than the panel), and the last column
+      // takes any space the panel has left, never less than its own width.
+      let tail = widthOf(last);
+      if (fixed) {
+        tail = Math.max(tail, (table.parentNode ? table.parentNode.clientWidth : 0) - others);
+        cols[last].style.width = tail + 'px';
+      }
+      table.style.width = fixed ? (others + tail) + 'px' : '';
+      table.style.setProperty('--status-w', tail + 'px');          // Qty sticks beside Status
       table.style.setProperty('--qty-w', widthOf(3) + 'px');      // row buttons stick beside Qty
     }
+    // Once the table is in the page, follow the width of its panel.
+    requestAnimationFrame(function () {
+      if (table.parentNode && window.ResizeObserver) new ResizeObserver(apply).observe(table.parentNode);
+    });
     const group = el('colgroup');
     cols.forEach(function (col) { group.appendChild(col); });
 
     const head = el('tr');
     HEADS.forEach(function (h, i) {
       const th = el('th', h[1], h[0]);
+      head.appendChild(th);
+      if (i === last) return;   // the last column has no handle: it takes what is left
       const grip = el('span', 'pub-cmp-grip');
       grip.title = 'Drag to resize the column (double-click to reset)';
       grip.addEventListener('pointerdown', function (event) {
@@ -417,7 +431,6 @@
       });
       grip.addEventListener('dblclick', function () { delete dragged[key][i]; apply(); });
       th.appendChild(grip);
-      head.appendChild(th);
     });
     apply();
     return [group, head];
