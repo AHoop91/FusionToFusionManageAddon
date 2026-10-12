@@ -51,8 +51,10 @@ from src.core.constants import (  # noqa: E402
     MENU_UPLOAD_DRAWING_COMMAND_ID,
     MENU_UPLOAD_STEP_COMMAND_ID,
     PUBLISH_COMMAND_ID,
+    PUBLISH_HEIGHT,
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
+    PUBLISH_WIDTH,
     RIBBON_DESIGN_WORKSPACE,
     RIBBON_DRAWING_WORKSPACE,
     RIBBON_PANEL_ID,
@@ -113,7 +115,7 @@ def run(context) -> None:
         register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks))
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
-        _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, PUBLISH_TITLE, "publish")
+        _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, PUBLISH_TITLE, "publish", False, PUBLISH_WIDTH, PUBLISH_HEIGHT)
         _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, JOBS_TITLE, "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, "Upload", "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
@@ -125,7 +127,7 @@ def run(context) -> None:
                           _icon("item"), needs_setup=True),
             RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                           PUBLISH_TOOLTIP,
-                          _publish_host.show,
+                          _publish_host.show_centered,
                           _icon("publish"), needs_setup=True, root_only=True, context="design"),
             RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, "Upload STEP File To Fusion Manage Item",
                           "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component.",
@@ -143,7 +145,7 @@ def run(context) -> None:
                                   _icon("item"), needs_setup=True)
         publish_item = RibbonCommand(PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                                      PUBLISH_TOOLTIP,
-                                     _publish_host.show,
+                                     _publish_host.show_centered,
                                      _icon("publish"), needs_setup=True)
         upload_drawing = RibbonCommand(UPLOAD_DRAWING_COMMAND_ID, UPLOAD_DRAWING_NAME,
                                        UPLOAD_DRAWING_TOOLTIP,
