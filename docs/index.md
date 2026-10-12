@@ -48,39 +48,40 @@ Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your
 
 </div>
 
-## Documentation map
+## Browse the documentation
 
-**Getting Started**
+<div class="grid cards" markdown>
 
-- [Overview](getting-started/overview.md)
-- [End-to-End Workflow](getting-started/workflow.md)
-- [Installation and Authentication](getting-started/installation.md)
+-   **Getting Started**
 
-**Configuration**
+    [Overview](getting-started/overview.md) ·
+    [End-to-End Workflow](getting-started/workflow.md) ·
+    [Installation and Authentication](getting-started/installation.md)
 
-- [Manufacturing Data Model](configuration/index.md#manufacturing-data-model)
-- [Workspace and Field Mapping](configuration/index.md#workspace-and-field-mapping)
+-   **Configuration**
 
-**Publishing**
+    [Manufacturing Data Model](configuration/index.md#manufacturing-data-model) ·
+    [Workspace and Field Mapping](configuration/index.md#workspace-and-field-mapping)
 
-- [Publishing](publishing/index.md)
-- [Item Creation](publishing/index.md#item-creation)
-- [Item Update](publishing/index.md#item-update)
-- [Bill of Materials](publishing/index.md#bill-of-materials)
-- [STEP File](publishing/index.md#step-file)
-- [Drawing Representation](publishing/index.md#drawing-representation)
+-   **Publishing**
 
-**Item Panel**
+    [Item Creation](publishing/index.md#item-creation) ·
+    [Item Update](publishing/index.md#item-update) ·
+    [Bill of Materials](publishing/index.md#bill-of-materials) ·
+    [STEP File](publishing/index.md#step-file) ·
+    [Drawing Representation](publishing/index.md#drawing-representation)
 
-- [Item Panel](item-panel/index.md)
-- [Tabs](item-panel/index.md#tabs)
-- [Review and Release](item-panel/index.md#review-and-release)
+-   **Item Panel**
 
-**Job Queue**
+    [Tabs](item-panel/index.md#tabs) ·
+    [Review and Release](item-panel/index.md#review-and-release)
 
-- [Job Queue](job-queue/index.md)
-- [Request Files and Retry](job-queue/index.md#request-files-and-retry)
+-   **Job Queue**
 
-**Reference**
+    [Request Files and Retry](job-queue/index.md#request-files-and-retry)
 
-- [Troubleshooting and Limitations](reference/troubleshooting.md)
+-   **Reference**
+
+    [Troubleshooting and Limitations](reference/troubleshooting.md)
+
+</div>

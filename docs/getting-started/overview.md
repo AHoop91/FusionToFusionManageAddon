@@ -30,23 +30,25 @@ To see how these fit together in practice, from engineering release through to r
 The add-in takes what the design says in the Manufacturing Data Model, compares it with Fusion Manage, and sends only the difference.
 
 ```mermaid
-flowchart TB
-    DESIGN["<b>Fusion</b><br/>Design and drawing"]
-    MDM["<b>Manufacturing Data Model</b><br/>Properties, thumbnails,<br/>part numbers"]
-    ADDIN["<b>Fusion Manage add-in</b><br/>Preview, compare, publish"]
-    FM["<b>Fusion Manage</b><br/>Items, BOMs, attachments"]
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 60, "rankSpacing": 90, "padding": 20}}}%%
+flowchart LR
+    DESIGN("<b>Fusion</b><br/><span style='font-size:0.85em'>Design and drawing</span>")
+    MDM("<b>Manufacturing<br/>Data Model</b><br/><span style='font-size:0.85em'>Properties, thumbnails,<br/>part numbers</span>")
+    ADDIN("<b>Fusion Manage add-in</b><br/><span style='font-size:0.85em'>Preview, compare, publish</span>")
+    FM("<b>Fusion Manage</b><br/><span style='font-size:0.85em'>Items, BOMs, attachments</span>")
 
-    DESIGN -->|"1. Saved to the cloud"| MDM
-    MDM -->|"2. Properties read"| ADDIN
-    DESIGN -->|"3. STEP and PDF exported"| ADDIN
-    ADDIN <-->|"4. Compared, then created or updated"| FM
+    DESIGN -->|"1 &nbsp;Saved to cloud"| MDM
+    MDM -->|"2 &nbsp;Properties read"| ADDIN
+    DESIGN -.->|"3 &nbsp;STEP and PDF exported"| ADDIN
+    ADDIN <-->|"4 &nbsp;Compare, create, update"| FM
 
-    classDef source fill:transparent,stroke:#94a3b8,stroke-width:2px
-    classDef addin fill:transparent,stroke:#1d4f91,stroke-width:4px
-    classDef target fill:transparent,stroke:#059669,stroke-width:2px
+    classDef source fill:#94a3b81f,stroke:#94a3b8,stroke-width:1.5px,rx:10,ry:10
+    classDef addin fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px,rx:10,ry:10
+    classDef target fill:#0596691f,stroke:#059669,stroke-width:1.5px,rx:10,ry:10
     class DESIGN,MDM source
     class ADDIN addin
     class FM target
+    linkStyle default stroke:#64748b,stroke-width:1.5px
 ```
 
 | Step | What happens |
@@ -74,10 +76,7 @@ The add-in adds a **Fusion Manage** tab to the ribbon in the **Design** and **Dr
 
 Most buttons stay greyed out until the Items workspace is configured (see [Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)). The tooltip of a greyed-out button says why.
 
-!!! example "Screenshot placeholder: Fusion Manage ribbon tab in the Design workspace"
-    **Show:** The Fusion Manage tab with the Item and Administration panels and their buttons.
-
-    Save the image as `docs/images/ribbon-design.png`, then replace this box with `![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png)`.
+![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png)
 
 The same actions are available from the right-click menu of a component in the browser or canvas: **Open Fusion Manage Item**, **Publish Fusion Manage Item** (top-level component only), **Upload STEP File To Fusion Manage Item** and, in a drawing, **Upload Drawing Representation To Fusion Manage Item**.
 
