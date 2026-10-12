@@ -9,6 +9,7 @@
   font-size: 11px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase;
 }
 .btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
 .btn:not(.btn-secondary):not(:disabled) { box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .2), 0 2px 2px rgba(0, 0, 0, .14), 0 1px 5px rgba(0, 0, 0, .12); }
 .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
 .btn-block { width: 100%; }

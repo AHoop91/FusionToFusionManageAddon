@@ -60,10 +60,9 @@
   flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;
   background: var(--surface); border-top: 1px solid var(--border);
 }
-.btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
 
 /* ---- States ---------------------------------------------------------------- */
-.pub-error { color: var(--danger, #d13438); }
+.pub-error { color: var(--danger); }
 
 /* Empty state: icon and message centred both ways. */
 .pub-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; text-align: center; }
@@ -71,7 +70,7 @@
 .pub-empty svg { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Failure state: centred in whatever holds it, with the warning icon and Retry. */
-.pub-error-state svg { stroke: var(--danger, #d13438); }
+.pub-error-state svg { stroke: var(--danger); }
 .pub-error-title { margin: 0; font-size: 14px; font-weight: 600; }
 .pub-retry { margin-top: 4px; padding: 5px 18px; }
 .pub-loading > .pub-error-state { margin: auto; min-width: 260px; }
@@ -94,11 +93,11 @@
 .pub-job-rows td { padding: 6px; border-top: 1px solid var(--border); }
 .pub-job-rows th:nth-child(2), .pub-job-rows td:nth-child(2) { width: 64px; text-align: center; }
 .pub-job-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.pub-job-reason { overflow: hidden; text-overflow: ellipsis; margin-top: 2px; font-weight: 400; color: var(--danger, #d13438); }
+.pub-job-reason { overflow: hidden; text-overflow: ellipsis; margin-top: 2px; font-weight: 400; color: var(--danger); }
 .pub-job-status svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pub-job-queued, .pub-job-cancelled { color: #8a8f98; }
 .pub-job-running { color: var(--accent); }
-.pub-job-error { color: var(--danger, #d13438); }
+.pub-job-error { color: var(--danger); }
 
 /* No permission to publish: an icon and a line, centred */
 .pub-denied { text-align: center; }

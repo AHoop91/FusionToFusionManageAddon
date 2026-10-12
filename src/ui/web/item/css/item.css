@@ -392,8 +392,8 @@
 a.item-bom-attachments:hover { color: var(--accent); }
 .item-bom-change { color: #2e9d4f; }
 .item-bom-change svg { fill: rgba(46, 157, 79, 0.18); }
-.item-bom-pin { color: #d13438; }
-.item-bom-pin svg { fill: rgba(209, 52, 56, 0.2); }
+.item-bom-pin { color: var(--danger); }
+.item-bom-pin svg { fill: rgba(207, 34, 46, 0.2); }
 .item-bom-count { color: var(--text); }
 .item-bom-icon-cell { text-align: center; }
 

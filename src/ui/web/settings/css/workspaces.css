@@ -93,7 +93,6 @@
 /* Mapping is locked until the workspace validates. */
 .ws-locked { min-width: 0; margin: 0; padding: 0; border: 0; }
 .ws-locked:disabled { opacity: 0.5; }
-.btn:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
 
 /* ---- Panel tabs inside a workspace card --------------------------------- */
 .ws-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }

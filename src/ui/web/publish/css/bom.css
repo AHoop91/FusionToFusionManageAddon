@@ -69,7 +69,7 @@
 /* A differing pair is two rows: the design line, then the Fusion Manage line. */
 .pub-cmp-fmline td { border-top-style: dashed; }
 /* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
-.pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: #d13438; text-decoration-thickness: 1.5px; }
+.pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
 
 /* Action buttons: at the end of the item, shown while the row is hovered or has focus (a chosen one stays visible). */
 .pub-cmp-actions { flex: none; display: inline-flex; gap: 4px; margin-left: auto; padding: 0 6px 0 8px; visibility: hidden; }
@@ -81,9 +81,9 @@
 .pub-cmp-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--muted); cursor: pointer; }
 .pub-cmp-act:hover { color: var(--accent); border-color: var(--accent); }
 .pub-cmp-act.chosen { background: var(--accent); border-color: var(--accent); color: #fff; }
-.pub-cmp-act-remove { color: #d13438; }
-.pub-cmp-act-remove:hover { color: #d13438; border-color: #d13438; }
-.pub-cmp-act-remove.chosen { background: #d13438; border-color: #d13438; color: #fff; }
+.pub-cmp-act-remove { color: var(--danger); }
+.pub-cmp-act-remove:hover { color: var(--danger); border-color: var(--danger); }
+.pub-cmp-act-remove.chosen { background: var(--danger); border-color: var(--danger); color: #fff; }
 .pub-cmp-actions .pub-cmp-act-revert { visibility: visible; color: var(--accent); border-color: var(--accent); transition: background .15s, color .15s; }   /* an edited line always shows how to undo it */
 .pub-cmp-act-revert:hover { background: var(--accent); color: #fff; }
 .pub-cmp-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
