@@ -186,7 +186,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
             return _entry(name, message=f"Unknown section: {name}")
         component = {k: str(payload.get(k) or "") for k in ("id", "item_number", "part_number", "description")}
         chosen = str(payload.get("fm_item") or "")
-        slot = f"component:{component['id']}" if name == "component" else name
+        slot = f"{name}:{component['id']}" if name in ("component", "thumbnail") and component["id"] else name
         try:
             model_id, time = _model_ref()
             settings = config.effective_settings()

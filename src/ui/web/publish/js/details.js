@@ -47,6 +47,10 @@
   const choices = {};           // item number -> Fusion Manage item id the user picked
   const changing = {};          // item number -> true while the user re-picks an already chosen item
   const collapsed = {};         // sub header -> true while collapsed; kept across components
+  const DEFAULT_WIDTHS = [24, 34, 34, 8];   // Property, Fusion, Fusion Manage, status: Fusion and Fusion Manage share the room equally
+  const MIN_COLUMN_PCT = 12;
+  const colWidths = DEFAULT_WIDTHS.slice();   // as dragged
+  const thumbs = {};            // component id -> thumbnail url ('' none, null while being read)
 
   function choiceKey(item) { return item.item_number || item.part_number || ''; }
 
@@ -102,6 +106,26 @@
     paint();
   }
 
+  /** Ask for a component's thumbnail the first time its details open; it arrives on its own, after the properties.
+   *  The design's own is not asked for: publish.js reads it for the top bar and hands it in with ``setThumbnail``. */
+  function loadThumbnail(item) {
+    if (!item.id || item.root || thumbs[item.id] !== undefined) return;
+    thumbs[item.id] = null;   // null: on its way
+    hooks.request('thumbnail:' + item.id, { section: 'thumbnail', id: item.id, force: force });
+  }
+
+  /** The design's thumbnail, already read for the top bar. */
+  function setThumbnail(id, url) {
+    thumbs[id] = url || '';
+    if (selected && selected.id === id) paint();
+  }
+
+  /** The answer for a thumbnail read by ``loadThumbnail``: its url, or '' when there is none (or it could not be read). */
+  function handleThumbnail(id, entry) {
+    thumbs[id] = entry.ok ? entry.data.url || '' : '';
+    if (selected && selected.id === id) paint();
+  }
+
   function retry() {
     if (!selected) return;
     if (selected.root && rootError) {
@@ -133,27 +157,59 @@
 
   // ---- Drawing the pane -------------------------------------------------------
 
-  /** Value cell: one line, cut with an ellipsis when long (the full text is the tooltip). */
-  // ``shown`` is the value as Fusion Manage will hold it (a number cut to its field's digits); the tooltip keeps the full value.
+  /** Value cell: long text wraps. ``shown`` is the value as Fusion Manage will hold it (a number cut to its field's digits); the tooltip keeps the full value. */
   function valueCell(value, shown) {
     const text = shown || value;
-    const td = el('td', 'pub-cut' + (text ? '' : ' muted'), text || '-');
+    const td = el('td', text ? '' : 'muted', text || '-');
     if (value) td.title = value;
     return td;
   }
 
+  /** Drag handle on the right edge of column ``i``: it grows or shrinks against the next column, so the table keeps its width. */
+  function columnGrip(i, table, apply) {
+    const grip = el('span', 'pub-cmp-grip');
+    grip.title = 'Drag to resize the column (double-click to reset)';
+    grip.addEventListener('pointerdown', function (event) {
+      event.preventDefault();
+      const startX = event.clientX;
+      const pair = colWidths[i] + colWidths[i + 1];
+      const first = colWidths[i];
+      const full = table.getBoundingClientRect().width || 1;
+      grip.setPointerCapture(event.pointerId);
+      grip.classList.add('dragging');
+      function onMove(e) {
+        colWidths[i] = Math.min(pair - MIN_COLUMN_PCT, Math.max(MIN_COLUMN_PCT, first + (e.clientX - startX) / full * 100));
+        colWidths[i + 1] = pair - colWidths[i];
+        apply();
+      }
+      function onUp() {
+        grip.classList.remove('dragging');
+        grip.removeEventListener('pointermove', onMove);
+        grip.removeEventListener('pointerup', onUp);
+        grip.removeEventListener('pointercancel', onUp);
+      }
+      grip.addEventListener('pointermove', onMove);
+      grip.addEventListener('pointerup', onUp);
+      grip.addEventListener('pointercancel', onUp);
+    });
+    grip.addEventListener('dblclick', function () { DEFAULT_WIDTHS.forEach(function (w, k) { colWidths[k] = w; }); apply(); });
+    return grip;
+  }
+
   function propertyTable(rows) {
     const table = el('table', 'pub-table pub-property-table');
-    // Column widths (used in the wide layout): Fusion Manage starts about two thirds across.
+    // Column widths (used in the wide layout), in percent; the user can drag them and they stay for the next component.
     const cols = el('colgroup');
-    ['25%', '40%', '27%', '8%'].forEach(function (w) {
-      const col = el('col');
-      col.style.width = w;
-      cols.appendChild(col);
-    });
+    function apply() { colWidths.forEach(function (w, i) { cols.children[i].style.width = w + '%'; }); }
+    colWidths.forEach(function () { cols.appendChild(el('col')); });
+    apply();
     table.appendChild(cols);
     const head = el('tr');
-    ['Property', 'Fusion', 'Fusion Manage', ''].forEach(function (h) { head.appendChild(el('th', '', h)); });
+    ['Property', 'Fusion', 'Fusion Manage', ''].forEach(function (h, i) {
+      const th = el('th', '', h);
+      if (i < 2) th.appendChild(columnGrip(i, table, apply));   // moves the edge it shares with the next column
+      head.appendChild(th);
+    });
     table.appendChild(head);
     rows.forEach(function (r) {
       const tr = el('tr');
@@ -235,10 +291,24 @@
     return box;
   }
 
-  /** Title card: the component, the state pill and, once an item is chosen among several, a Change button. */
+  /** Header: the component's thumbnail, number and name, the state pill and, once an item is chosen among several, a Change button. */
   function headCard(compare) {
-    const head = el('div', 'card pub-props-head');
-    head.appendChild(el('h3', 'pub-props-title', selected.title));
+    const head = el('div', 'pub-props-head');
+    let url = selected.id ? thumbs[selected.id] : '';
+    if (selected.root && url === undefined) url = null;   // the top bar is still reading it
+    if (url === null || url) {   // a skeleton while it loads, nothing when the component has none
+      const thumb = el('div', 'pub-props-thumb' + (url === null ? ' pub-thumb-loading' : ''));
+      // Only http(s) URLs, so nothing else is ever loaded into the style.
+      if (url && /^https?:\/\//i.test(url)) thumb.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
+      head.appendChild(thumb);
+    }
+    // The number is the title; the name (the design's description) is a sub heading under it.
+    const number = selected.part_number || selected.item_number || '';
+    const name = selected.root ? selected.description : selected.name || selected.description;
+    const text = el('div', 'pub-props-text');
+    text.appendChild(el('h3', 'pub-props-title', number || selected.title));
+    if (number && name) text.appendChild(el('p', 'pub-props-subtitle', name));
+    head.appendChild(text);
     const state = changeState(compare);
     if (compare && PILLS[state]) {
       const pill = el('span', 'pub-pill pub-pill-' + state, PILLS[state].text);
@@ -290,6 +360,7 @@
     selected = item;
     $('pub-detail').hidden = false;
     $('pub-backdrop').hidden = false;
+    loadThumbnail(item);   // before the first paint, so the skeleton is there from the start
     paint();
     if (item.root) hooks.onRootLoad(); else load(item);   // the design's own properties are read by publish.js, once
   }
@@ -320,7 +391,7 @@
     rootCompare = null;
     rootError = '';
     force = !!skipCache;
-    [compares, errors, loading].forEach(function (map) {
+    [compares, errors, loading, thumbs].forEach(function (map) {
       Object.keys(map).forEach(function (id) { delete map[id]; });
     });
   }
@@ -368,6 +439,6 @@
 
   ns.pubDetails = {
     init: init, open: open, reset: reset, setRoot: setRoot, setRootError: setRootError,
-    handleComponent: handleComponent, choiceFor: choiceFor,
+    handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail, choiceFor: choiceFor,
   };
 })(window.MfgUi);

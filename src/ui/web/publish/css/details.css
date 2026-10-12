@@ -14,7 +14,7 @@
 .pub-detail-close:hover { background: rgba(0, 0, 0, .06); color: rgba(0, 0, 0, .87); }
 .pub-detail-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .pub-props { min-width: 0; }
-.pub-detail > .pub-props { flex: 1; min-height: 0; padding: 12px; overflow-y: auto; }
+.pub-detail > .pub-props { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; }
 .pub-backdrop { display: none; }
 /* Drag handle on the pane's left edge (wide layout only). */
 .pub-detail-resize { position: absolute; top: 0; bottom: 0; left: 0; z-index: 1; width: 6px; cursor: col-resize; touch-action: none; }
@@ -38,9 +38,19 @@
   }
 }
 
-/* ---- Title card, state pill and the choice of Fusion Manage item ---------------- */
-.pub-props-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 4px; }
-.pub-props-title { flex: 1; min-width: 0; margin: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+/* ---- Header, state pill and the choice of Fusion Manage item ---------------- */
+/* No card: the component sits on the pane itself, with its thumbnail, a larger title and a rule under it. */
+.pub-props-head { position: relative; display: flex; align-items: flex-start; gap: 20px; padding: 4px 0 20px; border-bottom: 1px solid var(--border); }
+/* The state pill sits in the top right corner, out of the title's way. */
+.pub-props-head .pub-pill { position: absolute; top: 0; right: 0; }
+.pub-props-thumb { flex: none; width: 96px; height: 96px; border: 1px solid var(--border); border-radius: 8px; background: #fff center / contain no-repeat; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+/* Same sweeping skeleton as the thumbnail in the top bar (the shorthand above would otherwise clear its gradient). */
+.pub-props-thumb.pub-thumb-loading { background-image: linear-gradient(90deg, #eceff1 25%, #f7f8f9 50%, #eceff1 75%); background-size: 200% 100%; background-repeat: repeat-x; animation: pub-thumb-sweep 1.3s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .pub-props-thumb.pub-thumb-loading { animation: none; } }
+.pub-props-text { flex: 1; min-width: 0; }
+.pub-props-title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.pub-props-subtitle { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+@container details (max-width: 600px) { .pub-props-thumb { width: 80px; height: 80px; } .pub-props-title { font-size: 16px; } .pub-props-subtitle { font-size: 12px; } }
 
 /* State pill: same look and colours as the chips in the BOM table (.pub-cmp-chip). */
 .pub-pill { flex: none; box-sizing: border-box; min-width: 88px; padding: 2px 8px; text-align: center; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
@@ -63,23 +73,25 @@
 
 /* ---- Sections: a sub header with a chevron, then its content ----------------------- */
 .pub-subheading {
-  display: flex; align-items: center; gap: 4px; width: 100%; margin: 10px 0 6px; padding: 2px 0; border: 0; background: transparent;
+  display: flex; align-items: center; gap: 4px; width: 100%; margin: 16px 0 8px; padding: 2px 0; border: 0; background: transparent;
   font: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); cursor: pointer; text-align: left;
 }
 .pub-subheading svg { flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .pub-subheading:hover { color: inherit; }
+.pub-section-body > .card { padding: 4px 16px 8px; border-radius: 8px; }
 /* Loading balls sit in the middle of a section, both ways. */
 .pub-props-wait { display: flex; align-items: center; justify-content: center; min-height: 120px; }
 
 /* ---- Properties table ------------------------------------------------- */
 .pub-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.pub-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; }
-.pub-table td { padding: 5px 6px; border-top: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+.pub-table th { text-align: left; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 6px 8px 8px; border-bottom: 1px solid var(--border); }
+.pub-table td { padding: 9px 8px; border-top: 1px solid #eceef0; vertical-align: top; overflow-wrap: anywhere; }
+.pub-table tr:nth-child(2) td { border-top: 0; }
 .pub-table td.muted { color: var(--muted); }
 
 /* Comparison status: a dot at the right of each property. */
 .pub-status { width: 28px; text-align: center; vertical-align: middle; }
-.pub-mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; cursor: default; }
+.pub-mark { display: inline-block; width: 8px; height: 8px; border-radius: 50%; cursor: default; box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
 .pub-status-match .pub-mark { background: var(--ok); }
 .pub-status-mismatch .pub-mark { background: #d98c00; }
 .pub-status-new .pub-mark { background: var(--accent); }
@@ -89,20 +101,21 @@
 
 /* Properties table: fixed columns (widths come from its colgroup); the status dot sits far right. */
 .pub-property-table { table-layout: fixed; }
-.pub-property-table th { white-space: nowrap; }
+.pub-property-table th { position: relative; white-space: nowrap; }
 .pub-property-table td:nth-child(3) { padding-right: 24px; }
 .pub-property-table td.pub-status { padding: 0 14px 0 0; text-align: right; vertical-align: middle; }
 .pub-property-table .pub-mark { vertical-align: middle; }
 
-/* Wide window: values are cut on one line. */
+/* Wide window. */
 @media (min-width: 901px) {
-  .pub-props .pub-table td.pub-cut { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pub-props .card.pub-empty { padding: 16px; }
+  .pub-property-table tr:not(:first-child):hover td { background: #f6f8fa; }
+  .pub-property-table td:first-child { font-weight: 500; }
 }
 
 /* Narrow window: each property becomes a card, name on top, then its value and Fusion Manage lines. */
 @media (max-width: 900px) {
-  .pub-props .card:not(.pub-props-head):not(.pub-props-wait):not(.pub-empty):not(.pub-pick-card) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .pub-props .card:not(.pub-props-wait):not(.pub-empty):not(.pub-pick-card) { padding: 0; border: 0; background: transparent; box-shadow: none; }
   .pub-table, .pub-table tbody, .pub-table tr, .pub-table td { display: block; width: 100%; }
   .pub-table tr:first-of-type { display: none; }
   .pub-table tr {
@@ -119,7 +132,7 @@
 /* The pane is narrower than the window, so it picks its layout from its own width: under 600px
    the properties stack as cards (name on top, then its values) instead of columns. */
 @container details (max-width: 600px) {
-  .pub-props .card:not(.pub-props-head):not(.pub-props-wait):not(.pub-empty):not(.pub-pick-card) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .pub-props .card:not(.pub-props-wait):not(.pub-empty):not(.pub-pick-card) { padding: 0; border: 0; background: transparent; box-shadow: none; }
   .pub-props .pub-table, .pub-props .pub-table tbody, .pub-props .pub-table tr, .pub-props .pub-table td { display: block; width: 100%; }
   .pub-props .pub-table tr:first-of-type { display: none; }
   .pub-props .pub-table tr {
@@ -132,7 +145,6 @@
   .pub-props .pub-property-table td { min-width: 0; overflow-wrap: anywhere; }
   .pub-props .pub-table td { border: 0; padding: 2px 0; }
   .pub-props .pub-table td:first-child, .pub-props .pub-table td:nth-child(3) { width: 100%; white-space: normal; padding-right: 0; }
-  .pub-props .pub-table td.pub-cut { max-width: none; overflow: visible; white-space: normal; text-overflow: clip; }
   .pub-props .pub-table td[data-label="Property"] { font-weight: 600; padding-bottom: 4px; }
   .pub-props .pub-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #6b7280); }
   .pub-props .pub-table td[data-label="Property"]::before { content: none; }

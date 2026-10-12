@@ -13,7 +13,7 @@
   const jobs = ns.pubJobs;
 
   const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
-  const STALE_MS = 60000;   // the panel shown again after this long reads Fusion Manage afresh
+  const STALE_MS = 600000;   // the panel shown again after this long reads Fusion Manage afresh
   const SECTIONS = ['structure', 'thumbnail'];    // loaded for the open design once its summary is in
   const ALL_SECTIONS = ['properties', 'structure', 'thumbnail'];   // properties (the design's own) load when its row is opened
 
@@ -247,10 +247,15 @@
       ensureSections();
       return;
     }
+    if (name.indexOf('thumbnail:') === 0) {
+      details.handleThumbnail(name.slice('thumbnail:'.length), entry);
+      return;
+    }
     loaded[name] = true;
     if (name === 'thumbnail') {   // no thumbnail (or none yet) just leaves the box empty
       const url = entry.ok ? entry.data.url : '';
       setThumbnail(url, false);
+      details.setThumbnail(currentSummary ? currentSummary.component_id : '', url);   // the design's details show the same one
       return;
     }
     if (name === 'properties') {
@@ -320,7 +325,7 @@
     // also fires focus, so reload only when a different design is open.
     bridge.on('get_publish_model_key', function (r) {
       if (!r.ok) return;
-      // Another design, or the same one shown again after a while (Fusion Manage may have changed).
+      // Another design, or the same one shown again after ten minutes (Fusion Manage may have changed).
       if (r.result.key !== loadedKey) refresh(false);
       else if (Date.now() - lastLoad > STALE_MS) refresh(true);
     });

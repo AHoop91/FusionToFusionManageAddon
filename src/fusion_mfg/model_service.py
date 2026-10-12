@@ -34,7 +34,7 @@ def read_section(client: MfgGraphQlClient, section: str, model_id: str, time: st
 
     ``time`` pins the query to a version and is sent only when non-empty.
     ``structure``, ``component`` and ``thumbnail`` also need the ``summary`` (for the root
-    component id and composition), and ``component`` the ``component_id``.
+    component id and composition), and ``component`` the ``component_id`` (``thumbnail`` takes one too, else it is the design's).
     ``physical`` adds the physical properties (mass, volume, ...) to the properties of ``properties`` and
     ``component``; they are slow for the Data Model to work out, so only a caller that maps them asks.
     ``progress(count)`` is called after each page of the ``structure`` that is followed by another, with the relations read so far.
@@ -45,7 +45,7 @@ def read_section(client: MfgGraphQlClient, section: str, model_id: str, time: st
     if section == COMPONENT:
         return _read_component(client, summary or {}, component_id, time, physical)
     if section == THUMBNAIL:
-        return {"url": read_thumbnail_url(client, summary or {}, (summary or {}).get("component_id", ""), time)}
+        return {"url": read_thumbnail_url(client, summary or {}, component_id or (summary or {}).get("component_id", ""), time)}
     if physical and section == "properties" and summary and summary.get("component_id"):   # the design's own component, with its physical properties
         return _read_component(client, summary, summary["component_id"], time, physical)["properties"]
     query, parse = SECTIONS[section]
