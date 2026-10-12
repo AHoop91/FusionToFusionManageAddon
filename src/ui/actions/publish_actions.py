@@ -21,7 +21,6 @@ from ...fm.items import ItemService
 from ...fm.permissions import denial
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
-from ...fusion_mfg.summary_cache import SummaryCache
 from ...sync.bom_compare import compare_bom
 from ...sync.item_compare import compare_with_item, item_number_of, lookup_item
 from ...sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN
@@ -121,10 +120,9 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
     # One slot per section; a component's properties get a slot each ("component:<id>").
     sections: Dict[str, Dict[str, Any]] = {name: _entry(name) for name in SECTION_NAMES}
     lock = threading.Lock()
-    summary_cache = SummaryCache()
 
     def run(slot: str, name: str, key: str, client: MfgGraphQlClient, fm: FmClient, cfg: WorkspaceConfig,
-            model_id: str, time: str, component: Dict[str, str], chosen: str, force: bool) -> None:
+            model_id: str, time: str, component: Dict[str, str], chosen: str) -> None:
         try:
             whole = Stopwatch()
             if name == "summary":   # the first section: when it is denied nothing else is asked for
@@ -169,16 +167,6 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                     note(stage="comparing")
                     hits = searching.result()
                 data = _compare_bom(rows, summary, cfg, fm, chosen, hits)
-            elif name == "summary":
-                # A version of a design does not change, so its summary is read once; a refresh reads it again.
-                # Without the timestamp that pins the version there is no version to keep it for.
-                data = summary_cache.get(key) if time and not force else None
-                from_cache = data is not None
-                if not from_cache:
-                    data = read()
-                    if time:
-                        summary_cache.put(key, data)
-                log.info("TIMING summary %s (version %s)", "from the cache" if from_cache else "read from the Data Model", time or "unpinned")
             else:
                 data = read()
             log.info("Loaded %s of %s", slot, model_id)
@@ -220,8 +208,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
             log.debug("%s requested: starting", slot)
             sections[slot] = _entry(slot, pending=True, key=key)
             snapshot = dict(sections[slot])
-        threading.Thread(target=run, args=(slot, name, key, client, fm, cfg, model_id, time, component, chosen,
-                                           bool(payload.get("force"))), daemon=True).start()
+        threading.Thread(target=run, args=(slot, name, key, client, fm, cfg, model_id, time, component, chosen),
+                         daemon=True).start()
         return snapshot
 
     def load_publish_section_status(payload: Dict[str, Any]) -> Dict[str, Any]:
