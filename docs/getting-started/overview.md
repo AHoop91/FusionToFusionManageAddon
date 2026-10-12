@@ -4,11 +4,23 @@ title: Overview
 
 # Overview
 
-This add-in is vault-inspired item management for Fusion, powered by Fusion Manage. It carries a **released engineering definition** from Fusion into **independently managed manufacturing items and BOMs** in Fusion Manage, with the representations and information the wider supply chain needs.
+The Fusion Manage add-in brings Vault-inspired item management to Fusion, powered by Fusion Manage. It bridges **engineering to enterprise**: it carries a **released engineering definition** from Fusion into **independently managed manufacturing items and BOMs** in Fusion Manage, together with the representations and information the wider supply chain needs to source, build and support the product.
 
-Engineering components and manufactured items are kept separate, so each has its own lifecycle. The add-in is the bridge between them. Fusion and Fusion Manage keep doing their own jobs. See the [End-to-End Workflow](workflow.md) for how this works in practice.
+## Why it exists
 
-Technically, it reads the design's components, properties and thumbnails from the Manufacturing Data Model, compares them with what already exists in Fusion Manage, and sends only what needs to be created or changed.
+Engineering and the enterprise work to different rhythms. Engineers iterate on designs, while manufacturing, purchasing, quality and supply chain teams need a stable, controlled record of what is to be built. Mixing the two forces one side to inherit the other's pace and permissions.
+
+The add-in keeps them separate by design:
+
+- **Engineering components** stay in Fusion, where design work continues and revisions are managed.
+- **Manufactured items** live in Fusion Manage, each with its own lifecycle, approvals and release status.
+- **The add-in is the controlled bridge between them.** Fusion and Fusion Manage each keep doing their own job, and information crosses only when you choose to publish.
+
+The result is a single, traceable path from a released design to an item the enterprise can rely on, without re-keying data or maintaining parallel spreadsheets. The [End-to-End Workflow](workflow.md) shows how this works in practice.
+
+## How it works
+
+The add-in reads a design's components, properties, thumbnails and part numbers from the Manufacturing Data Model and compares them with what already exists in Fusion Manage. It shows you the differences before anything changes, then sends **only what needs to be created or updated**. Nothing is overwritten blindly, and you stay in control of every publish.
 
 ## What it does
 
