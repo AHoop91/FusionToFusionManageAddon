@@ -304,7 +304,8 @@
     renderHeader(view);
     currentView = view;
     labelTabs(view);
-    if (document.querySelector('.item-tab-active').disabled) showTab('item');   // the tab open for the last item is not allowed for this one
+    if (startOnItemTab || document.querySelector('.item-tab-active').disabled) showTab('item');   // just opened, or the tab open for the last item is not allowed for this one
+    startOnItemTab = false;
     // these are read from Fusion Manage only when their tab is opened
     LAZY_TABS.forEach(function (name) {
       const tab = $('item-' + name);
@@ -337,6 +338,8 @@
 
   function poll() { bridge.send('get_item_view'); }
 
+  let startOnItemTab = false;   // set when the panel is opened; the next item shown starts on the Item tab
+
   setLoading(true);   // until the first answer
 
   function start() {
@@ -346,7 +349,8 @@
     ns.account.init();
     ns.auth.init();
     bridge.on('get_item_view', handle);
-    bridge.on('item_changed', function () {   // Python opened another item in this palette
+    bridge.on('item_changed', function (note) {   // Python opened another item in this palette
+      if (note && note.item_tab) startOnItemTab = true;   // the panel was opened, not just following the selection: back to the Item tab
       setLoading(true, 'Finding the Fusion Manage item...');   // at once, not after the answer to the poll
       poll();
     });

@@ -10,6 +10,7 @@ Manage's web UI, so it needs no separate sign-in. Finding and reading the item c
 they run on a worker thread; the page polls ``get_item_view`` for the answer.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -300,7 +301,7 @@ class ItemPanel:
         self._start()
         if show:
             self._host.show()
-        self._host.send("item_changed")   # an open page starts polling again
+        self._host.send("item_changed", json.dumps({"item_tab": show}))   # an open page starts polling again; a panel just opened starts on the Item tab
 
     def _has_number(self, number: str, quiet: bool = False) -> bool:
         """Whether ``number`` (a part number) names a component to look up; when not, say what to select."""
