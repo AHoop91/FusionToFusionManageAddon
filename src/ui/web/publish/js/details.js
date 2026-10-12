@@ -134,8 +134,10 @@
   // ---- Drawing the pane -------------------------------------------------------
 
   /** Value cell: one line, cut with an ellipsis when long (the full text is the tooltip). */
-  function valueCell(value) {
-    const td = el('td', 'pub-cut' + (value ? '' : ' muted'), value || '-');
+  // ``shown`` is the value as Fusion Manage will hold it (a number cut to its field's digits); the tooltip keeps the full value.
+  function valueCell(value, shown) {
+    const text = shown || value;
+    const td = el('td', 'pub-cut' + (text ? '' : ' muted'), text || '-');
     if (value) td.title = value;
     return td;
   }
@@ -157,7 +159,7 @@
       const tr = el('tr');
       const hasFm = r.fm_field && r.fm_value;
       [['Property', el('td', '', r.name)],
-       ['Fusion', valueCell(r.value)],
+       ['Fusion', valueCell(r.value, r.shown)],
        ['Fusion Manage', el('td', hasFm ? '' : 'muted', hasFm ? r.fm_value : '-')]].forEach(function (c) {
         c[1].setAttribute('data-label', c[0]);
         tr.appendChild(c[1]);

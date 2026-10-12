@@ -88,7 +88,8 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
         else:
             fit = (lambda text, field=mapping.fm_field_id: fit_number(field, text)) if fit_number else None
             status = MATCH if _same(value, fm_value, fit) else MISMATCH
-        rows.append({"name": name, "value": value, "fm_field": mapping.fm_field_id,
+        shown = fit_number(mapping.fm_field_id, value) if fit_number and value else value
+        rows.append({"name": name, "value": value, "shown": shown, "fm_field": mapping.fm_field_id,
                      "fm_value": fm_value, "status": status})
     # Mapped rows first, so what will change is at the top.
     order = {MISMATCH: 0, NEW: 1, MULTIPLE: 2, UNKNOWN: 3, MATCH: 4, UNCHECKED: 5, UNMAPPED: 6}
