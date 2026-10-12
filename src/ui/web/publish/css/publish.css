@@ -38,6 +38,29 @@
 @keyframes pub-thumb-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .pub-thumb-loading { animation: none; } }
 .pub-summary-text { flex: 1; min-width: 0; }
+.pub-summary { position: relative; }
+
+/* Up-to-date check: a round button at the top right. A ring sweeps round it while it scans, then it settles into a state colour. */
+.pub-check { position: absolute; top: 12px; right: 16px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; cursor: pointer; color: var(--muted); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: color .2s, box-shadow .2s; }
+.pub-check:hover { box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.pub-check svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-check-ring circle { stroke-dasharray: 94.2; stroke-dashoffset: 0; opacity: .25; transition: opacity .2s; }
+.pub-check-icon { padding: 8px; box-sizing: border-box; opacity: 0; transition: opacity .2s; }
+.pub-check-bang { display: none; }
+.pub-check-count { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #a86400; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.pub-check[data-state="idle"] { display: none; }
+.pub-check[data-state="checking"] { color: #0b6bb5; }
+.pub-check[data-state="checking"] .pub-check-ring { animation: pub-check-spin 1s linear infinite; }
+.pub-check[data-state="checking"] .pub-check-ring circle { stroke-dasharray: 28 66; opacity: 1; }
+.pub-check[data-state="ok"] { color: #2e9d4f; }
+.pub-check[data-state="ok"] .pub-check-ring circle, .pub-check[data-state="changes"] .pub-check-ring circle, .pub-check[data-state="error"] .pub-check-ring circle { opacity: 1; }
+.pub-check[data-state="ok"] .pub-check-icon, .pub-check[data-state="changes"] .pub-check-icon, .pub-check[data-state="error"] .pub-check-icon { opacity: 1; }
+.pub-check[data-state="changes"] { color: #a86400; }
+.pub-check[data-state="error"] { color: #b3262a; }
+.pub-check[data-state="changes"] .pub-check-tick, .pub-check[data-state="error"] .pub-check-tick { display: none; }
+.pub-check[data-state="changes"] .pub-check-bang, .pub-check[data-state="error"] .pub-check-bang { display: inline; }
+@keyframes pub-check-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pub-check[data-state="checking"] .pub-check-ring { animation-duration: 3s; } }
 .pub-summary .pub-label { width: 90px; }
 
 /* ---- Bill of materials on the left; the details pane takes the right when a row is picked ---- */

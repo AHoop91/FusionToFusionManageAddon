@@ -15,7 +15,7 @@
   const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
   const STALE_MS = 600000;   // the panel shown again after this long reads Fusion Manage afresh
   const SECTIONS = ['structure', 'thumbnail'];    // loaded for the open design once its summary is in
-  const ALL_SECTIONS = ['properties', 'structure', 'thumbnail'];   // properties (the design's own) load when its row is opened
+  const ALL_SECTIONS = ['properties', 'structure', 'thumbnail'];   // the design's own properties load last, once the Bill of Materials is in (for the up-to-date check), so they never slow it
 
   let currentSummary = null;   // summary of the open design
   let loadedKey = null;        // design the panel currently shows
@@ -73,6 +73,82 @@
     $('pub-content').hidden = true;
     $('pub-denied-text').textContent = message;
     $('pub-denied').hidden = false;
+  }
+
+  // ---- Up-to-date check ------------------------------------------------------------
+
+  let rootCompare = null;   // the design's own properties compared with Fusion Manage (null until read)
+  let rootFailed = '';      // why the design could not be checked
+
+  const DIFFERING = ['new', 'changed', 'added', 'mismatch'];   // BOM lines the design has that Fusion Manage lacks or holds differently; lines only Fusion Manage has (it extends the BOM) are ignored
+
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+  const ISSUES = {
+    new: 'Not in Fusion Manage',
+    changed: 'Quantity differs',
+    mismatch: 'Different item at this position',
+    added: 'Added with Add Items',
+  };
+
+  let report = { state: 'checking', text: '', props: [], lines: [], subject: '' };   // what the button last said, listed in its dialog
+
+  function quantityText(quantity) { return quantity === '' || quantity === undefined ? '-' : 'Qty ' + quantity; }
+
+  /** The discrepancies, as the dialog lists them: attributes of the design, then the Bill of Materials lines. */
+  function discrepancies() {
+    const model = ns.bomModel;
+    const props = rootCompare.rows.filter(function (r) { return r.status === 'mismatch' || r.status === 'new'; }).map(function (r) {
+      const own = r.shown || r.value;
+      return { name: r.name, fusion: own ? own + (r.unit ? ' ' + r.unit : '') : '', fm: r.fm_value };
+    });
+    const items = currentRows.length ? model.arrange(model.buildItems(currentRows, currentSummary || {})) : [];
+    const lines = items.filter(function (item) { return DIFFERING.indexOf(model.statusOf(item)) >= 0; }).map(function (item) {
+      const status = model.statusOf(item);
+      const different = status === 'mismatch';
+      return {
+        number: item.design.pn, name: item.design.name, issue: ISSUES[status] || status, component: item.component,
+        fusion: different ? item.design.pn : quantityText(model.quantityOf(item)),
+        fm: status === 'new' || status === 'added' ? '-' : different ? item.fm.pn : quantityText(item.fm.quantity),
+      };
+    });
+    return { props: props, lines: lines };
+  }
+
+  /** Round button at the top right: scanning while the Bill of Materials and the design's properties are read, then what they say. */
+  function updateCheck() {
+    const button = $('pub-check');
+    const count = $('pub-check-count');
+    let state = 'checking', text = 'Checking Fusion Manage...', n = 0;
+    let found = { props: [], lines: [] };
+    if (!loaded.structure && !rootFailed) {
+      state = 'idle';   // hidden until the panel has loaded; the check then runs quietly
+    } else if (rootFailed) {
+      state = 'error'; text = 'Could not check: ' + rootFailed;
+    } else if (loaded.structure && rootCompare) {
+      const own = details.changeState(rootCompare);
+      found = discrepancies();
+      n = found.props.length + found.lines.length;
+      if (own === 'unknown') { state = 'error'; text = 'Fusion Manage could not be read.'; }
+      else if (own === 'multiple') { state = 'changes'; text = 'Several Fusion Manage items match this design. Choose one in its details.'; }
+      else if (own === 'new') { state = 'changes'; text = 'Not in Fusion Manage yet: publishing creates it.'; n = 0; found = { props: [], lines: [] }; }
+      else if (n) { state = 'changes'; text = plural(found.props.length, 'attribute difference') + ' and ' + plural(found.lines.length, 'Bill of Materials line') + ' to update.'; }
+      else { state = 'ok'; text = 'The design matches Fusion Manage.'; }
+    }
+    const summary = currentSummary || {};
+    report = { state: state, text: text, props: found.props, lines: found.lines, subject: summary.item_number || summary.part_number || 'this design' };
+    button.dataset.state = state;
+    button.title = state === 'checking' ? text : text + ' Click for details.';
+    button.setAttribute('aria-label', button.title);
+    count.hidden = !n;
+    count.textContent = n > 99 ? '99+' : String(n);
+  }
+
+  function checkClicked() {
+    if (report.state === 'checking' || report.state === 'idle') return;
+    ns.pubCheckReport.open(report, {
+      onLine: details.open,
+    });
   }
 
   // ---- Bill of materials panel ---------------------------------------------------
@@ -259,17 +335,39 @@
       return;
     }
     if (name === 'properties') {
+      rootCompare = entry.ok ? entry.data.compare : null;
+      rootFailed = entry.ok ? '' : entry.message || 'Unknown error';
       if (entry.ok) details.setRoot(entry.data.compare);
-      else details.setRootError(entry.message || 'Unknown error');
+      else details.setRootError(rootFailed);
+      updateCheck();
       return;
     }
     if (!entry.ok) {
-      bomError(entry.message, function () { loaded.structure = false; loadSection('structure'); });
+      rootFailed = entry.message || 'Unknown error';
+      updateCheck();
+      bomError(entry.message, function () { rootFailed = ''; loaded.structure = false; loadSection('structure'); updateCheck(); });
       return;
     }
     ns.bomModel.clearDecisions();   // fresh comparison: nothing is chosen or added yet
     fmItemId = entry.data.fm_item_id || '';
     renderBom(entry.data.rows, !!entry.data.pick);
+    updateCheck();
+    if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
+  }
+
+  /** Read only the Bill of Materials (and the design's own properties, for the check) again, skipping the cached copies; the summary, thumbnail and details stay. */
+  function refreshBom() {
+    lastLoad = Date.now();   // a focus right after must not reload everything
+    ['structure', 'properties'].forEach(function (name) {
+      loaded[name] = false;
+      inflight[name] = false;
+      forceNext[name] = true;
+      clearTimeout(timers[name]);
+    });
+    rootCompare = null;
+    rootFailed = '';
+    updateCheck();
+    loadSection('structure');   // the properties follow once it is in
   }
 
   /** Read the open design again (all sections), skipping the cached copies when ``force``. */
@@ -284,6 +382,9 @@
       clearTimeout(timers[name]);
     });
     clearBom();
+    rootCompare = null;
+    rootFailed = '';
+    updateCheck();
     details.reset(force);
     loaded.summary = false;
     forceNext.summary = !!force;
@@ -315,10 +416,11 @@
         loadSection('properties');
       },
     });
-    jobs.init({ onFinished: function () { lastLoad = 0; refresh(true); } });   // Fusion Manage changed: compare again
+    jobs.init({ onFinished: refreshBom });   // Fusion Manage changed: compare the Bill of Materials again
     $('pub-publish').addEventListener('click', publish);
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
+    $('pub-check').addEventListener('click', checkClicked);
     $('pub-refresh').addEventListener('click', function () { refresh(true); });
     $('pub-add-items').addEventListener('click', openAddItems);
     // The palette stays open while the user switches designs. Clicking into it

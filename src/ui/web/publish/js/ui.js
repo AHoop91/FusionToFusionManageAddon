@@ -53,7 +53,7 @@
     caption.textContent = text;
     slowTimers.set(caption, setTimeout(function () {
       if (caption.isConnected && !caption.closest('[hidden]')) {
-        caption.textContent = text + ' This is taking longer than expected: the Manufacturing Data Model is slow to respond. Still trying...';
+        caption.textContent = text + ' This may take a moment.';
       }
     }, SLOW_MS));
   }
@@ -79,7 +79,7 @@
     // A clock for a timeout, a warning triangle for anything else.
     card.appendChild(svg(timedOut ? ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 7v5l3 2'] : ['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
     card.appendChild(el('h4', 'pub-error-title', timedOut ? 'Timed out' : 'Could not load'));
-    card.appendChild(el('p', 'muted', timedOut ? 'The Manufacturing Data Model took too long to respond.' : (message || 'Unknown error')));
+    card.appendChild(el('p', 'muted', timedOut ? 'The request took too long. Please try again.' : (message || 'Unknown error')));
     const retry = el('button', 'pub-outline-button pub-retry', 'Retry');
     retry.type = 'button';
     retry.addEventListener('click', onRetry);

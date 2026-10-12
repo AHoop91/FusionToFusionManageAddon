@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="css/bom.css">
   <link rel="stylesheet" href="css/details.css">
   <link rel="stylesheet" href="css/add-items.css">
+  <link rel="stylesheet" href="css/check.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
 </head>
@@ -60,6 +61,12 @@
       <div class="pub-summary">
         <div id="pub-thumb" class="pub-thumb" aria-hidden="true"></div>
         <div id="pub-summary" class="pub-summary-text"><p class="muted">Loading...</p></div>
+        <!-- Is the design up to date in Fusion Manage? Scans in the background; filled in by publish.js. -->
+        <button id="pub-check" class="pub-check" type="button" data-state="idle" aria-label="Checking Fusion Manage">
+          <svg class="pub-check-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"/></svg>
+          <svg class="pub-check-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="pub-check-tick" d="M6 12.5l4 4 8-9"/><path class="pub-check-bang" d="M12 7v6.5M12 17v.2"/></svg>
+          <span id="pub-check-count" class="pub-check-count" hidden></span>
+        </button>
       </div>
 
       <!-- The bill of materials; a row click opens that component's details beside it. -->
@@ -127,6 +134,7 @@
   <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>
   <script src="js/add-items.js"></script>
+  <script src="js/check-report.js"></script>
   <script src="js/publish-jobs.js"></script>
   <script src="js/publish.js"></script>
 </body>

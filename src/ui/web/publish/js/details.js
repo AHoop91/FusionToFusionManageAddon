@@ -441,6 +441,6 @@
 
   ns.pubDetails = {
     init: init, open: open, reset: reset, setRoot: setRoot, setRootError: setRootError,
-    handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail, choiceFor: choiceFor,
+    changeState: changeState, handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail, choiceFor: choiceFor,
   };
 })(window.MfgUi);
