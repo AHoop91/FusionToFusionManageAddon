@@ -6,11 +6,16 @@ from ...auth.auth_service import AuthService
 from ...config.config_service import CompanyModeUnavailable, ConfigService
 from ...fm.client import FmClient
 from ...fm.profile import ProfileService
+from ...fm.ttl_cache import TtlCache
 from ..message_bridge import MessageBridge
+
+
+PROFILE_SECONDS = 600
 
 
 def register_auth_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:
     """Register the ``auth_*`` actions."""
+    profiles = TtlCache(PROFILE_SECONDS)   # the user's name and picture seldom change, and a panel opens often: read them once in a while
 
     def auth_status(_payload: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -26,11 +31,19 @@ def register_auth_actions(bridge: MessageBridge, config: ConfigService, auth: Au
         auth.cancel_login()
 
     def auth_logout(_payload: Dict[str, Any]) -> Dict[str, Any]:
+        profiles.clear()
         auth.sign_out(config.effective_settings())
         return {"state": "signed_out", "error": ""}
 
     def auth_profile(_payload: Dict[str, Any]) -> Dict[str, Any]:
-        return ProfileService(FmClient(config.effective_settings(), auth)).current()
+        settings = config.effective_settings()
+        key = (settings.tenant, settings.client_id)
+        profile = profiles.get(key)
+        if profile is None:
+            profile = ProfileService(FmClient(settings, auth)).current()
+            if profile["user_id"] or profile["name"]:   # an answer, not the empty one a failed read gives
+                profiles.put(key, profile)
+        return profile
 
     bridge.register("auth_status", auth_status)
     bridge.register("auth_login", auth_login)

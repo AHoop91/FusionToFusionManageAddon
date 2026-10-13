@@ -107,7 +107,7 @@ class PaletteHost:
 
     def __init__(self, ui: adsk.core.UserInterface, bridge: MessageBridge,
                  palette_id: str, title: str, page: str, docked: bool = True,
-                 width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT) -> None:
+                 width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT, close_button: bool = True) -> None:
         self._ui = ui
         self._bridge = bridge
         self._palette_id = palette_id
@@ -115,6 +115,7 @@ class PaletteHost:
         self._page = page
         self._docked = docked   # False: a floating window the user can place anywhere
         self._size = (width, height)
+        self._close_button = close_button   # False: the page has its own way to close, so Fusion adds no bar with a Close button under it
         self._handler = None  # Kept referenced or Fusion garbage-collects it.
         self._palette = None
 
@@ -125,7 +126,7 @@ class PaletteHost:
             url = os.path.join(os.path.dirname(__file__), "web", self._page, "index.html")
             palette = self._ui.palettes.add(
                 self._palette_id, self._title, url.replace("\\", "/"),
-                True, True, True, self._size[0], self._size[1], True,
+                True, self._close_button, True, self._size[0], self._size[1], True,
             )
             if self._docked:
                 # Limit docking to the left/right edges so the panel always spans
