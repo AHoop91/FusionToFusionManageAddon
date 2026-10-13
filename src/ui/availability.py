@@ -8,7 +8,7 @@ so one cannot undo the other.
 
 import threading
 import time
-from typing import Callable, Dict, Sequence
+from typing import Callable, Dict, Optional, Sequence
 
 import adsk.core
 
@@ -84,8 +84,10 @@ class GateWatcher:
     them, it is looked at again every ``seconds``, for at most ``give_up`` seconds; nothing runs when no drawing is loading."""
 
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, gate: SetupGate, loading: Callable[[], bool],
-                 seconds: float = 2.0, give_up: float = 60.0, grace: float = 15.0) -> None:
+                 seconds: float = 2.0, give_up: float = 60.0, grace: float = 15.0,
+                 on_event: Optional[Callable[[], None]] = None) -> None:
         self._app = adsk.core.Application.get()
+        self._on_event = on_event   # also run on each check (the active hub can change with the document)
         self._ui = ui
         self._tasks = tasks
         self._gate = gate
@@ -110,6 +112,8 @@ class GateWatcher:
 
         ``polled`` is True when the fallback poll asked, False when a Fusion event did; an event holds the poll off for ``grace``."""
         try:
+            if self._on_event:
+                self._on_event()
             self._gate.refresh()
             waiting = self._loading()
         except Exception:  # noqa: BLE001 - never raise into Fusion

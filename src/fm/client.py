@@ -14,6 +14,7 @@ import urllib.request
 from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 
 from ..auth.auth_service import AuthService
+from ..config.hub import tenant_code
 from ..config.models import ConnectionSettings
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
@@ -94,7 +95,10 @@ class FmClient:
 
     @property
     def base_url(self) -> str:
-        """API root, e.g. https://acme.autodeskplm360.net."""
+        """API root, e.g. https://acme.autodeskplm360.net. The tenant must be a plain host name label, so the access token
+        can only go to a ``*.autodeskplm360.net`` host."""
+        if not self.tenant or tenant_code(self.tenant) != self.tenant:
+            raise FmApiError("No usable Fusion hub is active; open the hub of your Fusion Manage tenant.")
         return f"https://{self.tenant}{FM_HOST_SUFFIX}"
 
     @staticmethod

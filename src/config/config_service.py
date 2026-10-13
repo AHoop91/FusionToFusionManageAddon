@@ -8,6 +8,7 @@ can show the option without it being usable.
 
 import json
 import os
+from dataclasses import replace
 from typing import Callable, List, Optional
 
 from ..core.constants import ADDIN_NAME
@@ -37,8 +38,9 @@ def config_path() -> str:
 class ConfigService:
     """Single source of truth for configuration."""
 
-    def __init__(self, path: Optional[str] = None) -> None:
+    def __init__(self, path: Optional[str] = None, tenant: Optional[Callable[[], str]] = None) -> None:
         self._path = path or config_path()
+        self._tenant = tenant or (lambda: "")   # the tenant of the active Fusion hub: the only place a tenant comes from
         self._config = self._read()
         self._listeners: List[Callable[[], None]] = []
 
@@ -81,7 +83,7 @@ class ConfigService:
         Local settings are only validated when local mode is active so users
         can switch modes without being blocked by unfinished fields.
         """
-        problems = local.validate() if mode == MODE_LOCAL else []
+        problems = local.validate(require_tenant=False) if mode == MODE_LOCAL else []
         problems += workspaces.validate()
         if problems:
             return problems
@@ -99,7 +101,7 @@ class ConfigService:
         """Settings the rest of the add-in should use for the active mode."""
         if self._config.mode == MODE_COMPANY:
             return self._load_company_settings()
-        return self._config.local
+        return replace(self._config.local, tenant=self._tenant())
 
     def _load_company_settings(self) -> ConnectionSettings:
         """PLACEHOLDER: load shared company config from ``company_source``.

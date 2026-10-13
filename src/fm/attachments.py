@@ -106,7 +106,8 @@ class AttachmentService:
                                          timeout=DOWNLOAD_TIMEOUT_SECONDS)
         folder = os.path.join(tempfile.gettempdir(), DOWNLOAD_FOLDER, f"{item_id}_{attachment_id}")
         os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, _UNSAFE.sub("_", name) or f"attachment_{attachment_id}")
+        # Windows drops trailing dots and spaces, so "a.exe." is saved as "a.exe": strip them to see the real extension.
+        path = os.path.join(folder, _UNSAFE.sub("_", name).strip(" .") or f"attachment_{attachment_id}")
         with open(path, "wb") as handle:
             handle.write(body)
         log.info("Downloaded attachment %s of item %s (%d bytes) to %s", attachment_id, item_id, len(body), path)

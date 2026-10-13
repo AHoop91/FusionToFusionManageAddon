@@ -8,9 +8,9 @@ title: Troubleshooting and Limitations
 
 | Message | Cause and fix |
 |---|---|
-| **Client ID is required.** / **Tenant is required.** / **Callback port must be between 1024 and 65535.** / **At least one scope is required.** | Complete the **Connection** tab and save. |
+| **Client ID is required.** / **Callback port must be between 1024 and 65535.** / **At least one scope is required.** | Complete the **Connection** tab and save. |
+| **No usable Fusion hub is active; open the hub of your Fusion Manage tenant.** | The tenant is the name of the hub open in Fusion. Open that hub (its name must be only letters, digits and hyphens) and try again. |
 | **Callback port 8765 is unavailable: …** | Another program is using the port. Choose a different **Callback port**, register the new callback URL on your APS application, and sign in again. |
-| **State mismatch; sign-in rejected.** | The browser returned a redirect that does not belong to the sign-in you started, for example from an old tab. Close old sign-in tabs and click **Sign in** again. |
 | **Sign-in timed out.** | No redirect arrived within 180 seconds. Sign in again and complete the browser step promptly. |
 | **Sign-in cancelled.** | You clicked **Cancel**. |
 | **Sign-in already in progress.** | Wait for the current attempt to end or cancel it. |
@@ -34,7 +34,7 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 | Message | Cause and fix |
 |---|---|
 | **Insufficient permissions to publish to the Items workspace. Missing: …** | Your Fusion Manage user lacks the named permissions. Ask your administrator. Publishing needs View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM. |
-| **Could not check your permissions in Fusion Manage: …** | The permissions request failed for a reason other than being refused: check the tenant name, your network and sign-in. |
+| **Could not check your permissions in Fusion Manage: …** | The permissions request failed for a reason other than being refused: check the active hub, your network and sign-in. |
 | **Set the Items workspace ID in Settings first.** | Configure the Items workspace. |
 | **Could not find the Data Model id of the open design.** | The design is not saved to the cloud, or its Data Model reference is not available yet. Save the design and try again. |
 | **n items match … Choose one.** (status **Choose item**) | More than one Fusion Manage item has this item number. Pick the right one in the Details Panel. |

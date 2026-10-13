@@ -23,6 +23,7 @@ for _name in [m for m in sys.modules if m == "src" or m.startswith("src.")]:
 
 from src.auth.auth_service import AuthService  # noqa: E402
 from src.config.config_service import ConfigService  # noqa: E402
+from src.config.hub import HubTenant  # noqa: E402
 from src.core.logging_setup import get_logger, shutdown_logging  # noqa: E402
 from src.ui import drawing_source  # noqa: E402
 from src.ui.actions import register_actions  # noqa: E402
@@ -120,7 +121,9 @@ def run(context) -> None:
         bridge = MessageBridge()
         _tasks = UiThread()
         badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, JOBS_TOOLTIP, os.path.join(_ADDIN_DIR, "resources"))
-        config, auth = ConfigService(), AuthService()
+        hub = HubTenant()
+        hub.refresh()
+        config, auth = ConfigService(tenant=hub.current), AuthService()
         register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks))
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
@@ -185,7 +188,8 @@ def run(context) -> None:
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
         _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), config.items_setup_problem, drawing_source.problem)
-        _watcher = GateWatcher(_ui, _tasks, _gate, lambda: drawing_source.active_drawing() is not None and bool(drawing_source.problem()))
+        _watcher = GateWatcher(_ui, _tasks, _gate, lambda: drawing_source.active_drawing() is not None and bool(drawing_source.problem()),
+                               on_event=hub.refresh)
         _watcher.check()
         config.on_change(lambda: _tasks.post(_gate.refresh))   # saving the settings can come from any thread
         log.info("Add-in started")

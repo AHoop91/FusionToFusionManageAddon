@@ -143,7 +143,6 @@ Open **Manage ▸ Item Management ▸ Administration ▸ Preferences**. Signed o
 | Setting | What to enter |
 |---|---|
 | **Client ID** | The Client ID from [stage 2.5](#25-copy-the-client-id). |
-| **Tenant** | Your Fusion Manage tenant name, for example `mycompany`. The add-in connects to `https://<tenant>.autodeskplm360.net`. |
 | **Callback port** | The port in your callback URL. Default `8765`; allowed range 1024–65535. |
 | **Scopes** | Leave as `data:read data:write data:search`. |
 
@@ -153,10 +152,12 @@ The panel shows the callback URL it will use. It must be registered on your APS 
 http://localhost:8765/callback
 ```
 
-A Client ID, a Tenant, a valid port and at least one scope are required before you can sign in. Click **Save**.
+There is no tenant setting. The add-in uses the name of the hub that is open in Fusion as the tenant, and connects to `https://<hub name>.autodeskplm360.net`, so open your Fusion Manage hub before you sign in. A hub whose name is not a plain tenant name (letters, digits and hyphens) cannot be used.
+
+A Client ID, a valid port and at least one scope are required before you can sign in. Click **Save**.
 
 !!! example "Screenshot placeholder: Preferences, Connection tab"
-    **Show:** Client ID, Tenant, Callback port and Scopes filled in, with the callback URL shown.
+    **Show:** Client ID, Callback port and Scopes filled in, with the callback URL shown.
 
     Save the image as `docs/images/preferences-connection.png`, then replace this box with `![Preferences, Connection tab](../images/preferences-connection.png)`.
 

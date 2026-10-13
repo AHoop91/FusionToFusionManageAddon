@@ -22,7 +22,7 @@ class ConnectionSettings:
     """Everything needed to sign in to and address Fusion Manage."""
 
     client_id: str = ""
-    tenant: str = ""
+    tenant: str = ""   # not saved: ``ConfigService.effective_settings`` fills it from the active Fusion hub
     callback_port: int = DEFAULT_CALLBACK_PORT
     scopes: List[str] = field(default_factory=lambda: list(DEFAULT_SCOPES))
 
@@ -31,13 +31,16 @@ class ConnectionSettings:
         """Redirect URI; must be registered on the APS application."""
         return f"http://localhost:{self.callback_port}/callback"
 
-    def validate(self) -> List[str]:
-        """Return human-readable problems; empty list means valid."""
+    def validate(self, require_tenant: bool = True) -> List[str]:
+        """Return human-readable problems; empty list means valid.
+
+        ``require_tenant`` is False for the saved settings, which hold no tenant (it is the active hub's).
+        """
         problems = []
         if not self.client_id.strip():
             problems.append("Client ID is required.")
-        if not self.tenant.strip():
-            problems.append("Tenant is required.")
+        if require_tenant and not self.tenant.strip():
+            problems.append("No usable Fusion hub is active; open the hub of your Fusion Manage tenant.")
         if not (1024 <= int(self.callback_port) <= 65535):
             problems.append("Callback port must be between 1024 and 65535.")
         if not self.scopes:
@@ -45,7 +48,9 @@ class ConnectionSettings:
         return problems
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        del data["tenant"]
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ConnectionSettings":
@@ -58,7 +63,6 @@ class ConnectionSettings:
         scopes = data.get("scopes")
         return cls(
             client_id=str(data.get("client_id", "")).strip(),
-            tenant=str(data.get("tenant", "")).strip(),
             callback_port=port,
             scopes=[str(s) for s in scopes] if isinstance(scopes, list) and scopes
             else list(DEFAULT_SCOPES),

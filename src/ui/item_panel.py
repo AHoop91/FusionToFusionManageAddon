@@ -49,7 +49,9 @@ log = get_logger("item_panel")
 
 LINE_ID = "MfgToFm_MenuLine"   # the line above the add-in's entries in the right-click menu
 LOOKUPS_KEPT = 200   # answers held for the page to read before the oldest finished ones are dropped
-RUNNABLE = (".exe", ".com", ".bat", ".cmd", ".msi", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".scr", ".lnk", ".jar", ".hta", ".reg", ".dll", ".cpl", ".py", ".sh", ".app", ".command")
+# Only these are opened with their program; any other attachment (a program, a script, a macro document, a shortcut, a web page) has its folder shown.
+SAFE_TO_OPEN = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".txt", ".csv", ".md",
+                ".docx", ".xlsx", ".pptx", ".step", ".stp", ".iges", ".igs", ".dxf", ".dwg", ".stl", ".3mf", ".obj", ".f3d", ".f3z")
 
 
 class ItemNotFound(Exception):
@@ -133,8 +135,10 @@ def _active_ref() -> DesignRef:
 
 
 def _open_file(path: str) -> None:
-    """Open a file with its default program; a program or script is not run, its folder is shown instead."""
-    if os.path.splitext(path)[1].lower() in RUNNABLE:
+    """Open a file with its default program if it is a known safe type; anything else is not run, its folder is shown instead.
+
+    Windows ignores a trailing dot or space ("a.exe." is "a.exe"), so they are left out when reading the extension."""
+    if os.path.splitext(path.rstrip(" ."))[1].lower() not in SAFE_TO_OPEN:
         path = os.path.dirname(path)
     if hasattr(os, "startfile"):
         os.startfile(path)   # Windows

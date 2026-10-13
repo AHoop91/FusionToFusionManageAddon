@@ -6,6 +6,7 @@ loopback interface only, receives that one request, validates the ``state``
 value (CSRF protection) and hands the authorization code back to the caller.
 """
 
+import secrets
 import threading
 import time
 import urllib.parse
@@ -55,9 +56,12 @@ class CallbackServer:
                     return
 
                 params = urllib.parse.parse_qs(parsed.query)
-                if params.get("state", [""])[0] != state:
-                    result["error"] = "State mismatch; sign-in rejected."
-                elif "error" in params:
+                if not secrets.compare_digest(params.get("state", [""])[0].encode(), state.encode()):
+                    # Not our redirect (another program or a web page): ignore it and keep waiting, so it cannot cancel the sign-in.
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                if "error" in params:
                     result["error"] = params.get("error_description", params["error"])[0]
                 else:
                     result["code"] = params.get("code", [""])[0] or None
