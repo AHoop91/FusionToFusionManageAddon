@@ -11,7 +11,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/AHoop91/FusionToFusionManageAddon">
-    <img src="resources/AddInIcon.svg" alt="Logo" width="80" height="80">
+    <img src="resources/AddInIcon.svg" alt="Logo" width="200" height="200">
   </a>
 
   <h3 align="center">Fusion Manage Item Management</h3>
@@ -122,7 +122,7 @@ The add-in adds a **Fusion Manage** tab to the ribbon in the **Design** and **Dr
 |---|---|---|
 | Item | Open Fusion Manage Item | Show the item of the selected component, or of the open design or drawing |
 | Item | Publish Fusion Manage Item (Design) | Preview and publish the open design |
-| Item | Upload Drawing Representation (Drawing) | Attach a PDF of the open drawing |
+| Item | Upload Drawing PDF (Drawing) | Attach a PDF of the open drawing |
 | Administration | Job Queue | See publishes that are waiting, running and finished |
 | Administration | Preferences | Sign in, set the connection and the workspace mapping |
 
