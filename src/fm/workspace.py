@@ -1,4 +1,7 @@
-"""Fusion Manage workspace validation.
+"""Fusion Manage workspace listing and validation.
+
+``GET /api/v3/workspaces`` lists the workspaces; the ones whose ``type`` is the
+revision controlled workspace type are offered for the Items workspace.
 
 Validating a workspace id means:
 
@@ -24,6 +27,9 @@ log = get_logger("fm.workspace")
 OPTIONS_PAGE = 100   # picklist options requested per call
 MAX_OPTIONS = 2000   # stop reading a picklist after this many options
 READERS = 4          # picklists read at once
+WORKSPACES_PAGE = 100   # workspaces requested per call
+WORKSPACES_BULK = "application/vnd.autodesk.plm.workspaces.bulk+json"
+REVISION_CONTROLLED_TYPE ="6"   # /api/v3/workspace-types/6: "Revision Controlled Workspace"
 
 
 class WorkspaceService:
@@ -31,6 +37,35 @@ class WorkspaceService:
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
+
+    def revision_controlled(self) -> List[Dict[str, str]]:
+        """The tenant's revision controlled workspaces as ``[{id, name}]``, sorted by name.
+
+        Raises ``AuthError`` or ``FmApiError`` when the list cannot be read.
+        """
+        found: List[Dict[str, str]] = []
+        seen: List[str] = []
+        offset = 0
+        while True:
+            data = self._client.get_json(f"{WORKSPACES}?offset={offset}&limit={WORKSPACES_PAGE}", WORKSPACES_BULK)   # plain JSON leaves out each workspace's name and type
+            rows = data.get("items") if isinstance(data, dict) else None
+            if not isinstance(rows, list) or not rows:
+                break
+            for row in rows:
+                if not isinstance(row, dict) or row.get("deleted") or row.get("controlled"):
+                    continue   # a controlled workspace (Components, Drawings) is not one that holds items
+                workspace_id = last_segment(row.get("__self__"))
+                kind = row.get("type")   # a link, or an object holding one
+                kind_id = last_segment(kind.get("link") or kind.get("__self__") if isinstance(kind, dict) else kind)
+                seen.append(f"{row.get('name')}={kind_id or kind!r}")
+                if workspace_id and kind_id == REVISION_CONTROLLED_TYPE:
+                    found.append({"id": workspace_id, "name": str(row.get("name") or workspace_id)})
+            offset += len(rows)
+            if offset >= int(data.get("totalCount") or 0):
+                break
+        log.info("Workspace types: %s; revision controlled: %d", seen, len(found))
+        found.sort(key=lambda w: w["name"].lower())
+        return found
 
     def validate(self, kind: WorkspaceKind, workspace_id: str) -> Dict[str, Any]:
         """Return ``{kind, valid, message, ...}`` for one workspace id; a valid one also carries its fields and picklists."""

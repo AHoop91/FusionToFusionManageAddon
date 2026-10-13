@@ -34,7 +34,6 @@ class DefaultMapping:
 
     source: str
     fm_field_id: str
-    match_key: bool = False
 
 
 @dataclass(frozen=True)
@@ -49,17 +48,12 @@ class SourceField:
     # The Data Model's own name for the property, where it differs from the label shown in Settings.
     data_model_name: str = ""
 
-    @property
-    def can_match(self) -> bool:
-        """Only property values can identify an existing item."""
-        return self.kind == "property"
-
 
 WORKSPACE_KINDS = [
     # The item BOM is always published, so its permissions are required.
     WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.",
                   ("view_items", "add_items", "edit_items", "view_bom", "add_to_bom", "edit_bom"),
-                  (DefaultMapping("part_number", "NUMBER", True), DefaultMapping("name", "TITLE"),
+                  (DefaultMapping("part_number", "NUMBER"), DefaultMapping("name", "TITLE"),
                    DefaultMapping("description", "DESCRIPTION"), DefaultMapping("thumbnail", "IMAGE"),
                    DefaultMapping("material", "MATERIAL"), DefaultMapping("custom:Type", "TYPE"),
                    DefaultMapping("physical:Height", "HEIGHT"), DefaultMapping("physical:Width", "WIDTH"),
@@ -110,30 +104,21 @@ def data_model_name(source: str) -> str:
     return (known.data_model_name or known.label) if known and known.kind == "property" else ""
 
 
-def can_match(source: str) -> bool:
-    """Hub properties are property values, so they can be the match key."""
-    field_def = _SOURCES_BY_ID.get(source)
-    return field_def.can_match if field_def else source.startswith((CUSTOM_PREFIX, BASE_PREFIX))   # a physical property is a measurement, never the key
-
-
 @dataclass
 class FieldMapping:
     """One mapping row: a source field fills a Fusion Manage field."""
 
     source: str = ""
     fm_field_id: str = ""
-    # The match key identifies an existing item so it is updated, not duplicated.
-    match_key: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"source": self.source, "fm_field_id": self.fm_field_id, "match_key": self.match_key}
+        return {"source": self.source, "fm_field_id": self.fm_field_id}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FieldMapping":
         return cls(
             source=str(data.get("source", "")).strip(),
             fm_field_id=str(data.get("fm_field_id", "")).strip(),
-            match_key=bool(data.get("match_key", False)),
         )
 
 
@@ -164,7 +149,7 @@ class WorkspaceConfig:
     component_field: str = ""
 
     def setup_problem(self, title: str) -> str:
-        """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings with a key."""
+        """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings."""
         if not self.workspace_id:
             return f"The {title} workspace ID is not set."
         problems = self.validate(title)
@@ -181,16 +166,9 @@ class WorkspaceConfig:
                 problems.append(f"{title}: choose a source field (and name any custom property) for every mapping.")
             elif row.source in seen:
                 problems.append(f"{title}: source field '{row.source}' is mapped twice.")
-            elif row.match_key and not can_match(row.source):
-                problems.append(f"{title}: '{row.source}' cannot be the match key.")
             seen.add(row.source)
             if not row.fm_field_id:
                 problems.append(f"{title}: enter a Fusion Manage field ID for every mapping.")
-        keys = sum(1 for row in self.mappings if row.match_key)
-        if keys > 1:
-            problems.append(f"{title}: only one mapping can be the match key.")
-        elif keys == 0 and self.workspace_id:
-            problems.append(f"{title}: tick Key on one mapping so existing items in Fusion Manage can be matched.")
         # A Fusion Manage field can be filled once, by a mapping or a static value.
         targets = [row.fm_field_id for row in self.mappings if row.fm_field_id]
         if self.component_field:
@@ -261,8 +239,7 @@ def catalog() -> Dict[str, Any]:
         "kinds": [{"id": k.kind_id, "title": k.title, "description": k.description, "component_lookup": k.component_lookup,
                    "default_mappings": [asdict(m) for m in k.default_mappings]}
                   for k in WORKSPACE_KINDS],
-        "source_fields": [{"id": f.field_id, "label": f.label, "kind": f.kind,
-                           "can_match": f.can_match} for f in SOURCE_FIELDS],
+        "source_fields": [{"id": f.field_id, "label": f.label, "kind": f.kind} for f in SOURCE_FIELDS],
         "custom_prefix": CUSTOM_PREFIX,
         "base_prefix": BASE_PREFIX,
         "physical_prefix": PHYSICAL_PREFIX,

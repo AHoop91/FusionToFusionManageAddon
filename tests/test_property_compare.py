@@ -22,7 +22,7 @@ class DataModelNameTests(unittest.TestCase):
 
 
 class CompareTests(unittest.TestCase):
-    mappings = [FieldMapping("part_number", "NUMBER", True), FieldMapping("material", "MATERIAL")]
+    mappings = [FieldMapping("part_number", "NUMBER"), FieldMapping("material", "MATERIAL")]
     properties = [{"name": "partNumber", "value": "PN-1"}, {"name": "materialName", "value": "Steel"},
                   {"name": "tipPartNumber", "value": "PN-1"}]
     summary = {"part_number": "PN-1", "description": ""}

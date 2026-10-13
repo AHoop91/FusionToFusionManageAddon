@@ -112,8 +112,8 @@ You normally set it up once, then share it with colleagues by export and import 
 
 The add-in currently works with one workspace kind, **Items** ("Manufacturing items created in Fusion Manage"). On the **Workspaces** tab you will find a card for it with:
 
-1. **Items Workspace ID**: the numeric ID of the workspace in your tenant, for example `83`.
-2. **Validate**: checks the workspace and loads its field list so the pickers below can show real field names. The mapping controls stay disabled until the workspace validates (a tick appears next to the ID).
+1. **Items Workspace**: a drop-down of the revision controlled workspaces in your tenant. Choose the one that holds your items by name.
+2. **Validation**: happens automatically when you pick a workspace or open the tab. It checks the workspace and loads its field list so the pickers below can show real field names. The mapping controls stay disabled until the workspace validates (a tick appears next to the workspace).
 3. **Component linking**: optional, see below.
 4. **Field mapping**: which Data Model property fills which Fusion Manage field. **Add default fields** loads the standard set (see [Default fields](#default-fields)).
 5. **Static values**: fields set to a fixed value on every published item.
@@ -121,7 +121,7 @@ The add-in currently works with one workspace kind, **Items** ("Manufacturing it
 Click **Save** when you are done. Saving is refused while the settings have problems, and the message says what to fix.
 
 !!! example "Screenshot placeholder: Preferences, Workspaces tab with a validated Items workspace"
-    **Show:** The Items card with the workspace ID, the tick after Validate, and the mapping sections.
+    **Show:** The Items card with the chosen workspace with its validation tick, and the mapping sections.
 
     Save the image as `docs/images/workspaces-tab.png`, then replace this box with `![Preferences, Workspaces tab with a validated Items workspace](../images/workspaces-tab.png)`.
 
@@ -133,7 +133,6 @@ Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Man
 |---|---|
 | **Fusion field** | The source: a Data Model property. |
 | **Manage field** | The Fusion Manage field it fills, shown with its title and ID. |
-| **Key** | The *match key*: the one mapping used to find an existing item so it is updated rather than duplicated. |
 
 #### Available sources
 
@@ -146,7 +145,6 @@ Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Man
 - The workspace ID must be a number.
 - Every row needs both a source and a Fusion Manage field.
 - A source can be mapped only once, and a Fusion Manage field can be filled only once, whether by a mapping, a static value or the component-linking field.
-- Exactly one mapping must be the **Key**. Only property values can be the key; the thumbnail and physical properties cannot.
 
 #### Picklist and number fields
 
@@ -168,7 +166,7 @@ If the target field is a picklist, the add-in looks up the picklist's options an
 
 | # | Data Model source | Fusion Manage field ID | Notes |
 |---|---|---|---|
-| 1 | Part number | `NUMBER` | The **Key**: how an existing item is found and updated rather than duplicated |
+| 1 | Part number | `NUMBER` | Existing items are found by their item number |
 | 2 | Name | `TITLE` | |
 | 3 | Description | `DESCRIPTION` | |
 | 4 | Thumbnail | `IMAGE` | The component's image, sent as a file |
@@ -191,7 +189,7 @@ Each default writes to a Fusion Manage field **by its field ID**, so the workspa
 Check the result after loading: the **Mapped fields** list should show all ten rows. If your workspace has been customised, add or correct the missing rows by hand.
 
 !!! example "Screenshot placeholder: Mapped fields after Add default fields"
-    **Show:** The ten default mappings in the Mapped fields list, with the Key on Part number.
+    **Show:** The ten default mappings in the Mapped fields list.
 
     Save the image as `docs/images/mapped-fields-defaults.png`, then replace this box with `![Mapped fields after Add default fields](../images/mapped-fields-defaults.png)`.
 
@@ -308,4 +306,4 @@ If your Items workspace has a field that links an item to a record in the Fusion
 
 ### When the buttons light up
 
-The ribbon and context-menu buttons, other than **Preferences** and **Export**, stay disabled until the Items workspace is usable: a workspace ID is set, the mappings are valid, and a match key is chosen. The tooltip says what is still missing. The **Export** window opens either way; it turns off only its **Item** destination, and says why.
+The ribbon and context-menu buttons, other than **Preferences** and **Export**, stay disabled until the Items workspace is usable: a workspace ID is set, and the mappings are valid. The tooltip says what is still missing. The **Export** window opens either way; it turns off only its **Item** destination, and says why.

@@ -1,9 +1,8 @@
 /**
  * Workspaces tab: one card with a tab per Fusion Manage workspace ("Items", ...).
  *
- * Each tab stacks that workspace's sections: Workspace ID with Validate, then Field
- * mapping (source field -> Fusion Manage field id, one row optionally the
- * match key). Kinds and source fields come from the catalog Python
+ * Each tab stacks that workspace's sections: Workspace picker (validated on choosing), then Field
+ * mapping (source field -> Fusion Manage field id). Kinds and source fields come from the catalog Python
  * sends, so a new workspace only needs a Python-side entry.
  */
 (function (ns) {
@@ -86,6 +85,56 @@
     },
   };
 
+  // ---- Workspace picker: the tenant's revision controlled workspaces -------
+
+  let workspaceList = [];     // [{id, name}]
+  let workspacesState = 'idle';   // idle | loading | ready | error
+  let workspacesTip = '';     // why the load failed, shown as a tooltip and in the empty list
+
+  const workspaceCfg = {
+    valueClass: 'ws-id',
+    placeholder: 'Choose a workspace...',
+    search: 'Search workspaces...',
+    tip: function () { return workspacesTip; },
+    empty: function () {
+      if (workspacesState === 'loading') return 'Loading workspaces...';
+      return workspacesTip || 'No revision controlled workspaces found';
+    },
+    label: function (value) {
+      const found = workspaceList.filter(function (w) { return w.id === value; })[0];
+      return found ? found.name : value;
+    },
+    groups: function (current) {
+      const items = workspaceList.map(function (w) { return { value: w.id, label: w.name }; });
+      // A saved workspace missing from the list must still be shown.
+      if (current && !workspaceList.some(function (w) { return w.id === current; })) {
+        items.push({ value: current, label: current });
+      }
+      return items.length ? [{ title: 'Revision Controlled Workspaces', items: items }] : [];
+    },
+  };
+
+  function onWorkspaces(r) {
+    const result = r.ok ? r.result : { pending: false, ok: false, message: r.error };
+    if (result.pending) {
+      setTimeout(function () { ns.bridge.send('list_workspaces_status', {}); }, POLL_MS);
+      return;
+    }
+    workspacesState = result.ok ? 'ready' : 'error';
+    workspaceList = result.workspaces || [];
+    workspacesTip = result.ok ? '' : 'Could not load the workspaces: ' + (result.message || 'unknown error');
+    document.querySelectorAll('.ws-id').forEach(function (input) {
+      refreshPicker(input.parentNode, workspaceCfg);   // shows names for saved ids
+    });
+  }
+
+  /** Ask Python for the revision controlled workspaces; called each time the tab opens. */
+  function loadWorkspaces() {
+    if (workspacesState === 'loading') return;
+    workspacesState = 'loading';
+    ns.bridge.send('list_workspaces', {});
+  }
+
   // ---- FM field picker: the workspace's fields, loaded at validation ------
 
   const fmFields = {};        // kindId -> [{id, title, type}]
@@ -104,7 +153,7 @@
     empty: function (wrap) {
       const kind = kindOf(wrap);
       if ((fmFields[kind] || []).length) return 'No matching fields';
-      return fmFieldsError[kind] || 'No fields loaded. Validate the workspace first.';
+      return fmFieldsError[kind] || 'No fields loaded. Choose a workspace first.';
     },
     taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap)); },
     label: function (value) {
@@ -173,7 +222,7 @@
     empty: function (wrap) {
       const kind = kindOf(wrap);
       if ((fmFields[kind] || []).length) return 'No field links to the component picklist';
-      return fmFieldsError[kind] || 'No fields loaded. Validate the workspace first.';
+      return fmFieldsError[kind] || 'No fields loaded. Choose a workspace first.';
     },
     taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field'); },
     label: fmFieldCfg.label,
@@ -210,17 +259,6 @@
     ns.bridge.send('list_custom_properties', {});
   }
 
-  /** Files cannot be the match key. */
-  function syncRow(row) {
-    const value = row.querySelector('.ws-source').value;
-    const field = catalog.source_fields.filter(function (f) { return f.id === value; })[0];
-    const canMatch = !field || field.can_match !== false;
-    const radio = row.querySelector('.ws-match');
-    radio.disabled = !canMatch;
-    if (!canMatch) radio.checked = false;
-    row.querySelector('.ws-key').style.opacity = canMatch ? '' : '0.4';
-  }
-
   /** A round button with a drawn X, so it looks the same everywhere. */
   function removeButton() {
     const button = el('button', 'ws-remove');
@@ -237,26 +275,11 @@
     row.appendChild(el('span', 'ws-arrow', '→'));
     row.appendChild(makePicker(fmFieldCfg, mapping.fm_field_id || ''));
 
-    const key = el('label', 'ws-key');
-    key.title = 'Match key: identifies an existing item so it is updated, not duplicated';
-    const radio = el('input', 'ws-match');
-    radio.type = 'checkbox';   // square box, but only one row can hold the key
-    radio.addEventListener('change', function () {
-      if (!radio.checked) return;
-      const panel = row.closest('.ws-kind');
-      if (panel) panel.querySelectorAll('.ws-match').forEach(function (other) { if (other !== radio) other.checked = false; });
-    });
-    radio.checked = !!mapping.match_key;
-    key.appendChild(radio);
-    row.appendChild(key);
-
     const remove = removeButton();
     remove.type = 'button';
     remove.title = 'Remove mapping';
     remove.addEventListener('click', function () { row.remove(); });
     row.appendChild(remove);
-    picker.addEventListener('pick', function () { syncRow(row); });
-    syncRow(row);
     return row;
   }
 
@@ -320,8 +343,6 @@
     status.textContent = text;
     status.className = 'ws-status ' + (text ? 'error' : 'muted');
     card.querySelector('.ws-tick').hidden = !valid;
-    // Nothing to validate again until the id changes (or it is empty).
-    card.querySelector('.ws-validate').disabled = valid || !card.querySelector('.ws-id').value.trim();
   }
 
   /** Show or hide the bouncing-ball overlay while Python checks the workspace. */
@@ -337,8 +358,16 @@
   /** Abandon an in-flight validation (id edited, or the call itself failed). */
   function stopBusy(card, kindId) {
     delete polling[kindId];
-    card.querySelector('.ws-validate').textContent = 'Validate';
     setBusy(card, false);
+  }
+
+  /** Ask Python to check the workspace chosen on a card. */
+  function validateKind(card, kindId) {
+    const workspaceId = card.querySelector('.ws-id').value.trim();
+    if (!workspaceId) return;
+    setBusy(card, true);
+    polling[kindId] = workspaceId;
+    ns.bridge.send('validate_workspace', { kind: kindId, workspace_id: workspaceId });
   }
 
   /** Called with Python's answer to `validate_workspace` / `_status`. */
@@ -383,7 +412,7 @@
   }
 
   // ---- Workspace sections -------------------------------------------------
-  // A workspace's settings are stacked sections: Workspace (id + Validate), then
+  // A workspace's settings are stacked sections: Workspace (picker), then
   // Field mapping. Gated sections sit in `fieldset.ws-locked`, which validation enables.
   // The id row is never gated.
 
@@ -397,33 +426,27 @@
     return box;
   }
 
+  /** A line under a heading saying what the section is for. */
+  function describe(text) { return el("p", "ws-sub muted", text); }
+
   function hint() {
-    return el('p', 'ws-hint muted', 'Validate the workspace to enable these settings.');
+    return el('p', 'ws-hint muted', 'Choose a workspace to enable these settings.');
   }
 
-  /** Workspace id input with its Validate button and status line. */
+  /** Workspace picker with its status line. */
   function buildIdSection(kind, config) {
     const section = el('div', 'ws-section');
-    section.appendChild(el('label', 'ws-id-label', kind.title + ' Workspace ID'));
+    section.appendChild(el('label', 'ws-id-label', 'Workspace'));
+    section.appendChild(describe('The Fusion Manage workspace your published items are created in. Only revision controlled workspaces are listed.'));
     const idRow = el('div', 'ws-id-row');
-    const idInput = el('input', 'ws-id');
-    idInput.type = 'text';
-    idInput.inputMode = 'numeric';
-    idInput.autocomplete = 'off';
-    idInput.spellcheck = false;
-    idInput.placeholder = 'e.g. 83';
-    idInput.value = config.workspace_id || '';
-    // The input sits in a wrapper so a green tick can overlay its right edge.
+    // The picker sits in a wrapper so a green tick can overlay its right edge.
     const wrap = el('div', 'ws-id-wrap');
-    wrap.appendChild(idInput);
+    wrap.appendChild(makePicker(workspaceCfg, config.workspace_id || ''));
     const tick = el('span', 'ws-tick', '✓');
     tick.title = 'Workspace validated';
     tick.hidden = true;
     wrap.appendChild(tick);
     idRow.appendChild(wrap);
-    const validate = el('button', 'btn btn-secondary ws-validate', 'Validate');
-    validate.type = 'button';
-    idRow.appendChild(validate);
     section.appendChild(idRow);
     section.appendChild(el('p', 'ws-status muted'));
     return section;
@@ -453,6 +476,7 @@
   function buildComponentSection(kind, config) {
     const section = el('div', 'ws-section');
     section.appendChild(heading('Component linking'));
+    section.appendChild(describe('Links each published item to its component in Fusion Manage.'));
     section.appendChild(hint());
     const block = el('div', 'ws-block');
     block.appendChild(blockTitle('Component field',
@@ -468,6 +492,7 @@
     const head = el('div', 'ws-section-head');   // heading on the left, Add default fields on the right
     head.appendChild(heading('Field mapping'));
     section.appendChild(head);
+    section.appendChild(describe('Choose which Fusion data fills which Fusion Manage field on each published item.'));
     section.appendChild(hint());
 
     const rows = el('div', 'ws-rows');
@@ -475,7 +500,7 @@
     const add = el('button', 'ws-add-btn', '+ Add field mapping');
     add.type = 'button';
     add.addEventListener('click', function () {
-      rows.appendChild(mappingRow(kind.id, { source: '', fm_field_id: '', match_key: false }));
+      rows.appendChild(mappingRow(kind.id, { source: '', fm_field_id: '' }));
     });
     const defaults = el('button', 'btn btn-secondary ws-defaults ws-lock-btn', 'Add default fields');
     defaults.type = 'button';
@@ -487,15 +512,16 @@
         const known = fmFields[kind.id] || [];
         (kind.default_mappings || []).forEach(function (m) {
           if (known.length && !known.some(function (f) { return f.id === m.fm_field_id; })) return;
-          rows.appendChild(mappingRow(kind.id, { source: m.source, fm_field_id: m.fm_field_id, match_key: m.match_key }));
+          rows.appendChild(mappingRow(kind.id, { source: m.source, fm_field_id: m.fm_field_id }));
         });
       });
     });
     head.appendChild(defaults);
     const mapping = el('div', 'ws-block');
     mapping.appendChild(blockTitle('Mapped fields',
-      'Maps each Fusion field to a field in the Fusion Manage workspace. Select Key on the one mapping used to identify existing items, so a matching item is updated rather than duplicated.'));
-    mapping.appendChild(columnHeads(['Fusion field', '', 'Manage field', 'Key', ''], 'ws-cols-map'));
+      'Maps each Fusion field to a field in the Fusion Manage workspace. Existing items are found by their item number.'));
+    mapping.appendChild(describe('Each row copies one Fusion value into a Manage field.'));
+    mapping.appendChild(columnHeads(['Fusion field', '', 'Manage field', ''], 'ws-cols-map'));
     mapping.appendChild(rows);
     mapping.appendChild(add);
 
@@ -508,6 +534,7 @@
     });
     const fixed = el('div', 'ws-block');
     fixed.appendChild(blockTitle('Static values', 'Sets a Fusion Manage field to the same fixed value on every published item, regardless of the design.'));
+    fixed.appendChild(describe('Fields set to the same fixed value on every published item.'));
     fixed.appendChild(columnHeads(['Manage field', '', 'Value', ''], 'ws-cols-static'));
     fixed.appendChild(statics);
     fixed.appendChild(addStatic);
@@ -539,30 +566,25 @@
     busy.appendChild(el('p', 'muted', 'Validating workspace...'));
     panel.appendChild(busy);
 
-    // Wiring: changing the id invalidates; Validate asks Python.
+    // Wiring: choosing a workspace invalidates, then asks Python to validate.
     const idInput = panel.querySelector('.ws-id');
-    const validate = panel.querySelector('.ws-validate');
     setValid(panel, !!validated[kind.id] && validated[kind.id] === idInput.value.trim(), '');
-    idInput.addEventListener('input', function () {
+    idInput.parentNode.addEventListener('pick', function () {
       delete validated[kind.id];
       stopBusy(panel, kind.id);
       setValid(panel, false, '');
-    });
-    validate.addEventListener('click', function () {
-      validate.disabled = true;
-      validate.textContent = 'Validating...';
-      setBusy(panel, true);
-      polling[kind.id] = idInput.value.trim();
-      ns.bridge.send('validate_workspace', { kind: kind.id, workspace_id: polling[kind.id] });
+      validateKind(panel, kind.id);   // a new choice is checked at once
     });
     return panel;
   }
 
   /** Build the card: a tab strip of workspace kinds over their panels. */
   function buildCard(kinds, settings) {
-    const card = el('section', 'ws-card');
+    const card = el('section', 'card ws-card');
+    if (kinds.length === 1) card.appendChild(el('h2', '', kinds[0].title + ' Workspace'));
     const strip = el('div', 'ws-tabs');
     strip.setAttribute('role', 'tablist');
+    strip.hidden = kinds.length < 2;   // a lone workspace needs no tab
     const body = el('div', 'ws-body');
     const panels = [];
 
@@ -591,9 +613,10 @@
 
   /** Validate every workspace that has an id but is not validated yet (on opening the tab). */
   function autoValidate() {
+    loadWorkspaces();
     $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
-      const button = card.querySelector('.ws-validate');
-      if (!button.disabled && card.querySelector('.ws-id').value.trim() && !polling[card.dataset.kind]) button.click();
+      const kindId = card.dataset.kind;
+      if (validated[kindId] !== card.querySelector('.ws-id').value.trim() && !polling[kindId]) validateKind(card, kindId);
     });
   }
 
@@ -603,6 +626,8 @@
     if (tab) tab.addEventListener('click', autoValidate);
     ns.bridge.on('validate_workspace', onValidated);
     ns.bridge.on('validate_workspace_status', onValidated);
+    ns.bridge.on('list_workspaces', onWorkspaces);
+    ns.bridge.on('list_workspaces_status', onWorkspaces);
     ns.bridge.on('list_custom_properties', onProperties);
     ns.bridge.on('list_custom_properties_status', onProperties);
   }
@@ -635,7 +660,6 @@
           return {
             source: row.querySelector('.ws-source').value,
             fm_field_id: row.querySelector('.ws-fm-field').value,
-            match_key: row.querySelector('.ws-match').checked,
           };
         }),
         static_values: Array.prototype.map.call(card.querySelectorAll('.ws-static-row'), function (row) {

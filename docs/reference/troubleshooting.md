@@ -29,7 +29,7 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 
     Save the image as `docs/images/greyed-button.png`, then replace this box with `![Greyed-out button with its tooltip](../images/greyed-button.png)`.
 
-- Messages such as *The Items workspace ID is not set.* or *Items: tick Key on one mapping so existing items in Fusion Manage can be matched.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
+- Messages such as *The Items workspace ID is not set.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
 - For the drawing PDF, *The drawing has no references yet.*, *… none of the designs is loaded yet.* and *The top-level component of … has no part number.* mean the drawing is not ready. Wait for it to finish loading, or give the top-level component a part number. The add-in rechecks every couple of seconds.
 
 ## Publishing

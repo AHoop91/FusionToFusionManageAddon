@@ -97,7 +97,7 @@ flowchart LR
 One-time setup:
 
 - The add-in is installed and you are signed in ([Installation and Authentication](installation.md)).
-- The Items workspace is configured, with field mappings and a match key ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
+- The Items workspace is configured, with field mappings ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
 - Every user who publishes holds the Fusion Manage permissions listed in [Installation and Authentication](installation.md#permissions-in-fusion-manage).
 
 ---

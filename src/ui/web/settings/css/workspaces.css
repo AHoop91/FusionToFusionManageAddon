@@ -17,7 +17,7 @@
 .ws-heading { margin: 16px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Mapping table: source field -> FM field id, key radio, remove. */
-.ws-row, .ws-cols { display: grid; align-items: center; column-gap: 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 28px 24px; }
+.ws-row, .ws-cols { display: grid; align-items: center; column-gap: 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 24px; }
 .ws-row { margin-bottom: 8px; }
 .ws-static-row, .ws-cols-static { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 24px; }
 .ws-arrow { text-align: center; color: var(--muted); }
@@ -68,7 +68,6 @@
 .ws-pick-item.selected { font-weight: 600; }
 .ws-pick-item:disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; background: none; }
 .ws-pick-detail { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
-.ws-body .ws-key { display: inline-flex; align-items: center; justify-content: center; align-self: stretch; margin: 0; padding: 0; font-weight: 400; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .ws-remove {
   display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
   background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
@@ -84,7 +83,7 @@
 .ws-id-row { display: flex; gap: 8px; margin-top: 4px; }
 .ws-id-row .ws-id { width: 100%; margin-top: 0; padding-right: 28px; }
 .ws-id-wrap { position: relative; flex: 1; }
-.ws-tick { position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+.ws-tick { position: absolute; right: 28px; top: 50%; transform: translateY(-50%);
   color: var(--ok); font-weight: 700; pointer-events: none; }
 .ws-status { min-height: 0; margin: 4px 0 0; font-size: 12px; }
 .ws-hint { margin: 8px 0; font-size: 12px; }
@@ -124,7 +123,6 @@
 .ws-footer .row { justify-content: flex-end; }
 .ws-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
 .ws-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ws-match { width: 20px; height: 20px; margin: 0; cursor: pointer; accent-color: var(--accent); }
 .ws-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
 .ws-section-head .ws-heading { margin: 0; }
 .ws-section-head .ws-defaults { margin: 0; }
@@ -157,3 +155,16 @@
 .ws-cols span:nth-child(4) { text-align: center; }
 .ws-static-slot { min-width: 0; }
 .ws-static-slot .ws-static-value:not([type="hidden"]) { width: 100%; box-sizing: border-box; }
+
+/* ---- Flat layout: sections on the page, divided by thin rules, not boxed ---- */
+.ws-card.card { margin-bottom: 14px; }
+.ws-body { padding: 0; }
+.ws-tabs { padding: 0; margin-bottom: 14px; }
+.ws-tabs[hidden] { display: none; }
+.ws-section + .ws-section { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--border); }
+.ws-block { margin-top: 14px; padding: 0; border: 0; border-radius: 0; background: none; }
+.ws-block + .ws-block { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.ws-block-head { margin-bottom: 12px; }
+.ws-panel > .ws-desc { margin-bottom: 14px; }
+.ws-sub { margin: 2px 0 10px; font-size: 12px; line-height: 1.4; }
+.ws-block-title + .ws-sub { margin-top: -6px; }

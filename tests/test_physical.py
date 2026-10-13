@@ -1,6 +1,6 @@
 import unittest
 
-from src.config.workspace_models import data_model_name, is_valid_source, can_match
+from src.config.workspace_models import data_model_name, is_valid_source
 from src.fusion_mfg.physical import parse_physical
 from src.fusion_mfg.properties import parse_definitions
 
@@ -48,7 +48,6 @@ class PhysicalTests(unittest.TestCase):
     def test_source_names_and_listing(self):
         self.assertTrue(is_valid_source("physical:Mass"))
         self.assertEqual(data_model_name("physical:Mass"), "Physical Mass")
-        self.assertFalse(can_match("physical:Mass"))
         listed = [p for p in parse_definitions({"hub": {}}) if p["group"] == "physical"]
         self.assertEqual([p["name"] for p in listed], ["Mass", "Volume", "Area", "Density", "Length", "Width", "Height"])
 
