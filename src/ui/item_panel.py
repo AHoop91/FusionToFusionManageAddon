@@ -42,7 +42,7 @@ from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
 from .ui_thread import UiThread
-from .upload_jobs import DRAWING_JOB, STEP_JOB, pick
+from .upload_jobs import DRAWING_JOB, DWG_JOB, DXF_JOB, STEP_JOB, pick
 
 log = get_logger("item_panel")
 
@@ -176,6 +176,8 @@ class ItemPanel:
         bridge.register("upload_status", lambda _payload: self._uploads.status())
         bridge.register("upload_context", self._upload_context)
         bridge.register("upload_drawing", self._upload_drawing)
+        bridge.register("upload_dwg", self._upload_dwg)
+        bridge.register("upload_dxf", self._upload_dxf)
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
         bridge.register("open_attachment", self._open_attachment)
@@ -343,6 +345,14 @@ class ItemPanel:
         """Upload the open drawing as the PDF of the item shown (the Actions menu). UI thread."""
         return self._upload_for_item(DRAWING_JOB, payload)
 
+    def _upload_dwg(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Upload the open drawing as the DWG file of the item shown (the Actions menu). UI thread."""
+        return self._upload_for_item(DWG_JOB, payload)
+
+    def _upload_dxf(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Upload the open drawing as the DXF file of the item shown (the Actions menu). UI thread."""
+        return self._upload_for_item(DXF_JOB, payload)
+
     def _upload_for_item(self, job: UploadJob, payload: Dict[str, Any]) -> Dict[str, Any]:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         if not self._number:
@@ -351,12 +361,16 @@ class ItemPanel:
         return self._uploads.from_panel(job, workspace_id, item_id, Subject(self._number, self._part))
 
     def _upload_context(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
-        """What the Actions menu uploads for the open document: the STEP file of a design, the PDF of a drawing, else nothing (``action`` is "")."""
+        """What the Actions menu uploads for the open document, as ``actions``: the STEP file of a design, the PDF, DWG and DXF of a
+        drawing, else nothing (an empty list)."""
         if drawing_source.active_drawing() is not None:
-            return {"action": "upload_drawing", "label": "Upload Drawing Representation", "ext": ".pdf", "ready": bool(drawing_source.cached_number())}
+            ready = bool(drawing_source.cached_number())
+            return {"actions": [{"action": "upload_drawing", "label": "Upload Drawing as PDF", "ext": ".pdf", "ready": ready},
+                                {"action": "upload_dwg", "label": "Upload Drawing as DWG", "ext": ".dwg", "ready": ready},
+                                {"action": "upload_dxf", "label": "Upload Drawing as DXF", "ext": ".dxf", "ready": ready}]}
         if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
-            return {"action": "add_step_file", "label": "Upload STEP File", "ext": ".step", "ready": True}
-        return {"action": ""}   # neither a design nor a drawing is open: nothing to offer
+            return {"actions": [{"action": "add_step_file", "label": "Upload STEP File", "ext": ".step", "ready": True}]}
+        return {"actions": []}   # neither a design nor a drawing is open: nothing to offer
 
     def upload_selected_step(self) -> None:
         """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
@@ -365,13 +379,26 @@ class ItemPanel:
             pick(_menu_selection)
             self._find(number, lambda subject: self._uploads.from_number(STEP_JOB, subject))
 
-    def upload_drawing(self) -> None:
-        """Upload the open drawing as the PDF of the item of the design it shows (the ribbon button). UI thread."""
+    def upload_step(self) -> None:
+        """Upload the open design as the STEP file of the item of the selected component, else of the design (the ribbon button). UI thread."""
+        pick(_active_selection())
+        self._find(_selected_part_number(), lambda subject: self._uploads.from_number(STEP_JOB, subject))
+
+    def upload_drawing(self, job: UploadJob = DRAWING_JOB) -> None:
+        """Upload the open drawing as the PDF (or the DWG or DXF, by ``job``) of the item of the design it shows (the ribbon button). UI thread."""
         number, reason = drawing_source.top_level_number()
         if not number:
             self._ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
             return
-        self._find(number, lambda subject: self._uploads.from_number(DRAWING_JOB, subject))
+        self._find(number, lambda subject: self._uploads.from_number(job, subject))
+
+    def upload_drawing_dwg(self) -> None:
+        """Upload the open drawing as the DWG file of the item of the design it shows (the ribbon button). UI thread."""
+        self.upload_drawing(DWG_JOB)
+
+    def upload_drawing_dxf(self) -> None:
+        """Upload the open drawing as the DXF file of the item of the design it shows (the ribbon button). UI thread."""
+        self.upload_drawing(DXF_JOB)
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""

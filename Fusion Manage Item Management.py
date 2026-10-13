@@ -57,6 +57,8 @@ from src.core.constants import (  # noqa: E402
     PUBLISH_WIDTH,
     RIBBON_DESIGN_WORKSPACE,
     RIBBON_DRAWING_WORKSPACE,
+    RIBBON_EXPORT_PANEL_ID,
+    RIBBON_EXPORT_PANEL_NAME,
     RIBBON_PANEL_ID,
     RIBBON_PANEL_NAME,
     RIBBON_PUBLISH_PANEL_ID,
@@ -64,9 +66,12 @@ from src.core.constants import (  # noqa: E402
     SETTINGS_PALETTE_ID,
     SETTINGS_TITLE,
     UPLOAD_DRAWING_COMMAND_ID,
+    UPLOAD_DWG_COMMAND_ID,
+    UPLOAD_DXF_COMMAND_ID,
     UPLOAD_PROGRESS_HEIGHT,
     UPLOAD_PROGRESS_PALETTE_ID,
     UPLOAD_PROGRESS_WIDTH,
+    UPLOAD_STEP_COMMAND_ID,
 )
 from src.ui.ribbon import Ribbon, RibbonCommand, RibbonPanel  # noqa: E402
 
@@ -74,7 +79,7 @@ log = get_logger()
 
 JOBS_TOOLTIP = "Show the job queue: publishes that are waiting, running and finished."
 PUBLISH_TOOLTIP = "Preview what will be published to Fusion Manage for the current item."
-UPLOAD_DRAWING_NAME = "Upload Drawing Representation To Fusion Manage Item"
+UPLOAD_DRAWING_NAME = "Upload Drawing PDF To Fusion Manage Item"
 UPLOAD_DRAWING_TOOLTIP = "Create a PDF of the open drawing and attach it to the Fusion Manage item of the design it shows."
 
 
@@ -151,20 +156,35 @@ def run(context) -> None:
                                        UPLOAD_DRAWING_TOOLTIP,
                                        _item_panel.upload_drawing,
                                        _icon("upload_drawing"), needs_setup=True, needs_drawing=True)
+        upload_step = RibbonCommand(UPLOAD_STEP_COMMAND_ID, "Upload STEP File To Fusion Manage Item",
+                                    "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component, or of the design.",
+                                    _item_panel.upload_step,
+                                    _icon("upload_step"), needs_setup=True)
+        upload_dwg = RibbonCommand(UPLOAD_DWG_COMMAND_ID, "Upload Drawing DWG To Fusion Manage Item",
+                                   "Create a DWG file of the open drawing and attach it to the Fusion Manage item of the design it shows.",
+                                   _item_panel.upload_drawing_dwg,
+                                   _icon("upload_drawing"), promoted=False, needs_setup=True, needs_drawing=True)
+        upload_dxf = RibbonCommand(UPLOAD_DXF_COMMAND_ID, "Upload Drawing DXF To Fusion Manage Item",
+                                   "Create a DXF file of the open drawing and attach it to the Fusion Manage item of the design it shows.",
+                                   _item_panel.upload_drawing_dxf,
+                                   _icon("upload_drawing"), promoted=False, needs_setup=True, needs_drawing=True)
         # Panels appear in this order. Add further buttons or panels here; the ribbon needs no other changes.
         administration = RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
             RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
-                          _jobs_host.show,
+                          _jobs_host.show_centered,
                           _icon("jobs"), needs_setup=True),
             RibbonCommand(COMMAND_ID, "Preferences",
                           "Open the Fusion Manage panel: connection and settings.",
                           _palette_host.show,
                           _icon("settings")),
         ])
-        # A drawing is not published (that is for the design), so it has no Publish, and uploads its PDF in place of a STEP file.
+        # A drawing is not published (that is for the design), so it has no Publish. Export has the files to attach: a design makes a STEP
+        # file; a drawing, a PDF (the button) or a DWG or DXF (its dropdown), since a STEP file is of a design.
         panels = {
-            RIBBON_DESIGN_WORKSPACE: [RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item, publish_item]), administration],
-            RIBBON_DRAWING_WORKSPACE: [RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item, upload_drawing]), administration],
+            RIBBON_DESIGN_WORKSPACE: [RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item, publish_item]),
+                                      RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [upload_step]), administration],
+            RIBBON_DRAWING_WORKSPACE: [RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item]),
+                                       RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [upload_drawing, upload_dwg, upload_dxf]), administration],
         }
         _ribbon = Ribbon(_ui, panels)
         _ribbon.register()

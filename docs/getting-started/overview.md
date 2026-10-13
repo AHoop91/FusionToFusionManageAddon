@@ -82,7 +82,7 @@ The add-in adds a **Fusion Manage** tab to the ribbon in the **Design** and **Dr
 |---|---|---|
 | Item | Open Fusion Manage Item | Show the Fusion Manage item of the selected component, or of the open design or drawing. |
 | Item | Publish Fusion Manage Item (Design only) | Preview and publish the open design. |
-| Item | Upload Drawing Representation To Fusion Manage Item (Drawing only) | Attach a PDF of the open drawing. |
+| Item | Upload Drawing PDF To Fusion Manage Item (Drawing only) | Attach a PDF of the open drawing. |
 | Administration | Job Queue | See publishes that are waiting, running and finished. |
 | Administration | Preferences | Sign in, set the connection and the workspace mapping. |
 
@@ -90,7 +90,7 @@ Most buttons stay greyed out until the Items workspace is configured (see [Works
 
 ![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png)
 
-The same actions are available from the right-click menu of a component in the browser or canvas: **Open Fusion Manage Item**, **Publish Fusion Manage Item** (top-level component only), **Upload STEP File To Fusion Manage Item** and, in a drawing, **Upload Drawing Representation To Fusion Manage Item**.
+The same actions are available from the right-click menu of a component in the browser or canvas: **Open Fusion Manage Item**, **Publish Fusion Manage Item** (top-level component only), **Upload STEP File To Fusion Manage Item** and, in a drawing, **Upload Drawing PDF To Fusion Manage Item**.
 
 !!! example "Screenshot placeholder: Right-click menu on a component"
     **Show:** The right-click menu of a component in the browser, showing the Fusion Manage entries.

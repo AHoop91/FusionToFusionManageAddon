@@ -350,7 +350,7 @@ A drawing is **not an item of its own**. Its PDF is attached to the item of the 
 ### Upload a drawing PDF
 
 1. Open the drawing. The add-in works out which item it belongs to from the design the drawing references: the Fusion Manage item of that design's **top-level component**, found by its part number.
-2. Choose **Fusion Manage ▸ Item ▸ Upload Drawing Representation To Fusion Manage Item**, or right-click the top of the drawing's component tree and choose the same entry. In a drawing, the [Item Panel](../item-panel/index.md) **Actions** menu offers the same upload.
+2. Choose **Fusion Manage ▸ Item ▸ Upload Drawing PDF To Fusion Manage Item**, or right-click the top of the drawing's component tree and choose the same entry. In a drawing, the [Item Panel](../item-panel/index.md) **Actions** menu offers the same upload.
 3. A PDF of every sheet of the drawing is created, named after the item number (for example `PN-1001.pdf`), and uploaded in a window with the stages **Find item**, **Create PDF** and **Upload**.
 
 The right-click entry is offered only when the **top of the tree** is selected, not a component below it.

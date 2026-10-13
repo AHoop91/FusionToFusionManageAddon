@@ -243,23 +243,27 @@
 
     document.addEventListener('click', function () { setOpen(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
-    const upload = list.querySelector('[data-upload]');   // uploads the STEP file of a design, or the PDF of a drawing: Python says which
-    const uploadIcon = upload.querySelector('.item-menu-icon');
-    const uploadLabel = upload.querySelector('.item-menu-label');
+    const uploads = Array.prototype.slice.call(list.querySelectorAll('[data-upload]'));   // the STEP file of a design, or the PDF, DWG and DXF of a drawing: Python says which are offered
     let uploading = false;
-    let uploadReady = true;
     let uploadTimer = 0;
     const card = ns.uploadProgress.mount($('progress-card'));
-    function syncUpload() { upload.disabled = uploading || !uploadReady; }
-    /** The Upload entry for what the open document uploads (``action``, ``label``, ``ext`` of the file, ``ready``). */
+    function syncUpload() {
+      uploads.forEach(function (entry) { entry.disabled = uploading || entry.dataset.ready !== 'true'; });
+    }
+    /** The Upload entries for what the open document uploads (``actions``: each has ``action``, ``label``, ``ext`` of the file, ``ready``). */
     function setUpload(context) {
-      $('item-actions-menu').hidden = !context.action;   // no action: no three dots
-      if (!context.action) { setOpen(false); return; }
-      upload.dataset.action = context.action;
-      uploadLabel.textContent = context.label;
-      uploadIcon.replaceChildren(ns.itemFiles.icon(context.ext));   // the icon the Files tab shows for that kind of file
-      uploadReady = context.ready;
-      upload.title = context.ready ? '' : 'The drawing is still loading';
+      const offered = context.actions || [];
+      $('item-actions-menu').hidden = !offered.length;   // nothing offered: no three dots
+      if (!offered.length) setOpen(false);
+      uploads.forEach(function (entry) {
+        const found = offered.find(function (a) { return a.action === entry.dataset.action; });
+        entry.hidden = !found;
+        if (!found) return;
+        entry.querySelector('.item-menu-label').textContent = found.label;
+        entry.querySelector('.item-menu-icon').replaceChildren(ns.itemFiles.icon(found.ext));   // the icon the Files tab shows for that kind of file
+        entry.dataset.ready = String(found.ready);
+        entry.title = found.ready ? '' : 'The drawing is still loading';
+      });
       syncUpload();
     }
     /** The progress dialog over the panel for ``state`` (``active``, and while it is, what ``upload-progress.js`` shows). */
@@ -279,7 +283,7 @@
       entry.addEventListener('click', function () {
         setOpen(false);
         if (!currentView) return;
-        if (entry === upload) showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
+        if (uploads.indexOf(entry) >= 0) showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
         bridge.send(entry.dataset.action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: entry.dataset.action });
       });
     });
@@ -288,6 +292,8 @@
     }
     bridge.on('add_step_file', started);
     bridge.on('upload_drawing', started);
+    bridge.on('upload_dwg', started);
+    bridge.on('upload_dxf', started);
     bridge.on('upload_context', function (r) { if (r.ok) setUpload(r.result); });
     window.addEventListener('focus', function () { if (currentView) bridge.send('upload_context'); });   // the open document may have changed
     bridge.on('upload_status', function (r) {

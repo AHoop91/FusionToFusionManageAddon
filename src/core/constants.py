@@ -21,6 +21,9 @@ MENU_PUBLISH_COMMAND_ID = "MfgToFm_MenuPublishCmd"
 MENU_UPLOAD_STEP_COMMAND_ID = "MfgToFm_MenuUploadStepCmd"
 MENU_UPLOAD_DRAWING_COMMAND_ID = "MfgToFm_MenuUploadDrawingCmd"
 UPLOAD_DRAWING_COMMAND_ID = "MfgToFm_UploadDrawingCmd"
+UPLOAD_STEP_COMMAND_ID = "MfgToFm_UploadStepCmd"
+UPLOAD_DWG_COMMAND_ID = "MfgToFm_UploadDwgCmd"
+UPLOAD_DXF_COMMAND_ID = "MfgToFm_UploadDxfCmd"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
@@ -29,6 +32,8 @@ RIBBON_PANEL_ID = "MfgToFm_SettingsPanel"
 RIBBON_PANEL_NAME = "Administration"
 RIBBON_PUBLISH_PANEL_ID = "MfgToFm_PublishPanel"
 RIBBON_PUBLISH_PANEL_NAME = "Item"
+RIBBON_EXPORT_PANEL_ID = "MfgToFm_ExportPanel"
+RIBBON_EXPORT_PANEL_NAME = "Export"
 
 # Workspaces that get the ribbon tab: Design and Drawing.
 RIBBON_DESIGN_WORKSPACE = "FusionSolidEnvironment"

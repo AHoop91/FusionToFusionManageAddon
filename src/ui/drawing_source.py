@@ -124,18 +124,37 @@ def _top_level_component() -> Optional[Any]:
     return design.rootComponent if design is not None else None
 
 
-def export_pdf(path: str) -> None:
-    """Write every sheet of the open drawing to one PDF at ``path``."""
+def _export(path: str, kind: str, create: str) -> None:
+    """Write the open drawing to ``path`` with the export options ``create`` of the drawing's export manager makes (``kind`` names the format)."""
     drawing = active_drawing()
     if drawing is None:
         raise RuntimeError("The open document is not a drawing.")
     manager = drawing.exportManager
-    options = manager.createPDFExportOptions(path)
-    options.openPDF = False
+    make_options = getattr(manager, create, None)
+    if make_options is None:   # DWG and DXF came to the API later than PDF
+        raise RuntimeError(f"This version of Fusion cannot export a drawing as a {kind}. Update Fusion and try again.")
+    options = make_options(path)
+    if hasattr(options, "openPDF"):
+        options.openPDF = False
     if not manager.execute(options):
-        raise RuntimeError("Fusion could not export the drawing as a PDF.")
+        raise RuntimeError(f"Fusion could not export the drawing as a {kind}.")
     if not (os.path.isfile(path) and os.path.getsize(path)):   # an export straight after a drawing opens can report success and write nothing
-        raise RuntimeError("Fusion reported the PDF as exported, but no file was written. Wait for the drawing to finish loading and try again.")
+        raise RuntimeError(f"Fusion reported the {kind} as exported, but no file was written. Wait for the drawing to finish loading and try again.")
+
+
+def export_pdf(path: str) -> None:
+    """Write every sheet of the open drawing to one PDF at ``path``."""
+    _export(path, "PDF", "createPDFExportOptions")
+
+
+def export_dwg(path: str) -> None:
+    """Write the open drawing to a DWG file at ``path``."""
+    _export(path, "DWG", "createDWGExportOptions")
+
+
+def export_dxf(path: str) -> None:
+    """Write the open drawing to a DXF file at ``path``."""
+    _export(path, "DXF", "createDXFExportOptions")
 
 
 def problem() -> str:

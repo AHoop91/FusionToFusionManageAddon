@@ -1,6 +1,6 @@
-"""The kinds of file the add-in attaches to a Fusion Manage item: a STEP file of a design, and a PDF of a drawing."""
+"""The kinds of file the add-in attaches to a Fusion Manage item: a STEP file of a design, and a PDF, DWG or DXF of a drawing."""
 
-from typing import Any, Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional
 
 import adsk.core
 import adsk.fusion
@@ -77,18 +77,26 @@ def _confirm_design(ui: adsk.core.UserInterface, subject: Subject) -> bool:
     return True
 
 
-def _confirm_drawing(ui: adsk.core.UserInterface, subject: Subject) -> bool:
-    """Whether the open drawing may be attached as the PDF of item ``subject``: it is a drawing of that item, or the user says so."""
-    held, reason = drawing_source.top_level_number()
-    if not held:
-        ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
-        return False
-    if held == subject.part_number:
-        return True
-    question = (f"The open drawing is of {held}, but the item is {subject.item_number} ({subject.part_number}).\n\n"
-                f"Upload this drawing as {subject.item_number}.pdf anyway?")
-    return ui.messageBox(question, ITEM_COMMAND_NAME, adsk.core.MessageBoxButtonTypes.YesNoButtonType) == adsk.core.DialogResults.DialogYes
+def _confirm_drawing(extension: str) -> Callable[[adsk.core.UserInterface, Subject], bool]:
+    """A check of whether the open drawing may be attached as the ``extension`` file of item ``subject``: it is a drawing of that item, or the user says so."""
+    def confirm(ui: adsk.core.UserInterface, subject: Subject) -> bool:
+        held, reason = drawing_source.top_level_number()
+        if not held:
+            ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
+            return False
+        if held == subject.part_number:
+            return True
+        question = (f"The open drawing is of {held}, but the item is {subject.item_number} ({subject.part_number}).\n\n"
+                    f"Upload this drawing as {subject.item_number}{extension} anyway?")
+        return ui.messageBox(question, ITEM_COMMAND_NAME, adsk.core.MessageBoxButtonTypes.YesNoButtonType) == adsk.core.DialogResults.DialogYes
+    return confirm
+
+
+def _drawing_job(title: str, label: str, extension: str, short: str, export: Callable[[str], None]) -> UploadJob:
+    return UploadJob(title, label, extension, ("Find item", f"Create {short}", "Upload"), lambda path, _subject, _progress: export(path), _confirm_drawing(extension))
 
 
 STEP_JOB = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), _export_design, _confirm_design)
-DRAWING_JOB = UploadJob("Uploading Drawing Representation", "drawing PDF", ".pdf", ("Find item", "Create PDF", "Upload"), lambda path, _subject, _progress: drawing_source.export_pdf(path), _confirm_drawing)
+DRAWING_JOB = _drawing_job("Uploading Drawing PDF", "drawing PDF", ".pdf", "PDF", drawing_source.export_pdf)
+DWG_JOB = _drawing_job("Uploading Drawing DWG", "drawing DWG", ".dwg", "DWG", drawing_source.export_dwg)
+DXF_JOB = _drawing_job("Uploading Drawing DXF", "drawing DXF", ".dxf", "DXF", drawing_source.export_dxf)
