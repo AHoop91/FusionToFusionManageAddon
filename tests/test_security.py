@@ -39,6 +39,28 @@ class TenantTests(unittest.TestCase):
             self.assertEqual(service.config.local.tenant, "")
 
 
+class RedirectTests(unittest.TestCase):
+    def redirect(self, url, to):
+        from src.core.http import _SafeRedirects
+        request = urllib.request.Request(url, headers={"Authorization": "Bearer t"})
+        return _SafeRedirects().redirect_request(request, None, 302, "Found", {}, to)
+
+    def test_token_stays_on_its_own_host(self):
+        self.assertEqual(self.redirect("https://a.example/x", "https://a.example/y").get_header("Authorization"), "Bearer t")
+        self.assertIsNone(self.redirect("https://a.example/x", "https://b.example/y").get_header("Authorization"))
+
+    def test_a_redirect_to_http_is_refused(self):
+        with self.assertRaises(urllib.error.HTTPError):
+            self.redirect("https://a.example/x", "http://a.example/y")
+
+
+class SignedHeaderTests(unittest.TestCase):
+    def test_only_headers_meant_for_a_signed_address_are_sent(self):
+        from src.fm.client import signed_headers
+        sent = signed_headers({"x-amz-meta-a": "1", "Content-MD5": "m", "Host": "evil", "Content-Length": "1", "Authorization": "x"})
+        self.assertEqual(sent, {"x-amz-meta-a": "1", "Content-MD5": "m"})
+
+
 class CallbackTests(unittest.TestCase):
     def get(self, port, query):
         try:

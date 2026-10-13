@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
+from ..core.http import OPENER
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 
@@ -74,7 +75,7 @@ class MfgGraphQlClient:
             "Authorization": f"Bearer {token}"})
         name = label or _first_field(text)
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 first_byte_seconds = watch.lap()   # until the response headers arrived
                 raw = response.read()
                 payload = json.loads(raw)

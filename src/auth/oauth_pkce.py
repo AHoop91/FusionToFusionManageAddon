@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, List
 
+from ..core.http import OPENER
 from .errors import AuthError
 
 AUTHORIZE_URL = "https://developer.api.autodesk.com/authentication/v2/authorize"
@@ -60,7 +61,7 @@ def _post_token(form: Dict[str, str]) -> Dict[str, Any]:
                  "Accept": "application/json"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=TOKEN_REQUEST_TIMEOUT_SECONDS) as response:
+        with OPENER.open(request, timeout=TOKEN_REQUEST_TIMEOUT_SECONDS) as response:
             body = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]

@@ -9,13 +9,13 @@ import json
 import logging
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 
 from ..auth.auth_service import AuthService
 from ..config.hub import tenant_code
 from ..config.models import ConnectionSettings
+from ..core.http import OPENER
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 
@@ -46,17 +46,15 @@ def last_segment(link: Any) -> str:
     return link.rstrip("/").rsplit("/", 1)[-1] if isinstance(link, str) else ""
 
 
-class _KeepSignInHere(urllib.request.HTTPRedirectHandler):
-    """Follows a redirect, but sends the access token only to the host it was meant for."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        new = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new is not None and urllib.parse.urlparse(newurl).netloc != urllib.parse.urlparse(req.full_url).netloc:
-            new.remove_header("Authorization")
-        return new
+SIGNED_HEADER_PREFIXES = ("x-amz-", "x-goog-", "x-ms-", "content-md5", "content-type", "content-encoding", "cache-control")   # what a signed upload address can ask to be sent with the file
 
 
-_OPENER = urllib.request.build_opener(_KeepSignInHere)
+def signed_headers(extra: Dict[str, str]) -> Dict[str, str]:
+    """The headers of ``extra`` that belong with a signed upload; the rest (``Host``, ``Content-Length``, ``Authorization``, ...) are left out."""
+    kept = {k: v for k, v in extra.items() if k.lower().startswith(SIGNED_HEADER_PREFIXES)}
+    if len(kept) != len(extra):
+        log.warning("Left out upload headers not meant for a signed address: %s", sorted(set(extra) - set(kept)))
+    return kept
 
 
 class SendResult(NamedTuple):
@@ -133,7 +131,7 @@ class FmClient:
             headers={"Accept": accept, "Authorization": f"Bearer {token}"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 first_byte_seconds = watch.lap()   # until the response headers arrived
                 body = response.read()
                 if log.isEnabledFor(logging.DEBUG):
@@ -162,7 +160,7 @@ class FmClient:
         token = self._auth.get_access_token(self._settings)
         request = urllib.request.Request(f"{self.base_url}{path}", headers={"Accept": "*/*", "Authorization": f"Bearer {token}"})
         try:
-            with _OPENER.open(request, timeout=timeout) as response:
+            with OPENER.open(request, timeout=timeout) as response:
                 return response.read(), str(response.headers.get("Content-Type") or "")
         except urllib.error.HTTPError as exc:
             raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
@@ -181,10 +179,10 @@ class FmClient:
         body: Any = content
         if progress is not None:   # sent in pieces so the caller can see how far it has got
             body = _chunks(content, progress)
-        request = urllib.request.Request(url, data=body, method="PUT", headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(content)), **(headers or {})})
+        request = urllib.request.Request(url, data=body, method="PUT", headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(content)), **signed_headers(headers or {})})
         began = time.monotonic()
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with OPENER.open(request, timeout=timeout) as response:
                 log.info("PUT of %d bytes -> %s in %.1fs", len(content), response.status, time.monotonic() - began)
                 return response.status
         except urllib.error.HTTPError as exc:
@@ -211,7 +209,7 @@ class FmClient:
             log.debug("%s %s body: %s", method, path, _clip(payload or b""))
         began = time.monotonic()
         try:
-            with urllib.request.urlopen(request, timeout=WRITE_TIMEOUT_SECONDS) as response:
+            with OPENER.open(request, timeout=WRITE_TIMEOUT_SECONDS) as response:
                 raw = response.read()
                 try:
                     data = json.loads(raw) if raw.strip() else None
