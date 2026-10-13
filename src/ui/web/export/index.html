@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Export</title>
+  <link rel="stylesheet" href="../shared/css/base.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="../shared/css/header.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/progress.css">
+  <link rel="stylesheet" href="../shared/css/upload-progress.css">
+  <link rel="stylesheet" href="css/export-page.css">
+</head>
+<body>
+  <!-- The shared top bar, filled in by shell.js. The logo is here already, and a grey circle where the avatar will be, so the bar is
+       not empty while the page starts. -->
+  <header id="app-header" class="app-header"><img class="logo" src="../shared/assets/fusion-manage-logo.svg" alt="Fusion Manage"></header>
+  <span id="export-avatar-skeleton" class="export-avatar-skeleton" aria-hidden="true"></span>
+
+  <!-- Until the first answer about the sign-in arrives (this window is made afresh each time), so "Logging in" is not shown to someone who is. -->
+  <div id="export-ready" class="loader">
+    <div class="balls" role="status" aria-label="Getting things ready"><span></span><span></span><span></span></div>
+    <p class="muted">Getting things ready...</p>
+  </div>
+
+  <!-- ===== Signed-out view: sign-in only ================================ -->
+  <div id="view-login" class="view" hidden>
+    <div id="login-form" class="view-scroll" hidden>
+      <div class="card login-card">
+        <h2>Sign in to Fusion Manage</h2>
+        <p id="conn-summary" class="muted">Loading...</p>
+        <div class="row">
+          <button id="signin-btn" class="btn">Sign in</button>
+        </div>
+        <p id="conn-error" class="error" hidden></p>
+      </div>
+    </div>
+
+    <!-- Shown instead of the form while the browser sign-in is pending. -->
+    <div id="login-loader" class="loader">
+      <div class="balls" role="status" aria-label="Logging in"><span></span><span></span><span></span></div>
+      <p class="muted">Logging in...</p>
+      <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== Signed-in view: the Export window of the ribbon (what to export from the open document, and where in Fusion Manage to attach it) ===== -->
+  <div id="view-app" class="view" hidden>
+    <div class="export">
+      <div class="export-body">
+        <header class="export-summary">
+          <h1 id="export-target" class="export-target"></h1>
+          <p id="export-description" class="export-description"></p>
+        </header>
+        <p id="export-problem" class="export-alert" role="alert" hidden></p>
+
+        <section class="export-group" aria-labelledby="export-destination-title">
+          <h2 id="export-destination-title">Attach to</h2>
+          <div id="export-destinations" class="export-cards" role="radiogroup" aria-labelledby="export-destination-title"></div>
+        </section>
+
+        <section id="export-format-group" class="export-group" aria-labelledby="export-format-title">
+          <h2 id="export-format-title">File format</h2>
+          <div id="export-formats" class="export-segments" role="radiogroup" aria-labelledby="export-format-title"></div>
+        </section>
+
+        <p id="export-error" class="export-alert" role="alert" hidden></p>
+      </div>
+
+      <footer class="export-actions">
+        <p id="export-status" class="export-status" aria-live="polite"></p>
+        <button id="export-cancel" class="btn btn-secondary" type="button">Cancel</button>
+        <button id="export-run" class="btn" type="button" disabled>Export</button>
+      </footer>
+    </div>
+  </div>
+  <!-- The export under way, and how it went, on a card over the choices (as the Item panel shows an upload). -->
+  <div id="export-overlay" class="progress-backdrop" hidden>
+    <div class="progress export-dialog" role="dialog" aria-modal="true" aria-label="Export">
+      <div id="export-progress"></div>   <!-- the progress card of upload-progress.js -->
+      <div id="export-result" class="export-result" hidden role="status">
+        <span class="export-result-icon" aria-hidden="true"></span>
+        <h2 id="export-result-title" class="export-result-title"></h2>
+        <p id="export-result-message" class="export-result-message"></p>
+        <div class="progress-actions export-result-actions">
+          <button id="export-done" class="btn" type="button">Done</button>
+          <button id="export-retry" class="btn" type="button" hidden>Try again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="../shared/js/dom.js"></script>
+  <script src="../shared/js/bridge.js"></script>
+  <script src="../shared/js/shell.js"></script>
+  <script src="../shared/js/account.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/upload-progress.js"></script>
+  <script src="js/export-page.js"></script>
+</body>
+</html>

@@ -6,7 +6,7 @@ title: Job Queue
 
 Every publish is a **job**. The Job Queue shows the jobs that are waiting, running and finished, so you can see what the add-in is doing without keeping the Publish panel open.
 
-Open it with **Fusion Manage ▸ Administration ▸ Job Queue**.
+Open it with **Manage ▸ Item Management ▸ Administration ▸ Job Queue**.
 
 
 ## How jobs run

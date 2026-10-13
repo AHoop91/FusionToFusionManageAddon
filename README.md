@@ -107,7 +107,7 @@ Key features:
 3. Browse to the cloned folder (the one containing `Fusion Manage Item Management.py` and `Fusion Manage Item Management.manifest`).
 4. Select the add-in in the list and click **Run**. Tick **Run on Startup** to load it with Fusion.
 5. Create an APS application with the callback URL `http://localhost:8765/callback` and copy its Client ID.
-6. Open **Fusion Manage ▸ Administration ▸ Preferences**, enter the Client ID and your tenant name, save, and click **Sign in**.
+6. Open **Manage ▸ Item Management ▸ Administration ▸ Preferences**, enter the Client ID and your tenant name, save, and click **Sign in**.
 
 The full walkthrough, including APS application setup, is in [Installation and Authentication](https://ahoop91.github.io/FusionToFusionManageAddon/getting-started/installation/).
 
@@ -116,17 +116,16 @@ The full walkthrough, including APS application setup, is in [Installation and A
 <!-- USAGE -->
 ## Usage
 
-The add-in adds a **Fusion Manage** tab to the ribbon in the **Design** and **Drawing** workspaces.
+The add-in adds an **Export** panel and an **Item Management** panel to the **Manage** tab of the ribbon in the **Design** and **Drawing** workspaces. **Administration** is a submenu of **Item Management**; its buttons are pinned to the ribbon.
 
 | Panel | Button | Purpose |
 |---|---|---|
-| Item | Open Fusion Manage Item | Show the item of the selected component, or of the open design or drawing |
-| Item | Publish Fusion Manage Item (Design) | Preview and publish the open design |
-| Export | Export STEP File (Design) | Attach a STEP file of the open design or the selected component |
-| Export | Export PDF (Drawing) | Attach a PDF of the open drawing |
-| Export | Export DWG, Export DXF (Drawing, in the dropdown) | Attach a DWG or DXF of the open drawing |
-| Administration | Job Queue | See publishes that are waiting, running and finished |
-| Administration | Preferences | Sign in, set the connection and the workspace mapping |
+| Export | Export | Open the Export window: export the open design or drawing and attach the file to its item or component |
+| Item Management | Open Fusion Manage Item | Show the item of the selected component, or of the open design or drawing |
+| Item Management | Publish Fusion Manage Item (Design) | Preview and publish the open design |
+| Item Management ▸ Administration | Job Queue | See publishes that are waiting, running and finished |
+| Item Management ▸ Administration | Preferences | Sign in, set the connection and the workspace mapping |
+
 
 The same actions are available from the right-click menu of a component.
 

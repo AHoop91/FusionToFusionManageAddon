@@ -1,8 +1,8 @@
 """Native Fusion ribbon: an add-in tab with panels of command buttons.
 
-The add-in's panels go into Fusion's own tab called ``host_tab_name`` ("Manage") as one panel, the groups of buttons told apart by
-a separator; where that tab cannot be found the add-in gets a tab of its own, one panel per group. Buttons are declared as
-``RibbonCommand`` values grouped in ``RibbonPanel`` values, so adding a
+The panels go into Fusion's own tab called ``host_tab_name`` ("Manage"); where that tab cannot be found the add-in gets a tab of its
+own. A panel is made of groups of buttons, told apart by a separator. Buttons are declared as
+``RibbonCommand`` values grouped in ``RibbonGroup`` and ``RibbonPanel`` values, so adding a
 command or panel is one entry in the lists passed to ``Ribbon``; no Fusion
 plumbing changes.
 
@@ -14,7 +14,7 @@ garbage-collects them and the button silently stops working.
 
 import traceback
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Sequence
 
 import adsk.core
 
@@ -94,28 +94,37 @@ def define_command(ui: adsk.core.UserInterface, command: RibbonCommand, handlers
 
 
 @dataclass(frozen=True)
+class RibbonGroup:
+    """Commands of a panel that go together: apart from the others by a separator, and under one name as a submenu if ``submenu_icon`` is set."""
+
+    commands: Sequence[RibbonCommand]
+    name: str = ""   # the submenu's name
+    submenu_icon: str = ""   # this folder of icons makes the group a submenu; "" for loose buttons
+
+
+@dataclass(frozen=True)
 class RibbonPanel:
-    """One panel of buttons on the tab. Panels appear in the order given."""
+    """One panel of the ribbon. Panels appear in the order given."""
 
     panel_id: str
     name: str
-    commands: Sequence[RibbonCommand]
-    submenu_icon: str = ""   # in the merged panel, the group is a submenu named for this panel, with this folder of icons; "" for loose buttons
+    groups: Sequence[RibbonGroup]
+
+    @property
+    def commands(self) -> List[RibbonCommand]:
+        return [command for group in self.groups for command in group.commands]
 
 
 class Ribbon:
     """Creates and removes the add-in's ribbon panels for each workspace (a drawing does not get what a design does).
 
-    With ``host_tab_name`` and ``merged_panel`` (its id and title) the groups are one panel of that tab of Fusion's, with a separator
-    between the groups; when a workspace has no such tab it gets a tab of the add-in's own instead.
+    The panels are put in Fusion's own tab called ``host_tab_name``; a workspace with no such tab gets a tab of the add-in's own instead.
     """
 
-    def __init__(self, ui: adsk.core.UserInterface, panels_by_workspace: Dict[str, Sequence[RibbonPanel]],
-                 host_tab_name: str = "", merged_panel: Optional[Tuple[str, str]] = None) -> None:
+    def __init__(self, ui: adsk.core.UserInterface, panels_by_workspace: Dict[str, Sequence[RibbonPanel]], host_tab_name: str = "") -> None:
         self._ui = ui
         self._panels_by_workspace = {workspace_id: list(panels) for workspace_id, panels in panels_by_workspace.items()}
         self._host_tab_name = host_tab_name
-        self._merged_panel = merged_panel
         self._handlers: List[object] = []
 
     # ---- Ids ---------------------------------------------------------------
@@ -130,12 +139,9 @@ class Ribbon:
     def _panel_id(panel: RibbonPanel, workspace_id: str) -> str:
         return f"{panel.panel_id}_{workspace_id}"
 
-    def _merged_id(self, workspace_id: str) -> str:
-        return f"{self._merged_panel[0]}_{workspace_id}" if self._merged_panel else ""
-
     def _host_tab(self, workspace: Any) -> Any:
         """Fusion's tab called ``host_tab_name`` in ``workspace``, or None (every tab is logged then, to find the right name)."""
-        if not (self._host_tab_name and self._merged_panel):
+        if not self._host_tab_name:
             return None
         tabs = [workspace.toolbarTabs.item(i) for i in range(workspace.toolbarTabs.count)]
         for tab in tabs:
@@ -165,47 +171,41 @@ class Ribbon:
                 log.warning("Workspace not found, no ribbon added: %s (Fusion has: %s)", workspace_id,
                             ", ".join(self._ui.workspaces.item(i).id for i in range(self._ui.workspaces.count)))
                 continue
-            host = self._host_tab(workspace)
-            if host is not None:
-                self._register_merged(host, workspace_id, panels, definitions)
-                continue
-            tab = workspace.toolbarTabs.itemById(self._tab_id(workspace_id)) \
+            tab = self._host_tab(workspace) or workspace.toolbarTabs.itemById(self._tab_id(workspace_id)) \
                 or workspace.toolbarTabs.add(self._tab_id(workspace_id), RIBBON_TAB_NAME)
             for ribbon_panel in panels:
-                panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id)) \
-                    or tab.toolbarPanels.add(self._panel_id(ribbon_panel, workspace_id), ribbon_panel.name)
-                self._add_controls(panel, ribbon_panel.commands, definitions)
+                panel_id = self._panel_id(ribbon_panel, workspace_id)
+                panel = tab.toolbarPanels.itemById(panel_id) or tab.toolbarPanels.add(panel_id, ribbon_panel.name)
+                self._add_groups(panel, panel_id, ribbon_panel, definitions)
 
-    def _register_merged(self, host: Any, workspace_id: str, panels: Sequence[RibbonPanel], definitions: Dict[str, Any]) -> None:
-        """One panel of ``host`` with every group of ``panels``, a separator between the groups."""
-        panel_id = self._merged_id(workspace_id)
-        panel = host.toolbarPanels.itemById(panel_id) or host.toolbarPanels.add(panel_id, self._merged_panel[1])
-        for number, ribbon_panel in enumerate(panels):
+    def _add_groups(self, panel: Any, panel_id: str, ribbon_panel: RibbonPanel, definitions: Dict[str, Any]) -> None:
+        """The groups of ``ribbon_panel`` in ``panel``, a separator between them."""
+        for number, group in enumerate(ribbon_panel.groups):
             if number:
                 separator_id = f"{panel_id}_separator{number}"
                 if panel.controls.itemById(separator_id) is None:
                     panel.controls.addSeparator(separator_id)
-            if not ribbon_panel.submenu_icon:
-                self._add_controls(panel, ribbon_panel.commands, definitions)
+            if not group.submenu_icon:
+                self._add_controls(panel, group.commands, definitions)
                 continue
             # Fusion has no heading control, so a group with a submenu names it that way. Its commands are in the submenu, the promoted
             # ones pinned from there: a button added to the panel as well would be listed twice in its dropdown.
             try:
-                self._add_submenu(panel, ribbon_panel, workspace_id, definitions)
+                self._add_submenu(panel, f"{panel_id}_submenu{number}", group, definitions)
             except Exception:  # noqa: BLE001 - the other groups are still added
-                log.exception("Could not add the '%s' submenu", ribbon_panel.name)
+                log.exception("Could not add the '%s' submenu", group.name)
 
-    def _add_submenu(self, panel: Any, ribbon_panel: RibbonPanel, workspace_id: str, definitions: Dict[str, Any]) -> None:
-        """A submenu of the panel named for ``ribbon_panel``, with its commands."""
-        submenu_id = f"{ribbon_panel.panel_id}_submenu_{workspace_id}"
-        submenu = panel.controls.itemById(submenu_id) or panel.controls.addDropDown(ribbon_panel.name, ribbon_panel.submenu_icon, submenu_id)
-        for command in ribbon_panel.commands:
+    @staticmethod
+    def _add_submenu(panel: Any, submenu_id: str, group: RibbonGroup, definitions: Dict[str, Any]) -> None:
+        """A submenu of the panel named for ``group``, with its commands."""
+        submenu = panel.controls.itemById(submenu_id) or panel.controls.addDropDown(group.name, group.submenu_icon, submenu_id)
+        for command in group.commands:
             definition = definitions[command.command_id]
             control = submenu.controls.itemById(definition.id) or submenu.controls.addCommand(definition)
             if command.promoted:   # pinned to the ribbon bar, as "Pin to Toolbar" does; the dropdown of the panel lists the submenu only
                 pinned = adsk.core.CommandControl.cast(control).promote(True)
-                log.info("Pinned '%s' of the '%s' submenu to the panel: %s", command.name, ribbon_panel.name, pinned)
-        log.info("Added the '%s' submenu with %d command(s)", ribbon_panel.name, submenu.controls.count)
+                log.info("Pinned '%s' of the '%s' submenu to the panel: %s", command.name, group.name, pinned)
+        log.info("Added the '%s' submenu with %d command(s)", group.name, submenu.controls.count)
 
     @staticmethod
     def _add_controls(panel: Any, commands: Sequence[RibbonCommand], definitions: Dict[str, Any]) -> None:
@@ -217,23 +217,19 @@ class Ribbon:
             control.isPromoted = command.promoted
 
     def unregister(self) -> None:
-        """Remove tabs, panels and command definitions. Safe to call repeatedly."""
+        """Remove panels, the add-in's own tabs and command definitions. Safe to call repeatedly."""
         for workspace_id, panels in self._panels_by_workspace.items():
             workspace = self._ui.workspaces.itemById(workspace_id)
             if workspace is None:
                 continue
-            host = self._host_tab(workspace)
-            merged = host.toolbarPanels.itemById(self._merged_id(workspace_id)) if host is not None else None
-            if merged:
-                merged.deleteMe()
-            tab = workspace.toolbarTabs.itemById(self._tab_id(workspace_id))
-            if tab is None:
-                continue
-            for ribbon_panel in panels:
-                panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id))
-                if panel:
-                    panel.deleteMe()
-            tab.deleteMe()
+            own = workspace.toolbarTabs.itemById(self._tab_id(workspace_id))
+            for tab in [self._host_tab(workspace), own]:
+                for ribbon_panel in panels if tab is not None else []:
+                    panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id))
+                    if panel:
+                        panel.deleteMe()
+            if own is not None:
+                own.deleteMe()
         for command in self.commands():
             definition = self._ui.commandDefinitions.itemById(command.command_id)
             if definition:

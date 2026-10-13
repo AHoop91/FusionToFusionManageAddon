@@ -125,7 +125,7 @@ What the next stage depends on:
 This is the step that crosses the bridge. Either role can publish: the Design Engineer who released the component, or the Manufacturing Engineer who takes it on. It needs the Fusion Manage permissions listed under [Before you start](#before-you-start), so whoever publishes must hold them.
 
 1. Open the released design.
-2. Choose **Fusion Manage ▸ Item ▸ Publish Fusion Manage Item**.
+2. Choose **Manage ▸ Item Management ▸ Publish Fusion Manage Item**.
 3. Review the BOM and each component's properties in the Details Panel. Anything marked **New** or **Update** will change in Fusion Manage.
 4. Click **Publish**.
 

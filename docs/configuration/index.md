@@ -308,4 +308,4 @@ If your Items workspace has a field that links an item to a record in the Fusion
 
 ### When the buttons light up
 
-The ribbon and context-menu buttons, other than **Preferences**, stay disabled until the Items workspace is usable: a workspace ID is set, the mappings are valid, and a match key is chosen. The tooltip says what is still missing.
+The ribbon and context-menu buttons, other than **Preferences** and **Export**, stay disabled until the Items workspace is usable: a workspace ID is set, the mappings are valid, and a match key is chosen. The tooltip says what is still missing. The **Export** window opens either way; it turns off only its **Item** destination, and says why.

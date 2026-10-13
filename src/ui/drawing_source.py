@@ -135,7 +135,7 @@ def _export(path: str, kind: str, create: str) -> None:
         raise RuntimeError(f"This version of Fusion cannot export a drawing as a {kind}. Update Fusion and try again.")
     options = make_options(path)
     if hasattr(options, "openPDF"):
-        options.openPDF = False
+        options.openPDF = False   # the file is attached, not shown
     if not manager.execute(options):
         raise RuntimeError(f"Fusion could not export the drawing as a {kind}.")
     if not (os.path.isfile(path) and os.path.getsize(path)):   # an export straight after a drawing opens can report success and write nothing

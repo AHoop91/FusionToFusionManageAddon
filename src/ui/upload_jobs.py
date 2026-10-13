@@ -9,6 +9,7 @@ from ..core.constants import ITEM_COMMAND_NAME
 from ..publish.exporters import catch_up, export_step
 from . import drawing_source
 from .attachment_upload import Progress, UploadJob
+from .export_options import DWG, DXF, PDF, STEP
 from .item_numbers import Subject
 
 
@@ -92,11 +93,24 @@ def _confirm_drawing(extension: str) -> Callable[[adsk.core.UserInterface, Subje
     return confirm
 
 
-def _drawing_job(title: str, label: str, extension: str, short: str, export: Callable[[str], None]) -> UploadJob:
-    return UploadJob(title, label, extension, ("Find item", f"Create {short}", "Upload"), lambda path, _subject, _progress: export(path), _confirm_drawing(extension))
+_DRAWINGS = {   # format: title, label, extension, short name of the format, what writes it
+    PDF: ("Uploading Drawing PDF", "drawing PDF", ".pdf", "PDF", drawing_source.export_pdf),
+    DWG: ("Uploading Drawing DWG", "drawing DWG", ".dwg", "DWG", drawing_source.export_dwg),
+    DXF: ("Uploading Drawing DXF", "drawing DXF", ".dxf", "DXF", drawing_source.export_dxf),
+}
+
+
+def drawing_job(key: str) -> UploadJob:
+    """The job that attaches the open drawing as a file of format ``key`` (``export_options.PDF``...)."""
+    title, label, extension, short, export = _DRAWINGS[key]
+    return UploadJob(title, label, extension, ("Find item", f"Create {short}", "Upload"),
+                     lambda path, _subject, _progress: export(path), _confirm_drawing(extension))
 
 
 STEP_JOB = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), _export_design, _confirm_design)
-DRAWING_JOB = _drawing_job("Uploading Drawing PDF", "drawing PDF", ".pdf", "PDF", drawing_source.export_pdf)
-DWG_JOB = _drawing_job("Uploading Drawing DWG", "drawing DWG", ".dwg", "DWG", drawing_source.export_dwg)
-DXF_JOB = _drawing_job("Uploading Drawing DXF", "drawing DXF", ".dxf", "DXF", drawing_source.export_dxf)
+DRAWING_JOB, DWG_JOB, DXF_JOB = drawing_job(PDF), drawing_job(DWG), drawing_job(DXF)
+
+
+def export_job(key: str) -> UploadJob:
+    """The job that exports the open document as format ``key``."""
+    return STEP_JOB if key == STEP else drawing_job(key)

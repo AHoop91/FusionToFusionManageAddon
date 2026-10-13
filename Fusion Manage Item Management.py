@@ -27,6 +27,7 @@ from src.core.logging_setup import get_logger, shutdown_logging  # noqa: E402
 from src.ui import drawing_source  # noqa: E402
 from src.ui.actions import register_actions  # noqa: E402
 from src.ui.availability import GateWatcher, SetupGate  # noqa: E402
+from src.ui.export_dialog import ExportDialog  # noqa: E402
 from src.ui.file_dialogs import FileDialogs  # noqa: E402
 from src.ui.message_bridge import MessageBridge  # noqa: E402
 from src.ui.job_alerts import JobAlerts  # noqa: E402
@@ -36,6 +37,11 @@ from src.ui.palette_host import PaletteHost  # noqa: E402
 from src.ui.ui_thread import UiThread  # noqa: E402
 from src.core.constants import (  # noqa: E402
     COMMAND_ID,
+    EXPORT_COMMAND_ID,
+    EXPORT_HEIGHT,
+    EXPORT_PALETTE_ID,
+    EXPORT_TITLE,
+    EXPORT_WIDTH,
     ITEM_COMMAND_ID,
     ITEM_HEIGHT,
     ITEM_PALETTE_ID,
@@ -55,6 +61,7 @@ from src.core.constants import (  # noqa: E402
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
     PUBLISH_WIDTH,
+    RIBBON_ADMINISTRATION_NAME,
     RIBBON_DESIGN_WORKSPACE,
     RIBBON_DRAWING_WORKSPACE,
     RIBBON_EXPORT_PANEL_ID,
@@ -62,21 +69,13 @@ from src.core.constants import (  # noqa: E402
     RIBBON_HOST_TAB_NAME,
     RIBBON_MERGED_PANEL_ID,
     RIBBON_MERGED_PANEL_NAME,
-    RIBBON_PANEL_ID,
-    RIBBON_PANEL_NAME,
-    RIBBON_PUBLISH_PANEL_ID,
-    RIBBON_PUBLISH_PANEL_NAME,
     SETTINGS_PALETTE_ID,
     SETTINGS_TITLE,
-    UPLOAD_DRAWING_COMMAND_ID,
-    UPLOAD_DWG_COMMAND_ID,
-    UPLOAD_DXF_COMMAND_ID,
     UPLOAD_PROGRESS_HEIGHT,
     UPLOAD_PROGRESS_PALETTE_ID,
     UPLOAD_PROGRESS_WIDTH,
-    UPLOAD_STEP_COMMAND_ID,
 )
-from src.ui.ribbon import Ribbon, RibbonCommand, RibbonPanel  # noqa: E402
+from src.ui.ribbon import Ribbon, RibbonCommand, RibbonGroup, RibbonPanel  # noqa: E402
 
 log = get_logger()
 
@@ -99,6 +98,8 @@ _palette_host = None
 _publish_host = None
 _jobs_host = None
 _progress_host = None
+_export_host = None
+_export_dialog = None
 _item_host = None
 _item_panel = None
 _item_menu = None
@@ -112,7 +113,7 @@ _watcher = None
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
+    global _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
     try:
         _ui = adsk.core.Application.get().userInterface
 
@@ -128,6 +129,8 @@ def run(context) -> None:
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, "Upload", "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host)
+        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, EXPORT_TITLE, "export", False, EXPORT_WIDTH, EXPORT_HEIGHT, False)
+        _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
                           "Open the Fusion Manage item of the selected component.",
@@ -155,24 +158,12 @@ def run(context) -> None:
                                      PUBLISH_TOOLTIP,
                                      _publish_host.show_centered,
                                      _icon("publish"), needs_setup=True)
-        upload_drawing = RibbonCommand(UPLOAD_DRAWING_COMMAND_ID, UPLOAD_DRAWING_NAME,
-                                       UPLOAD_DRAWING_TOOLTIP,
-                                       _item_panel.upload_drawing,
-                                       _icon("upload_drawing"), needs_setup=True, needs_drawing=True)
-        upload_step = RibbonCommand(UPLOAD_STEP_COMMAND_ID, "Export STEP File",
-                                    "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component, or of the design.",
-                                    _item_panel.upload_step,
-                                    _icon("upload_step"), needs_setup=True)
-        upload_dwg = RibbonCommand(UPLOAD_DWG_COMMAND_ID, "Export DWG",
-                                   "Create a DWG file of the open drawing and attach it to the Fusion Manage item of the design it shows.",
-                                   _item_panel.upload_drawing_dwg,
-                                   _icon("upload_drawing"), promoted=False, needs_setup=True, needs_drawing=True)
-        upload_dxf = RibbonCommand(UPLOAD_DXF_COMMAND_ID, "Export DXF",
-                                   "Create a DXF file of the open drawing and attach it to the Fusion Manage item of the design it shows.",
-                                   _item_panel.upload_drawing_dxf,
-                                   _icon("upload_drawing"), promoted=False, needs_setup=True, needs_drawing=True)
-        # Panels appear in this order. Add further buttons or panels here; the ribbon needs no other changes.
-        administration = RibbonPanel(RIBBON_PANEL_ID, RIBBON_PANEL_NAME, [
+        # Not held back by the setup or the drawing loading: the Export window says what is missing, and which destination that leaves off.
+        export = RibbonCommand(EXPORT_COMMAND_ID, "Export",
+                               "Export the open design or drawing, and attach the file to its item or component in Fusion Manage.",
+                               _export_dialog.show,
+                               _icon("upload_step"))
+        administration = RibbonGroup([
             RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
                           _jobs_host.show_centered,
                           _icon("jobs"), needs_setup=True),
@@ -180,19 +171,16 @@ def run(context) -> None:
                           "Open the Fusion Manage panel: connection and settings.",
                           _palette_host.show,
                           _icon("settings")),
-        ], submenu_icon=_icon("settings"))
-        # A drawing is not published (that is for the design), so it has no Publish. Export has the files to attach: a design makes a STEP
-        # file; a drawing a PDF, DWG or DXF, since a STEP file is of a design. The groups come out as one panel of Fusion's Manage tab (see
-        # ``Ribbon``); Export and Administration are submenus, with their promoted commands pinned to the ribbon bar.
-        item_design = RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item, publish_item])
-        item_drawing = RibbonPanel(RIBBON_PUBLISH_PANEL_ID, RIBBON_PUBLISH_PANEL_NAME, [open_item])
-        export_design = RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [upload_step], _icon("upload_step"))
-        export_drawing = RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [upload_drawing, upload_dwg, upload_dxf], _icon("upload_drawing"))
+        ], RIBBON_ADMINISTRATION_NAME, _icon("settings"))
+        # Panels appear in this order, Export on the left. A drawing is not published (that is for the design), so it has no Publish.
+        export_panel = RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [RibbonGroup([export])])
         panels = {
-            RIBBON_DESIGN_WORKSPACE: [item_design, export_design, administration],
-            RIBBON_DRAWING_WORKSPACE: [item_drawing, export_drawing, administration],
+            RIBBON_DESIGN_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME,
+                                                                [RibbonGroup([open_item, publish_item]), administration])],
+            RIBBON_DRAWING_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME,
+                                                                 [RibbonGroup([open_item]), administration])],
         }
-        _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME, (RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME))
+        _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME)
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
@@ -216,6 +204,8 @@ def stop(context) -> None:
             _publish_host.dispose()
         if _progress_host:
             _progress_host.dispose()
+        if _export_host:
+            _export_host.dispose()
         if _jobs_host:
             _jobs_host.dispose()
         if _item_host:

@@ -21,7 +21,7 @@ Setting up the add-in takes four stages. Do them in this order.
 2. In Fusion open **Utilities ▸ Add-Ins ▸ Scripts and Add-Ins**, switch to the **Add-Ins** tab, click **+** (add existing add-in) and browse to the folder.
 3. Select **MfgToFm** in the list and click **Run**. Tick **Run on Startup** if you want it to load with Fusion.
 
-The add-in supports Windows and macOS. Once it is running, a **Fusion Manage** tab appears in the Design and Drawing workspaces. Most buttons stay greyed out until setup is complete.
+The add-in supports Windows and macOS. Once it is running, an **Export** panel and an **Item Management** panel appear in the **Manage** tab of the Design and Drawing workspaces. Most buttons stay greyed out until setup is complete.
 
 !!! example "Screenshot placeholder: Scripts and Add-Ins dialog with MfgToFm selected"
     **Show:** The Add-Ins tab with MfgToFm selected, and the Run and Run on Startup options.
@@ -138,7 +138,7 @@ You must already be a member of the hub (see [2.3](#23-add-developers-to-the-hub
 
 ## 3. Configure the connection
 
-Open **Fusion Manage ▸ Administration ▸ Preferences**. Signed out, the panel shows **Sign in to Fusion Manage** with a **Connection settings** link. Once signed in, the same fields are on the **Connection** tab.
+Open **Manage ▸ Item Management ▸ Administration ▸ Preferences**. Signed out, the panel shows **Sign in to Fusion Manage** with a **Connection settings** link. Once signed in, the same fields are on the **Connection** tab.
 
 | Setting | What to enter |
 |---|---|

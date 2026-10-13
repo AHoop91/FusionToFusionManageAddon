@@ -10,6 +10,7 @@ from .client import WORKSPACES, FmApiError, FmClient
 
 PERMISSION_PREFIX = "permission.shortname."
 VIEW_ITEMS = "view_items"   # without it nothing of the workspace can be seen
+ATTACH_PERMISSIONS = (VIEW_ITEMS, "add_attachments", "edit_attachments")   # to find the record, attach a file, and give a file a new version
 
 
 def parse_granted(data: Any) -> Set[str]:

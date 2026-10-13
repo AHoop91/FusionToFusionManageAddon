@@ -1,7 +1,7 @@
 """Make a file from the open document and attach it to a Fusion Manage item (a new version when the file is there already).
 
-What file is made is an ``UploadJob``: a STEP file of a design, or a PDF of a drawing. It starts from the Actions menu of the
-Item panel (the item shown), or from the right-click menu or the ribbon (the item of a number). The file is made on Fusion's UI
+What file is made is an ``UploadJob``: a STEP file of a design, or a PDF, DWG or DXF of a drawing. It starts from the Actions menu of the
+Item panel (the item shown), from the right-click menu (the item of a number) or from the Export window (the item or the component of a number). The file is made on Fusion's UI
 thread; finding the item and the upload run on a worker thread. How far it has got is kept in ``status`` for a page to poll
 (``upload_status``): the Item panel shows it over itself, and the other starts in a small window of their own.
 """
@@ -24,9 +24,11 @@ from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
 from ..fm.client import FmClient
+from ..fm.components import ComponentService, link_ids
 from ..fm.items import ItemService, pick_hit
 from ..publish.exporters import catch_up
 from ..publish.writer import safe_name
+from .export_options import COMPONENT, ITEM
 from .item_numbers import Subject
 from .palette_host import PaletteHost
 from .ui_thread import UiThread
@@ -66,8 +68,9 @@ class AttachmentUpload:
         self._auth = auth
         self._reload = reload   # read the item shown again (its tab counts change)
         self._lock = threading.Lock()
-        self._status: Dict[str, Any] = {"active": False}
+        self._status: Dict[str, Any] = {"active": False}   # when over, with the ``result`` of the last one: ``ok`` and a ``message``
         self._window_open = False
+        self._in_window = False   # the upload on show is one the Export window follows: its end is told to the window, not in a message box
 
     # ---- Starting -------------------------------------------------------------------
 
@@ -80,36 +83,66 @@ class AttachmentUpload:
         self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject))   # after this call returns, so the page is not left waiting
         return {"started": True}
 
-    def from_number(self, job: UploadJob, subject: Subject) -> None:
-        """Upload for the item of ``subject``, asking nothing and showing the progress window. UI thread."""
+    def from_number(self, job: UploadJob, subject: Subject, destination: str = ITEM) -> None:
+        """Upload for the item of ``subject`` (``destination`` ITEM), or for its component in the Components workspace (COMPONENT), asking
+        nothing and showing the progress window. UI thread."""
         if not self._begin(job, FIND):
             self._ui.messageBox("A file is already being uploaded.", ITEM_COMMAND_NAME)
             return
         self._window_open = True
         self._window.show_centered()
-        threading.Thread(target=self._find_then_make, args=(job, subject), daemon=True).start()
+        threading.Thread(target=self._find_then_make, args=(job, subject, destination), daemon=True).start()
 
-    def _find_then_make(self, job: UploadJob, subject: Subject) -> None:
-        """Find the item of ``subject`` in Fusion Manage (a worker thread), then make the file on the UI thread."""
+    def begin_in_window(self, job: UploadJob) -> bool:
+        """Start the status of an upload that the Export window follows (it shows the progress, and the end, itself); False when one is
+        already under way. UI thread."""
+        if not self._begin(job, FIND, in_window=True):
+            return False
+        self._in_window = True
+        return True
+
+    def continue_in_window(self, job: UploadJob, subject: Subject, destination: str) -> None:
+        """Go on with the upload ``begin_in_window`` started, once the item of ``subject`` is known. UI thread."""
+        threading.Thread(target=self._find_then_make, args=(job, subject, destination), daemon=True).start()
+
+    def fail_in_window(self, message: str) -> None:
+        """End the upload ``begin_in_window`` started, for ``message``. UI thread."""
+        self._finish({"ok": False, "message": message})
+
+    def _find_then_make(self, job: UploadJob, subject: Subject, destination: str) -> None:
+        """Find the item (or the component) of ``subject`` in Fusion Manage (a worker thread), then make the file on the UI thread."""
         number = subject.item_number
         try:
-            problem = self._config.items_setup_problem()
-            if problem:
-                raise ValueError(f"{problem} Complete it in Preferences.")
-            workspace_id = self._config.config.workspaces.get(ITEMS_KIND).workspace_id
-            hits = ItemService(FmClient(self._config.effective_settings(), self._auth)).search(workspace_id, number)
-            if not hits:
-                raise LookupError(f"No item exists for {number}.")
+            workspace_id, item_id = self._find_component(number) if destination == COMPONENT else self._find_item(number)
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
-            log.exception("Could not find the item of %s to attach a %s to", number, job.label)
+            log.exception("Could not find the %s of %s to attach a %s to", destination, number, job.label)
             self._fail(f"Could not attach a {job.label}:\n{exc}")
             return
-        item_id = pick_hit(hits, number)["id"]
-        self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject))
+        self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject, destination))
+
+    def _find_item(self, number: str) -> Tuple[str, str]:
+        """``(workspace id, item id)`` of the item numbered ``number`` in the Items workspace."""
+        problem = self._config.items_setup_problem()
+        if problem:
+            raise ValueError(f"{problem} Complete it in Preferences.")
+        workspace_id = self._config.config.workspaces.get(ITEMS_KIND).workspace_id
+        hits = ItemService(FmClient(self._config.effective_settings(), self._auth)).search(workspace_id, number)
+        if not hits:
+            raise LookupError(f"No item exists for {number}.")
+        return workspace_id, pick_hit(hits, number)["id"]
+
+    def _find_component(self, number: str) -> Tuple[str, str]:
+        """``(workspace id, item id)`` of the working version of the component numbered ``number`` in the Components workspace."""
+        link, reason = ComponentService(FmClient(self._config.effective_settings(), self._auth)).find_working(number)
+        workspace_id, item_id = link_ids(link)
+        if not item_id:
+            raise LookupError(reason or f"No component exists for {number}.")
+        log.info("Working version of the component %s: workspace %s, item %s (%s)", number, workspace_id, item_id, link)
+        return workspace_id, item_id
 
     # ---- Doing ----------------------------------------------------------------------
 
-    def _make(self, job: UploadJob, workspace_id: str, item_id: str, subject: Subject) -> None:
+    def _make(self, job: UploadJob, workspace_id: str, item_id: str, subject: Subject, destination: str = ITEM) -> None:
         """Write the file and send it off to be attached. UI thread."""
         name = f"{safe_name(subject.item_number)}{job.extension}"
         folder = os.path.join(tempfile.gettempdir(), TEMP_FOLDER, uuid.uuid4().hex)
@@ -128,9 +161,9 @@ class AttachmentUpload:
         finally:
             shutil.rmtree(folder, ignore_errors=True)
         self._stage(job, SEND, 0)
-        threading.Thread(target=self._upload, args=(job, workspace_id, item_id, name, content), daemon=True).start()
+        threading.Thread(target=self._upload, args=(job, workspace_id, item_id, name, content, destination), daemon=True).start()
 
-    def _upload(self, job: UploadJob, workspace_id: str, item_id: str, name: str, content: bytes) -> None:
+    def _upload(self, job: UploadJob, workspace_id: str, item_id: str, name: str, content: bytes, destination: str) -> None:
         try:
             client = FmClient(self._config.effective_settings(), self._auth)
             kind = AttachmentService(client).upload(workspace_id, item_id, name, content,
@@ -139,13 +172,18 @@ class AttachmentUpload:
             log.exception("Could not attach %s", name)
             self._fail(f"Could not attach {name}:\n{exc}")
             return
-        self._tasks.post(lambda: self._done(name, kind))
+        self._tasks.post(lambda: self._done(name, kind, destination))
 
-    def _done(self, name: str, kind: str) -> None:
-        """Say the file is attached (a green tick in the panel when it is open, else a message box) and read the item again. UI thread."""
+    def _done(self, name: str, kind: str, destination: str) -> None:
+        """Say the file is attached (to the Export window if it follows it, else a green tick in the panel when it is open, else a message
+        box) and read the item again. UI thread."""
+        message = f"A new version of {name} was uploaded to the {destination} in Fusion Manage." if kind == "version" else f"{name} was attached to the {destination} in Fusion Manage."
+        if self._in_window:
+            self._finish({"ok": True, "message": message})
+            self._reload()
+            return
         self._end()
         self._close_window()   # now, before the message below, not when the queue gets to it
-        message = f"A new version of {name} was uploaded to the item in Fusion Manage." if kind == "version" else f"{name} was attached to the item in Fusion Manage."
         if self._host.visible:
             self._host.send("toast", json.dumps({"message": message, "tone": "success"}))
         else:
@@ -153,7 +191,11 @@ class AttachmentUpload:
         self._reload()
 
     def _fail(self, message: str) -> None:
-        """Stop and tell the user why, from any thread; the progress goes first, so it is not left over the message."""
+        """Stop and tell the user why, from any thread (the Export window if it follows the upload, else a message box); the progress goes
+        first, so it is not left over the message."""
+        if self._in_window:
+            self._finish({"ok": False, "message": message})
+            return
         self._end()
         self._tasks.post(lambda: self._ui.messageBox(message, ITEM_COMMAND_NAME))
 
@@ -161,21 +203,27 @@ class AttachmentUpload:
 
     def status(self) -> Dict[str, Any]:
         """The answer of a page's poll: ``active``, and while it is, the ``title``, the ``stage`` in words, the ``step`` it is at
-        among ``steps`` and the ``percent`` (None while unknown)."""
+        among ``steps`` and the ``percent`` (None while unknown). Once one the Export window follows is over, ``result`` says how it went."""
         with self._lock:
             return dict(self._status)
 
-    def _begin(self, job: UploadJob, step: int) -> bool:
-        """Start an upload of ``job`` at ``step``; False when one is already under way."""
+    def _begin(self, job: UploadJob, step: int, in_window: bool = False) -> bool:
+        """Start an upload of ``job`` at ``step`` (one the Export window follows if ``in_window``); False when one is already under way."""
         with self._lock:
             if self._status["active"]:
                 return False
+            self._in_window = in_window
             self._status = {"active": True, "title": job.title, "steps": list(job.steps), "step": step, "stage": job.stage(step), "percent": None}
             return True
 
     def _stage(self, job: UploadJob, step: int, percent: Optional[int] = None) -> None:
         with self._lock:
             self._status.update(step=step, stage=job.stage(step), percent=percent)
+
+    def _finish(self, result: Dict[str, Any]) -> None:
+        """End an upload the Export window follows, keeping ``result`` for its next poll."""
+        with self._lock:
+            self._status = {"active": False, "result": result}
 
     def _end(self) -> None:
         with self._lock:

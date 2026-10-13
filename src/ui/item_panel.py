@@ -16,7 +16,7 @@ import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import adsk.core
 import adsk.fusion
@@ -42,7 +42,7 @@ from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
 from .ui_thread import UiThread
-from .upload_jobs import DRAWING_JOB, DWG_JOB, DXF_JOB, STEP_JOB, pick
+from .upload_jobs import DRAWING_JOB, DWG_JOB, DXF_JOB, STEP_JOB, export_job, pick
 
 log = get_logger("item_panel")
 
@@ -265,9 +265,10 @@ class ItemPanel:
         if number and number != self._part:
             self._find(number, lambda subject: self._open(subject, show=False), quiet=True)   # it is open already
 
-    def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False) -> None:
+    def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False, fail: Optional[Callable[[str], None]] = None) -> None:
         """Read the item number of the component with ``part_number`` from the Data Model (a worker thread), then call ``then`` with it on the
-        UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log). UI thread."""
+        UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log; ``fail`` is
+        given the reason instead of a message box showing it). UI thread."""
         if not self._has_number(part_number, quiet):
             return
         ref = _active_ref()
@@ -283,7 +284,7 @@ class ItemPanel:
                     log.exception("Could not read the item number of %s", part_number)
                 if not quiet:
                     message = str(exc) or type(exc).__name__
-                    self._tasks.post(lambda: self._ui.messageBox(message, ITEM_COMMAND_NAME))
+                    self._tasks.post(lambda: fail(message) if fail else self._ui.messageBox(message, ITEM_COMMAND_NAME))
                 return
             self._tasks.post(lambda: then(subject))
 
@@ -379,26 +380,50 @@ class ItemPanel:
             pick(_menu_selection)
             self._find(number, lambda subject: self._uploads.from_number(STEP_JOB, subject))
 
-    def upload_step(self) -> None:
-        """Upload the open design as the STEP file of the item of the selected component, else of the design (the ribbon button). UI thread."""
-        pick(_active_selection())
-        self._find(_selected_part_number(), lambda subject: self._uploads.from_number(STEP_JOB, subject))
-
-    def upload_drawing(self, job: UploadJob = DRAWING_JOB) -> None:
-        """Upload the open drawing as the PDF (or the DWG or DXF, by ``job``) of the item of the design it shows (the ribbon button). UI thread."""
+    def upload_drawing(self) -> None:
+        """Upload the open drawing as the PDF of the item of the design it shows (the right-click entry). UI thread."""
         number, reason = drawing_source.top_level_number()
         if not number:
             self._ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
             return
-        self._find(number, lambda subject: self._uploads.from_number(job, subject))
+        self._find(number, lambda subject: self._uploads.from_number(DRAWING_JOB, subject))
 
-    def upload_drawing_dwg(self) -> None:
-        """Upload the open drawing as the DWG file of the item of the design it shows (the ribbon button). UI thread."""
-        self.upload_drawing(DWG_JOB)
+    def export_target(self) -> Tuple[str, str]:
+        """``(part number, "")`` of what the Export window exports: the top of the open drawing, or the selected component (else the top) of the
+        open design; ``("", why not)`` when there is nothing to export yet. UI thread."""
+        if drawing_source.active_drawing() is not None:
+            number, reason = drawing_source.top_level_number()
+            return (number, "") if number else ("", f"The drawing is not ready yet: {reason}")
+        number = _selected_part_number()
+        return (number, "") if number else ("", "Select a component that has a part number, or open a design that has one.")
 
-    def upload_drawing_dxf(self) -> None:
-        """Upload the open drawing as the DXF file of the item of the design it shows (the ribbon button). UI thread."""
-        self.upload_drawing(DXF_JOB)
+    def export_description(self) -> str:
+        """The description Fusion holds for what Export exports: the selected component of the open design (else the design's top), or the
+        design a drawing shows; "" when it has none or cannot be read. UI thread."""
+        try:
+            if drawing_source.active_drawing() is not None:
+                design = drawing_source.referenced_design()
+                component = design.rootComponent if design is not None else None
+            else:
+                component = next((c for c in map(_component_of, _active_selection()) if c is not None), None)
+                design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+                component = component or (design.rootComponent if design is not None else None)
+            return str(component.description or "").strip() if component is not None else ""
+        except (AttributeError, RuntimeError):
+            return ""
+
+    def export(self, key: str, destination: str) -> None:
+        """Export the open document as the format ``key`` and attach it to the item (or the component) ``destination`` of the part
+        ``export_target`` gives. The Export window follows it (``begin_in_window``), so it is told how it went, not shown a message box.
+        Raises ``ValueError`` when there is nothing to export or an upload is already under way. UI thread."""
+        number, problem = self.export_target()
+        if not number:
+            raise ValueError(problem)
+        job = export_job(key)
+        if not self._uploads.begin_in_window(job):
+            raise ValueError("A file is already being uploaded.")
+        pick(_active_selection())
+        self._find(number, lambda subject: self._uploads.continue_in_window(job, subject, destination), fail=self._uploads.fail_in_window)
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""
