@@ -65,7 +65,7 @@ def _post_token(form: Dict[str, str]) -> Dict[str, Any]:
             body = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
-        raise AuthError(f"Token request failed ({exc.code}): {detail}") from exc
+        raise AuthError(f"Token request failed ({exc.code}): {detail}", rejected=exc.code in (400, 401)) from exc
     except (urllib.error.URLError, OSError) as exc:
         raise AuthError(f"Could not reach Autodesk: {exc}") from exc
     body["expires_at"] = time.time() + int(body.get("expires_in", 0))

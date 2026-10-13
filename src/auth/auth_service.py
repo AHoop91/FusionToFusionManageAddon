@@ -140,8 +140,9 @@ class AuthService:
                 raise AuthError("Session expired; sign in again.")
             try:
                 fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
-            except AuthError:
-                self.sign_out(settings)
+            except AuthError as exc:
+                if exc.rejected:   # the refresh token is dead; a network or server failure keeps the session for the next try
+                    self.sign_out(settings)
                 raise
             # Refresh tokens rotate; keep the old one if none is returned.
             fresh.setdefault("refresh_token", refresh)
