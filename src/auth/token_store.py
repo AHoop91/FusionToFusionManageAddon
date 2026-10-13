@@ -31,14 +31,19 @@ class _DataBlob(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
 
-def _dpapi(data: bytes, encrypt: bool) -> bytes:
-    """Run DPAPI encrypt/decrypt on ``data`` for the current user."""
+_ENTROPY = f"{ADDIN_NAME}.tokens.v1".encode("utf-8")   # a program that only calls DPAPI as this user cannot read the file; one that knows this value can
+
+
+def _dpapi(data: bytes, encrypt: bool, entropy: Optional[bytes] = _ENTROPY) -> bytes:
+    """Run DPAPI encrypt/decrypt on ``data`` for the current user, with ``entropy`` mixed in (None for none)."""
     buffer = ctypes.create_string_buffer(data, len(data))
     blob_in = _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char)))
     blob_out = _DataBlob()
+    extra = ctypes.create_string_buffer(entropy, len(entropy)) if entropy else None
+    blob_extra = _DataBlob(len(entropy), ctypes.cast(extra, ctypes.POINTER(ctypes.c_char))) if entropy else None
     func = ctypes.windll.crypt32.CryptProtectData if encrypt \
         else ctypes.windll.crypt32.CryptUnprotectData
-    args = [ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)]
+    args = [ctypes.byref(blob_in), None, ctypes.byref(blob_extra) if entropy else None, None, None, 0, ctypes.byref(blob_out)]
     if not func(*args):
         raise OSError("DPAPI operation failed")
     try:
@@ -60,15 +65,24 @@ class _DpapiBackend:
         return os.path.join(self._dir, f"tokens_{safe}.bin")
 
     def save(self, client_id: str, payload: bytes) -> None:
-        with open(self._file(client_id), "wb") as handle:
+        path = self._file(client_id)
+        tmp_path = path + ".tmp"   # written whole, then swapped in, so a crash cannot leave a half-written file
+        with open(tmp_path, "wb") as handle:
             handle.write(_dpapi(payload, True))
+        os.replace(tmp_path, path)
 
     def load(self, client_id: str) -> Optional[bytes]:
         path = self._file(client_id)
         if not os.path.exists(path):
             return None
         with open(path, "rb") as handle:
-            return _dpapi(handle.read(), False)
+            blob = handle.read()
+        try:
+            return _dpapi(blob, False)
+        except OSError:
+            payload = _dpapi(blob, False, None)   # kept by an earlier version, without entropy: read it, then keep it the new way
+            self.save(client_id, payload)
+            return payload
 
     def clear(self, client_id: str) -> None:
         path = self._file(client_id)
@@ -78,15 +92,21 @@ class _DpapiBackend:
 
 # ---- macOS backend ----------------------------------------------------------
 
+def _quote(text: str) -> str:
+    """``text`` as one double-quoted word of a ``security -i`` command line."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 class _KeychainBackend:
     """One login-Keychain generic password per client id."""
 
     def save(self, client_id: str, payload: bytes) -> None:
-        subprocess.run(
-            ["security", "add-generic-password", "-U", "-s", _KEYCHAIN_SERVICE,
-             "-a", client_id, "-w", base64.b64encode(payload).decode("ascii")],
-            check=True, capture_output=True,
-        )
+        # The command goes in on stdin (``security -i``), not on the command line, where any program could read the tokens from the process list.
+        if any(ord(c) < 32 for c in client_id):
+            raise ValueError("The Client ID holds a control character.")
+        command = (f"add-generic-password -U -s {_quote(_KEYCHAIN_SERVICE)} -a {_quote(client_id)} "
+                   f"-w {_quote(base64.b64encode(payload).decode('ascii'))}\n")
+        subprocess.run(["security", "-i"], input=command, text=True, check=True, capture_output=True)
 
     def load(self, client_id: str) -> Optional[bytes]:
         result = subprocess.run(
