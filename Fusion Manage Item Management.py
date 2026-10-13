@@ -86,7 +86,7 @@ UPLOAD_DRAWING_TOOLTIP = "Create a PDF of the open drawing and attach it to the 
 
 
 def _icon(folder: str) -> str:
-    """The folder of the icons (``16x16.png``...) named ``folder`` under ``resources``."""
+    """The folder of the icons (``16x16.svg``...) named ``folder`` under ``resources``."""
     return os.path.join(_ADDIN_DIR, "resources", folder)
 
 

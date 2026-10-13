@@ -28,7 +28,7 @@ log = get_logger("ribbon")
 class RibbonCommand:
     """One ribbon button.
 
-    ``resource_folder`` holds the icons (``16x16.png``, ``32x32.png``); leave
+    ``resource_folder`` holds the icons (``16x16.svg``, ``32x32.svg``); leave
     it empty to use Fusion's default icon.
     """
 
