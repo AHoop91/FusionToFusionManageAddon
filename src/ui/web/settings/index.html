@@ -105,9 +105,13 @@
                 <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">
               </label>
               <label>Tenant
-                <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
+                <span class="inline-row">
+                  <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
+                  <button id="f-tenant-find" type="button" class="btn btn-secondary">Find</button>
+                </span>
               </label>
-              <p class="hint">The part before .autodeskplm360.net in your Fusion Manage address. Leave it empty to use the name of the hub open in Fusion.</p>
+              <p class="hint">The part before .autodeskplm360.net in your Fusion Manage address. <b>Find</b> reads it from the Fusion Manage item the open design is linked to; sign in first.</p>
+              <p id="f-tenant-msg" class="hint" hidden></p>
               <label>Callback port
                 <input id="f-port" type="number" min="1024" max="65535">
               </label>

@@ -39,9 +39,8 @@ def config_path() -> str:
 class ConfigService:
     """Single source of truth for configuration."""
 
-    def __init__(self, path: Optional[str] = None, tenant: Optional[Callable[[], str]] = None) -> None:
+    def __init__(self, path: Optional[str] = None) -> None:
         self._path = path or config_path()
-        self._tenant = tenant or (lambda: "")   # the name of the active Fusion hub: the tenant when none is saved
         self._config = self._read()
         self._listeners: List[Callable[[], None]] = []
 
@@ -102,8 +101,7 @@ class ConfigService:
         """Settings the rest of the add-in should use for the active mode."""
         if self._config.mode == MODE_COMPANY:
             return self._load_company_settings()
-        saved = self._config.local.tenant.strip()
-        return replace(self._config.local, tenant=tenant_code(saved) if saved else self._tenant())
+        return replace(self._config.local, tenant=tenant_code(self._config.local.tenant))
 
     def _load_company_settings(self) -> ConnectionSettings:
         """PLACEHOLDER: load shared company config from ``company_source``.

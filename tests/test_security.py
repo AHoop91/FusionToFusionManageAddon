@@ -9,7 +9,7 @@ from unittest import mock
 
 from src.auth.callback_server import CallbackServer
 from src.config.config_service import ConfigService
-from src.config.hub import tenant_code
+from src.config.hub import tenant_code, tenant_of_link
 from src.config.models import MODE_LOCAL, ConnectionSettings
 from src.fm.client import FmApiError, FmClient
 
@@ -31,13 +31,23 @@ class TenantTests(unittest.TestCase):
         self.assertEqual(ConnectionSettings(client_id="c", tenant="acme").validate(), [])
         self.assertTrue(ConnectionSettings(client_id="c", tenant="evil.example/x#").validate(require_tenant=False))
 
-    def test_effective_settings_use_the_saved_tenant_else_the_hub(self):
+    def test_effective_settings_use_only_the_saved_tenant(self):
         with tempfile.TemporaryDirectory() as folder:
-            service = ConfigService(os.path.join(folder, "config.json"), tenant=lambda: "hubco")
-            self.assertEqual(service.effective_settings().tenant, "hubco")
+            service = ConfigService(os.path.join(folder, "config.json"))
+            self.assertEqual(service.effective_settings().tenant, "")
             self.assertEqual(service.update(MODE_LOCAL, ConnectionSettings(client_id="c", tenant="Acme"), service.config.workspaces, ""), [])
             self.assertEqual(service.effective_settings().tenant, "acme")
             self.assertEqual(service.config.local.tenant, "Acme")
+
+
+class TenantFromLinkTests(unittest.TestCase):
+    def test_the_tenant_comes_from_the_item_address_or_urn(self):
+        url = "https://ACME.autodeskplm360.net/plm/extAccess?itemUrn=x"
+        self.assertEqual(tenant_of_link("", url), "acme")
+        self.assertEqual(tenant_of_link("urn:adsk.plm:tenant.workspace.item:ACME.57.15745", ""), "acme")
+        self.assertEqual(tenant_of_link("", "https://evil.example/plm"), "")
+        self.assertEqual(tenant_of_link("", "https://x.evil.com/?.autodeskplm360.net"), "")
+        self.assertEqual(tenant_of_link("", ""), "")
 
 
 class RedirectTests(unittest.TestCase):

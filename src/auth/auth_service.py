@@ -60,7 +60,7 @@ class AuthService:
 
     def start_login(self, settings: ConnectionSettings) -> None:
         """Begin browser sign-in. Raises AuthError if settings are invalid."""
-        problems = settings.validate()
+        problems = settings.validate(require_tenant=False)   # signing in does not need the tenant
         if problems:
             raise AuthError(" ".join(problems))
         with self._lock:

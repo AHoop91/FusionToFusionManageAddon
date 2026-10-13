@@ -9,7 +9,8 @@ title: Troubleshooting and Limitations
 | Message | Cause and fix |
 |---|---|
 | **Client ID is required.** / **Callback port must be between 1024 and 65535.** / **At least one scope is required.** | Complete the **Connection** tab and save. |
-| **Tenant is required: enter it in Preferences, or open the Fusion hub named after it.** | Enter the tenant in Preferences ▸ Connection. Left empty, the add-in uses the open hub's name, which fails when the hub is named differently. |
+| **Tenant is required: use Find in Preferences ▸ Connection, or enter it.** | Sign in, open a design linked to a Fusion Manage item, click **Find** next to Tenant, then **Save**. Or type the part before `.autodeskplm360.net`. |
+| **The open design is not linked to a Fusion Manage item.** | **Find** reads the tenant from the item the open design is linked to. Open a linked design, or type the tenant. |
 | **Tenant must be a single name such as mycompany, not an address.** | Enter only the part before `.autodeskplm360.net`: letters, digits and hyphens. |
 | **Insufficient permissions to view the Items workspace** with *no user mapped to the given client* in the log | The tenant is wrong, so the request went to another Fusion Manage tenant. Set the correct Tenant in Preferences. |
 | **Callback port 8765 is unavailable: …** | Another program is using the port. Choose a different **Callback port**, register the new callback URL on your APS application, and sign in again. |

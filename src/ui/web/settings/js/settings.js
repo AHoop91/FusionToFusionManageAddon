@@ -63,6 +63,28 @@
     if ($('conn-settings').parentNode !== target) target.appendChild($('conn-settings'));
   }
 
+  // ---- Tenant -------------------------------------------------------------
+
+  const TENANT_POLL_MS = 500;
+
+  /** Show the outcome of finding the tenant; a pending answer is asked for again shortly. */
+  function onTenant(r) {
+    const result = r.ok ? r.result : { pending: false, ok: false, message: r.error };
+    const msg = $('f-tenant-msg');
+    if (result.pending) {
+      setTimeout(function () { bridge.send('detect_tenant_status', {}); }, TENANT_POLL_MS);
+      return;
+    }
+    $('f-tenant-find').disabled = false;
+    msg.hidden = false;
+    if (result.ok) {
+      $('f-tenant').value = result.tenant;
+      msg.textContent = 'Found ' + result.tenant + '. Save to keep it.';
+    } else {
+      msg.textContent = result.message || 'The tenant could not be found.';
+    }
+  }
+
   // ---- Wiring -------------------------------------------------------------
 
   // Id prefix of the Save button that started the last save ('save' | 'ws-save' | 'gen-save').
@@ -93,6 +115,14 @@
       setTimeout(function () { msg.textContent = ''; }, 2000);
       // Refresh sign-in state now that the connection details changed.
       ns.auth.refresh();
+    });
+
+    bridge.on('detect_tenant', onTenant);
+    bridge.on('detect_tenant_status', onTenant);
+    $('f-tenant-find').addEventListener('click', function () {
+      $('f-tenant-find').disabled = true;
+      $('f-tenant-msg').hidden = true;
+      bridge.send('detect_tenant', {});
     });
 
     $('toggle-conn').addEventListener('click', function () {

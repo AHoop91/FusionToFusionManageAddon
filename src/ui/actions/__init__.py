@@ -5,6 +5,7 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``settings_actions``: read and save connection settings.
 * ``auth_actions``: sign-in state, login, logout and the user profile.
 * ``workspace_actions``: Fusion Manage workspace validation.
+* ``tenant_actions``: find the Fusion Manage tenant from the open design's linked item.
 * ``property_actions``: the hub's custom properties for field mapping.
 * ``publish_actions``: the open model for the Publish Item panel.
 * ``linkable_actions``: pages of items the Add Items picker can add to the Bill of Materials.
@@ -25,6 +26,7 @@ from .property_actions import register_property_actions
 from .publish_actions import register_publish_actions
 from .publish_run_actions import register_publish_run_actions
 from .settings_actions import register_settings_actions
+from .tenant_actions import register_tenant_actions
 from .transfer_actions import register_transfer_actions
 from .workspace_actions import register_workspace_actions
 
@@ -35,6 +37,7 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_settings_actions(bridge, config)
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)
+    register_tenant_actions(bridge, config, auth)
     register_property_actions(bridge, config, auth)
     register_publish_actions(bridge, config, auth)
     register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)

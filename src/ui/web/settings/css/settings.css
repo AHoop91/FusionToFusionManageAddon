@@ -29,3 +29,6 @@
   margin: 0 0 12px; padding: 8px 12px; font-size: 12px; color: var(--text);
   background: #fff8e1; border: 1px solid #f0d98a; border-radius: 4px;
 }
+
+.inline-row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.inline-row input { flex: 1; margin-top: 0; }

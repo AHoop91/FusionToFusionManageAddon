@@ -23,7 +23,7 @@ class ConnectionSettings:
     """Everything needed to sign in to and address Fusion Manage."""
 
     client_id: str = ""
-    tenant: str = ""   # empty means the name of the hub open in Fusion (``ConfigService.effective_settings``)
+    tenant: str = ""   # found from a linked item by the Preferences panel, or typed
     callback_port: int = DEFAULT_CALLBACK_PORT
     scopes: List[str] = field(default_factory=lambda: list(DEFAULT_SCOPES))
 
@@ -35,7 +35,7 @@ class ConnectionSettings:
     def validate(self, require_tenant: bool = True) -> List[str]:
         """Return human-readable problems; empty list means valid.
 
-        ``require_tenant`` is False for the saved settings, where an empty tenant means the open hub's name.
+        ``require_tenant`` is False for the saved settings, which may be saved before the tenant is known (sign-in does not need it).
         """
         problems = []
         if not self.client_id.strip():
@@ -43,7 +43,7 @@ class ConnectionSettings:
         if self.tenant.strip() and not tenant_code(self.tenant):
             problems.append("Tenant must be a single name such as mycompany, not an address.")
         elif require_tenant and not self.tenant.strip():
-            problems.append("Tenant is required: enter it in Preferences, or open the Fusion hub named after it.")
+            problems.append("Tenant is required: use Find in Preferences ▸ Connection, or enter it.")
         if not (1024 <= int(self.callback_port) <= 65535):
             problems.append("Callback port must be between 1024 and 65535.")
         if not self.scopes:

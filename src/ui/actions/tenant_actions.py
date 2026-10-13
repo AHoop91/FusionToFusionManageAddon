@@ -1,0 +1,62 @@
+"""Palette actions that find the Fusion Manage tenant from the open design's linked item."""
+
+import threading
+from typing import Any, Dict
+
+from ...auth.auth_service import AuthService
+from ...config.config_service import ConfigService
+from ...config.hub import tenant_of_link
+from ...core.logging_setup import get_logger
+from ...fusion_mfg.graphql_client import MfgGraphQlClient
+from ...fusion_mfg.model_service import read_manage_item, read_section
+from ..message_bridge import MessageBridge
+from .publish_actions import _model_ref
+
+log = get_logger("tenant_actions")
+
+NOT_LINKED = "The open design is not linked to a Fusion Manage item. Open a design that is, then try again."
+
+
+def register_tenant_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:
+    """Register ``detect_tenant`` and ``detect_tenant_status``.
+
+    The Data Model knows the Fusion Manage item the open design is linked to, and that item's address names the tenant. The read
+    runs on a worker thread and the panel polls for the answer, so Fusion's UI thread is never blocked.
+    """
+
+    state: Dict[str, Any] = {"pending": False, "ok": False, "tenant": "", "message": ""}
+    lock = threading.Lock()
+
+    def run(client: MfgGraphQlClient, model_id: str, time: str) -> None:
+        try:
+            summary = read_section(client, "summary", model_id, time)
+            link = read_manage_item(client, summary, summary.get("component_id", ""), time)
+            tenant = tenant_of_link(link["urn"], link["url"])
+            log.info("Tenant found from the open design's Fusion Manage item: %r", tenant)
+            outcome = {"pending": False, "ok": bool(tenant), "tenant": tenant, "message": "" if tenant else NOT_LINKED}
+        except Exception as exc:  # noqa: BLE001 - never leave the panel waiting
+            log.exception("Could not find the tenant")
+            outcome = {"pending": False, "ok": False, "tenant": "", "message": str(exc) or type(exc).__name__}
+        with lock:
+            state.update(outcome)
+
+    def detect_tenant(_payload: Dict[str, Any]) -> Dict[str, Any]:
+        with lock:
+            if state["pending"]:
+                return dict(state)
+        model_id, time = _model_ref()
+        if not model_id:
+            return {"pending": False, "ok": False, "tenant": "", "message": "Open a design that is linked to a Fusion Manage item, then try again."}
+        client = MfgGraphQlClient(config.effective_settings(), auth)
+        with lock:
+            state.update(pending=True, ok=False, tenant="", message="")
+            snapshot = dict(state)
+        threading.Thread(target=run, args=(client, model_id, time), daemon=True).start()
+        return snapshot
+
+    def detect_tenant_status(_payload: Dict[str, Any]) -> Dict[str, Any]:
+        with lock:
+            return dict(state)
+
+    bridge.register("detect_tenant", detect_tenant)
+    bridge.register("detect_tenant_status", detect_tenant_status)
