@@ -28,5 +28,10 @@
     },
   };
 
+  // A button marked `data-close` closes the palette it is in (the palettes have no Close button of Fusion's own).
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('[data-close]')) send('palette_close');
+  });
+
   ns.bridge = { on: on, send: send };
 })(window.MfgUi);

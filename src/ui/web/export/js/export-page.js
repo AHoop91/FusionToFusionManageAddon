@@ -100,18 +100,36 @@
     if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton('Checking permissions'));
   }
 
+  /** Fold the destination section away or open it; the destination chosen shows beside its title either way. */
+  function setDestinationOpen(open) {
+    $('export-destination-toggle').setAttribute('aria-expanded', String(open));
+    $('export-destination-panel').hidden = !open;
+  }
+
+  /** What shows beside the title of the folded section: the destination chosen, or why there is none. */
+  function summarizeDestination() {
+    const chosen = context.destinations.filter(function (d) { return d.key === destination; })[0];
+    const waiting = context.destinations.some(function (d) { return d.checking; });
+    const pill = $('export-destination-summary');
+    pill.textContent = chosen ? chosen.label : waiting ? 'Checking...' : 'None available';
+    pill.dataset.kind = chosen ? chosen.key : '';
+  }
+
   function renderDestinations() {
     const box = $('export-destinations');
     box.replaceChildren();
     context.destinations.forEach(function (d) {
       box.appendChild(segment(d, 'export-destination', d.key === destination, !!d.reason || d.checking, function (key) {
         destination = key;
+        summarizeDestination();
         renderDestinationNote();
         syncRun();
         loadFiles();
       }));
     });
+    summarizeDestination();
     renderDestinationNote();
+    if (!context.destinations.some(function (d) { return d.checking || !d.reason; })) setDestinationOpen(true);   // none can be used: show why
   }
 
   // ---- The files attached where the export would go -------------------------------------
@@ -362,6 +380,9 @@
     });
     bridge.on('upload_status', followUpload);
 
+    $('export-destination-toggle').addEventListener('click', function () {
+      setDestinationOpen($('export-destination-panel').hidden);
+    });
     $('export-cancel').addEventListener('click', function () { bridge.send('export_close'); });
     $('export-done').addEventListener('click', function () { bridge.send('export_close'); });
     $('export-retry').addEventListener('click', retry);

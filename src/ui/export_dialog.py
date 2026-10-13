@@ -160,7 +160,7 @@ class ExportDialog:
             message = json.dumps({"ok": True, "result": dict(result, format=key, destination=destination), "error": None})
             self._tasks.post(lambda: self._host.send("export_files_found", message))
 
-        self._panel.export_files(key, destination, found)
+        self._panel.export_files(key, destination, str(payload.get("target") or ""), found)
         return {"started": True}
 
     def _run(self, payload: Dict[str, Any]) -> Dict[str, Any]:

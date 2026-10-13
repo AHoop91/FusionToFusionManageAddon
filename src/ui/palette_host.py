@@ -91,6 +91,11 @@ class _IncomingHandler(adsk.core.HTMLEventHandler):
         # a "response" action. It is an acknowledgement, not a request.
         if html_args.action == "response":
             return
+        if html_args.action == "palette_close":   # a page's own Close button: the palette it is in is hidden, not disposed
+            palette = self._palette_getter()
+            if palette:
+                palette.isVisible = False
+            return
         response = self._bridge.dispatch(html_args.action, html_args.data)
         palette = self._palette_getter()
         if palette:

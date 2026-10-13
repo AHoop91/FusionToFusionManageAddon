@@ -5,6 +5,7 @@ dates, so it is not used. Whatever cannot be dated is answered as such (``saved`
 document: a component of an assembly is dated by its own document, and a drawing by itself and the design it shows.
 """
 
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -31,9 +32,14 @@ def _file_saved(data_file: Any, name: str) -> Tuple[Optional[float], str]:
     """``(Unix time of the latest saved version of the data file, "")``, or ``(None, why not)``."""
     if data_file is None:
         return None, f"{name} has not been saved to Fusion, so it has no version history."
+    began = time.monotonic()
     try:
-        latest = data_file.latestVersion or data_file
-        return float(latest.dateCreated), ""
+        latest = data_file
+        if data_file.versionNumber != data_file.latestVersionNumber:   # asking for the latest version may go to the server: only when this is not it
+            latest = data_file.latestVersion or data_file
+        saved = float(latest.dateCreated)
+        log.info("Version history of %s read in %.2fs (version %s of %s)", name, time.monotonic() - began, data_file.versionNumber, data_file.latestVersionNumber)
+        return saved, ""
     except (RuntimeError, AttributeError, TypeError, ValueError) as exc:   # e.g. offline
         return None, f"The version history of {name} could not be read ({exc})."
 
@@ -100,7 +106,7 @@ def saved_state(number: str, entities: Iterable[Any]) -> Dict[str, Any]:
         elif occurrence is not None:
             saved, reason = _component_saved(occurrence)
             answer = _answer(saved, f"The component {occurrence.component.name}" if saved is not None else "", reason=reason)
-        elif design is not None and str(design.rootComponent.partNumber or "").strip() == number:
+        elif design is not None:   # no selected component carries the number, so it is the design's (as ``export_target`` took it): its part number is not read again, which is slow
             answer = _of_documents([("The design", document)])
         else:
             answer = _answer(reason=f"The document that holds {number} could not be found.")

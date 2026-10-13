@@ -178,7 +178,7 @@ class ItemPanel:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
         self._numbers = ItemNumbers(config, auth)
-        self._saved = TtlCache()   # when what the Export window exports was last saved, by part number and document: read once per window
+        self._export_read = TtlCache()   # what Fusion says of what the Export window exports (its design reference, when it was saved), read once per window
         self._number = ""   # the item number the panel shows, for Refresh
         self._part = ""   # the part number Fusion gives that component
         self._selection_handler = _SelectionHandler(self._follow_selection)   # kept, or Fusion drops it
@@ -422,6 +422,22 @@ class ItemPanel:
         except (AttributeError, RuntimeError):
             return ""
 
+    def _export_state(self, number: str) -> Tuple[DesignRef, Dict[str, Any]]:
+        """The design reference and the last save (``design_history.saved_state``) of what Export exports, numbered ``number``. Reading them holds
+        Fusion's thread, so it is done once per window, and timed in the log. UI thread."""
+        document = adsk.core.Application.get().activeDocument
+        key = (number, document.name if document is not None else "")
+        kept = self._export_read.get(key)
+        if kept:
+            return kept
+        began = time.monotonic()
+        ref = _active_ref()
+        referenced = time.monotonic()
+        source = saved_state(number, _active_selection())
+        log.info("Export state of %s read on Fusion's thread in %.2fs (design reference %.2fs, last saved %.2fs)", number,
+                 time.monotonic() - began, referenced - began, time.monotonic() - referenced)
+        return self._export_read.put(key, (ref, source))
+
     def warm_export_target(self) -> None:
         """Read the item number of what Export will export ahead of the click, on a worker thread, so that the Data Model (about two seconds
         the first time for a design) is already read, and kept, when Export is pressed. A failure is left for the click to report. UI thread."""
@@ -442,19 +458,16 @@ class ItemPanel:
 
     def reset_export(self) -> None:
         """Forget what was read for an earlier Export window: the document may have been saved since. UI thread."""
-        self._saved.clear()
+        self._export_read.clear()
 
-    def export_files(self, key: str, destination: str, done: Callable[[Dict[str, Any]], None]) -> None:
-        """Say what exporting as the format ``key`` to ``destination`` would do to the files attached in Fusion Manage: add one, or make a new
-        version of the one of that name (``AttachmentUpload.preview``). Told to ``done`` from a worker thread. UI thread."""
-        number, _problem = self.export_target()
+    def export_files(self, key: str, destination: str, number: str, done: Callable[[Dict[str, Any]], None]) -> None:
+        """Say what exporting the part ``number`` as the format ``key`` to ``destination`` would do to the files attached in Fusion Manage: add
+        one, or make a new version of the one of that name (``AttachmentUpload.preview``). Told to ``done`` from a worker thread. UI thread."""
         if not number:
             done({"state": "unavailable", "message": "Nothing to export yet."})
             return
-        ref, extension = _active_ref(), FORMATS[key].extension
-        document = adsk.core.Application.get().activeDocument
-        cache_key = (number, document.name if document is not None else "")
-        source = self._saved.get(cache_key) or self._saved.put(cache_key, saved_state(number, _active_selection()))
+        ref, source = self._export_state(number)
+        extension = FORMATS[key].extension
 
         def work() -> None:
             try:

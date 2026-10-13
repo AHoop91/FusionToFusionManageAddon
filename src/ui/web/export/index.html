@@ -49,22 +49,33 @@
     <div class="export">
       <div class="export-body">
         <header class="export-summary">
-          <h1 id="export-target" class="export-target"></h1>
-          <p id="export-description" class="export-description"></p>
+          <div class="export-summary-text">
+            <h1 id="export-target" class="export-target"></h1>
+            <p id="export-description" class="export-description"></p>
+          </div>
+          <!-- Where the file will be attached, always in view (the section below changes it). -->
+          <span id="export-destination-summary" class="export-pill" title="Where the file will be attached"></span>
         </header>
         <p id="export-problem" class="export-alert" role="alert" hidden></p>
 
-        <section class="export-group" aria-labelledby="export-destination-title">
-          <h2 id="export-destination-title">Attach to</h2>
-          <p class="export-hint">Where in Fusion Manage the file is attached: the item of the part, or its component.</p>
-          <div id="export-destinations" class="export-segments" role="radiogroup" aria-labelledby="export-destination-title"></div>
-          <div id="export-destination-note" class="export-notes" aria-live="polite"></div>
-        </section>
-
         <section id="export-format-group" class="export-group" aria-labelledby="export-format-title">
           <h2 id="export-format-title">File format</h2>
-          <p class="export-hint">The kind of file made from what is open: a design is exported as STEP, a drawing as PDF, DWG or DXF.</p>
           <div id="export-formats" class="export-segments" role="radiogroup" aria-labelledby="export-format-title"></div>
+        </section>
+
+        <section class="export-group" aria-labelledby="export-destination-title">
+          <!-- Folded away once it is set (in Preferences); the destination chosen shows as a pill at the top of the window. -->
+          <h2 id="export-destination-title">
+            <button id="export-destination-toggle" class="export-toggle" type="button" aria-expanded="false" aria-controls="export-destination-panel">
+              <span class="export-chevron" aria-hidden="true"></span>
+              <span>Attach to</span>
+            </button>
+          </h2>
+          <div id="export-destination-panel" hidden>
+            <p class="export-hint">This is defined within your settings, but you can override it if necessary.</p>
+            <div id="export-destinations" class="export-segments" role="radiogroup" aria-labelledby="export-destination-title"></div>
+            <div id="export-destination-note" class="export-notes" aria-live="polite"></div>
+          </div>
         </section>
 
         <!-- What is attached in Fusion Manage already, and so whether this export adds a file or makes a new version of one. -->
