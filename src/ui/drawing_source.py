@@ -74,7 +74,10 @@ def _number_of(document: Any) -> Tuple[str, str]:
         design = adsk.fusion.Design.cast(source.products.itemByProductType("DesignProductType"))
         if design is None:
             continue
-        number = str(design.rootComponent.partNumber or "").strip()
+        try:
+            number = str(design.rootComponent.partNumber or "").strip()
+        except RuntimeError as error:   # "Part number cannot be fetched while offline": the design is still loading
+            return "", f"The part number of {source.name} cannot be read yet ({error})."
         if number:
             return number, ""
         return "", f"The top-level component of {source.name} has no part number."

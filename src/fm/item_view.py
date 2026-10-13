@@ -12,8 +12,10 @@ uri) or HTML (what a formula field writes; the page sanitises it before showing 
 import base64
 import html
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Set
 
+from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .items import display_text
@@ -166,26 +168,44 @@ class ItemViewService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
+    def prepare(self, workspace_id: str) -> None:
+        """Read what a workspace shares between its items (section layouts, hidden fields, tab names) all at once, so a ``read`` finds it
+        cached. It needs no item, so it can run while the item is still being found. A failure is left for ``read`` to report."""
+        steps = (lambda: SectionService(self._client).layouts(workspace_id), lambda: self._hidden_fields(workspace_id),
+                 lambda: TabService(self._client).labels(workspace_id))
+        with ThreadPoolExecutor(max_workers=len(steps)) as pool:
+            for pending in [pool.submit(step) for step in steps]:
+                try:
+                    pending.result()
+                except (FmApiError, AuthError) as exc:
+                    log.debug("Preparing workspace %s: %s", workspace_id, exc)
+
     def read(self, workspace_id: str, item_id: str, held: Set[str]) -> Dict[str, Any]:
         """The item laid out for display; ``held`` is the user's permissions in the workspace (they decide which tabs can be opened)."""
-        data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
-        if not isinstance(data, dict):
-            raise FmApiError(f"Fusion Manage gave no item {item_id} in workspace {workspace_id}.")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            # the other tabs are read when they are opened; only their names and counts come with the item
+            tabs = pool.submit(TabService(self._client).read, workspace_id, item_id, held)   # asked while the item is read
+            layouts = pool.submit(self._layouts, workspace_id)
+            data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
+            if not isinstance(data, dict):
+                raise FmApiError(f"Fusion Manage gave no item {item_id} in workspace {workspace_id}.")
+            view = build_view(data, layouts.result(), self._image, self._client.base_url, self._hidden_fields(workspace_id))
+            if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
+                log.error("No sections could be built for item %s: %s", item_id, str(data)[:3000])
+            view["tabs"] = tabs.result()
+        view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
+        return view
+
+    def _layouts(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:
         try:
             layouts = SectionService(self._client).layouts(workspace_id)
         except FmApiError as exc:   # the fields still show, without their matrices
             log.warning("Could not read the section layout of workspace %s: %s", workspace_id, exc)
-            layouts = {}
+            return {}
         for layout in list(layouts.values())[:3]:
             log.debug("Section %s layout keys: %s; matrices: %s", last_segment(str(layout.get("__self__") or layout.get("link") or "")),
                      sorted(layout), [sorted(m) for m in (layout.get("matrices") or [])[:1] if isinstance(m, dict)])
-        view = build_view(data, layouts, self._image, self._client.base_url, self._hidden_fields(workspace_id))
-        if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
-            log.error("No sections could be built for item %s: %s", item_id, str(data)[:3000])
-        # the other tabs are read when they are opened; only their names and counts come with the item
-        view["tabs"] = TabService(self._client).read(workspace_id, item_id, held)
-        view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
-        return view
+        return layouts
 
     def _hidden_fields(self, workspace_id: str) -> Set[str]:
         """Ids of the workspace's fields that are not to be shown on an item (empty if the field list cannot be read)."""

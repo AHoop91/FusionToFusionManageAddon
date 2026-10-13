@@ -106,15 +106,13 @@
 .pub-jobs-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .pub-jobs-title { margin: 0; font-size: 15px; font-weight: 600; }
 .pub-jobs-message { margin: 2px 0 0; font-size: 12px; }
-.pub-job-group td { padding: 6px; background: var(--header-bg); border-top: 0; }
-.pub-job-group:not(:first-of-type) td { border-top: 8px solid var(--bg); }
-.pub-job-group-box { display: flex; align-items: center; gap: 8px; }
-.pub-job-count { flex: 1; font-size: 12px; }
-.pub-job-name { font-weight: 600; }
 .pub-job-rows { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 .pub-job-rows th { padding: 4px 6px; text-align: left; font-weight: 600; color: var(--muted); }
 .pub-job-rows td { padding: 6px; border-top: 1px solid var(--border); }
 .pub-job-rows th:nth-child(2), .pub-job-rows td:nth-child(2) { width: 64px; text-align: center; }
+.pub-job-rows th:nth-child(3), .pub-job-rows td:nth-child(3) { width: 72px; text-align: right; }
+.pub-job-rows tr.pub-job-first td { border-top: 8px solid var(--bg); }
+.pub-job-note { margin-top: 2px; font-size: 12px; font-weight: 400; }
 .pub-job-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .pub-job-reason { overflow: hidden; text-overflow: ellipsis; margin-top: 2px; font-weight: 400; color: var(--danger); }
 .pub-job-status svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }

@@ -169,10 +169,10 @@ def run(context) -> None:
         _ribbon = Ribbon(_ui, panels)
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
-        # needs the drawing loaded, which is looked at again every few seconds.
+        # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
         _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), config.items_setup_problem, drawing_source.problem)
-        _gate.refresh()
-        _watcher = GateWatcher(_tasks, _gate)
+        _watcher = GateWatcher(_ui, _tasks, _gate, lambda: drawing_source.active_drawing() is not None and bool(drawing_source.problem()))
+        _watcher.check()
         config.on_change(lambda: _tasks.post(_gate.refresh))   # saving the settings can come from any thread
         log.info("Add-in started")
     except Exception:  # noqa: BLE001 - report to the user instead of failing silently

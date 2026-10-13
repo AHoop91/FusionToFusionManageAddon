@@ -47,44 +47,44 @@
     return (job.rows || []).filter(function (row) { return row.status !== 'done'; });
   }
 
-  /** The items of a job, one row each: "Number - Title" and a status icon. */
-  function itemRows(table, rows) {
-    rows.forEach(function (row) {
-      const tr = ui.el('tr');
-      const name = ui.el('td', 'pub-job-item', row.description ? row.item + ' - ' + row.description : (row.item || '-'));
-      name.title = name.textContent;
-      if (row.status === 'error' && row.detail) name.appendChild(ui.el('div', 'pub-job-reason', row.detail));
-      tr.appendChild(name);
-      tr.appendChild(statusIcon(row));
-      table.appendChild(tr);
-    });
+  /** What the whole job is doing, said once on its first row: waiting, cancelled or failed ("" while it runs or when it is done). */
+  function jobNote(job) {
+    if (job.phase === 'queued') return 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '');
+    if (job.phase === 'cancelled') return 'Cancelled';
+    return job.phase === 'error' ? 'Failed' : '';
   }
 
-  /** A line above the items of one publish (one assembly): its name, a note while it waits, and Cancel while it is active. */
-  function jobHeading(table, job) {
-    const tr = ui.el('tr', 'pub-job-group');
-    const cell = ui.el('td');
-    cell.colSpan = 2;
-    const box = ui.el('div', 'pub-job-group-box');
-    box.appendChild(ui.el('span', 'pub-job-name', (job.kind === 'send' ? 'Retry of ' : 'Publish of ') + job.name));
-    const note = job.phase === 'queued' ? 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '')
-      : (job.phase === 'cancelled' ? 'Cancelled' : (job.phase === 'error' ? 'Failed' : ''));
-    box.appendChild(ui.el('span', 'muted pub-job-count', note));
+  /** The buttons of a job: Cancel while it is active, Retry once it failed (it sends the failed requests again; what was accepted is skipped). */
+  function jobActions(job) {
+    const cell = ui.el('td', 'pub-job-actions');
     if (FINISHED.indexOf(job.phase) < 0) {
       const cancel = ui.el('button', 'pub-outline-button', 'Cancel');
       cancel.type = 'button';
       cancel.addEventListener('click', function () { bridge.send('cancel_publish', { id: job.id }); });
-      box.appendChild(cancel);
-    } else if (job.phase === 'error' || failedRows(job)) {   // sends the failed requests again; what was accepted is skipped
+      cell.appendChild(cancel);
+    } else if (job.phase === 'error' || failedRows(job)) {
       const retry = ui.el('button', 'pub-outline-button', 'Retry');
       retry.type = 'button';
       retry.title = 'Send the failed requests to Fusion Manage again. What it already accepted is skipped.';
       retry.addEventListener('click', function () { retry.disabled = true; bridge.send('retry_publish', { id: job.id }); });
-      box.appendChild(retry);
+      cell.appendChild(retry);
     }
-    cell.appendChild(box);
-    tr.appendChild(cell);
-    table.appendChild(tr);
+    return cell;
+  }
+
+  /** The items of a job, one row each: "Number - Title", a status icon and, on the first row, the job's note and buttons. */
+  function itemRows(table, job, rows) {
+    rows.forEach(function (row, index) {
+      const tr = ui.el('tr', index === 0 ? 'pub-job-first' : '');
+      const name = ui.el('td', 'pub-job-item', row.description ? row.item + ' - ' + row.description : (row.item || '-'));
+      name.title = name.textContent;
+      if (index === 0 && jobNote(job)) name.appendChild(ui.el('div', 'muted pub-job-note', jobNote(job)));
+      if (row.status === 'error' && row.detail) name.appendChild(ui.el('div', 'pub-job-reason', row.detail));
+      tr.appendChild(name);
+      tr.appendChild(statusIcon(row));
+      tr.appendChild(index === 0 ? jobActions(job) : ui.el('td'));
+      table.appendChild(tr);
+    });
   }
 
   /** The message in the top bar: what is running and waiting. */
@@ -103,14 +103,13 @@
     box.textContent = '';
     const table = ui.el('table', 'pub-job-rows');
     const head = ui.el('tr');
-    ['Item', 'Status'].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
+    ['Item', 'Status', ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
     table.appendChild(head);
     let shown = 0;
     jobs.slice().reverse().forEach(function (job) {   // newest first
       const rows = visibleRows(job);
       if (!rows.length && FINISHED.indexOf(job.phase) >= 0) return;   // everything in it is done
-      jobHeading(table, job);
-      itemRows(table, rows);
+      itemRows(table, job, rows.length ? rows : [{ item: job.name, description: '', status: job.phase }]);
       shown += 1;
     });
     if (shown) box.appendChild(table);

@@ -1,0 +1,14 @@
+{
+    "autodeskProduct": "Fusion",
+    "type": "addin",
+    "id": "6f1d2a4e-3b8c-4c57-9a1e-5d0b7e2c9f41",
+    "author": "Ashley Hooper",
+    "description": {
+        "": "Publishes Manufacturing Data Model items, bills of materials (BOMs) and files from Fusion into Fusion Manage. Create or update Fusion Manage items from your designs, map and push item fields (with automatic unit conversion), attach STEP and drawing files, and track every publish in a job queue with status and retry for failed jobs. Includes an Item Panel to view and open the linked Fusion Manage item."
+    },
+    "iconFilename": "resources/AddInIcon.svg",
+    "version": "0.1.0",
+    "runOnStartup": false,
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}

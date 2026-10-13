@@ -53,12 +53,12 @@ class TabService:
     def read(self, workspace_id: str, item_id: str, held: Set[str]) -> Dict[str, Dict[str, Any]]:
         """``{"files": {"label", "count", "allowed"}, ...}`` for each tab the page shows that the workspace has; ``allowed`` is whether
         the user's permissions (``held``) let them see it. Raises ``FmApiError`` when the names or counts cannot be read."""
-        labels = self._labels(workspace_id)
+        labels = self.labels(workspace_id)
         counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
         return {key: {"label": labels[name], "count": counts.get(COUNTED.get(name, ""), counts.get(name, 0)), "allowed": TAB_PERMISSIONS[key] in held}
                 for key, name in TABS.items() if name in labels}
 
-    def _labels(self, workspace_id: str) -> Dict[str, str]:
+    def labels(self, workspace_id: str) -> Dict[str, str]:
         key = (self._client.tenant, workspace_id)
         cached = self._labels_cache.get(key)
         if cached is not None:

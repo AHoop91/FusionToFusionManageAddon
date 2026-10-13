@@ -36,36 +36,40 @@ A released component and a manufactured item are not the same thing, so they do 
 
 ## The workflow at a glance
 
-Read the diagram left to right. Engineering designs, reviews and releases in Fusion. The add-in then carries the released design across. Manufacturing reviews and releases the item in Fusion Manage. The five stages below cover the same path.
+Read the diagram left to right. Engineering designs and releases in Fusion. The add-in then carries the released design across, with STEP and PDF files as an optional extra. Manufacturing enriches the item, reviews it and releases it in Fusion Manage. The five stages below cover the same path.
 
 ```mermaid
 %%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 60, "padding": 16}}}%%
 flowchart LR
-    subgraph ENG["ENGINEERING &nbsp;·&nbsp; in Fusion"]
-        E1("<b>Design</b><br/>Model the component<br/>and its drawing")
-        E2("<b>Review</b><br/>Engineering checks<br/>the design")
-        E3("<b>Released</b><br/>Component and<br/>drawing released")
+    subgraph ENG["<b>ENGINEERING</b> &nbsp;·&nbsp; Fusion"]
+        E1("<b>Design</b><br/>Model, draw and<br/>review the design")
+        E2("<b>Released</b><br/>Component and<br/>drawing released")
     end
 
-    subgraph ADD["THE ADD-IN &nbsp;·&nbsp; in Fusion"]
-        A1("<b>Publish</b><br/>Send the released design<br/>when it is ready")
+    subgraph ADD["<b>THE ADD-IN</b> &nbsp;·&nbsp; Fusion"]
+        A1("<b>Publish</b><br/>Send the released<br/>design when ready")
+        A2("<b>Upload files</b><br/>STEP and drawing PDF<br/><i>Optional, manual</i>")
     end
 
-    subgraph MFG["MANUFACTURING &nbsp;·&nbsp; in Fusion Manage"]
-        M1("<b>Manufacturing item</b><br/>Item and BOM created,<br/>files attached")
-        M2("<b>Review</b><br/>Engineering, Quality and<br/>Manufacturing check")
-        M3("<b>Released</b><br/>Item released by<br/>its own workflow")
+    subgraph MFG["<b>MANUFACTURING</b> &nbsp;·&nbsp; Fusion Manage"]
+        M1("<b>Manufacturing item</b><br/>Item and BOM<br/>created or updated")
+        M2("<b>Enrich</b><br/>Add production lines,<br/>fields and items")
+        M3("<b>Review</b><br/>Engineering, Quality and<br/>Manufacturing check")
+        M4("<b>Released</b><br/>Item released by<br/>its own workflow")
     end
 
-    E1 --> E2 --> E3 ==> A1 ==> M1 --> M2 --> M3
-    E3 -.->|"Engineering change:<br/>publish again"| A1
+    E1 --> E2 ==> A1 ==> M1 --> M2 --> M3 --> M4
+    A1 -.-> A2 -.->|"attached to<br/>the item"| M1
+    E2 -.->|"Engineering change:<br/>publish again"| A1
 
     classDef eng fill:#3b82c426,stroke:#3b82c4,stroke-width:1.5px
     classDef add fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px
+    classDef opt fill:#1d4f9110,stroke:#1d4f91,stroke-width:1.5px,stroke-dasharray:5 4
     classDef mfg fill:#0596691f,stroke:#059669,stroke-width:1.5px
-    class E1,E2,E3 eng
+    class E1,E2 eng
     class A1 add
-    class M1,M2,M3 mfg
+    class A2 opt
+    class M1,M2,M3,M4 mfg
     style ENG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
     style ADD fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
     style MFG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
@@ -206,7 +210,7 @@ The manufactured item is released through **its own workflow in Fusion Manage**,
 |---|---|
 | Create or update items from a released design | **Publish Fusion Manage Item** |
 | See whether a publish succeeded | **Job Queue** |
-| Retry after a failure | **Send to Fusion Manage** in the Job Queue |
+| Retry after a failure | **Retry** on the job in the Job Queue |
 | Attach a STEP file | **Upload STEP File To Fusion Manage Item** |
 | Attach a drawing PDF | **Upload Drawing Representation To Fusion Manage Item** |
 | Review an item | **Open Fusion Manage Item** |

@@ -7,6 +7,7 @@ so one cannot undo the other.
 """
 
 import threading
+import time
 from typing import Callable, Dict, Sequence
 
 import adsk.core
@@ -50,18 +51,101 @@ class SetupGate:
             log.info("%s is %s%s", command.name, "disabled: " if reason else "enabled", reason)
 
 
+class _DocumentHandler(adsk.core.DocumentEventHandler):
+    def __init__(self, callback: Callable[[], None]) -> None:
+        super().__init__()
+        self._callback = callback
+
+    def notify(self, args) -> None:
+        self._callback()
+
+
+class _DataReadyHandler(adsk.core.MFGDMDataEventHandler):
+    def __init__(self, callback: Callable[[], None]) -> None:
+        super().__init__()
+        self._callback = callback
+
+    def notify(self, args) -> None:
+        self._callback()
+
+
+class _WorkspaceHandler(adsk.core.WorkspaceEventHandler):
+    def __init__(self, callback: Callable[[], None]) -> None:
+        super().__init__()
+        self._callback = callback
+
+    def notify(self, args) -> None:
+        self._callback()
+
+
 class GateWatcher:
-    """Asks the gate to look again every few seconds, on the main thread: a drawing loads, and a document is switched, without any
-    event of ours to say so."""
+    """Asks the gate to look again when a document is opened or activated, a workspace is entered, or Fusion reports a document's
+    data model properties ready (``mfgdmDataReady``): Fusion's events, on the main thread. Should a drawing still not be ready after
+    them, it is looked at again every ``seconds``, for at most ``give_up`` seconds; nothing runs when no drawing is loading."""
 
-    def __init__(self, tasks: UiThread, gate: SetupGate, seconds: float = 2.0) -> None:
+    def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, gate: SetupGate, loading: Callable[[], bool],
+                 seconds: float = 2.0, give_up: float = 60.0, grace: float = 15.0) -> None:
+        self._app = adsk.core.Application.get()
+        self._ui = ui
+        self._tasks = tasks
+        self._gate = gate
+        self._loading = loading   # True while the open document is a drawing that is not ready yet
+        self._seconds = seconds
+        self._give_up = give_up
         self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, args=(tasks, gate, seconds), daemon=True)
-        self._thread.start()
+        self._polling = False
+        self._deadline = 0.0
+        self._grace = grace   # how long after the last event the poll waits before it steps in
+        self._quiet_until = 0.0
+        self._document_handler = _DocumentHandler(self.check)   # kept, or Fusion drops the handlers
+        self._workspace_handler = _WorkspaceHandler(self.check)
+        self._data_handler = _DataReadyHandler(self.check)   # Fusion says the document's data model properties are ready
+        self._app.mfgdmDataReady.add(self._data_handler)
+        self._app.documentActivated.add(self._document_handler)
+        self._app.documentOpened.add(self._document_handler)
+        self._ui.workspaceActivated.add(self._workspace_handler)
 
-    def _run(self, tasks: UiThread, gate: SetupGate, seconds: float) -> None:
-        while not self._stop.wait(seconds):
-            tasks.post(gate.refresh)
+    def check(self, polled: bool = False) -> None:
+        """Refresh the gate now, and keep watching if a drawing is still loading. Main thread.
+
+        ``polled`` is True when the fallback poll asked, False when a Fusion event did; an event holds the poll off for ``grace``."""
+        try:
+            self._gate.refresh()
+            waiting = self._loading()
+        except Exception:  # noqa: BLE001 - never raise into Fusion
+            log.exception("Could not check what the commands need")
+            waiting = True   # unknown state: look again shortly, within the give-up time
+        if not waiting:
+            if self._polling:
+                log.info("Drawing ready (%s)", "found by the fallback poll" if polled else "on a Fusion event")
+            self._polling = False
+            return
+        now = time.monotonic()
+        if not polled:
+            self._quiet_until = now + self._grace
+            self._deadline = now + self._give_up
+        if not self._polling and not self._stop.is_set():
+            self._polling = True
+            threading.Thread(target=self._poll, daemon=True).start()
+
+    def _poll(self) -> None:
+        """The fallback: only once no event has come for ``grace`` seconds, look again every ``seconds``."""
+        while self._polling and not self._stop.wait(self._seconds):
+            now = time.monotonic()
+            if now > self._deadline:
+                break
+            if now >= self._quiet_until:
+                self._tasks.post(lambda: self.check(True))
+        self._polling = False
 
     def dispose(self) -> None:
         self._stop.set()
+        self._polling = False
+        for event, handler in ((self._app.mfgdmDataReady, self._data_handler),
+                               (self._app.documentActivated, self._document_handler),
+                               (self._app.documentOpened, self._document_handler),
+                               (self._ui.workspaceActivated, self._workspace_handler)):
+            try:
+                event.remove(handler)
+            except RuntimeError:
+                pass

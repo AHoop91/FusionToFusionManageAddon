@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <g transform="translate(24 8) scale(0.95)">
+    <path d="m13.6308.0379l.02-.0339,64.1293,14.1717h6.6615v62.8281H11.9881c-2.513,0-4.5502-2.0372-4.5502-4.5502v-6.1561L13.6308.0379Z" fill="#933c00"/>
+    <path d="m78.2288,63.0031H13.6308V.0379l.0199-.0379h60.0279c2.513,0,4.5502,2.0372,4.5502,4.5502v58.4528Z" fill="#ff6b00"/>
+    <polygon points="0 71.2285 13.6507 63.0031 13.6507 0 0 8.2254 0 71.2285" fill="#ff9548"/>
+    <path d="m45.2424,20.3818v8.3301h11.4727v6.1855h-11.4727v14.1162h-8.7295V14.0966h22.2969v6.2852h-13.5674Z" fill="#fff"/>
+  </g>
+  <text x="64" y="112" text-anchor="middle" textLength="118" lengthAdjust="spacingAndGlyphs"
+        font-family="Segoe UI, Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#ff6b00">Item Management</text>
+</svg>

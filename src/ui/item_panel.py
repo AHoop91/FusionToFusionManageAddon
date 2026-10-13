@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import adsk.core
@@ -270,6 +271,7 @@ class ItemPanel:
         ref = _active_ref()
 
         def work() -> None:
+            self._warm()   # the workspace's layouts are read while the Data Model answers
             try:
                 subject = self._numbers.resolve(ref, part_number)
             except Exception as exc:  # shown to the user, never raised into a thread nobody watches
@@ -302,6 +304,16 @@ class ItemPanel:
         if show:
             self._host.show()
         self._host.send("item_changed", json.dumps({"item_tab": show}))   # an open page starts polling again; a panel just opened starts on the Item tab
+
+    def _warm(self) -> None:
+        """Read what the Items workspace shares between its items, ahead of the item (best effort: ``_read`` reports a real failure)."""
+        try:
+            cfg = self._config.config.workspaces.get(ITEMS_KIND)
+            if cfg and cfg.workspace_id and not self._config.items_setup_problem():
+                threading.Thread(target=ItemViewService(FmClient(self._config.effective_settings(), self._auth)).prepare,
+                                 args=(cfg.workspace_id,), daemon=True).start()
+        except Exception:  # noqa: BLE001 - only an optimisation
+            log.debug("Could not prepare the Items workspace", exc_info=True)
 
     def _has_number(self, number: str, quiet: bool = False) -> bool:
         """Whether ``number`` (a part number) names a component to look up; when not, say what to select."""
@@ -405,18 +417,20 @@ class ItemPanel:
             raise ValueError(f"{problem} Complete it in Preferences.")
         cfg = self._config.config.workspaces.get(ITEMS_KIND)
         client = FmClient(self._config.effective_settings(), self._auth)
-        try:
-            held = granted_permissions(client, cfg.workspace_id)
-        except FmApiError as exc:
-            if exc.status in (401, 403):
-                raise NoAccess() from exc
-            raise ValueError(f"Could not check your permissions in Fusion Manage: {exc}") from exc
-        if VIEW_ITEMS not in held:   # nothing else is looked at: no access overrides everything
-            raise NoAccess()
-        try:
-            hits = ItemService(client).search(cfg.workspace_id, number)
-        except (FmApiError, AuthError) as exc:
-            raise ValueError(f"Fusion Manage search failed: {exc}") from exc
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            searching = pool.submit(ItemService(client).search, cfg.workspace_id, number)   # asked while the permissions are checked
+            try:
+                held = granted_permissions(client, cfg.workspace_id)
+            except FmApiError as exc:
+                if exc.status in (401, 403):
+                    raise NoAccess() from exc
+                raise ValueError(f"Could not check your permissions in Fusion Manage: {exc}") from exc
+            if VIEW_ITEMS not in held:   # nothing else is looked at: no access overrides everything
+                raise NoAccess()
+            try:
+                hits = searching.result()
+            except (FmApiError, AuthError) as exc:
+                raise ValueError(f"Fusion Manage search failed: {exc}") from exc
         if not hits:
             raise ItemNotFound(number)
         if len(hits) > 1:
