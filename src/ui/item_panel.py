@@ -35,9 +35,13 @@ from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
 from ..fm.items import ItemService, pick_hit
 from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
+from ..fm.ttl_cache import TtlCache
 from ..fm.where_used import WhereUsedService
+from ..publish.writer import safe_name
 from . import drawing_source
 from .attachment_upload import AttachmentUpload, UploadJob
+from .design_history import saved_state
+from .export_options import FORMATS
 from .item_numbers import DesignRef, ItemNumbers, NoItemNumber, Subject, active_design_ref, design_ref
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
@@ -174,6 +178,7 @@ class ItemPanel:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
         self._numbers = ItemNumbers(config, auth)
+        self._saved = TtlCache()   # when what the Export window exports was last saved, by part number and document: read once per window
         self._number = ""   # the item number the panel shows, for Refresh
         self._part = ""   # the part number Fusion gives that component
         self._selection_handler = _SelectionHandler(self._follow_selection)   # kept, or Fusion drops it
@@ -432,6 +437,32 @@ class ItemPanel:
                 log.info("Item number of %s not read ahead: %s", number, exc)
                 return
             self._uploads.warm_component(subject.item_number)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def reset_export(self) -> None:
+        """Forget what was read for an earlier Export window: the document may have been saved since. UI thread."""
+        self._saved.clear()
+
+    def export_files(self, key: str, destination: str, done: Callable[[Dict[str, Any]], None]) -> None:
+        """Say what exporting as the format ``key`` to ``destination`` would do to the files attached in Fusion Manage: add one, or make a new
+        version of the one of that name (``AttachmentUpload.preview``). Told to ``done`` from a worker thread. UI thread."""
+        number, _problem = self.export_target()
+        if not number:
+            done({"state": "unavailable", "message": "Nothing to export yet."})
+            return
+        ref, extension = _active_ref(), FORMATS[key].extension
+        document = adsk.core.Application.get().activeDocument
+        cache_key = (number, document.name if document is not None else "")
+        source = self._saved.get(cache_key) or self._saved.put(cache_key, saved_state(number, _active_selection()))
+
+        def work() -> None:
+            try:
+                item_number = self._numbers.resolve(ref, number).item_number
+                done(self._uploads.preview(destination, item_number, f"{safe_name(item_number)}{extension}", source))
+            except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches
+                log.info("Files for the export of %s not read: %s", number, exc)
+                done({"state": "unavailable", "message": str(exc)})
 
         threading.Thread(target=work, daemon=True).start()
 

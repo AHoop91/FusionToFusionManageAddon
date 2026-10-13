@@ -3,7 +3,9 @@
  * and sends the choice back (``export_run``). The window stays open and follows the export (``upload_status``), then says how it went.
  *
  * Which destinations the user may attach to is read from Fusion Manage when the window opens and arrives later (``export_access``):
- * until then a destination shows a skeleton where its description will be.
+ * until then a grey bar stands where the reason a destination is off would be. The file the export affects is read when the format or
+ * destination is chosen (``export_files``, answered by ``export_files_found``) and shown on a card: new, or already attached and whether it
+ * is up to date.
  */
 (function (ns) {
   'use strict';
@@ -16,12 +18,18 @@
   const UPLOAD_POLL_MS = 250;     // how often to ask how far the export has got
   const START_WAIT_MS = 30000;    // how long an export may go without saying how far it is, before it is called failed
   const ACCESS_WAIT_MS = 20000;   // how long to wait for the permission check before saying it could not be done
+  const FILES_ASK_DELAY_MS = 120; // how long a choice stays still before the attached files are asked for
+  const FILES_WAIT_MS = 30000;    // how long to wait for the attached files before saying they could not be read
 
   let context = null;      // what Python said is on offer
   let format = '';         // the key of the format chosen
   let destination = '';    // the key of the destination chosen
   let access = null;       // why each destination may not be attached to, once the permission check has answered
   let accessTimer = 0;
+  let files = null;        // what is attached where the export would go: {state: 'loading'}, or Python's answer; null when nothing is asked
+  let filesKey = '';       // which choices `files` was asked for, so the same ones are not asked again
+  let filesTimer = 0;
+  let askTimer = 0;        // the pause before the files are asked for, so the choice is drawn first and quick changes ask once
   let progressCard = null; // the progress card, once mounted
   let startedAt = 0;       // when the export was asked for
   let phase = 'form';      // 'form' (choosing), 'working' (the export is under way) or 'result' (how it went)
@@ -34,47 +42,18 @@
     chosen.classList.add('is-checked');
   }
 
-  /** A radio button (for the keyboard) in a joined button, for the format. */
-  function segment(f, checked, onPick) {
-    const part = el('label', 'export-segment' + (checked ? ' is-checked' : ''));
+  /** A radio button (for the keyboard) in a joined button: a format, or a destination (turned off when ``off``). */
+  function segment(item, name, checked, off, onPick) {
+    const part = el('label', 'export-segment' + (checked ? ' is-checked' : '') + (off ? ' is-off' : ''));
     const input = el('input');
     input.type = 'radio';
-    input.name = 'export-format';
-    input.checked = checked;
-    input.addEventListener('change', function () { mark(part, '.export-segment'); onPick(f.key); });
-    part.appendChild(input);
-    part.appendChild(el('span', '', f.label));
-    return part;
-  }
-
-  /** A card for a destination: its name, and under it what it is, why it is off, or a skeleton while that is being read. */
-  function card(d, checked, onPick) {
-    const off = !!d.reason || d.checking;
-    const wrap = el('label', 'export-card' + (off ? ' is-off' : '') + (checked ? ' is-checked' : ''));
-    const input = el('input');
-    input.type = 'radio';
-    input.name = 'export-destination';
+    input.name = name;
     input.checked = checked;
     input.disabled = off;
-    input.addEventListener('change', function () { mark(wrap, '.export-card'); onPick(d.key); });
-    wrap.appendChild(input);
-    wrap.appendChild(el('span', 'export-card-title', d.label));
-    if (d.checking) {
-      const bar = el('span', 'export-skeleton');
-      bar.setAttribute('role', 'status');
-      bar.setAttribute('aria-label', 'Checking permissions');
-      wrap.appendChild(bar);
-    } else {
-      wrap.appendChild(el('span', 'export-card-text', d.reason || d.note));
-    }
-    return wrap;
-  }
-
-  /** The footer says what Export will do with the choices made. */
-  function showStatus() {
-    const found = context.formats.filter(function (f) { return f.key === format; })[0];
-    const where = context.destinations.filter(function (d) { return d.key === destination; })[0];
-    $('export-status').textContent = !found ? '' : where ? 'Uploading ' + found.label + ' file to ' + where.label : 'Choose where to attach the file';
+    input.addEventListener('change', function () { mark(part, '.export-segment'); onPick(item.key); });
+    part.appendChild(input);
+    part.appendChild(el('span', '', item.label));
+    return part;
   }
 
   function syncRun() {
@@ -92,23 +71,160 @@
     const box = $('export-formats');
     box.replaceChildren();
     context.formats.forEach(function (f) {
-      box.appendChild(segment(f, f.key === format, function (key) {
+      box.appendChild(segment(f, 'export-format', f.key === format, false, function (key) {
         format = key;
         destination = preferred();
         renderDestinations();
-        showStatus();
         syncRun();
+        loadFiles();
       }));
     });
     $('export-format-group').hidden = !context.formats.length;
+  }
+
+  /** A grey bar that shimmers where text is still to come. */
+  function skeleton(label) {
+    const bar = el('span', 'export-skeleton');
+    bar.setAttribute('role', 'status');
+    bar.setAttribute('aria-label', label);
+    return bar;
+  }
+
+  /** Under the destinations: why any that is off is off, or a grey bar while the permissions are being read. */
+  function renderDestinationNote() {
+    const box = $('export-destination-note');
+    box.replaceChildren();
+    context.destinations.filter(function (d) { return d.reason; }).forEach(function (d) {
+      box.appendChild(el('span', 'export-note is-off', d.label + ': ' + d.reason));
+    });
+    if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton('Checking permissions'));
   }
 
   function renderDestinations() {
     const box = $('export-destinations');
     box.replaceChildren();
     context.destinations.forEach(function (d) {
-      box.appendChild(card(d, d.key === destination, function (key) { destination = key; showStatus(); syncRun(); }));
+      box.appendChild(segment(d, 'export-destination', d.key === destination, !!d.reason || d.checking, function (key) {
+        destination = key;
+        renderDestinationNote();
+        syncRun();
+        loadFiles();
+      }));
     });
+    renderDestinationNote();
+  }
+
+  // ---- The files attached where the export would go -------------------------------------
+
+  /** A date as the user's computer writes it; the text as it came when it is not one. */
+  function shortDate(stamp) {
+    const when = new Date(stamp);
+    return isNaN(when) ? stamp : when.toLocaleDateString();
+  }
+
+  /** A file size in the unit that reads best. */
+  function fileSize(bytes) {
+    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+    return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+  }
+
+  /** Bouncing balls and a line of text, while the attached files are read. */
+  function loading() {
+    const box = el('div', 'export-files-loading');
+    const balls = el('div', 'balls');
+    balls.setAttribute('role', 'status');
+    balls.setAttribute('aria-label', 'Reading the attached files');
+    for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
+    box.appendChild(balls);
+    box.appendChild(el('span', 'export-note', 'Checking what is attached...'));
+    return box;
+  }
+
+  /** A line of the card: what it is about, and the fact. */
+  function detail(label, value) {
+    const row = el('div', 'export-file-row');
+    row.appendChild(el('dt', '', label));
+    row.appendChild(el('dd', '', value));
+    return row;
+  }
+
+  const FILE_STATES = {   // how the card names, and what it says of, each state of the attached file
+    new: { badge: 'New file', note: 'Not attached yet. Exporting attaches it as a new file.' },
+    current: { badge: 'Up to date', note: '' },
+    stale: { badge: 'Out of date', note: 'Exporting uploads a new version of this file.' },
+    unsaved: { badge: 'Unsaved changes', note: 'Save the document first, then export, so the file matches.' },
+    unknown: { badge: 'Not known', note: 'Exporting uploads a new version of this file.' },
+  };
+
+  /** The card for the file the export affects: its name and whether it is up to date, why, and what is attached now. */
+  function renderFiles() {
+    const box = $('export-files');
+    box.replaceChildren();
+    $('export-files-group').hidden = !files;
+    if (!files) return;
+    if (files.state === 'loading') {
+      box.appendChild(loading());
+      return;
+    }
+    if (files.state !== 'ok') {
+      box.appendChild(el('p', 'export-note is-off', files.message || 'The attached files could not be read.'));
+      return;
+    }
+    const old = files.existing;
+    const state = old ? (old.freshness || {}).state || 'unknown' : 'new';
+    const card = el('div', 'export-file is-' + state);
+    const head = el('div', 'export-file-head');
+    head.appendChild(el('span', 'export-file-name', files.name));
+    head.appendChild(el('span', 'export-file-badge', FILE_STATES[state].badge));
+    card.appendChild(head);
+    const status = el('div', 'export-file-status');
+    if (old && old.freshness) status.appendChild(el('span', 'export-file-why', old.freshness.message));
+    if (FILE_STATES[state].note) status.appendChild(el('span', 'export-file-note', FILE_STATES[state].note));
+    card.appendChild(status);
+    if (old) {
+      const rows = el('dl', 'export-file-rows');
+      rows.appendChild(detail('Version', old.version || 'Unknown'));
+      if (old.size) rows.appendChild(detail('Size', fileSize(old.size)));
+      rows.appendChild(detail('Last changed', old.updated ? shortDate(old.updated) : 'Unknown'));
+      if (old.user) rows.appendChild(detail('Changed by', old.user));
+      card.appendChild(rows);
+    }
+    box.appendChild(card);
+  }
+
+  /** Ask what is attached for the format and destination chosen, unless that was asked already or there is nothing to ask about. */
+  function loadFiles() {
+    const key = [format, destination, context.target].join('|');
+    if (!format || !destination || context.problem) {
+      files = null;
+      filesKey = '';
+      clearTimeout(filesTimer);
+      clearTimeout(askTimer);
+      renderFiles();
+      return;
+    }
+    if (key === filesKey) return;
+    filesKey = key;
+    files = { state: 'loading' };
+    renderFiles();
+    clearTimeout(filesTimer);
+    filesTimer = setTimeout(function () {
+      if (!files || files.state !== 'loading') return;
+      files = { state: 'unavailable', message: 'Fusion Manage did not answer, so the attached files could not be read.' };
+      renderFiles();
+    }, FILES_WAIT_MS);
+    clearTimeout(askTimer);
+    askTimer = setTimeout(function () {   // the call into Fusion holds the page until it returns, so it waits for the choice to be drawn
+      bridge.send('export_files', { format: format, destination: destination, target: context.target });
+    }, FILES_ASK_DELAY_MS);
+  }
+
+  /** An answer about the files: kept when it is for the choices now made, dropped when it is for an earlier choice. */
+  function filesFound(r) {
+    if (!r.ok || !files || r.result.format !== format || r.result.destination !== destination) return;
+    clearTimeout(filesTimer);
+    files = r.result;
+    renderFiles();
   }
 
   /** The choices: what is exported, any problem with it, the formats and destinations, and what pressing Export will do. */
@@ -123,8 +239,8 @@
     problem.hidden = !context.problem;
     renderFormats();
     renderDestinations();
-    showStatus();
     syncRun();
+    loadFiles();
   }
 
   /** Take in what Python said is on offer. While there is nothing to export yet (a drawing still loading) it asks again. */
@@ -239,6 +355,8 @@
       access = r.result.reasons;
       if (context) renderForm();   // else it is taken in when the context arrives
     });
+    bridge.on('export_files', function (r) { if (!r.ok) { files = { state: 'unavailable', message: r.error }; renderFiles(); } });
+    bridge.on('export_files_found', filesFound);
     bridge.on('export_run', function (r) {
       if (r.ok) startWorking(); else { showError(r.error); syncRun(); }
     });

@@ -35,7 +35,6 @@ from .ui_thread import UiThread
 log = get_logger("export_dialog")
 
 ITEM_NOT_CONFIGURED = "Item is not configured. Complete it in Preferences."
-NOTES = {ITEM: "The item in the Items workspace", COMPONENT: "The component in the Components workspace"}
 LABELS = {ITEM: "Item", COMPONENT: "Component"}
 
 
@@ -59,12 +58,14 @@ class ExportDialog:
         self._access: Dict[str, str] = {}   # for each destination, why the user may not attach to it ("" when they may); empty until read
         self._checking = False
         bridge.register("export_context", self._context)
+        bridge.register("export_files", self._files)
         bridge.register("export_run", self._run)
         bridge.register("export_close", self._close)
 
     def show(self) -> None:
         """Open the window afresh in the middle of Fusion (it is closed, not hidden, so it is read again and centred each time). UI thread."""
         self._access, self._checking = {}, False
+        self._panel.reset_export()
         self._host.dispose()
         self._host.show_centered()
 
@@ -139,7 +140,7 @@ class ExportDialog:
         destinations = []
         for key in (ITEM, COMPONENT):
             reason = setup[key] or self._access.get(key, "")
-            destinations.append({"key": key, "label": LABELS[key], "note": NOTES[key], "reason": reason,
+            destinations.append({"key": key, "label": LABELS[key], "reason": reason,
                                  "checking": not reason and key not in self._access})
         usable = [d["key"] for d in destinations if not d["reason"] and not d["checking"]]
         exports = self._config.config.exports
@@ -147,6 +148,20 @@ class ExportDialog:
                 "formats": [describe(key) for key in formats_for(document)],
                 "destinations": destinations, "destination": usable[0] if usable else "",
                 "defaults": {key: exports.destination_of(key) for key in formats_for(document)}}   # set in Preferences ▸ Export
+
+    def _files(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Start reading the files attached where the export would go, to tell the page whether it adds a file or makes a new version of one
+        (``export_files_found``, with the format and destination asked about, so the page can tell it from an answer to an earlier choice)."""
+        key, destination = str(payload.get("format") or ""), str(payload.get("destination") or "")
+        if key not in formats_for(_document()) or destination not in (ITEM, COMPONENT):
+            raise ValueError("Choose a format and where to attach the file.")
+
+        def found(result: Dict[str, Any]) -> None:
+            message = json.dumps({"ok": True, "result": dict(result, format=key, destination=destination), "error": None})
+            self._tasks.post(lambda: self._host.send("export_files_found", message))
+
+        self._panel.export_files(key, destination, found)
+        return {"started": True}
 
     def _run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start the export the window asked for; raises (shown in the window) when what it asked for cannot be done now."""

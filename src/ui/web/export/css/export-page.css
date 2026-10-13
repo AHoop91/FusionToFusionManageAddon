@@ -22,22 +22,15 @@ body { background: var(--surface); }
 
 .export-alert { margin: 0; padding: 8px 12px; border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); background: #fff5f5; }
 
-.export-group h2 { margin: 0 0 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.export-hint { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+.export-group h2 { margin: 0 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 
-/* Where the file goes: two cards side by side, each with its name and a line on what it is (or, when it is off, why). */
-.export-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.export-card { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); cursor: pointer; transition: border-color .12s, box-shadow .12s, background-color .12s; }
-.export-card:hover:not(.is-off) { border-color: var(--accent); }
-.export-card.is-checked { border-color: var(--accent); background: #eef8fd; box-shadow: 0 0 0 1px var(--accent); }
-.export-card.is-off { background: var(--bg); cursor: not-allowed; }
-.export-card:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.export-card input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: inherit; }
-.export-card-title { font-size: 14px; font-weight: 600; }
-.export-card.is-off .export-card-title { color: var(--muted); }
-.export-card-text { font-size: 12px; color: var(--muted); }
-.export-card.is-off .export-card-text { color: var(--danger); }
+/* Under the destination: what it is, and why one that is off is off (or a grey bar while the permissions are read). */
+.export-notes { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.export-note { font-size: 12px; color: var(--muted); }
+.export-note.is-off { color: var(--danger); }
 
-/* The file format: joined buttons, one of them selected. The radio button is there for the keyboard and for readers of the page. */
+/* The destination and the file format: joined buttons, one of them selected. The radio button is there for the keyboard and for readers of the page. */
 .export-segments { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
 .export-segment { position: relative; padding: 7px 20px; border-left: 1px solid var(--border); background: var(--surface); cursor: pointer; user-select: none; transition: background-color .12s; }
 .export-segment:first-child { border-left: 0; }
@@ -45,11 +38,30 @@ body { background: var(--surface); }
 .export-segment.is-checked { background: var(--accent); color: #fff; font-weight: 600; }
 .export-segment input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: inherit; }
 .export-segment:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+.export-segment.is-off { color: var(--muted); background: var(--bg); cursor: not-allowed; }
 
-/* The footer: what pressing Export will do, to the left of the buttons. */
-.export-actions { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--bg); }
-.export-status { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.export-status:empty { display: none; }
+/* The attachments: a line above, then whether the export adds a file or replaces one, and the files that are there. */
+.export-files-group { padding-top: 16px; border-top: 1px solid var(--border); }
+/* While the files are read: the balls and their line centred, across and down, in the room the card will take. */
+.export-files-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 220px; text-align: center; }
+.export-file { --state: var(--muted); --tint: #f4f5f7; padding: 16px 18px; border: 1px solid var(--border); border-top: 3px solid var(--state); border-radius: 6px; background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+.export-file.is-new { --state: var(--accent); --tint: #eef8fd; }
+.export-file.is-current { --state: var(--ok); --tint: #eef8f0; }
+.export-file.is-stale, .export-file.is-unsaved { --state: #e0a800; --tint: #fff8e1; }
+.export-file-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.export-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
+.export-file-badge { flex: none; padding: 3px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: #fff; background: var(--state); }
+.export-file.is-stale .export-file-badge, .export-file.is-unsaved .export-file-badge { color: #3d2f00; }
+.export-file-status { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; padding: 10px 12px; border-radius: 4px; background: var(--tint); font-size: 12px; }
+.export-file-why { color: var(--text); }
+.export-file-note { font-weight: 600; }
+.export-file-rows { display: grid; gap: 6px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.export-file-row { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; font-size: 12px; }
+.export-file-row dt { font-weight: 600; color: var(--muted); }
+.export-file-row dd { margin: 0; }
+
+/* The footer: the buttons, to the right. */
+.export-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--bg); }
 
 /* ---- The export under way, and how it ended: a card over the choices (the backdrop and card are the Item panel's, progress.css) ---- */
 

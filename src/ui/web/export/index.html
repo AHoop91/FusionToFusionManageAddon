@@ -56,19 +56,28 @@
 
         <section class="export-group" aria-labelledby="export-destination-title">
           <h2 id="export-destination-title">Attach to</h2>
-          <div id="export-destinations" class="export-cards" role="radiogroup" aria-labelledby="export-destination-title"></div>
+          <p class="export-hint">Where in Fusion Manage the file is attached: the item of the part, or its component.</p>
+          <div id="export-destinations" class="export-segments" role="radiogroup" aria-labelledby="export-destination-title"></div>
+          <div id="export-destination-note" class="export-notes" aria-live="polite"></div>
         </section>
 
         <section id="export-format-group" class="export-group" aria-labelledby="export-format-title">
           <h2 id="export-format-title">File format</h2>
+          <p class="export-hint">The kind of file made from what is open: a design is exported as STEP, a drawing as PDF, DWG or DXF.</p>
           <div id="export-formats" class="export-segments" role="radiogroup" aria-labelledby="export-format-title"></div>
+        </section>
+
+        <!-- What is attached in Fusion Manage already, and so whether this export adds a file or makes a new version of one. -->
+        <section id="export-files-group" class="export-group export-files-group" aria-labelledby="export-files-title" hidden>
+          <h2 id="export-files-title">Attachment</h2>
+          <p class="export-hint">Fusion Manage keeps one file for each name, so exporting again adds a new version of it, not a second copy.</p>
+          <div id="export-files" aria-live="polite"></div>
         </section>
 
         <p id="export-error" class="export-alert" role="alert" hidden></p>
       </div>
 
       <footer class="export-actions">
-        <p id="export-status" class="export-status" aria-live="polite"></p>
         <button id="export-cancel" class="btn btn-secondary" type="button">Cancel</button>
         <button id="export-run" class="btn" type="button" disabled>Export</button>
       </footer>

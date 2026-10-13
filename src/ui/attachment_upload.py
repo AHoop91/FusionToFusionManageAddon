@@ -31,6 +31,7 @@ from ..fm.items import ItemService, pick_hit
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.writer import safe_name
+from .export_freshness import compare
 from .item_numbers import Subject
 from .palette_host import PaletteHost
 from .ui_thread import UiThread
@@ -156,6 +157,23 @@ class AttachmentUpload:
             self._find_component(number)
         except Exception as exc:  # noqa: BLE001 - only an optimisation
             log.info("Component %s not found ahead: %s", number, exc)
+
+    def preview(self, destination: str, number: str, name: str, source: Dict[str, Any]) -> Dict[str, Any]:
+        """What attaching the file called ``name`` to the item (or component) numbered ``number`` would do. ``state`` is "ok", with the
+        ``existing`` file it would make a new version of (None when it would be attached as new) and whether that file is as recent as the
+        ``source`` it is made from (``export_freshness.compare``); or "unavailable", with a ``message``. A worker thread; nothing is changed."""
+        try:
+            workspace_id, item_id = self._find_component(number) if destination == COMPONENT else self._find_item(number)
+            files = AttachmentService(FmClient(self._config.effective_settings(), self._auth)).files(workspace_id, item_id)
+        except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches
+            log.info("Could not read the files of the %s of %s: %s", destination, number, exc)
+            return {"state": "unavailable", "message": str(exc)}
+        found = next((file for file in files if file["name"] == name), None)   # the first of that name is the one a new version is made of
+        existing = None
+        if found:
+            existing = {key: found[key] for key in ("version", "updated", "user", "size")} | {"freshness": compare(found["updated"], source)}
+            log.info("Attached %s was uploaded %s; last saved %s: %s", name, found["updated"], source, existing["freshness"]["state"])
+        return {"state": "ok", "name": name, "existing": existing}
 
     # ---- Doing ----------------------------------------------------------------------
 
