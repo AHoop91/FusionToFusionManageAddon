@@ -20,6 +20,7 @@ import adsk.core
 
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
+from ..config.export_models import COMPONENT, ITEM
 from ..config.workspace_models import ITEMS_KIND
 from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
@@ -30,7 +31,6 @@ from ..fm.items import ItemService, pick_hit
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.writer import safe_name
-from .export_options import COMPONENT, ITEM
 from .item_numbers import Subject
 from .palette_host import PaletteHost
 from .ui_thread import UiThread

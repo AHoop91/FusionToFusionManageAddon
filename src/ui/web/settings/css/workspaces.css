@@ -108,19 +108,13 @@
 /* ---- Workspace tab options ---------------------------------------------- */
 
 .ws-panel .ws-id-label { margin-top: 0; }
-.ws-panel { position: relative; }
-.ws-busy { position: absolute; inset: 0; z-index: 5; justify-content: center;
-  background: rgba(255, 255, 255, 0.85); }
+.ws-busy { position: absolute; inset: 0; z-index: 7; justify-content: center; background: rgba(255, 255, 255, 0.85); }
+#sub-workspaces { position: relative; }
 .ws-section { margin-bottom: 4px; }
 .ws-panel > .ws-desc { margin: 0; font-size: 12px; }
 
-/* Save stays in view at the bottom of the scrolling panel. */
-.ws-footer { position: sticky; bottom: -16px; z-index: 6; margin: 16px -16px -16px; padding: 10px 16px;
-  background: var(--surface); border-top: 1px solid var(--border); }
-.ws-footer .error { margin: 0 0 8px; }
 .ws-panel .ws-heading { margin-bottom: 0; }
 .ws-section > .ws-block:first-child, .ws-locked > .ws-block:first-child { margin-top: 6px; }
-.ws-footer .row { justify-content: flex-end; }
 .ws-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
 .ws-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ws-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
@@ -130,9 +124,6 @@
   border: 1px solid #b9dcf3; border-radius: 4px; background: #eef7fd; }
 .ws-info-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--accent); }
 .ws-info-text { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text); }
-.ws-footer .ws-alert { flex: 1; margin: 0; padding: 8px 10px 8px 34px; border: 1px solid #f1b8b8; border-left: 3px solid var(--danger);
-  border-radius: 4px; background: #fdf0ef center left 10px / 16px 16px no-repeat; font-size: 12px; line-height: 1.4; color: #9b1c1c;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23d62830'/%3E%3Cpath d='M12 6.5v6.5' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17' r='1.4' fill='%23fff'/%3E%3C/svg%3E"); }
 
 /* Confirm dialog for "Add default fields". */
 .ws-dialog-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .5); }

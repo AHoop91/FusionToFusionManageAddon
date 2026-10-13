@@ -13,6 +13,7 @@ from typing import Callable, List, Optional
 
 from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
+from .export_models import ExportSettings
 from .hub import tenant_code
 from .models import MODE_COMPANY, MODE_LOCAL, AppConfig, ConnectionSettings
 from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceSettings
@@ -77,18 +78,20 @@ class ConfigService:
         os.replace(tmp_path, self._path)
 
     def update(self, mode: str, local: ConnectionSettings,
-               workspaces: WorkspaceSettings, company_source: str) -> List[str]:
+               workspaces: WorkspaceSettings, company_source: str, exports: Optional[ExportSettings] = None) -> List[str]:
         """Validate and save. Returns problems; nothing is saved if any exist.
 
         Local settings are only validated when local mode is active so users
-        can switch modes without being blocked by unfinished fields.
+        can switch modes without being blocked by unfinished fields. The
+        export settings are kept as they are when ``exports`` is None.
         """
+        exports = exports or self._config.exports
         problems = local.validate(require_tenant=False) if mode == MODE_LOCAL else []
-        problems += workspaces.validate()
+        problems += workspaces.validate() + exports.validate()
         if problems:
             return problems
         self._config = AppConfig(mode=mode, local=local, workspaces=workspaces,
-                                 company_source=company_source)
+                                 company_source=company_source, exports=exports)
         self.save()
         for callback in self._listeners:
             try:

@@ -307,3 +307,9 @@ If your Items workspace has a field that links an item to a record in the Fusion
 ### When the buttons light up
 
 The ribbon and context-menu buttons, other than **Preferences** and **Export**, stay disabled until the Items workspace is usable: a workspace ID is set, and the mappings are valid. The tooltip says what is still missing. The **Export** window opens either way; it turns off only its **Item** destination, and says why.
+
+## Export destinations
+
+On the **Export** tab of **Preferences** you choose, for each file format (STEP, PDF, DWG and DXF), where it is attached in Fusion Manage: to the **Item** in the Items workspace, or to the **Component** in the Components workspace. Every format starts on **Item**.
+
+The **Export** window starts on the destination set here for the format you pick, and you can still choose the other one for a single export. If the user may not attach files to the destination set, or it is not set up, the window starts on the other one instead.

@@ -345,9 +345,12 @@
     card.querySelector('.ws-tick').hidden = !valid;
   }
 
-  /** Show or hide the bouncing-ball overlay while Python checks the workspace. */
+  const busyCards = new Set();   // the cards whose workspace is being checked
+
+  /** Show the bouncing-ball overlay, over the visible part of the tab, while Python checks a workspace. */
   function setBusy(card, busy) {
-    card.querySelector('.ws-busy').hidden = !busy;
+    if (busy) busyCards.add(card); else busyCards.delete(card);
+    $('ws-busy').hidden = !busyCards.size;
   }
 
   // Validations in flight: kindId -> workspace id being checked. Python answers
@@ -554,17 +557,6 @@
     panel.appendChild(buildIdSection(kind, config));
     if (kind.component_lookup) panel.appendChild(buildComponentSection(kind, config));
     panel.appendChild(buildMappingSection(kind, config));
-
-    // Overlay shown while the workspace is being validated.
-    const busy = el('div', 'ws-busy loader');
-    busy.hidden = true;
-    const balls = el('div', 'balls');
-    balls.setAttribute('role', 'status');
-    balls.setAttribute('aria-label', 'Validating');
-    for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
-    busy.appendChild(balls);
-    busy.appendChild(el('p', 'muted', 'Validating workspace...'));
-    panel.appendChild(busy);
 
     // Wiring: choosing a workspace invalidates, then asks Python to validate.
     const idInput = panel.querySelector('.ws-id');

@@ -7,8 +7,7 @@ This holds no Fusion objects: the page shows what ``describe`` says.
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-STEP, PDF, DWG, DXF = "step", "pdf", "dwg", "dxf"
-ITEM, COMPONENT = "item", "component"   # where the file is attached in Fusion Manage: the item of the part, or its component
+from ..config.export_models import DWG, DXF, PDF, STEP
 
 DESIGN, DRAWING = "design", "drawing"   # the kinds of open document that can be exported
 FORMATS_OF = {DESIGN: (STEP,), DRAWING: (PDF, DWG, DXF)}   # the first is the one offered at first

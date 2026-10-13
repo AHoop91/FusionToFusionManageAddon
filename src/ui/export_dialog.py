@@ -19,13 +19,14 @@ import adsk.fusion
 from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
+from ..config.export_models import COMPONENT, ITEM
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.components import ComponentService
 from ..fm.permissions import ATTACH_PERMISSIONS, denial
 from . import drawing_source
-from .export_options import COMPONENT, DESIGN, DRAWING, ITEM, describe, formats_for
+from .export_options import DESIGN, DRAWING, describe, formats_for
 from .item_panel import ItemPanel
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
@@ -141,9 +142,11 @@ class ExportDialog:
             destinations.append({"key": key, "label": LABELS[key], "note": NOTES[key], "reason": reason,
                                  "checking": not reason and key not in self._access})
         usable = [d["key"] for d in destinations if not d["reason"] and not d["checking"]]
+        exports = self._config.config.exports
         return {"target": number, "description": self._panel.export_description() if number else "", "problem": problem,
                 "formats": [describe(key) for key in formats_for(document)],
-                "destinations": destinations, "destination": usable[0] if usable else ""}
+                "destinations": destinations, "destination": usable[0] if usable else "",
+                "defaults": {key: exports.destination_of(key) for key in formats_for(document)}}   # set in Preferences ▸ Export
 
     def _run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start the export the window asked for; raises (shown in the window) when what it asked for cannot be done now."""

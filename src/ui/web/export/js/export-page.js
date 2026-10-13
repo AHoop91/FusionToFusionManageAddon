@@ -81,11 +81,24 @@
     $('export-run').disabled = !(format && destination && !context.problem);
   }
 
+  /** The destination the format chosen starts on (set in Preferences, on the Export tab) when it can be used, else the first that can. */
+  function preferred() {
+    const usable = context.destinations.filter(function (d) { return !d.reason && !d.checking; });
+    const wanted = usable.filter(function (d) { return d.key === (context.defaults || {})[format]; })[0];
+    return (wanted || usable[0] || { key: '' }).key;
+  }
+
   function renderFormats() {
     const box = $('export-formats');
     box.replaceChildren();
     context.formats.forEach(function (f) {
-      box.appendChild(segment(f, f.key === format, function (key) { format = key; showStatus(); }));
+      box.appendChild(segment(f, f.key === format, function (key) {
+        format = key;
+        destination = preferred();
+        renderDestinations();
+        showStatus();
+        syncRun();
+      }));
     });
     $('export-format-group').hidden = !context.formats.length;
   }
@@ -118,7 +131,7 @@
   function load(result) {
     context = result;
     format = context.formats.length ? context.formats[0].key : '';
-    destination = context.destination;
+    destination = preferred();
     renderForm();
     if (context.problem) setTimeout(function () { bridge.send('export_context'); }, CONTEXT_POLL_MS);
   }
@@ -136,10 +149,7 @@
     clearTimeout(accessTimer);
     context.destinations.forEach(function (d) { d.reason = access[d.key] || ''; d.checking = false; });
     const chosen = context.destinations.filter(function (d) { return d.key === destination && !d.reason; })[0];
-    if (!chosen) {
-      const usable = context.destinations.filter(function (d) { return !d.reason; })[0];
-      destination = usable ? usable.key : '';
-    }
+    if (!chosen) destination = preferred();
   }
 
   /** The permission check has not answered in good time: say so on the destinations that were waiting, instead of shimmering on. */

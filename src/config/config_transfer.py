@@ -49,7 +49,7 @@ def import_config(config: ConfigService, path: str) -> None:
     envelope = _read_envelope(path)
     imported = AppConfig.from_dict(envelope["config"])
     problems = config.update(imported.mode, imported.local,
-                             imported.workspaces, imported.company_source)
+                             imported.workspaces, imported.company_source, imported.exports)
     if problems:
         raise ConfigTransferError("The file's settings are invalid: " + " ".join(problems))
 

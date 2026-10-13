@@ -7,6 +7,7 @@ stored here; see ``auth.token_store``.
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
+from .export_models import ExportSettings
 from .hub import tenant_code
 from .workspace_models import WorkspaceSettings
 
@@ -81,12 +82,14 @@ class AppConfig:
     # Placeholder for company mode. ``source`` will later hold a UNC path or
     # HTTPS URL to the shared JSON. Not used yet.
     company_source: str = ""
+    exports: ExportSettings = field(default_factory=ExportSettings)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "mode": self.mode,
             "local": self.local.to_dict(),
             "workspaces": self.workspaces.to_dict(),
+            "exports": self.exports.to_dict(),
             "company": {"source": self.company_source},
         }
 
@@ -101,4 +104,5 @@ class AppConfig:
             local=ConnectionSettings.from_dict(local),
             workspaces=WorkspaceSettings.from_dict(workspaces),
             company_source=str(data.get("company", {}).get("source", "")),
+            exports=ExportSettings.from_dict(data.get("exports")),
         )

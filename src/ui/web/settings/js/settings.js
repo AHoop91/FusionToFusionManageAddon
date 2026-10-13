@@ -23,6 +23,7 @@
     $('f-port').value = s.local.callback_port;
     $('f-scopes').value = s.local.scopes.join(' ');
     ns.workspaces.render(s);
+    ns.exports.render(s);
     $('callback-url').textContent = s.callback_url;
   }
 
@@ -31,6 +32,7 @@
     return {
       mode: document.querySelector('input[name="mode"]:checked').value,
       workspaces: ns.workspaces.read(),
+      exports: ns.exports.read(),
       local: {
         client_id: $('f-client-id').value,
         tenant: $('f-tenant').value,
@@ -50,7 +52,7 @@
   function applyLock() {
     const checked = document.querySelector('input[name="mode"]:checked');
     const locked = !!checked && checked.value === 'company';
-    ['conn-settings', 'lock-workspaces'].forEach(function (id) { $(id).disabled = locked; });
+    ['conn-settings', 'lock-workspaces', 'lock-exports'].forEach(function (id) { $(id).disabled = locked; });
     $('import-btn').disabled = locked;
     document.querySelectorAll('.lock-note').forEach(function (note) { note.hidden = !locked; });
   }
@@ -133,7 +135,7 @@
       $('callback-url').textContent = 'http://localhost:' + $('f-port').value + '/callback';
     });
     // Every tab saves the whole form; `prefix` says where to show the result.
-    [['save-btn', 'save'], ['ws-save-btn', 'ws-save'], ['gen-save-btn', 'gen-save']].forEach(function (pair) {
+    [['save-btn', 'save'], ['ws-save-btn', 'ws-save'], ['ex-save-btn', 'ex-save'], ['gen-save-btn', 'gen-save']].forEach(function (pair) {
       $(pair[0]).addEventListener('click', function () {
         saveSource = pair[1];
         bridge.send('save_settings', readSettings());
