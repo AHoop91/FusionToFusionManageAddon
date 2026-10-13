@@ -7,6 +7,7 @@ stored here; see ``auth.token_store``.
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
+from .hub import tenant_code
 from .workspace_models import WorkspaceSettings
 
 MODE_LOCAL = "local"
@@ -22,7 +23,7 @@ class ConnectionSettings:
     """Everything needed to sign in to and address Fusion Manage."""
 
     client_id: str = ""
-    tenant: str = ""   # not saved: ``ConfigService.effective_settings`` fills it from the active Fusion hub
+    tenant: str = ""   # empty means the name of the hub open in Fusion (``ConfigService.effective_settings``)
     callback_port: int = DEFAULT_CALLBACK_PORT
     scopes: List[str] = field(default_factory=lambda: list(DEFAULT_SCOPES))
 
@@ -34,13 +35,15 @@ class ConnectionSettings:
     def validate(self, require_tenant: bool = True) -> List[str]:
         """Return human-readable problems; empty list means valid.
 
-        ``require_tenant`` is False for the saved settings, which hold no tenant (it is the active hub's).
+        ``require_tenant`` is False for the saved settings, where an empty tenant means the open hub's name.
         """
         problems = []
         if not self.client_id.strip():
             problems.append("Client ID is required.")
-        if require_tenant and not self.tenant.strip():
-            problems.append("No usable Fusion hub is active; open the hub of your Fusion Manage tenant.")
+        if self.tenant.strip() and not tenant_code(self.tenant):
+            problems.append("Tenant must be a single name such as mycompany, not an address.")
+        elif require_tenant and not self.tenant.strip():
+            problems.append("Tenant is required: enter it in Preferences, or open the Fusion hub named after it.")
         if not (1024 <= int(self.callback_port) <= 65535):
             problems.append("Callback port must be between 1024 and 65535.")
         if not self.scopes:
@@ -48,9 +51,7 @@ class ConnectionSettings:
         return problems
 
     def to_dict(self) -> Dict[str, Any]:
-        data = asdict(self)
-        del data["tenant"]
-        return data
+        return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ConnectionSettings":
@@ -63,6 +64,7 @@ class ConnectionSettings:
         scopes = data.get("scopes")
         return cls(
             client_id=str(data.get("client_id", "")).strip(),
+            tenant=str(data.get("tenant", "")).strip(),
             callback_port=port,
             scopes=[str(s) for s in scopes] if isinstance(scopes, list) and scopes
             else list(DEFAULT_SCOPES),

@@ -55,7 +55,7 @@
           <h2>Configuration mode</h2>
           <p class="hint">
             The mode decides where the add-in gets its Fusion Manage connection
-            details (Client ID, callback port and scopes). Workspace
+            details (Client ID, tenant, callback port and scopes). Workspace
             IDs and field mappings are configured separately on the Workspaces tab.
           </p>
 
@@ -79,7 +79,7 @@
               <span class="mode-desc">
                 Connection details are read from a shared configuration file
                 published by your organisation (network path or web address), so
-                everyone uses the same Client ID without entering it.
+                everyone uses the same Client ID and tenant without entering them.
                 Fields your organisation locks cannot be changed locally.
               </span>
             </span>
@@ -104,7 +104,10 @@
               <label>Client ID
                 <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">
               </label>
-              <p class="hint">The tenant is the name of the hub open in Fusion, so open that hub before signing in.</p>
+              <label>Tenant
+                <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
+              </label>
+              <p class="hint">The part before .autodeskplm360.net in your Fusion Manage address. Leave it empty to use the name of the hub open in Fusion.</p>
               <label>Callback port
                 <input id="f-port" type="number" min="1024" max="65535">
               </label>

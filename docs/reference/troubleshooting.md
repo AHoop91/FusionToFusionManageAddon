@@ -9,7 +9,9 @@ title: Troubleshooting and Limitations
 | Message | Cause and fix |
 |---|---|
 | **Client ID is required.** / **Callback port must be between 1024 and 65535.** / **At least one scope is required.** | Complete the **Connection** tab and save. |
-| **No usable Fusion hub is active; open the hub of your Fusion Manage tenant.** | The tenant is the name of the hub open in Fusion. Open that hub (its name must be only letters, digits and hyphens) and try again. |
+| **Tenant is required: enter it in Preferences, or open the Fusion hub named after it.** | Enter the tenant in Preferences ▸ Connection. Left empty, the add-in uses the open hub's name, which fails when the hub is named differently. |
+| **Tenant must be a single name such as mycompany, not an address.** | Enter only the part before `.autodeskplm360.net`: letters, digits and hyphens. |
+| **Insufficient permissions to view the Items workspace** with *no user mapped to the given client* in the log | The tenant is wrong, so the request went to another Fusion Manage tenant. Set the correct Tenant in Preferences. |
 | **Callback port 8765 is unavailable: …** | Another program is using the port. Choose a different **Callback port**, register the new callback URL on your APS application, and sign in again. |
 | **Sign-in timed out.** | No redirect arrived within 180 seconds. Sign in again and complete the browser step promptly. |
 | **Sign-in cancelled.** | You clicked **Cancel**. |

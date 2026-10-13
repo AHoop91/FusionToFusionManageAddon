@@ -10,7 +10,7 @@ from unittest import mock
 from src.auth.callback_server import CallbackServer
 from src.config.config_service import ConfigService
 from src.config.hub import tenant_code
-from src.config.models import AppConfig, ConnectionSettings
+from src.config.models import MODE_LOCAL, ConnectionSettings
 from src.fm.client import FmApiError, FmClient
 
 
@@ -27,16 +27,17 @@ class TenantTests(unittest.TestCase):
                 FmClient(ConnectionSettings(tenant=bad), mock.Mock()).base_url
         self.assertEqual(FmClient(ConnectionSettings(tenant="acme"), mock.Mock()).base_url, "https://acme.autodeskplm360.net")
 
-    def test_tenant_is_not_saved_or_imported(self):
-        self.assertNotIn("tenant", ConnectionSettings(tenant="acme").to_dict())
-        loaded = AppConfig.from_dict({"local": {"client_id": "c", "tenant": "evil.example/x#"}})
-        self.assertEqual(loaded.local.tenant, "")
+    def test_a_saved_tenant_must_be_a_plain_name(self):
+        self.assertEqual(ConnectionSettings(client_id="c", tenant="acme").validate(), [])
+        self.assertTrue(ConnectionSettings(client_id="c", tenant="evil.example/x#").validate(require_tenant=False))
 
-    def test_effective_settings_take_the_tenant_from_the_hub(self):
+    def test_effective_settings_use_the_saved_tenant_else_the_hub(self):
         with tempfile.TemporaryDirectory() as folder:
             service = ConfigService(os.path.join(folder, "config.json"), tenant=lambda: "hubco")
             self.assertEqual(service.effective_settings().tenant, "hubco")
-            self.assertEqual(service.config.local.tenant, "")
+            self.assertEqual(service.update(MODE_LOCAL, ConnectionSettings(client_id="c", tenant="Acme"), service.config.workspaces, ""), [])
+            self.assertEqual(service.effective_settings().tenant, "acme")
+            self.assertEqual(service.config.local.tenant, "Acme")
 
 
 class RedirectTests(unittest.TestCase):

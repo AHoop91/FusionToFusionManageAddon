@@ -152,7 +152,7 @@ The panel shows the callback URL it will use. It must be registered on your APS 
 http://localhost:8765/callback
 ```
 
-There is no tenant setting. The add-in uses the name of the hub that is open in Fusion as the tenant, and connects to `https://<hub name>.autodeskplm360.net`, so open your Fusion Manage hub before you sign in. A hub whose name is not a plain tenant name (letters, digits and hyphens) cannot be used.
+Enter the **Tenant**: the part before `.autodeskplm360.net` in your Fusion Manage address (for example `mycompany`). It must be only letters, digits and hyphens, never an address. If you leave it empty, the add-in uses the name of the hub that is open in Fusion, which works only when the hub is named after the tenant.
 
 A Client ID, a valid port and at least one scope are required before you can sign in. Click **Save**.
 

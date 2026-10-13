@@ -19,6 +19,7 @@
     if (modeRadio) modeRadio.checked = true;
     applyLock();
     $('f-client-id').value = s.local.client_id;
+    $('f-tenant').value = s.local.tenant;
     $('f-port').value = s.local.callback_port;
     $('f-scopes').value = s.local.scopes.join(' ');
     ns.workspaces.render(s);
@@ -32,6 +33,7 @@
       workspaces: ns.workspaces.read(),
       local: {
         client_id: $('f-client-id').value,
+        tenant: $('f-tenant').value,
         callback_port: $('f-port').value,
         scopes: $('f-scopes').value.split(/\s+/).filter(Boolean),
       },
