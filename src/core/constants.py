@@ -27,7 +27,10 @@ UPLOAD_DXF_COMMAND_ID = "MfgToFm_UploadDxfCmd"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
-RIBBON_TAB_NAME = "Fusion Manage"
+RIBBON_TAB_NAME = "Fusion Manage"   # the add-in's own tab, where Fusion has no tab called RIBBON_HOST_TAB_NAME
+RIBBON_HOST_TAB_NAME = "Manage"   # Fusion's own tab the add-in's buttons go into
+RIBBON_MERGED_PANEL_ID = "MfgToFm_ItemManagementPanel"
+RIBBON_MERGED_PANEL_NAME = "Item Management"
 RIBBON_PANEL_ID = "MfgToFm_SettingsPanel"
 RIBBON_PANEL_NAME = "Administration"
 RIBBON_PUBLISH_PANEL_ID = "MfgToFm_PublishPanel"
