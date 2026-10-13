@@ -365,11 +365,11 @@ class ItemPanel:
         drawing, else nothing (an empty list)."""
         if drawing_source.active_drawing() is not None:
             ready = bool(drawing_source.cached_number())
-            return {"actions": [{"action": "upload_drawing", "label": "Upload Drawing as PDF", "ext": ".pdf", "ready": ready},
-                                {"action": "upload_dwg", "label": "Upload Drawing as DWG", "ext": ".dwg", "ready": ready},
-                                {"action": "upload_dxf", "label": "Upload Drawing as DXF", "ext": ".dxf", "ready": ready}]}
+            return {"actions": [{"action": "upload_drawing", "label": "Export PDF", "ext": ".pdf", "ready": ready},
+                                {"action": "upload_dwg", "label": "Export DWG", "ext": ".dwg", "ready": ready},
+                                {"action": "upload_dxf", "label": "Export DXF", "ext": ".dxf", "ready": ready}]}
         if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
-            return {"actions": [{"action": "add_step_file", "label": "Upload STEP File", "ext": ".step", "ready": True}]}
+            return {"actions": [{"action": "add_step_file", "label": "Export STEP File", "ext": ".step", "ready": True}]}
         return {"actions": []}   # neither a design nor a drawing is open: nothing to offer
 
     def upload_selected_step(self) -> None:

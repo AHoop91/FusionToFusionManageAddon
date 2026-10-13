@@ -158,8 +158,8 @@ The published item is the foundation. This stage adds what the supply chain need
 
 | Task | How |
 |---|---|
-| Attach a STEP file of a component | Select the component and choose **Upload STEP File To Fusion Manage Item** ([STEP File](../publishing/index.md#step-file)). |
-| Attach a PDF of the drawing | Open the drawing and choose **Upload Drawing PDF To Fusion Manage Item** ([Drawing Representation](../publishing/index.md#drawing-representation)). |
+| Attach a STEP file of a component | Select the component and choose **Export STEP File** ([STEP File](../publishing/index.md#step-file)). |
+| Attach a PDF of the drawing | Open the drawing and choose **Export PDF** ([Drawing Representation](../publishing/index.md#drawing-representation)). |
 | Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([Bill of Materials](../publishing/index.md#add-items)). |
 | Keep or change manufacturing lines that only Fusion Manage has | Review the **Fusion Manage Only** lines. They are kept unless you remove them. |
 | Complete information that engineering does not supply | Edit it in Fusion Manage. |
@@ -211,7 +211,7 @@ The manufactured item is released through **its own workflow in Fusion Manage**,
 | Create or update items from a released design | **Publish Fusion Manage Item** |
 | See whether a publish succeeded | **Job Queue** |
 | Retry after a failure | **Retry** on the job in the Job Queue |
-| Attach a STEP file | **Upload STEP File To Fusion Manage Item** |
-| Attach a drawing PDF | **Upload Drawing PDF To Fusion Manage Item** |
+| Attach a STEP file | **Export STEP File** |
+| Attach a drawing PDF | **Export PDF** |
 | Review an item | **Open Fusion Manage Item** |
 | Release an item | Fusion Manage, via **Open in browser** |

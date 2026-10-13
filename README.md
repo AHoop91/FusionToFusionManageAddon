@@ -122,7 +122,9 @@ The add-in adds a **Fusion Manage** tab to the ribbon in the **Design** and **Dr
 |---|---|---|
 | Item | Open Fusion Manage Item | Show the item of the selected component, or of the open design or drawing |
 | Item | Publish Fusion Manage Item (Design) | Preview and publish the open design |
-| Item | Upload Drawing PDF (Drawing) | Attach a PDF of the open drawing |
+| Export | Export STEP File (Design) | Attach a STEP file of the open design or the selected component |
+| Export | Export PDF (Drawing) | Attach a PDF of the open drawing |
+| Export | Export DWG, Export DXF (Drawing, in the dropdown) | Attach a DWG or DXF of the open drawing |
 | Administration | Job Queue | See publishes that are waiting, running and finished |
 | Administration | Preferences | Sign in, set the connection and the workspace mapping |
 

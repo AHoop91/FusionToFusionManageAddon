@@ -34,7 +34,7 @@ If no item has the number, the panel says **No item exists for …** and suggest
 ## Header
 
 !!! example "Screenshot placeholder: Item Panel header with the Actions menu open"
-    **Show:** The title, status line, Open in browser, Refresh and the Actions menu showing Upload STEP File.
+    **Show:** The title, status line, Open in browser, Refresh and the Actions menu showing Export STEP File.
 
     Save the image as `docs/images/item-actions.png`, then replace this box with `![Item Panel header with the Actions menu open](../images/item-actions.png)`.
 
@@ -43,7 +43,7 @@ If no item has the number, the panel says **No item exists for …** and suggest
 | Title and status line | The item's title, and a line with its version, lifecycle state and Type. |
 | **Open in browser** | Opens the item in Fusion Manage in your web browser. |
 | **Refresh** | Reads the item again from Fusion Manage. |
-| **Actions** (⋯) | Uploads the technical representation: **Upload STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). |
+| **Actions** (⋯) | Uploads the technical representation: **Export STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). |
 
 ## Required permission
 

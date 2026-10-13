@@ -280,10 +280,10 @@ The add-in can attach a **STEP file** of a component to its Fusion Manage item, 
 
 The item must already exist. Publish it first ([Item Creation](#item-creation)).
 
-!!! example "Screenshot placeholder: Right-click menu: Upload STEP File To Fusion Manage Item"
+!!! example "Screenshot placeholder: Right-click menu: Export STEP File"
     **Show:** The right-click menu of a component with the STEP upload entry.
 
-    Save the image as `docs/images/step-context-menu.png`, then replace this box with `![Right-click menu: Upload STEP File To Fusion Manage Item](../images/step-context-menu.png)`.
+    Save the image as `docs/images/step-context-menu.png`, then replace this box with `![Right-click menu: Export STEP File](../images/step-context-menu.png)`.
 
 ### Upload a STEP file
 
@@ -291,8 +291,8 @@ The file is named after the item number, for example `PN-1001.step`.
 
 1. In the Design workspace, select a component in the browser or canvas. With nothing selected, the open design's top-level component is used.
 2. Do one of the following:
-    - Right-click and choose **Upload STEP File To Fusion Manage Item**.
-    - Open the item in the [Item Panel](../item-panel/index.md) and choose **Actions ▸ Upload STEP File**.
+    - Right-click and choose **Export STEP File**.
+    - Open the item in the [Item Panel](../item-panel/index.md) and choose **Actions ▸ Export STEP File**.
 3. A small **Uploading STEP File** window shows three stages: **Find item**, **Create STEP** and **Upload**, with a percentage where one can be measured.
 4. When it finishes you see a confirmation: `<name> was attached to the item in Fusion Manage`, or `A new version of <name> was uploaded to the item in Fusion Manage`.
 
@@ -350,7 +350,7 @@ A drawing is **not an item of its own**. Its PDF is attached to the item of the 
 ### Upload a drawing PDF
 
 1. Open the drawing. The add-in works out which item it belongs to from the design the drawing references: the Fusion Manage item of that design's **top-level component**, found by its part number.
-2. Choose **Fusion Manage ▸ Item ▸ Upload Drawing PDF To Fusion Manage Item**, or right-click the top of the drawing's component tree and choose the same entry. In a drawing, the [Item Panel](../item-panel/index.md) **Actions** menu offers the same upload.
+2. Choose **Manage ▸ Item Management ▸ Export PDF**, or right-click the top of the drawing's component tree and choose the same entry. In a drawing, the [Item Panel](../item-panel/index.md) **Actions** menu offers the same upload.
 3. A PDF of every sheet of the drawing is created, named after the item number (for example `PN-1001.pdf`), and uploaded in a window with the stages **Find item**, **Create PDF** and **Upload**.
 
 The right-click entry is offered only when the **top of the tree** is selected, not a component below it.
