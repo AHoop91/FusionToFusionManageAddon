@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -26,6 +27,7 @@ from ..fm.attachments import AttachmentService
 from ..fm.client import FmClient
 from ..fm.components import ComponentService, link_ids
 from ..fm.items import ItemService, pick_hit
+from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.writer import safe_name
 from .export_options import COMPONENT, ITEM
@@ -38,6 +40,7 @@ log = get_logger("attachment_upload")
 TEMP_FOLDER = "MfgToFm_upload"   # under the temp folder, while a file waits to be attached
 Progress = Callable[[Optional[int]], None]   # told the percent done of a stage, or None while that is not known
 FIND, MAKE, SEND = 0, 1, 2   # the stages of an upload, by position in ``UploadJob.steps``
+PAGE_DRAW_SECONDS = 0.3   # a page asks how far an upload has got every quarter of a second
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class AttachmentUpload:
         self._auth = auth
         self._reload = reload   # read the item shown again (its tab counts change)
         self._lock = threading.Lock()
+        self._components = TtlCache(60)   # (workspace id, item id) of a component's working version by item number, found ahead of an export
         self._status: Dict[str, Any] = {"active": False}   # when over, with the ``result`` of the last one: ``ok`` and a ``message``
         self._window_open = False
         self._in_window = False   # the upload on show is one the Export window follows: its end is told to the window, not in a message box
@@ -112,12 +116,14 @@ class AttachmentUpload:
     def _find_then_make(self, job: UploadJob, subject: Subject, destination: str) -> None:
         """Find the item (or the component) of ``subject`` in Fusion Manage (a worker thread), then make the file on the UI thread."""
         number = subject.item_number
+        began = time.monotonic()
         try:
             workspace_id, item_id = self._find_component(number) if destination == COMPONENT else self._find_item(number)
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
             log.exception("Could not find the %s of %s to attach a %s to", destination, number, job.label)
             self._fail(f"Could not attach a {job.label}:\n{exc}")
             return
+        log.info("Found the %s of %s in %.2fs", destination, number, time.monotonic() - began)
         self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject, destination))
 
     def _find_item(self, number: str) -> Tuple[str, str]:
@@ -132,25 +138,37 @@ class AttachmentUpload:
         return workspace_id, pick_hit(hits, number)["id"]
 
     def _find_component(self, number: str) -> Tuple[str, str]:
-        """``(workspace id, item id)`` of the working version of the component numbered ``number`` in the Components workspace."""
+        """``(workspace id, item id)`` of the working version of the component numbered ``number`` in the Components workspace. A worker thread."""
+        known = self._components.get(number)
+        if known:
+            return known
         link, reason = ComponentService(FmClient(self._config.effective_settings(), self._auth)).find_working(number)
         workspace_id, item_id = link_ids(link)
         if not item_id:
             raise LookupError(reason or f"No component exists for {number}.")
         log.info("Working version of the component %s: workspace %s, item %s (%s)", number, workspace_id, item_id, link)
-        return workspace_id, item_id
+        return self._components.put(number, (workspace_id, item_id))
+
+    def warm_component(self, number: str) -> None:
+        """Find the working version of the component numbered ``number`` ahead of the export, so the export finds it kept. A worker thread;
+        a failure is left for the export to report."""
+        try:
+            self._find_component(number)
+        except Exception as exc:  # noqa: BLE001 - only an optimisation
+            log.info("Component %s not found ahead: %s", number, exc)
 
     # ---- Doing ----------------------------------------------------------------------
 
     def _make(self, job: UploadJob, workspace_id: str, item_id: str, subject: Subject, destination: str = ITEM) -> None:
         """Write the file and send it off to be attached. UI thread."""
+        log.info("Making the %s on Fusion's thread", job.label)
         name = f"{safe_name(subject.item_number)}{job.extension}"
         folder = os.path.join(tempfile.gettempdir(), TEMP_FOLDER, uuid.uuid4().hex)
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, name)
         try:
             self._stage(job, MAKE)
-            catch_up()   # let the progress window draw before Fusion is busy
+            self._let_page_draw()
             job.make(path, subject, lambda percent: self._stage(job, MAKE, percent))
             with open(path, "rb") as handle:
                 content = handle.read()
@@ -162,6 +180,15 @@ class AttachmentUpload:
             shutil.rmtree(folder, ignore_errors=True)
         self._stage(job, SEND, 0)
         threading.Thread(target=self._upload, args=(job, workspace_id, item_id, name, content, destination), daemon=True).start()
+
+    @staticmethod
+    def _let_page_draw() -> None:
+        """Making the file holds Fusion's thread (a STEP file about three seconds), and the page's question of how far the upload has got is
+        answered on that thread. Give the page one round of asking, so it shows the stage it is about to be stuck on."""
+        end = time.monotonic() + PAGE_DRAW_SECONDS
+        while time.monotonic() < end:
+            catch_up()
+            time.sleep(0.05)
 
     def _upload(self, job: UploadJob, workspace_id: str, item_id: str, name: str, content: bytes, destination: str) -> None:
         try:

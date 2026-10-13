@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -412,6 +413,24 @@ class ItemPanel:
         except (AttributeError, RuntimeError):
             return ""
 
+    def warm_export_target(self) -> None:
+        """Read the item number of what Export will export ahead of the click, on a worker thread, so that the Data Model (about two seconds
+        the first time for a design) is already read, and kept, when Export is pressed. A failure is left for the click to report. UI thread."""
+        number, _problem = self.export_target()
+        if not number:
+            return
+        ref = _active_ref()
+
+        def work() -> None:
+            try:
+                subject = self._numbers.resolve(ref, number)
+            except Exception as exc:  # noqa: BLE001 - only an optimisation
+                log.info("Item number of %s not read ahead: %s", number, exc)
+                return
+            self._uploads.warm_component(subject.item_number)
+
+        threading.Thread(target=work, daemon=True).start()
+
     def export(self, key: str, destination: str) -> None:
         """Export the open document as the format ``key`` and attach it to the item (or the component) ``destination`` of the part
         ``export_target`` gives. The Export window follows it (``begin_in_window``), so it is told how it went, not shown a message box.
@@ -422,8 +441,10 @@ class ItemPanel:
         job = export_job(key)
         if not self._uploads.begin_in_window(job):
             raise ValueError("A file is already being uploaded.")
+        began = time.monotonic()
         pick(_active_selection())
         self._find(number, lambda subject: self._uploads.continue_in_window(job, subject, destination), fail=self._uploads.fail_in_window)
+        log.info("Export began its search after %.2fs on Fusion's thread", time.monotonic() - began)
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""

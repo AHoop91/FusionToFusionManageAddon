@@ -6,14 +6,18 @@ from the design's bill of materials (read once per version of the design and kep
 been published, so it is refused with ``NoItemNumber``.
 """
 
+import json
+import os
 import threading
-from typing import Any, Dict, NamedTuple, Tuple
+import time
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import adsk.core
 import adsk.fusion
 
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
+from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
 from ..fusion_mfg.model_service import read_section
@@ -54,12 +58,62 @@ def _same(a: str, b: str) -> bool:
     return a.strip().lower() == b.strip().lower()
 
 
+class _Remembered:
+    """Item numbers already found, kept in a file so they outlast Fusion. A saved version of a design never changes, so what was read for
+    ``(model_id, time, part number)`` is still true. Only found numbers are kept; a missing one may be given later. Failures to read or write
+    the file are logged and otherwise ignored: the Data Model is asked instead."""
+
+    LIMIT = 1000   # entries kept; the oldest go first
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+        self._entries: Dict[str, List[str]] = self._load()
+
+    @staticmethod
+    def _key(ref: DesignRef, part_number: str) -> str:
+        return f"{ref.model_id}|{ref.time}|{part_number.strip().lower()}"
+
+    def _load(self) -> Dict[str, List[str]]:
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                data = json.load(f)
+            return {k: v for k, v in data.items() if isinstance(v, list) and len(v) == 2}
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError, AttributeError) as exc:
+            log.warning("Item numbers kept from earlier are not read: %s", exc)
+            return {}
+
+    def get(self, ref: DesignRef, part_number: str) -> Optional[Subject]:
+        found = self._entries.get(self._key(ref, part_number))
+        return Subject(found[0], found[1]) if found else None
+
+    def add(self, ref: DesignRef, part_number: str, subject: Subject) -> None:
+        key = self._key(ref, part_number)
+        self._entries.pop(key, None)   # re-added last, so it is the newest
+        self._entries[key] = [subject.item_number, subject.part_number]
+        while len(self._entries) > self.LIMIT:
+            del self._entries[next(iter(self._entries))]
+        try:
+            os.makedirs(os.path.dirname(self._path), exist_ok=True)
+            with open(self._path, "w", encoding="utf-8") as f:
+                json.dump(self._entries, f)
+        except OSError as exc:
+            log.warning("Item numbers are not kept for next time: %s", exc)
+
+
+def _remembered_path() -> str:
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/Library/Application Support")
+    return os.path.join(base, ADDIN_NAME, "item_numbers.json")
+
+
 class ItemNumbers:
     """Finds item numbers; the reads run on a worker thread, never on Fusion's."""
 
-    def __init__(self, config: ConfigService, auth: AuthService) -> None:
+    def __init__(self, config: ConfigService, auth: AuthService, remembered_path: Optional[str] = None) -> None:
         self._config = config
         self._auth = auth
+        self._remembered = _Remembered(remembered_path or _remembered_path())
         self._lock = threading.Lock()
         self._key: Tuple[str, str] = ("", "")
         self._summary: Dict[str, Any] = {}
@@ -69,7 +123,13 @@ class ItemNumbers:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""
         if not ref.model_id:
             raise NoItemNumber("The design has not been saved, so it has no item number.")
-        client = MfgGraphQlClient(self._config.effective_settings(), self._auth)
+        requested = part_number
+        known = self._remembered.get(ref, requested)
+        if known:
+            log.info("Part number %s is item number %s (kept from an earlier read)", known.part_number or "(the design)", known.item_number)
+            return known
+        began = time.monotonic()
+        client =MfgGraphQlClient(self._config.effective_settings(), self._auth)
         with self._lock:   # one read at a time, so a burst of selections reads the bill of materials once
             if self._key != tuple(ref):
                 self._key, self._summary, self._rows = tuple(ref), read_section(client, "summary", ref.model_id, ref.time), None
@@ -89,5 +149,8 @@ class ItemNumbers:
         number = found.pop().strip()
         if not number:
             raise NoItemNumber(f"{label} has no item number, so it has not been published to Fusion Manage.")
-        log.info("Part number %s is item number %s", part_number or "(the design)", number)
-        return Subject(number, part_number)
+        log.info("Part number %s is item number %s (%.2fs; the Data Model is read once per version of the design, then kept)",
+                 part_number or "(the design)", number, time.monotonic() - began)
+        subject = Subject(number, part_number)
+        self._remembered.add(ref, requested, subject)
+        return subject

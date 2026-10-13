@@ -133,6 +133,8 @@ class ExportDialog:
         if not self._access and not self._checking:
             self._checking = True
             threading.Thread(target=self._check_access, args=(setup,), daemon=True).start()
+            if document and not problem:
+                self._panel.warm_export_target()   # while the user chooses, so Find item has nothing left to read
         destinations = []
         for key in (ITEM, COMPONENT):
             reason = setup[key] or self._access.get(key, "")
