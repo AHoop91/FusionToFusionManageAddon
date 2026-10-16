@@ -49,7 +49,7 @@ Properties with no mapping are listed as not published. Mapped properties are li
 ## Publish
 
 1. Review the BOM and details. **Refresh** reads the design and Fusion Manage again.
-2. Optionally use **Add Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](#add-items)).
+2. Optionally use **Add Existing Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](#add-existing-items)).
 3. Click **Publish**. The button is enabled once the BOM has loaded.
 
 A progress dialog appears. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
@@ -243,17 +243,20 @@ A Fusion Manage Only line with no partner shows a single **Remove** button; clic
 
 A quantity can be edited in the table. An edited cell shows a revert button that restores the original value.
 
-### Add Items
+### Add Existing Items
 
-**Add Items** (top right of the BOM) opens a picker that lists Fusion Manage items from the Items workspace so you can add items that are not in the design.
+**Add Existing Items** (top right of the BOM) opens a picker that searches the Items workspace so you can add items that are not in the design.
 
-!!! example "Screenshot placeholder: Add Items picker"
-    **Show:** The Add Items dialog with its list, filter box and some items ticked.
+!!! example "Screenshot placeholder: Add Existing Items picker"
+    **Show:** The Add Existing Items dialog with its property filters, results and some items ticked.
 
-    Save the image as `docs/images/add-items.png`, then replace this box with `![Add Items picker](../images/add-items.png)`.
+    Save the image as `docs/images/add-items.png`, then replace this box with `![Add Existing Items picker](../images/add-items.png)`.
 
-- The list loads 100 items at a time as you scroll and stays quick with thousands of items.
-- Type to filter, change the sort direction, and tick the items to add. Selections survive filtering and paging. Items already staged are marked.
+- With nothing typed the picker lists every item of the workspace; **Search** applies the search box and the filters.
+- The search box matches the item descriptor. The **Filter** pane on the left narrows the results by property: choose a property and a value (a drop-down for properties with a fixed list). **Add Row** adds another property to the group and **Add Group** starts a new group. Rows of a group, and groups, are joined by **AND** or **OR**; the Items workspace is always applied on top.
+- Results load 50 at a time as you scroll. Tick the items to add; selections survive searching and paging, and **Clear** unticks them all.
+- The bar under the list shows how many items are selected. **Show only selected** narrows the list to the ticked items, so you can review them before adding. **Cancel** closes the picker without adding anything.
+- Items the Bill of Materials already holds, or that you have already added in the panel, are hidden. Turn on **Show hidden items** to see them ticked, greyed out and locked.
 - Added lines appear in the BOM as **New** and can be taken out again with their own **Remove** button before publishing.
 
 ### What gets sent

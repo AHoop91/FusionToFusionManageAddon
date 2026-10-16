@@ -21,7 +21,7 @@
     changed: { tone: 'changed', label: 'Updates',       text: 'Quantity differs from Fusion Manage' },
     added:   { tone: 'new',     label: 'New',           text: 'Publishing adds this line to the Fusion Manage BOM' },
     kept:    { tone: 'extra',   label: 'Keep',          text: 'Publishing keeps this Fusion Manage line, renumbered at the end of the BOM' },
-    linked:  { tone: 'added',   label: 'Added',        text: 'Picked with Add Items: publishing adds this Fusion Manage item to the end of the Fusion Manage BOM' },
+    linked:  { tone: 'added',   label: 'Added',        text: 'Picked with Add Existing Items: publishing adds this Fusion Manage item to the end of the Fusion Manage BOM' },
   };
   const PAIR_ASK = 'Item number differs from the Fusion Manage line at this position: choose an action';
 
@@ -29,7 +29,7 @@
   const FILTERS = [
     { id: 'review',  label: 'Review',      title: 'Item number differs from Fusion Manage and no action is chosen yet' },
     { id: 'new',     label: 'New',         title: 'Not in Fusion Manage yet, with the Fusion Manage line each is paired with' },
-    { id: 'added',   label: 'Added',       title: 'Picked with Add Items: publishing adds them to the Fusion Manage BOM' },
+    { id: 'added',   label: 'Added',       title: 'Picked with Add Existing Items: publishing adds them to the Fusion Manage BOM' },
     { id: 'changed', label: 'Updates',     title: 'Quantity differs from Fusion Manage' },
     { id: 'extra',   label: 'Fusion Manage Only', title: 'Only in Fusion Manage' },
     { id: 'hidden',  label: 'Show Hidden Components', title: 'Hidden in the Fusion component tree', right: true },

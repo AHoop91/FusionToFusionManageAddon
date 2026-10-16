@@ -7,7 +7,7 @@ the request is sent (a new item's id, a BOM line's id); ``{{tenant}}`` and ``{{v
 from typing import Any, Dict, List
 
 from ..fm.client import WORKSPACES
-from ..fm.linkable import BOM_VIEW_ID
+from ..fm.linkable import linkable_row
 
 BOM_ORDER = {"remove": 0, "renumber": 1, "update": 2, "add": 3}   # a line is freed before another takes its number
 
@@ -28,11 +28,9 @@ def _add_body(workspace_id: str, op: Dict[str, Any]) -> Dict[str, Any]:
     body = dict(op.get("linkable") or {})
     if not body:   # an item this run creates: written as Fusion Manage will answer it, ids and tenant filled in when sent
         parent, number = f"{{{{item:{op['parent']}}}}}", f"{{{{item:{op['number']}}}}}"
-        body = {"__self__": f"{WORKSPACES}/{workspace_id}/items/{parent}/views/{BOM_VIEW_ID}/linkable-items/{number}",
-                "urn": f"urn:adsk.plm:tenant.workspace.item.view.linkable-item:{{{{tenant}}}}.{workspace_id}.{parent}.{BOM_VIEW_ID}.{number}",
-                "item": {"link": op.get("link") or f"{WORKSPACES}/{workspace_id}/items/{number}",
-                         "urn": f"urn:adsk.plm:tenant.workspace.item:{{{{tenant}}}}.{workspace_id}.{number}",
-                         "title": str(op["number"]), "deleted": False, "version": f"{{{{version:{op['number']}}}}}"}}
+        body = linkable_row(workspace_id, parent, number)
+        body["item"].update({"link": op.get("link") or body["item"]["link"], "title": str(op["number"]), "deleted": False,
+                             "version": f"{{{{version:{op['number']}}}}}"})
     body.update({"itemNumber": _line_number(op.get("sequence", "")), "quantity": str(op.get("quantity", "")),
                  "children": [], "fields": []})
     return body

@@ -41,5 +41,38 @@ class PicklistTests(unittest.TestCase):
         self.assertEqual(self.client.get_json.call_count, 2)   # the fields, then the options
 
 
+class OptionsPageTests(unittest.TestCase):
+    def test_a_page_carries_its_options_the_total_and_how_many_rows_it_held(self):
+        from src.fm.workspace import WorkspaceService
+
+        class Client:
+            def get_json(self, path):
+                self.path = path
+                return {"totalCount": 120, "items": [{"link": "/api/v3/lookups/C/options/1", "title": "United States"}, {"link": ""}]}
+
+        client = Client()
+        page = WorkspaceService(client).options_page("C", 50, 50, "united st")
+        self.assertEqual(page, {"options": [{"value": "/api/v3/lookups/C/options/1", "title": "United States"}], "total": 120, "raw": 2})
+        self.assertIn("offset=50&limit=50&filter=united+st", client.path)
+
+
+class FieldVisibilityTests(unittest.TestCase):
+    def test_a_field_hidden_on_items_is_marked_not_shown(self):
+        from src.fm.workspace import WorkspaceService
+
+        class Client:
+            def get_json(self, path):
+                return {"fields": [{"__self__": "/api/v3/workspaces/1/fields/A", "name": "Shown", "visibility": "ALWAYS"},
+                                   {"__self__": "/api/v3/workspaces/1/fields/B", "name": "Never", "visibility": "NEVER"},
+                                   {"__self__": "/api/v3/workspaces/1/fields/C", "name": "Flag", "visibility": "ALWAYS", "hidden": True},
+                                   {"__self__": "/api/v3/workspaces/1/fields/D", "name": "Calc", "derived": True},
+                                   {"__self__": "/api/v3/workspaces/1/fields/E", "name": "Calc2", "formulaField": True, "derived": False},
+                                   {"__self__": "/api/v3/workspaces/1/fields/F", "name": "Plain", "formulaField": False, "derived": False}]}
+
+        fields, _ = WorkspaceService(Client()).fields("/api/v3/workspaces/1")
+        self.assertEqual({f["id"]: f["shown"] for f in fields}, {"A": True, "B": False, "C": False, "D": True, "E": True, "F": True})
+        self.assertEqual({f["id"] for f in fields if f["computed"]}, {"D", "E"})
+
+
 if __name__ == "__main__":
     unittest.main()

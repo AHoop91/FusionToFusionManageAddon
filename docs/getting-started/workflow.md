@@ -160,7 +160,7 @@ The published item is the foundation. This stage adds what the supply chain need
 |---|---|
 | Attach a STEP file of a component | Select the component and choose **Export STEP File** ([STEP File](../publishing/index.md#step-file)). |
 | Attach a PDF of the drawing | Open the drawing and choose **Export PDF** ([Drawing Representation](../publishing/index.md#drawing-representation)). |
-| Add items that are not in the design | Use **Add Items** in the Publish panel, then publish again ([Bill of Materials](../publishing/index.md#add-items)). |
+| Add items that are not in the design | Use **Add Existing Items** in the Publish panel, then publish again ([Bill of Materials](../publishing/index.md#add-existing-items)). |
 | Keep or change manufacturing lines that only Fusion Manage has | Review the **Fusion Manage Only** lines. They are kept unless you remove them. |
 | Complete information that engineering does not supply | Edit it in Fusion Manage. |
 

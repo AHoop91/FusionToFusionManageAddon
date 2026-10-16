@@ -1,56 +1,21 @@
-"""Items that can be added to a Fusion Manage item's Bill of Materials.
+"""Linkable items: the rows Fusion Manage offers for adding items to a Bill of Materials.
 
-The Add dialog of Fusion Manage reads ``linkable-items`` of the item in the BOM view (view 5),
-one page at a time. Each page is reduced to the few fields the picker draws.
+Adding an item to a BOM posts its linkable-items row back (see ``publish.bom_requests``); the Add Items picker
+finds the items through the search API (see ``item_search``).
 """
 
-import re
-from typing import Any, Dict, List
-from urllib.parse import quote
+from typing import Any, Dict
 
-from .bom import _name_of, _number_of
-from .client import WORKSPACES, FmClient
+from .client import WORKSPACES
 
-PAGE_SIZE = 100
-SORT_DIRECTIONS = ("asc", "desc")
 BOM_VIEW_ID = "5"   # the Bill of Materials view is always view 5
 
 
-def _title(node: Any) -> str:
-    return str(node.get("title", "")) if isinstance(node, dict) else ""
+def linkable_row(workspace_id: str, parent: str, item: str) -> Dict[str, Any]:
+    """The linkable-items row of ``item`` in the BOM view of ``parent``, as Fusion Manage answers it (``{{tenant}}`` is filled in when sent).
 
-
-def parse_page(data: Any) -> Dict[str, Any]:
-    """``{"total", "count", "items": [{"id", "link", "number", "name", "version", "workspace", "lifecycle", "linkable"}]}``.
-
-    ``linkable`` is the row as Fusion Manage sent it (``__self__``, ``urn``, ``item``): adding the item to a BOM posts it back."""
-    data = data if isinstance(data, dict) else {}
-    items: List[Dict[str, str]] = []
-    for row in data.get("items") or []:
-        item = row.get("item") if isinstance(row, dict) else None
-        if not isinstance(item, dict):
-            continue
-        link = str(item.get("link", ""))
-        match = re.search(r"/items/(\d+)", link)
-        if not match:
-            continue
-        title = str(item.get("title", ""))
-        items.append({"id": match.group(1), "link": link, "number": _number_of(title), "name": _name_of(title) or title,
-                      "version": str(item.get("version", "")), "workspace": _title(row.get("workspace")),
-                      "lifecycle": _title(row.get("lifecycle")),
-                      "linkable": {k: row[k] for k in ("__self__", "urn", "item") if k in row}})
-    return {"total": int(data.get("totalCount") or 0), "count": len(items), "items": items}
-
-
-class LinkableService:
-    """Reads linkable items through an ``FmClient``."""
-
-    def __init__(self, client: FmClient) -> None:
-        self._client = client
-
-    def page(self, workspace_id: str, item_id: str, offset: int, sort: str) -> Dict[str, Any]:
-        """One page of the items that can be added to ``item_id``'s BOM, sorted by title (``asc`` or ``desc``)."""
-        direction = sort if sort in SORT_DIRECTIONS else "asc"
-        path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/views/{BOM_VIEW_ID}/linkable-items"
-                f"?limit={PAGE_SIZE}&offset={int(offset)}&relatedWorkspaceId={workspace_id}&sort={quote('item.title ' + direction)}")
-        return parse_page(self._client.get_json(path))
+    ``parent`` and ``item`` are ids, or ``{{item:<number>}}`` markers of items a publish run creates (see ``publish.placeholders``)."""
+    return {"__self__": f"{WORKSPACES}/{workspace_id}/items/{parent}/views/{BOM_VIEW_ID}/linkable-items/{item}",
+            "urn": f"urn:adsk.plm:tenant.workspace.item.view.linkable-item:{{{{tenant}}}}.{workspace_id}.{parent}.{BOM_VIEW_ID}.{item}",
+            "item": {"link": f"{WORKSPACES}/{workspace_id}/items/{item}",
+                     "urn": f"urn:adsk.plm:tenant.workspace.item:{{{{tenant}}}}.{workspace_id}.{item}"}}

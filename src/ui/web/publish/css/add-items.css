@@ -1,12 +1,12 @@
 /* ==========================================================================
    Publish Item panel: the Add Items picker, laid out like a compact (size="small") Material UI dialog:
-   a title bar, a body, an action row; 4px corners, an elevation shadow, outlined fields. Rows are a
+   a title bar, a search bar, a filter pane beside the results, an action row; 4px corners, an elevation shadow, outlined fields. Rows are a
    fixed height and skip layout and paint while off screen, so a list of thousands scrolls smoothly.
    ========================================================================== */
 
 .pub-add-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .5); }
 .pub-add-dialog {
-  display: flex; flex-direction: column; width: 100%; max-width: 560px; max-height: 100%;
+  display: flex; flex-direction: column; width: 100%; max-width: 980px; max-height: 100%;
   background: #fff; border-radius: 4px; font-size: 12px;
   box-shadow: 0 11px 15px -7px rgba(0, 0, 0, .2), 0 24px 38px 3px rgba(0, 0, 0, .14), 0 9px 46px 8px rgba(0, 0, 0, .12);
 }
@@ -18,13 +18,16 @@
 .pub-add-close:hover { background: rgba(0, 0, 0, .06); color: rgba(0, 0, 0, .87); }
 .pub-add-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 
-.pub-add-body { display: flex; flex-direction: column; min-height: 0; padding: 12px 16px 4px; }
+.pub-add-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding: 12px 16px 4px; }
 
 /* Once dragged or resized the dialog is pinned at a place and size of its own, and the list takes the height. */
 .pub-add-dialog { position: relative; }
 .pub-add-dialog.sized { position: absolute; max-width: none; max-height: none; }
 .pub-add-dialog.sized .pub-add-body { flex: 1 1 auto; }
-.pub-add-dialog.sized .pub-add-list { flex: 1 1 0; height: auto; min-height: 90px; }
+.pub-add-dialog.sized .pub-add-panes { flex: 1 1 0; }
+.pub-add-dialog.sized .pub-add-main { height: auto; }
+.pub-add-dialog.sized .pub-add-list { min-height: 90px; }
+.pub-add-dialog.sized .pub-add-side { height: auto; }
 .pub-add-drag { cursor: move; user-select: none; touch-action: none; }
 .pub-add-grip { position: absolute; z-index: 2; touch-action: none; }
 .pub-add-grip-right { top: 0; right: -3px; bottom: 12px; width: 8px; cursor: ew-resize; }
@@ -33,45 +36,120 @@
 .pub-add-grip-corner { right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: 0 0 4px 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 6 6 14M14 10l-4 4M14 2 2 14' stroke='%23757575' stroke-width='1.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") center / 14px 14px no-repeat; opacity: .8; }
 .pub-add-grip-corner:hover { opacity: 1; }
 
-/* Outlined fields. */
+/* Search bar. */
 .pub-add-top { display: flex; gap: 10px; }
-.pub-add-workspace, .pub-add-filter {
-  box-sizing: border-box; height: 28px; padding: 0 8px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px;
+.pub-add-filter, .pub-add-input, .pub-add-combo {
+  box-sizing: border-box; height: 28px; padding: 0 9px; border: 1px solid #cfd4d9; border-radius: 6px;
   background: #fff; color: inherit; font: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
 }
-.pub-add-workspace { flex: 0 0 32%; min-width: 0; }
-.pub-add-workspace:disabled { background: rgba(0, 0, 0, .04); color: rgba(0, 0, 0, .5); }
 .pub-add-filter { flex: 1; min-width: 0; }
-.pub-add-filter:hover { border-color: rgba(0, 0, 0, .87); }
-.pub-add-filter:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.pub-add-total { margin: 8px 0 0; font-size: 11px; color: rgba(0, 0, 0, .6); }
-.pub-add-total:empty { display: none; }
+.pub-add-filter:hover, .pub-add-input:hover, .pub-add-combo:hover { border-color: #8b939b; }
+.pub-add-filter:focus, .pub-add-input:focus, .pub-add-combo:focus-visible, .pub-add-combo[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
 
-/* The list holds its own sticky header, so the header and rows share one set of columns:
-   select box, item, workspace, lifecycle. */
-.pub-add-list { flex: none; height: clamp(240px, 52vh, 460px); margin-top: 8px; overflow-y: auto; overflow-anchor: none; border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px; }
-.pub-add-row { display: grid; grid-template-columns: 34px minmax(0, 3fr) minmax(0, 1.1fr) minmax(0, 1.1fr); align-items: center; height: 30px; border-bottom: 1px solid rgba(0, 0, 0, .08); font-size: 12px; }
-.pub-add-row:not(.pub-add-head) { content-visibility: auto; contain-intrinsic-size: auto 30px; }
-.pub-add-row:not(.pub-add-head):hover { background: rgba(0, 0, 0, .04); }
-/* An item already added to the Bill of Materials: greyed out and locked. */
+/* Two panes: the property filters on the left, the matches on the right. */
+.pub-add-panes { display: flex; flex: 1 1 auto; gap: 12px; min-height: 0; margin-top: 10px; }
+.pub-add-side { flex: 0 0 clamp(240px, 28%, 290px); min-width: 0; height: clamp(260px, 56vh, 520px); overflow-y: auto; padding-right: 2px; }
+.pub-add-main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: clamp(260px, 56vh, 520px); overflow: hidden; border: 1px solid #dfe3e7; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
+.pub-add-results-head { display: flex; align-items: center; gap: 8px; box-sizing: border-box; min-height: 34px; padding: 0 12px; }
+.pub-add-results-title { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgba(0, 0, 0, .6); }
+.pub-add-total { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px; background: #eef1f3; font-size: 11px; font-weight: 400; color: #5b636b; white-space: nowrap; }
+.pub-add-total[hidden] { display: none; }
+.pub-add-total strong { font-weight: 600; color: #1f2328; }
+.pub-add-total-note { margin-left: 4px; padding-left: 8px; border-left: 1px solid #cfd5da; color: #7b838b; }
+.pub-add-note { margin: 0 0 8px; font-size: 11px; }
+.pub-add-note[hidden] { display: none; }
+
+/* Filter groups: a box per group, rows of property and value, a switch between rows and between groups. */
+.pub-add-group { border: 1px solid #dfe3e7; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
+.pub-add-group-head { display: flex; align-items: center; box-sizing: border-box; min-height: 34px; padding: 0 10px; border-bottom: 1px solid #eceff2; font-size: 10px; font-weight: 600; letter-spacing: .06em; color: rgba(0, 0, 0, .6); }
+.pub-add-filter-row { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px 2px; }
+.pub-add-filter-line { display: flex; align-items: center; gap: 4px; }
+.pub-add-filter-line .pub-add-combo-wrap { flex: 1; min-width: 0; }
+.pub-add-filter-row > .pub-add-input, .pub-add-filter-row > .pub-add-combo-wrap { width: 100%; }
+.pub-add-input:disabled { background: rgba(0, 0, 0, .04); }
+.pub-add-join { display: inline-flex; align-self: flex-start; padding: 2px; border-radius: 999px; background: #eceff2; }
+.pub-add-join-option { min-width: 38px; height: 20px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: #5b636b; font: inherit; font-size: 10px; font-weight: 700; letter-spacing: .04em; cursor: pointer; }
+.pub-add-join-option[aria-pressed="true"] { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.pub-add-filters > .pub-add-join { display: flex; width: max-content; margin: 8px auto; }
+.pub-add-remove { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: rgba(0, 0, 0, .5); cursor: pointer; }
+.pub-add-remove:hover { background: rgba(0, 0, 0, .06); color: rgba(0, 0, 0, .87); }
+.pub-add-remove svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.pub-add-link { display: block; margin: 0; padding: 4px 10px 8px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 11px; cursor: pointer; }
+.pub-add-link:hover { text-decoration: underline; }
+.pub-add-dashed { display: block; width: 100%; margin-top: 10px; padding: 6px; border: 1px dashed rgba(0, 0, 0, .3); border-radius: 4px; background: transparent; color: var(--accent); font: inherit; font-size: 11px; cursor: pointer; }
+.pub-add-dashed:hover { background: rgba(6, 150, 215, .06); }
+
+/* The matches: a checkbox, the item number over its name, and the revision. */
+.pub-add-list { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-anchor: none; border-top: 1px solid #eceff2; }
+.pub-add-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; height: 44px; padding-right: 8px; border-bottom: 1px solid rgba(0, 0, 0, .08); font-size: 12px; cursor: pointer; content-visibility: auto; contain-intrinsic-size: auto 44px; flex: none; }
+.pub-add-row:hover { background: rgba(6, 150, 215, .06); }
+/* An item already in the Bill of Materials: greyed out and locked. */
 .pub-add-row.pub-add-row-added { background: rgba(0, 0, 0, .04); color: rgba(0, 0, 0, .38); cursor: not-allowed; }
 .pub-add-row.pub-add-row-added:hover { background: rgba(0, 0, 0, .04); }
-.pub-add-head { position: sticky; top: 0; z-index: 1; height: 30px; background: #e6e6e6; border-bottom-color: rgba(0, 0, 0, .12); font-size: 11px; font-weight: 600; color: rgba(0, 0, 0, .75); }
 .pub-add-check { width: 14px; height: 14px; margin: 0 auto; accent-color: var(--accent); cursor: pointer; }
-.pub-add-check:disabled { cursor: default; }
-.pub-add-cell { min-width: 0; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pub-add-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 500; cursor: pointer; }
-.pub-add-sort:hover { color: rgba(0, 0, 0, .87); }
-.pub-add-sort::after { content: "\25BE"; }
-.pub-add-sort[data-sort="asc"]::after { content: "\25B4"; }
+.pub-add-check:disabled { cursor: not-allowed; }
+.pub-add-text { min-width: 0; }
+.pub-add-number { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pub-add-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: rgba(0, 0, 0, .6); }
+.pub-add-row-added .pub-add-name { color: inherit; }
+.pub-add-rev { padding: 1px 8px; border: 1px solid rgba(6, 150, 215, .45); border-radius: 10px; background: rgba(6, 150, 215, .08); font-size: 10px; font-weight: 600; color: #0b5f8a; white-space: nowrap; }
+.pub-add-row-added .pub-add-rev { border-color: rgba(0, 0, 0, .2); background: transparent; color: inherit; }
 
 /* Under the rows: a quiet line while more load; a centred card for the first load or a failure. */
 .pub-add-status { padding: 8px; text-align: center; color: rgba(0, 0, 0, .6); font-size: 11px; }
-.pub-add-status-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 100px; }
-.pub-add-status-card p { margin: 0; }
+.pub-add-status-card { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 100px; }
+.pub-add-status-card .loader { align-self: stretch; padding: 0; }   /* the balls sit in the middle of the whole list, across and down */
+.pub-add-status-card .loader p:empty { display: none; }   /* no caption yet: it would only push the balls off centre */
+.pub-add-status-card p { margin: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .pub-add-status-busy { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .pub-add-status-busy .balls { gap: 5px; height: 14px; transform: scale(.55); transform-origin: right bottom; margin-right: -8px; }
 
 /* Action row: the selected count on the left, the panel's own buttons on the right. */
 .pub-add-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 16px 12px; }
-.pub-add-count { margin-right: auto; font-size: 11px; color: rgba(0, 0, 0, .6); }
+.pub-add-count { font-size: 11px; color: rgba(0, 0, 0, .6); }
+.pub-add-footer .pub-add-switch { margin: 0 auto 0 12px; padding-left: 12px; border-left: 1px solid #e3e7ea; }
+.pub-add-switch:has(input:disabled) { opacity: .5; cursor: default; }
+.pub-add-switch input:disabled { cursor: default; }
+
+/* Drop-down: a button that looks like a field, and a floating list with its own search box. */
+.pub-add-combo { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }
+.pub-add-combo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pub-add-combo-empty .pub-add-combo-text { color: #7b838b; }
+.pub-add-combo svg { flex: none; fill: none; stroke: #6a737d; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.pub-add-combo[aria-expanded="true"] svg { transform: rotate(180deg); }
+.pub-add-menu { position: fixed; z-index: 60; box-sizing: border-box; padding: 5px; border: 1px solid #dfe3e7; border-radius: 8px; background: #fff; font-size: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .16), 0 2px 6px rgba(0, 0, 0, .08); }
+.pub-add-menu-search { box-sizing: border-box; width: 100%; height: 26px; margin-bottom: 4px; padding: 0 8px; border: 1px solid #cfd4d9; border-radius: 6px; font: inherit; outline: none; }
+.pub-add-menu-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.pub-add-menu-list { max-height: 168px; overflow-y: auto; }
+.pub-add-menu-option { display: block; width: 100%; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pub-add-menu-option:hover, .pub-add-menu-option:focus-visible { background: rgba(6, 150, 215, .1); outline: none; }
+.pub-add-menu-option[aria-selected="true"] { background: rgba(6, 150, 215, .14); color: #0b5f8a; font-weight: 600; }
+.pub-add-menu-none { padding: 8px; color: #7b838b; text-align: center; }
+.pub-add-menu-count { display: flex; align-items: center; justify-content: space-between; min-height: 18px; margin: 2px 0 4px; padding: 0 4px 6px; border-bottom: 1px solid #eceff2; font-size: 11px; color: #6a737d; }
+.pub-add-menu-count strong { font-weight: 600; color: #1f2328; }
+.pub-add-menu-error { color: var(--danger); }
+.pub-add-menu-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 8px; color: #6a737d; }
+.pub-add-spinner { display: inline-block; flex: none; width: 14px; height: 14px; box-sizing: border-box; border: 2px solid rgba(6, 150, 215, .25); border-top-color: var(--accent); border-radius: 50%; animation: pub-add-spin .7s linear infinite; }
+@keyframes pub-add-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pub-add-spinner { animation-duration: 2s; } }
+.pub-add-combo-wrap { position: relative; }
+.pub-add-combo-set .pub-add-combo-text { margin-right: 22px; }   /* room for the X, which sits just before the chevron */
+.pub-add-combo-clear { position: absolute; top: 50%; right: 32px; display: none; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; transform: translateY(-50%); border: 0; background: transparent; color: #8b939b; cursor: pointer; }
+.pub-add-combo-set .pub-add-combo-clear { display: inline-flex; }
+.pub-add-combo-clear:hover { color: #1f2328; }
+.pub-add-combo-clear svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.pub-add-menu-search::-webkit-search-cancel-button, .pub-add-menu-search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }   /* the browser's blue X: typing is cleared by selecting the text */
+
+/* A switch with its label on one line: "Show hidden items" in the results bar, "Show only selected" in the footer. */
+.pub-add-switch { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0; font: inherit; font-size: 11px; font-weight: 500; line-height: 16px; letter-spacing: 0; color: #3d444b; cursor: pointer; user-select: none; white-space: nowrap; }
+.pub-add-switch span { display: block; line-height: 16px; }
+.pub-add-switch:hover { color: #1f2328; }
+.pub-add-switch input { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 24px; height: 14px; margin: 0; border: 0; border-radius: 999px; background: #bcc4cb; cursor: pointer; transition: background-color .15s; }
+.pub-add-switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
+.pub-add-switch input:hover { background: #a9b2ba; }
+.pub-add-switch input:checked { background: var(--accent); }
+.pub-add-switch input:checked:hover { background: #0585bf; }
+.pub-add-switch input:checked::after { transform: translateX(10px); }
+.pub-add-switch input:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(6, 150, 215, .25); }
+.pub-add-switch:has(input:checked) { color: #0b5f8a; }
+.pub-add-row[hidden] { display: none; }   /* a grid row would otherwise ignore the hidden attribute */

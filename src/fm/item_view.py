@@ -72,7 +72,7 @@ def cell_of(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dic
     return cell
 
 
-def _not_shown(node: Any, hidden: Set[str]) -> bool:
+def not_shown(node: Any, hidden: Set[str]) -> bool:
     """Whether a field (as the item, the layout or the workspace's field list gives it) is not to be shown."""
     if not isinstance(node, dict):
         return False
@@ -91,7 +91,7 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
     if not grid:
         return {}
     width = max(len(r) for r in grid)
-    gone = [[_not_shown(ref, hidden) or bool(field_id(ref) and field_id(ref) not in cells) for ref in row] + [False] * (width - len(row))
+    gone = [[not_shown(ref, hidden) or bool(field_id(ref) and field_id(ref) not in cells) for ref in row] + [False] * (width - len(row))
             for row in grid]
     keep_cols = [c for c in range(width) if not all(g[c] for g in gone)]
     keep_rows = [r for r, g in enumerate(gone) if not all(g[c] for c in keep_cols)] if keep_cols else []
@@ -148,7 +148,7 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
             continue
         found = [f for f in node.get("fields") or [] if isinstance(f, dict)]
         shown.update({c["id"]: c for c in (cell_of(f, images, pages) for f in found if field_id(f) in HEADER_FIELDS) if c["id"]})
-        cells = {c["id"]: c for c in (cell_of(f, images, pages) for f in found if not _not_shown(f, hidden)) if c["id"]}
+        cells = {c["id"]: c for c in (cell_of(f, images, pages) for f in found if not not_shown(f, hidden)) if c["id"]}
         layout = layouts.get(last_segment(str(node.get("link") or node.get("__self__") or "")), {})
         matrices = [m for m in (_matrix(m, cells, hidden) for m in layout.get("matrices") or [] if isinstance(m, dict)) if m]
         in_matrix = {field_id(ref) for m in layout.get("matrices") or [] if isinstance(m, dict)
@@ -220,7 +220,7 @@ class ItemViewService:
             return set()
         rows = data.get("fields") if isinstance(data, dict) else data
         rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
-        hidden = {last_segment(r.get("__self__")) for r in rows if _not_shown(r, set())}
+        hidden = {last_segment(r.get("__self__")) for r in rows if not_shown(r, set())}
         log.debug("Workspace %s: %d field(s), %d hidden; visibility values %s", workspace_id, len(rows), len(hidden),
                  sorted({str(r.get("visibility")) for r in rows}))
         return self._hidden_cache.put(key, hidden)

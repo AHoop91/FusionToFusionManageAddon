@@ -20,13 +20,13 @@ ACCEPT = "application/vnd.autodesk.plm.bom.bulk+json"   # asked for by name: any
 _REVISION = re.compile(r"\s*\[REV:[^\]]*\]\s*$")
 
 
-def _name_of(title: str) -> str:
+def name_of(title: str) -> str:
     """Name of a node title: after the item number, without the trailing ``[REV:x]``."""
     name = title.split(" - ", 1)[1] if " - " in title else ""
     return _REVISION.sub("", name).strip()
 
 
-def _number_of(title: str) -> str:
+def number_of(title: str) -> str:
     """Item number of a node title such as ``002772 - CASE ASSEMBLY V16 [REV:w]``."""
     return title.split(" - ", 1)[0].strip()
 
@@ -69,7 +69,7 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
     data = data if isinstance(data, dict) else {}
     titles = {str((n.get("item") or {}).get("urn", "")): str((n.get("item") or {}).get("title", ""))
               for n in data.get("nodes") or [] if isinstance(n, dict)}
-    numbers = {urn: _number_of(title) for urn, title in titles.items()}
+    numbers = {urn: number_of(title) for urn, title in titles.items()}
     children: Dict[str, List[Dict[str, str]]] = {number: [] for number in numbers.values() if number}
     for edge in data.get("edges") or []:
         if not isinstance(edge, dict):
@@ -78,7 +78,7 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
         if not parent or not child:
             continue
         children.setdefault(parent, []).append(
-            {"number": child, "name": _name_of(titles[str(edge.get("child"))]),
+            {"number": child, "name": name_of(titles[str(edge.get("child"))]),
              "quantity": _quantity(edge.get("fields") or []), "sequence": str(edge.get("itemNumber", "")),
              "edge_id": _edge_id(edge)})
     return children

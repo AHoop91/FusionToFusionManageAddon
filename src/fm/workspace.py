@@ -15,11 +15,13 @@ Validating a workspace id means:
 
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
+from urllib.parse import quote_plus
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceKind
 from ..core.logging_setup import get_logger
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
+from .item_view import not_shown
 from .permissions import missing, parse_granted, title
 
 log = get_logger("fm.workspace")
@@ -30,6 +32,11 @@ READERS = 4          # picklists read at once
 WORKSPACES_PAGE = 100   # workspaces requested per call
 WORKSPACES_BULK = "application/vnd.autodesk.plm.workspaces.bulk+json"
 REVISION_CONTROLLED_TYPE ="6"   # /api/v3/workspace-types/6: "Revision Controlled Workspace"
+
+
+def _is_computed(row: Dict[str, Any]) -> bool:
+    """Whether a field's value is worked out by Fusion Manage (a computed field) rather than entered: its ``formulaField`` flag."""
+    return row.get("formulaField") is True or row.get("derived") is True
 
 
 class WorkspaceService:
@@ -101,16 +108,29 @@ class WorkspaceService:
         return result
 
     def _fields(self, base: str) -> Any:
-        """The workspace's fields for the mapping picker: ``([field], error)``.
+        """The workspace's fields for the mapping picker: ``([field], {lookup: options}, error)``.
 
         A failure here does not invalidate the workspace; the panel shows
         ``error`` in the empty field list instead.
         """
+        fields, error = self.fields(base)
+        if error:
+            return [], {}, error
+        names = sorted({f["picklist"] for f in fields if f["picklist"]})
+        with ThreadPoolExecutor(max_workers=READERS) as pool:   # one lookup per picklist, several at once
+            picklists = {n: o for n, o in zip(names, pool.map(self.options, names)) if o}
+        for f in fields:   # a list that could not be loaded leaves its field as plain text
+            if f["picklist"] not in picklists:
+                f["picklist"] = ""
+        return fields, picklists, ""
+
+    def fields(self, base: str) -> Any:
+        """The workspace's fields, without their picklist options: ``([{id, title, type, picklist, link_lookup, shown, computed}], error)`` (``shown``: not hidden on items; ``computed``: worked out by Fusion Manage)."""
         try:
             data = self._client.get_json(f"{base}/fields")
         except (FmApiError, AuthError) as exc:
             log.warning("Could not load fields for %s: %s", base, exc)
-            return [], {}, f"Could not load the workspace's fields: {exc}"
+            return [], f"Could not load the workspace's fields: {exc}"
         rows = data.get("fields") if isinstance(data, dict) else data
         fields = []
         for row in rows if isinstance(rows, list) else []:
@@ -129,15 +149,30 @@ class WorkspaceService:
             lookup = "" if links or row.get("editability") == "NEVER" else name
             fields.append({"id": field_id, "title": str(row.get("name") or row.get("title") or field_id),
                            "type": str(kind.get("title", "")), "picklist": lookup,
-                           "link_lookup": link_lookup})
+                           "link_lookup": link_lookup, "shown": not not_shown(row, set()),
+                           "computed": _is_computed(row)})
         fields.sort(key=lambda f: f["title"].lower())
-        names = sorted({f["picklist"] for f in fields if f["picklist"]})
-        with ThreadPoolExecutor(max_workers=READERS) as pool:   # one lookup per picklist, several at once
-            picklists = {n: o for n, o in zip(names, pool.map(self.options, names)) if o}
-        for f in fields:   # a list that could not be loaded leaves its field as plain text
-            if f["picklist"] not in picklists:
-                f["picklist"] = ""
-        return fields, picklists, ""
+        return fields, ""
+
+    def filterable_fields(self, base: str) -> List[Dict[str, Any]]:
+        """The fields an item search can be filtered by: those shown on items and not computed. Raises ``FmApiError`` when they cannot be read."""
+        fields, error = self.fields(base)
+        if error:
+            raise FmApiError(error)
+        return [f for f in fields if f["shown"] and not f["computed"]]
+
+    def options_page(self, lookup: str, offset: int, limit: int, text: str = "") -> Dict[str, Any]:
+        """One page of a picklist: ``{"options": [{value, title}], "total", "raw"}``, narrowed to titles matching ``text``.
+
+        ``raw`` is how many options the page held (where the next page starts)."""
+        data = self._client.get_json(
+            f"{LOOKUPS}/{lookup}?offset={max(0, int(offset))}&limit={int(limit)}&filter={quote_plus(text.strip())}&asc=&desc=")
+        items = data.get("items") if isinstance(data, dict) else None
+        rows = items if isinstance(items, list) else []
+        options = [{"value": str(i["link"]), "title": str(i.get("title") or i["link"])}
+                   for i in rows if isinstance(i, dict) and i.get("link")]
+        total = int(data.get("totalCount") or 0) if isinstance(data, dict) else 0
+        return {"options": options, "total": max(total, offset + len(rows)) if rows else total, "raw": len(rows)}
 
     def options(self, lookup: str) -> List[Dict[str, str]]:
         """The options of one picklist as ``[{value: link, title}]``; empty if it cannot be read."""

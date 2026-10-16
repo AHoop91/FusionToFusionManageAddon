@@ -88,7 +88,7 @@
     new: 'Not in Fusion Manage',
     changed: 'Quantity differs',
     mismatch: 'Different item at this position',
-    added: 'Added with Add Items',
+    added: 'Added with Add Existing Items',
   };
 
   let report = { state: 'checking', text: '', props: [], lines: [], subject: '' };   // what the button last said, listed in its dialog
