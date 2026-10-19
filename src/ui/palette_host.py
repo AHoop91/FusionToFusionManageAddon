@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Optional, Tuple
 
 import adsk.core
 
@@ -15,6 +16,22 @@ from .message_bridge import MessageBridge
 log = get_logger("palette")
 
 OPENED_ACTION = "palette_opened"   # sent to a page that is shown again; its ``bridge.on("palette_opened")`` callback runs
+
+
+_last_area: Optional[Tuple[int, int, int, int]] = None   # (screen x, screen y, width, height) of Fusion's viewport, as last seen
+
+
+def _viewport_area_now() -> Optional[Tuple[int, int, int, int]]:
+    """The viewport's place on screen. A drawing has no active viewport, so what was seen last (in a design, or when the add-in started)
+    is used then: Fusion's window is where it was. None when no viewport has been seen yet. UI thread."""
+    global _last_area
+    viewport = adsk.core.Application.get().activeViewport
+    if viewport is not None:
+        # Only the viewport's corner is converted. On a scaled display viewToScreen does not map a distance inside the
+        # viewport to the same distance on screen, so the middle is found by adding half the viewport's size to the corner.
+        corner = viewport.viewToScreen(adsk.core.Point2D.create(0, 0))
+        _last_area = (round(corner.x), round(corner.y), viewport.width, viewport.height)
+    return _last_area
 
 
 class _IncomingHandler(adsk.core.HTMLEventHandler):
@@ -63,6 +80,10 @@ class PaletteHost:
         self._close_button = close_button   # False: the page has its own way to close, so Fusion adds no bar with a Close button under it
         self._handler = None  # Kept referenced or Fusion garbage-collects it.
         self._palette = None
+        try:
+            _viewport_area_now()   # at start-up, so a drawing opened first still has an area to centre in
+        except Exception:
+            log.exception("Could not read the viewport")
 
     def show(self) -> None:
         """Show the palette, creating it on first use.
@@ -108,17 +129,16 @@ class PaletteHost:
 
     def _place_in_viewport(self, palette) -> None:
         """Move ``palette`` so its middle is the middle of the active viewport (``setPosition`` takes screen coordinates)."""
-        viewport = adsk.core.Application.get().activeViewport
-        if viewport is None:
+        area = _viewport_area_now()
+        if area is None:
+            log.info("Not centring '%s': no viewport has been seen yet", self._title)
             return
-        # Only the viewport's corner is converted. On a scaled display viewToScreen does not map a distance inside the
-        # viewport to the same distance on screen, so the middle is found by adding half the viewport's size to the corner.
-        corner = viewport.viewToScreen(adsk.core.Point2D.create(0, 0))
-        left = int(corner.x + (viewport.width - (palette.width or self._size[0])) / 2)
-        top = int(corner.y + (viewport.height - (palette.height or self._size[1])) / 2)
+        x, y, width, height = area
+        left = int(x + (width - (palette.width or self._size[0])) / 2)
+        top = int(y + (height - (palette.height or self._size[1])) / 2)
         palette.setPosition(left, top)
-        log.debug("Centred '%s' (%sx%s) at %s,%s in a viewport of %sx%s whose corner is at screen %s,%s",
-                  self._title, palette.width, palette.height, left, top, viewport.width, viewport.height, round(corner.x), round(corner.y))
+        log.debug("Centred '%s' (%sx%s) at %s,%s in the area %sx%s at screen %s,%s",
+                 self._title, palette.width, palette.height, left, top, width, height, x, y)
 
     @property
     def visible(self) -> bool:

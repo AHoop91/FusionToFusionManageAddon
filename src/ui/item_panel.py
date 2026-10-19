@@ -459,6 +459,7 @@ class ItemPanel:
     def reset_export(self) -> None:
         """Forget what was read for an earlier Export window: the document may have been saved since. UI thread."""
         self._export_read.clear()
+        self._numbers.forget_files()
 
     def export_files(self, key: str, destination: str, number: str, done: Callable[[Dict[str, Any]], None]) -> None:
         """Say what exporting the part ``number`` as the format ``key`` to ``destination`` would do to the files attached in Fusion Manage: add

@@ -129,7 +129,7 @@ def run(context) -> None:
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, "Upload", "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host)
-        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, EXPORT_TITLE, "export", False, EXPORT_WIDTH, EXPORT_HEIGHT)
+        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, EXPORT_TITLE, "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
         _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
