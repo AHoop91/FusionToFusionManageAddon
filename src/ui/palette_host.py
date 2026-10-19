@@ -14,6 +14,8 @@ from .message_bridge import MessageBridge
 
 log = get_logger("palette")
 
+OPENED_ACTION = "palette_opened"   # sent to a page that is shown again; its ``bridge.on("palette_opened")`` callback runs
+
 
 class _IncomingHandler(adsk.core.HTMLEventHandler):
     """Forwards palette messages to the MessageBridge and replies to JS."""
@@ -70,16 +72,19 @@ class PaletteHost:
         afterwards, as the API documents, so it opens in place. A new one has to be created showing (a palette created hidden loads its
         page without drawing it), so it is moved at once instead. Only the Fusion API is used, so this behaves the same on Windows and Mac.
         """
+        is_new = self._ui.palettes.itemById(self._palette_id) is None
         if self._docked:
             palette = self._get_or_create(visible=True)
         else:
-            palette = self._get_or_create(visible=self._ui.palettes.itemById(self._palette_id) is None)
+            palette = self._get_or_create(visible=is_new)
             try:
                 self._place_in_viewport(palette)
             except Exception:  # only a nicety: the palette opens wherever Fusion puts it
                 log.exception("Could not centre the palette")
         palette.isVisible = True
         log.info("Palette shown (visible=%s)", palette.isVisible)
+        if not is_new:   # a page that was only hidden is still loaded: tell it it was opened again (a new page loads fresh anyway)
+            palette.sendInfoToHTML(OPENED_ACTION, "{}")
 
     def _get_or_create(self, visible: bool):
         """The palette, created on first use (``visible`` says whether it is created showing)."""

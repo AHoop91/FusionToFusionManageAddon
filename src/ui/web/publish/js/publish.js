@@ -419,7 +419,11 @@
     window.addEventListener('focus', function () {
       if (!$('view-app').hidden && !inflight.summary) bridge.send('get_publish_model_key');
     });
-    ns.auth.onChange(function (signedIn) { if (signedIn) refresh(false); });
+    // Opening the panel always reads Fusion Manage again, never a copy kept from an earlier opening.
+    ns.auth.onChange(function (signedIn) { if (signedIn) refresh(true); });
+    bridge.on('palette_opened', function () {
+      if (!$('view-app').hidden) refresh(true, true);
+    });
   }
 
   function start() {
