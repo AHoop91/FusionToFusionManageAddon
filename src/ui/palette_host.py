@@ -63,24 +63,21 @@ class PaletteHost:
         self._palette = None
 
     def show(self) -> None:
-        """Show the palette, creating it on first use."""
-        palette = self._get_or_create(visible=True)
-        palette.isVisible = True
-        log.info("Palette shown (visible=%s)", palette.isVisible)
+        """Show the palette, creating it on first use.
 
-    def show_centered(self) -> None:
-        """Show the palette in the middle of Fusion's viewport (a floating palette otherwise opens wherever Fusion last put one).
-
-        An existing palette is placed while hidden and shown afterwards, as the API documents, so it opens in place. A new one has to be
-        created showing (a palette created hidden loads its page without drawing it), so it is moved at once instead. Only the Fusion API
-        is used, so this behaves the same on Windows and Mac.
+        A docked palette opens in its dock. A floating one opens in the middle of Fusion's viewport (it would otherwise open wherever
+        Fusion last put one), so every floating panel is placed the same way. An existing palette is placed while hidden and shown
+        afterwards, as the API documents, so it opens in place. A new one has to be created showing (a palette created hidden loads its
+        page without drawing it), so it is moved at once instead. Only the Fusion API is used, so this behaves the same on Windows and Mac.
         """
-        is_new = self._ui.palettes.itemById(self._palette_id) is None
-        palette = self._get_or_create(visible=is_new)
-        try:
-            self._place_in_viewport(palette)
-        except Exception:  # only a nicety: the palette opens wherever Fusion puts it
-            log.exception("Could not centre the palette")
+        if self._docked:
+            palette = self._get_or_create(visible=True)
+        else:
+            palette = self._get_or_create(visible=self._ui.palettes.itemById(self._palette_id) is None)
+            try:
+                self._place_in_viewport(palette)
+            except Exception:  # only a nicety: the palette opens wherever Fusion puts it
+                log.exception("Could not centre the palette")
         palette.isVisible = True
         log.info("Palette shown (visible=%s)", palette.isVisible)
 
@@ -109,12 +106,14 @@ class PaletteHost:
         viewport = adsk.core.Application.get().activeViewport
         if viewport is None:
             return
-        middle = viewport.viewToScreen(adsk.core.Point2D.create(viewport.width / 2, viewport.height / 2))
-        left = int(middle.x - (palette.width or self._size[0]) / 2)
-        top = int(middle.y - (palette.height or self._size[1]) / 2)
+        # Only the viewport's corner is converted. On a scaled display viewToScreen does not map a distance inside the
+        # viewport to the same distance on screen, so the middle is found by adding half the viewport's size to the corner.
+        corner = viewport.viewToScreen(adsk.core.Point2D.create(0, 0))
+        left = int(corner.x + (viewport.width - (palette.width or self._size[0])) / 2)
+        top = int(corner.y + (viewport.height - (palette.height or self._size[1])) / 2)
         palette.setPosition(left, top)
-        log.debug("Centred '%s' (%sx%s) at %s,%s on a viewport of %sx%s whose middle is at screen %s,%s",
-                  self._title, palette.width, palette.height, left, top, viewport.width, viewport.height, round(middle.x), round(middle.y))
+        log.debug("Centred '%s' (%sx%s) at %s,%s in a viewport of %sx%s whose corner is at screen %s,%s",
+                  self._title, palette.width, palette.height, left, top, viewport.width, viewport.height, round(corner.x), round(corner.y))
 
     @property
     def visible(self) -> bool:

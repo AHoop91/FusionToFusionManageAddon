@@ -95,7 +95,7 @@ class AttachmentUpload:
             self._ui.messageBox("A file is already being uploaded.", ITEM_COMMAND_NAME)
             return
         self._window_open = True
-        self._window.show_centered()
+        self._window.show()
         threading.Thread(target=self._find_then_make, args=(job, subject, destination), daemon=True).start()
 
     def begin_in_window(self, job: UploadJob) -> bool:

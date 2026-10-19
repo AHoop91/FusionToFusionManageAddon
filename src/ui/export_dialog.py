@@ -67,7 +67,7 @@ class ExportDialog:
         self._access, self._checking = {}, False
         self._panel.reset_export()
         self._host.dispose()
-        self._host.show_centered()
+        self._host.show()
 
     # ---- What can be attached to ----------------------------------------------------
 

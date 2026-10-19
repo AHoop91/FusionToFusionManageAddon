@@ -138,7 +138,7 @@ def run(context) -> None:
                           _icon("item"), needs_setup=True),
             RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                           PUBLISH_TOOLTIP,
-                          _publish_host.show_centered,
+                          _publish_host.show,
                           _icon("publish"), needs_setup=True, root_only=True, context="design"),
             RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, "Export STEP File",
                           "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component.",
@@ -156,7 +156,7 @@ def run(context) -> None:
                                   _icon("item"), needs_setup=True)
         publish_item = RibbonCommand(PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
                                      PUBLISH_TOOLTIP,
-                                     _publish_host.show_centered,
+                                     _publish_host.show,
                                      _icon("publish"), needs_setup=True)
         # Not held back by the setup or the drawing loading: the Export window says what is missing, and which destination that leaves off.
         export = RibbonCommand(EXPORT_COMMAND_ID, "Export",
@@ -165,7 +165,7 @@ def run(context) -> None:
                                _icon("upload_step"))
         administration = RibbonGroup([
             RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
-                          _jobs_host.show_centered,
+                          _jobs_host.show,
                           _icon("jobs"), needs_setup=True),
             RibbonCommand(COMMAND_ID, "Preferences",
                           "Open the Fusion Manage panel: connection and settings.",
