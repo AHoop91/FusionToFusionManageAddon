@@ -1,11 +1,5 @@
 <a id="readme-top"></a>
 
-> **Unofficial Project Notice**
-> This project is an independent, custom-built extension for Autodesk Fusion Manage. It is not an official Autodesk product and is not supported, endorsed, or maintained by Autodesk. It integrates with Autodesk Fusion Manage through supported web and API interactions.
->
-> **Disclaimer**
-> This project is provided "as is" without warranties of any kind, express or implied, including but not limited to reliability, accuracy, completeness, or fitness for a particular purpose. Use of this software is at your own discretion and risk.
-
 <!-- PROJECT SHIELDS -->
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
@@ -41,6 +35,8 @@
     <li>
       <a href="#about-the-project">About The Project</a>
       <ul>
+        <li><a href="#unofficial-project-notice">Unofficial Project Notice</a></li>
+        <li><a href="#disclaimer">Disclaimer</a></li>
         <li><a href="#built-with">Built With</a></li>
       </ul>
     </li>
@@ -77,6 +73,14 @@ Key features:
 * Item Panel to browse an item's fields, files, BOM, where-used and workflows inside Fusion
 * Job Queue to track publishes that are waiting, running and finished, with retry for failed jobs
 * Export and import configuration to share a setup with colleagues
+
+### Unofficial Project Notice
+
+This project is an independent, custom-built extension for Autodesk Fusion Manage. It is **not** an official Autodesk product, and it is not supported, endorsed or maintained by Autodesk. It integrates with Autodesk Fusion Manage through supported web and API interactions.
+
+### Disclaimer
+
+This project is provided "as is", without warranty of any kind, express or implied, including but not limited to warranties of reliability, accuracy, completeness or fitness for a particular purpose. Use of this software is at your own discretion and risk.
 
 <p align="right"><a href="#readme-top">↑ Back to top</a></p>
 
