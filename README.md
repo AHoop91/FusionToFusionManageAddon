@@ -1,6 +1,7 @@
 <a id="readme-top"></a>
 
 <!-- PROJECT SHIELDS -->
+[![Release][release-shield]][release-url]
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
@@ -172,6 +173,8 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information
 <p align="right"><a href="#readme-top">↑ Back to top</a></p>
 
 <!-- MARKDOWN LINKS & IMAGES -->
+[release-shield]: https://img.shields.io/github/v/release/AHoop91/FusionToFusionManageAddon.svg?style=for-the-badge
+[release-url]: https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest
 [contributors-shield]: https://img.shields.io/github/contributors/AHoop91/FusionToFusionManageAddon.svg?style=for-the-badge
 [contributors-url]: https://github.com/AHoop91/FusionToFusionManageAddon/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/AHoop91/FusionToFusionManageAddon.svg?style=for-the-badge
