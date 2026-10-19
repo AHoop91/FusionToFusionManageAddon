@@ -5,7 +5,7 @@
 
 /* ---- The pane --------------------------------------------------------------- */
 /* Runs the full height of the area, flush with its top, right and bottom edges (cancels the 16px padding of main). */
-.pub-detail { display: flex; flex-direction: column; flex: 0 0 44%; min-width: 260px; margin: -16px -16px -16px 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); position: relative; container: details / inline-size; }
+.pub-detail { display: flex; flex-direction: column; flex: 0 0 50%; min-width: 260px; margin: -16px -16px -16px 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); position: relative; container: details / inline-size; }
 /* Its title bar (.pub-pane-header) has the close button at its right; the content below it scrolls. */
 .pub-detail-close {
   display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; padding: 0;
