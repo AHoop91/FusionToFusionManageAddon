@@ -53,7 +53,7 @@ WORKSPACE_KINDS = [
     # The item BOM is always published, so its permissions are required.
     WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.",
                   ("view_items", "add_items", "edit_items", "view_bom", "add_to_bom", "edit_bom"),
-                  (DefaultMapping("part_number", "NUMBER"), DefaultMapping("name", "TITLE"),
+                  (DefaultMapping("item_number", "NUMBER"), DefaultMapping("name", "TITLE"),
                    DefaultMapping("description", "DESCRIPTION"), DefaultMapping("thumbnail", "IMAGE"),
                    DefaultMapping("material", "MATERIAL"), DefaultMapping("custom:Type", "TYPE"),
                    DefaultMapping("physical:Height", "HEIGHT"), DefaultMapping("physical:Width", "WIDTH"),
@@ -63,8 +63,11 @@ WORKSPACE_KINDS = [
 
 KINDS_BY_ID = {k.kind_id: k for k in WORKSPACE_KINDS}
 ITEMS_KIND = "items"   # the kind the Item panel, the publish and the BOM work with
+LEGACY_NUMBER_FIELD = "NUMBER"   # the field the Part number used to be mapped to by default
+ITEM_NUMBER_SOURCE = "item_number"   # the source every items workspace must map: it names the Fusion Manage field holding the item number
 
 SOURCE_FIELDS = [
+    SourceField("item_number", "Item Number"),
     SourceField("part_number", "Part number"),
     SourceField("name", "Name"),
     SourceField("description", "Description"),
@@ -180,6 +183,8 @@ class WorkspaceConfig:
                 targets.append(row.fm_field_id)
         for fm_field_id in sorted({t for t in targets if targets.count(t) > 1}):
             problems.append(f"{title}: Fusion Manage field '{fm_field_id}' is filled more than once.")
+        if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE and row.fm_field_id for row in self.mappings):
+            problems.append(f"{title}: map the Item Number to the Fusion Manage field that holds it (usually NUMBER).")
         return problems
 
     def to_dict(self) -> Dict[str, Any]:
@@ -192,11 +197,17 @@ class WorkspaceConfig:
     def from_dict(cls, data: Dict[str, Any]) -> "WorkspaceConfig":
         rows = data.get("mappings")
         statics = data.get("static_values")
+        mappings = ([FieldMapping.from_dict(r) for r in rows if isinstance(r, dict)]
+                    if isinstance(rows, list) else [])
+        # Earlier versions mapped the Part number to NUMBER; the Item Number is what that field holds now.
+        if not any(m.source == ITEM_NUMBER_SOURCE for m in mappings):
+            for m in mappings:
+                if m.source == "part_number" and m.fm_field_id == LEGACY_NUMBER_FIELD:
+                    m.source = ITEM_NUMBER_SOURCE
         return cls(
             workspace_id=str(data.get("workspace_id", "")).strip(),
             component_field=str(data.get("component_field", "")).strip(),
-            mappings=[FieldMapping.from_dict(r) for r in rows if isinstance(r, dict)]
-            if isinstance(rows, list) else [],
+            mappings=mappings,
             static_values=[StaticValue.from_dict(r) for r in statics if isinstance(r, dict)]
             if isinstance(statics, list) else [],
         )

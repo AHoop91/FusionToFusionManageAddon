@@ -144,6 +144,7 @@ Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Man
 
 - The workspace ID must be a number.
 - Every row needs both a source and a Fusion Manage field.
+- **Item Number** must be mapped to the Fusion Manage field that holds it (usually `NUMBER`). Without it the add-in cannot tell Fusion Manage which field carries the item number, so a workspace with no such mapping is reported as not set up.
 - A source can be mapped only once, and a Fusion Manage field can be filled only once, whether by a mapping, a static value or the component-linking field.
 
 #### Picklist and number fields
@@ -166,7 +167,7 @@ If the target field is a picklist, the add-in looks up the picklist's options an
 
 | # | Data Model source | Fusion Manage field ID | Notes |
 |---|---|---|---|
-| 1 | Part number | `NUMBER` | Existing items are found by their item number |
+| 1 | Item Number | `NUMBER` | Required. Existing items are found by their item number |
 | 2 | Name | `TITLE` | |
 | 3 | Description | `DESCRIPTION` | |
 | 4 | Thumbnail | `IMAGE` | The component's image, sent as a file |

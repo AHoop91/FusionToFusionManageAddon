@@ -30,7 +30,8 @@ def _key(name: str) -> str:
 
 def source_value(source: str, summary: Dict[str, Any], values: Dict[str, str]) -> str:
     """Current Data Model value of a mapping source (lower-cased ``values`` keys)."""
-    direct = {"part_number": summary.get("part_number", ""),
+    direct = {"item_number": summary.get("item_number", ""),
+              "part_number": summary.get("part_number", ""),
               "description": summary.get("description", "")}
     if source in direct and direct[source]:
         return str(direct[source])
