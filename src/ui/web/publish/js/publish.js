@@ -355,25 +355,10 @@
     if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
 
-  /** Read only the Bill of Materials (and the design's own properties, for the check) again, skipping the cached copies; the summary, thumbnail and details stay. */
-  function refreshBom() {
-    lastLoad = Date.now();   // a focus right after must not reload everything
-    ['structure', 'properties'].forEach(function (name) {
-      loaded[name] = false;
-      inflight[name] = false;
-      forceNext[name] = true;
-      clearTimeout(timers[name]);
-    });
-    rootCompare = null;
-    rootFailed = '';
-    updateCheck();
-    loadSection('structure');   // the properties follow once it is in
-  }
-
-  /** Read the open design again (all sections), skipping the cached copies when ``force``. */
-  function refresh(force) {
+  /** Read the open design again (all sections), skipping the cached copies when ``force``. ``now`` ignores the pause that merges triggers. */
+  function refresh(force, now) {
     // Focus, sign-in and the button can all fire together; load once.
-    if (Date.now() - lastLoad < 2000) return;
+    if (!now && Date.now() - lastLoad < 2000) return;
     lastLoad = Date.now();
     ALL_SECTIONS.forEach(function (name) {
       loaded[name] = false;
@@ -416,7 +401,7 @@
         loadSection('properties');
       },
     });
-    jobs.init({ onFinished: refreshBom });   // Fusion Manage changed: compare the Bill of Materials again
+    jobs.init({ onFinished: function () { refresh(true, true); } });   // Fusion Manage changed: read the whole panel again, not the cached copies
     $('pub-publish').addEventListener('click', publish);
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
