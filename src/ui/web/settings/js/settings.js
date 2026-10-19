@@ -18,6 +18,8 @@
     const modeRadio = document.querySelector('input[name="mode"][value="' + s.mode + '"]');
     if (modeRadio) modeRadio.checked = true;
     applyLock();
+    $('f-company-source').value = s.company_source;
+    showSharedStatus(s.shared);
     $('f-client-id').value = s.local.client_id;
     $('f-tenant').value = s.local.tenant;
     $('f-port').value = s.local.callback_port;
@@ -31,6 +33,7 @@
   function readSettings() {
     return {
       mode: document.querySelector('input[name="mode"]:checked').value,
+      company_source: $('f-company-source').value,
       workspaces: ns.workspaces.read(),
       exports: ns.exports.read(),
       local: {
@@ -54,7 +57,17 @@
     const locked = !!checked && checked.value === 'company';
     ['conn-settings', 'lock-workspaces', 'lock-exports'].forEach(function (id) { $(id).disabled = locked; });
     $('import-btn').disabled = locked;
+    $('shared-source').hidden = !locked;
     document.querySelectorAll('.lock-note').forEach(function (note) { note.hidden = !locked; });
+  }
+
+  /** Say whether the shared file was read, or an earlier copy is in use, or it cannot be read ({state, message} from Python). */
+  function showSharedStatus(status) {
+    const el = $('shared-status');
+    el.hidden = !status || status.state === 'off';
+    if (el.hidden) return;
+    el.dataset.state = status.state;
+    el.textContent = status.message;
   }
 
   // ---- Form placement -----------------------------------------------------
@@ -98,6 +111,11 @@
       radio.addEventListener('change', applyLock);
     });
     ns.workspaces.init();
+
+    bridge.on('choose_shared_config', function (r) {
+      if (r.ok && !r.result.cancelled) $('f-company-source').value = r.result.path;
+    });
+    $('f-company-browse').addEventListener('click', function () { bridge.send('choose_shared_config', {}); });
 
     bridge.on('get_settings', function (r) {
       if (!r.ok) return;

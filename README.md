@@ -157,7 +157,7 @@ Full documentation is published at **[ahoop91.github.io/FusionToFusionManageAddo
 - [x] STEP file and drawing representation upload
 - [x] Item Panel
 - [x] Job Queue with retry
-- [ ] Shared Configuration mode (read connection details from an organisation-published file)
+- [x] Shared Configuration mode (read the setup from a file on a shared path)
 - [ ] Support for Fusion Manage workspaces beyond **Items**
 
 See the [open issues](https://github.com/AHoop91/FusionToFusionManageAddon/issues) for a full list of proposed features (and known issues).

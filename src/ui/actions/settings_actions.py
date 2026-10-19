@@ -1,5 +1,6 @@
 """Palette actions for reading and saving settings."""
 
+from dataclasses import asdict
 from typing import Any, Dict
 
 from ...config.config_service import ConfigService
@@ -19,6 +20,7 @@ def settings_payload(config: ConfigService) -> Dict[str, Any]:
         "exports": cfg.exports.to_dict(),
         "catalog": catalog(),
         "company_source": cfg.company_source,
+        "shared": asdict(config.shared_status),
         "callback_url": cfg.local.callback_url,
     }
 

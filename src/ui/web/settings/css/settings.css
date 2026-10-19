@@ -15,11 +15,13 @@
 .mode-text { display: flex; flex-direction: column; gap: 4px; }
 .mode-title { font-weight: 600; }
 .mode-desc { font-weight: 400; font-size: 12px; color: var(--muted); }
-.mode-disabled { cursor: not-allowed; opacity: 0.7; }
-.badge {
-  margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: 500;
-  background: var(--bg); color: var(--muted); border: 1px solid var(--border);
-}
+
+/* The path of the shared file, under the mode options. */
+.shared-source { margin: 0 0 10px; }
+.shared-status { margin: 8px 0 0; padding: 8px 12px; font-size: 12px; border-radius: 4px; border: 1px solid; }
+.shared-status[data-state="ok"] { color: #1b5e20; background: #e8f5e9; border-color: #a5d6a7; }
+.shared-status[data-state="cached"] { color: var(--text); background: #fff8e1; border-color: #f0d98a; }
+.shared-status[data-state="error"] { color: #b71c1c; background: #fdecea; border-color: #f1aeb5; }
 
 /* ---- Shared Configuration lock ------------------------------------------ */
 /* Fieldsets used only to disable a group of controls at once. */

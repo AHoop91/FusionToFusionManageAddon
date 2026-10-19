@@ -174,7 +174,7 @@ On the **Profile** tab, **Export…** saves your mode, connection details, works
 On the **General** tab:
 
 - **Local Configuration**: you enter the details on the **Connection** tab. They are stored in your user profile on this machine.
-- **Shared Configuration**: *coming soon*. It will read the details from a file published by your organisation. The option is shown but disabled.
+- **Shared Configuration**: the connection, workspaces, mappings and exports are read from one file on a network path or shared folder, so everyone uses the same setup and cannot change it locally. Choose the file with **Browse...** or type its path. To make the file, set up one machine and use **Export...**, then put the file where everyone can read it. After exporting, the add-in offers to switch you to that file; to change the shared setup later, switch back to Local Configuration, edit, and export over the file again. The add-in checks the file about every 30 seconds and keeps the last good copy, so it keeps working, with a warning on the General tab, while the share cannot be reached. Switching back to Local Configuration brings back your own settings.
 
 ---
 

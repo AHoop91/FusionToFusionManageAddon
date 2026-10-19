@@ -2,7 +2,7 @@
  * Export / Import of the configuration file (General tab).
  *
  * Python opens Fusion's own file dialogs and does the file work; this module
- * only triggers the actions and reports the outcome.
+ * only triggers the actions and reports the outcome. After an export it offers to follow the file as the Shared Configuration.
  */
 (function (ns) {
   'use strict';
@@ -23,6 +23,16 @@
     bridge.on('export_config', function (r) {
       if (!r.ok) return report(r.error, true);
       report(r.result.cancelled ? '' : 'Exported to ' + fileName(r.result.path));
+      if (r.result.offer_shared) {
+        ns.info.shareDialog(r.result.path, function () { bridge.send('use_shared_config', { path: r.result.path }); });
+      }
+    });
+
+    bridge.on('use_shared_config', function (r) {
+      if (!r.ok) return report(r.error, true);
+      ns.settings.apply(r.result.settings);
+      ns.auth.refresh();
+      report('Now using ' + fileName(r.result.path) + ' as the Shared Configuration');
     });
 
     bridge.on('import_config', function (r) {

@@ -2,7 +2,8 @@
  * Info tips and the confirm dialog of the Workspaces tab, as ``ns.info``.
  *
  * ``tip(text)`` is an info icon whose click shows or hides a tip; ``confirmDefaults(kind, onYes)`` asks
- * before "Add default fields" replaces the mapped fields.
+ * before "Add default fields" replaces the mapped fields; ``showValidation`` reports a failed save;
+ * ``shareDialog(path, onYes)`` offers to follow an exported file as the Shared Configuration.
  */
 (function (ns) {
   'use strict';
@@ -167,5 +168,58 @@
     ok.addEventListener('click', present(overlay, ok));
   }
 
-  ns.info = { tip: infoTip, confirmDefaults: confirmDefaults, showValidation: showValidation };
+  const SHARE_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 14.5 11 16.5 15 12"/></svg>';
+
+  // What changes when the exported file becomes the Shared Configuration.
+  const SHARE_EFFECTS = [
+    'Your settings are read from this file, so you work with the same setup as everyone who uses it.',
+    'The Connection, Workspaces and Exports tabs become read-only here.',
+    'Your own settings are kept. To change the shared setup, switch back to Local Configuration on the General tab, make the changes, and export over this file again.',
+  ];
+
+  /** After an export: offer to follow the exported file as the Shared Configuration. ``onYes`` runs if the user agrees. */
+  function shareDialog(path, onYes) {
+    const overlay = el('div', 'ws-dialog-overlay');
+    const box = el('div', 'ws-dialog val-dialog share-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'share-title');
+
+    const head = el('div', 'val-head');
+    const badge = el('span', 'val-badge');
+    badge.innerHTML = SHARE_ICON;
+    const heading = el('div', 'val-heading');
+    const title = el('h3', 'val-title', 'Use this file as your Shared Configuration?');
+    title.id = 'share-title';
+    heading.appendChild(title);
+    heading.appendChild(el('p', 'val-sub', 'Your configuration was exported. You can now follow it like everyone else will.'));
+    head.appendChild(badge);
+    head.appendChild(heading);
+    box.appendChild(head);
+
+    const body = el('div', 'share-body');
+    body.appendChild(el('span', 'share-label', 'Exported file'));
+    body.appendChild(el('p', 'share-path', path));
+    body.appendChild(el('span', 'share-label', 'What changes'));
+    const list = el('ul', 'share-list');
+    SHARE_EFFECTS.forEach(function (text) { list.appendChild(el('li', '', text)); });
+    body.appendChild(list);
+    body.appendChild(el('p', 'share-hint', 'Choose this only if the file is in the location everyone will use, such as a shared folder or network path.'));
+    box.appendChild(body);
+
+    const actions = el('div', 'ws-dialog-actions');
+    const cancel = el('button', 'btn btn-secondary', 'Not now');
+    const ok = el('button', 'btn', 'Use this file');
+    cancel.type = ok.type = 'button';
+    actions.appendChild(cancel);
+    actions.appendChild(ok);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+
+    const close = present(overlay, cancel);
+    cancel.addEventListener('click', close);
+    ok.addEventListener('click', function () { close(); onYes(); });
+  }
+
+  ns.info = { tip: infoTip, confirmDefaults: confirmDefaults, showValidation: showValidation, shareDialog: shareDialog };
 })(window.MfgUi);

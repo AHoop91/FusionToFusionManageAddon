@@ -76,18 +76,28 @@
               </span>
             </label>
 
-            <label class="mode-option mode-disabled">
-              <input type="radio" name="mode" value="company" disabled>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="company">
               <span class="mode-text">
-                <span class="mode-title">Shared Configuration <span class="badge">Coming soon</span></span>
+                <span class="mode-title">Shared Configuration</span>
                 <span class="mode-desc">
-                  Connection details are read from a shared configuration file
-                  published by your organisation (network path or web address), so
-                  everyone uses the same Client ID and tenant without entering them.
-                  Fields your organisation locks cannot be changed locally.
+                  The connection details, workspaces, mappings and exports are read
+                  from one configuration file on a network path or shared folder, so
+                  everyone uses the same setup. They cannot be changed here. Create
+                  the file with Export on a machine that is set up.
                 </span>
               </span>
             </label>
+
+            <div id="shared-source" class="shared-source" hidden>
+              <label>Shared configuration file
+                <span class="inline-row">
+                  <input id="f-company-source" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. \\server\share\Fusion-Manage-Item-Management-config.json">
+                  <button id="f-company-browse" type="button" class="btn btn-secondary">Browse...</button>
+                </span>
+              </label>
+              <p id="shared-status" class="shared-status" hidden></p>
+            </div>
 
           </div>
         </div>
