@@ -1,5 +1,11 @@
 <a id="readme-top"></a>
 
+> **Unofficial Project Notice**
+> This project is an independent, custom-built extension for Autodesk Fusion Manage. It is not an official Autodesk product and is not supported, endorsed, or maintained by Autodesk. It integrates with Autodesk Fusion Manage through supported web and API interactions.
+>
+> **Disclaimer**
+> This project is provided "as is" without warranties of any kind, express or implied, including but not limited to reliability, accuracy, completeness, or fitness for a particular purpose. Use of this software is at your own discretion and risk.
+
 <!-- PROJECT SHIELDS -->
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
