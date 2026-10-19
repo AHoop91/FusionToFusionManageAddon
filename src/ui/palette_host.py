@@ -2,7 +2,6 @@
 
 import json
 import os
-import sys
 
 import adsk.core
 
@@ -14,67 +13,6 @@ from ..core.logging_setup import get_logger
 from .message_bridge import MessageBridge
 
 log = get_logger("palette")
-
-
-def _process_windows():
-    """``(window, rect, title)`` of each visible top-level window of this process, in the screen's own pixels (empty where not Windows)."""
-    if sys.platform != "win32":
-        return []
-    import ctypes
-    from ctypes import wintypes
-    user32 = ctypes.windll.user32
-    pid = os.getpid()
-    found = []
-
-    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    def visit(window, _param):
-        owner = wintypes.DWORD()
-        user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
-        rect = wintypes.RECT()
-        if owner.value == pid and user32.IsWindowVisible(window) and not user32.IsIconic(window) and user32.GetWindowRect(window, ctypes.byref(rect)):
-            text = ctypes.create_unicode_buffer(256)
-            user32.GetWindowTextW(window, text, 256)
-            found.append((window, rect, text.value))
-        return True
-
-    user32.EnumWindows(visit, 0)
-    return found
-
-
-def _center_new_window(before, title: str, size) -> bool:
-    """Move the window that opened since ``before`` (``_process_windows()`` taken ahead) to the middle of Fusion's main window; False where
-    that cannot be done. The window is the new one that is as wide as ``size`` or wider and smallest, else the one titled ``title``.
-
-    This works in the screen's own pixels throughout, so display scaling and where the monitors sit cannot put the window off Fusion
-    (``Palette.setPosition`` is in other units, which put it on another monitor).
-    """
-    import ctypes
-    from ctypes import wintypes
-    user32 = ctypes.windll.user32
-    user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
-
-    def area(w):
-        return (w[1].right - w[1].left) * (w[1].bottom - w[1].top)
-
-    now = _process_windows()
-    if not now:
-        return False
-    main = max(now, key=area)
-    seen = {w[0] for w in before}
-    fresh = [w for w in now if w[0] not in seen and w[0] != main[0]]
-    candidates = [w for w in fresh if w[1].right - w[1].left >= size[0] and w[1].bottom - w[1].top >= size[1]]
-    target = min(candidates, key=area) if candidates else next((w for w in now if w[2] == title and w[0] != main[0]), None)
-    if target is None:
-        log.info("No window to centre among: %s", [(w[2], w[1].right - w[1].left, w[1].bottom - w[1].top, w[0] in seen) for w in now])
-        return False
-    width, height = target[1].right - target[1].left, target[1].bottom - target[1].top
-    left = main[1].left + (main[1].right - main[1].left - width) // 2
-    top = main[1].top + (main[1].bottom - main[1].top - height) // 2
-    SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x0001, 0x0004, 0x0010
-    moved = bool(user32.SetWindowPos(target[0], None, left, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE))
-    log.info("Centred the window '%s' (%sx%s) in Fusion's %s at %s,%s: %s", target[2], width, height,
-             (main[1].left, main[1].top, main[1].right, main[1].bottom), left, top, moved)
-    return moved
 
 
 class _IncomingHandler(adsk.core.HTMLEventHandler):
@@ -126,12 +64,34 @@ class PaletteHost:
 
     def show(self) -> None:
         """Show the palette, creating it on first use."""
+        palette = self._get_or_create(visible=True)
+        palette.isVisible = True
+        log.info("Palette shown (visible=%s)", palette.isVisible)
+
+    def show_centered(self) -> None:
+        """Show the palette in the middle of Fusion's viewport (a floating palette otherwise opens wherever Fusion last put one).
+
+        An existing palette is placed while hidden and shown afterwards, as the API documents, so it opens in place. A new one has to be
+        created showing (a palette created hidden loads its page without drawing it), so it is moved at once instead. Only the Fusion API
+        is used, so this behaves the same on Windows and Mac.
+        """
+        is_new = self._ui.palettes.itemById(self._palette_id) is None
+        palette = self._get_or_create(visible=is_new)
+        try:
+            self._place_in_viewport(palette)
+        except Exception:  # only a nicety: the palette opens wherever Fusion puts it
+            log.exception("Could not centre the palette")
+        palette.isVisible = True
+        log.info("Palette shown (visible=%s)", palette.isVisible)
+
+    def _get_or_create(self, visible: bool):
+        """The palette, created on first use (``visible`` says whether it is created showing)."""
         palette = self._ui.palettes.itemById(self._palette_id)
         if palette is None:
             url = os.path.join(os.path.dirname(__file__), "web", self._page, "index.html")
             palette = self._ui.palettes.add(
                 self._palette_id, self._title, url.replace("\\", "/"),
-                True, self._close_button, True, self._size[0], self._size[1], True,
+                visible, self._close_button, True, self._size[0], self._size[1], True,
             )
             if self._docked:
                 # Limit docking to the left/right edges so the panel always spans
@@ -142,23 +102,19 @@ class PaletteHost:
             palette.incomingFromHTML.add(self._handler)
             log.info("Palette created")
         self._palette = palette
-        palette.isVisible = True
-        log.info("Palette shown (visible=%s)", palette.isVisible)
+        return palette
 
-    def show_centered(self) -> None:
-        """Show the palette in the middle of Fusion's window, both ways (a floating palette otherwise opens wherever Fusion last put one).
-        Windows only: elsewhere it is shown where Fusion puts it."""
-        before = _process_windows()   # to tell the palette's window from the others once it opens
-        self.show()
-        if sys.platform != "win32":
+    def _place_in_viewport(self, palette) -> None:
+        """Move ``palette`` so its middle is the middle of the active viewport (``setPosition`` takes screen coordinates)."""
+        viewport = adsk.core.Application.get().activeViewport
+        if viewport is None:
             return
-        try:
-            for _ in range(5):   # the window may not exist yet: let Fusion make it
-                adsk.doEvents()
-                if _center_new_window(before, self._title, self._size):
-                    return
-        except Exception:  # only a nicety: the palette is shown wherever Fusion put it
-            log.exception("Could not centre the palette")
+        middle = viewport.viewToScreen(adsk.core.Point2D.create(viewport.width / 2, viewport.height / 2))
+        left = int(middle.x - (palette.width or self._size[0]) / 2)
+        top = int(middle.y - (palette.height or self._size[1]) / 2)
+        palette.setPosition(left, top)
+        log.debug("Centred '%s' (%sx%s) at %s,%s on a viewport of %sx%s whose middle is at screen %s,%s",
+                  self._title, palette.width, palette.height, left, top, viewport.width, viewport.height, round(middle.x), round(middle.y))
 
     @property
     def visible(self) -> bool:
