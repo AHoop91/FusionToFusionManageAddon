@@ -110,8 +110,8 @@
       // Report the result on the tab whose Save button was pressed.
       const msg = $(saveSource + '-msg');
       const error = $(saveSource + '-error');
-      error.hidden = r.ok;
-      if (!r.ok) { error.textContent = r.error; return; }
+      ns.info.showValidation(error, r.ok ? '' : r.error);
+      if (!r.ok) return;
       fillSettings(r.result);
       msg.textContent = 'Saved';
       setTimeout(function () { msg.textContent = ''; }, 2000);

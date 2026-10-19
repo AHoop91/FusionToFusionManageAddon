@@ -184,7 +184,7 @@ class WorkspaceConfig:
         for fm_field_id in sorted({t for t in targets if targets.count(t) > 1}):
             problems.append(f"{title}: Fusion Manage field '{fm_field_id}' is filled more than once.")
         if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE and row.fm_field_id for row in self.mappings):
-            problems.append(f"{title}: map the Item Number to the Fusion Manage field that holds it (usually NUMBER).")
+            problems.append(f"{title}: Item Number must be mapped to the Fusion Manage Number field (NUMBER).")
         return problems
 
     def to_dict(self) -> Dict[str, Any]:

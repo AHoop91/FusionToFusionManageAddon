@@ -36,7 +36,7 @@ def register_settings_actions(bridge: MessageBridge, config: ConfigService) -> N
         problems = config.update(payload.get("mode", "local"), local, workspaces,
                                  str(payload.get("company_source", config.config.company_source)).strip(), exports)
         if problems:
-            raise ValueError(" ".join(problems))
+            raise ValueError("\n".join(problems))   # one problem per line: the Settings page lists them
         return settings_payload(config)
 
     bridge.register("get_settings", get_settings)

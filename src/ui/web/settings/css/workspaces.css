@@ -159,3 +159,19 @@
 .ws-panel > .ws-desc { margin-bottom: 14px; }
 .ws-sub { margin: 2px 0 10px; font-size: 12px; line-height: 1.4; }
 .ws-block-title + .ws-sub { margin-top: -6px; }
+
+/* ---- Validation dialog: what failed, and how to put it right ---- */
+.val-dialog { display: flex; flex-direction: column; max-width: 460px; padding: 0; overflow: hidden; border-radius: 10px; }
+.val-head { display: flex; flex: none; align-items: center; gap: 14px; padding: 20px 22px 16px; border-bottom: 1px solid #f3d3d3; background: linear-gradient(180deg, #fff3f3, #fff); }
+.val-badge { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: #fde2e2; color: var(--danger); box-shadow: 0 0 0 6px #fff0f0; }
+.val-badge svg { width: 24px; height: 24px; }
+.val-title { margin: 0 0 3px; font-size: 17px; font-weight: 600; color: #7a1717; }
+.val-sub { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.val-list { margin: 0; padding: 14px 22px 4px; list-style: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; counter-reset: issue; }
+.val-item { position: relative; margin: 0 0 10px; padding: 10px 12px 10px 40px; border: 1px solid #f1d0d0; border-left: 3px solid var(--danger); border-radius: 6px; background: #fffafa; counter-increment: issue; }
+.val-item::before { content: counter(issue); position: absolute; left: 12px; top: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
+.val-area { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 10px; background: #fde2e2; color: #8f1d1d; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.val-text { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text); }
+.val-fix { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.val-fix strong { color: var(--text); }
+.val-dialog .ws-dialog-actions { flex: none; margin: 0; padding: 12px 22px 18px; }
