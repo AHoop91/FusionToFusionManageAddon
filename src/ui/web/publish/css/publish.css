@@ -66,7 +66,7 @@
 /* ---- Bill of materials on the left; the details pane takes the right when a row is picked ---- */
 .pub-main { display: flex; position: relative; flex-direction: row; gap: 0; overflow: hidden; }
 /* The table's pane runs flush with the top, left and bottom edges of the area (cancels the 16px padding of main), under a grey title bar. */
-.pub-bom-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; margin: -16px 0 -16px -16px; }
+.pub-bom-pane { flex: 1; min-width: 0; container: bompane / inline-size; display: flex; flex-direction: column; margin: -16px 0 -16px -16px; }
 /* With no details pane beside it (closed, or a popup in the small layout) the table's pane runs to the right edge too. */
 .pub-main:has(> .pub-detail[hidden]) > .pub-bom-pane { margin-right: -16px; }
 @media (max-width: 760px) { .pub-bom-pane { margin-right: -16px; } }

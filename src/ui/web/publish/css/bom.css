@@ -33,7 +33,7 @@
 
 /* Filters above the table: small outlined 4px chips, filled when on, any number on at once. */
 .pub-cmp-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.pub-cmp-filter { display: inline-flex; align-items: center; gap: 6px; height: 24px; box-sizing: border-box; padding: 0 10px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: transparent; color: rgba(0, 0, 0, .87); cursor: pointer; transition: background-color .15s, border-color .15s; }
+.pub-cmp-filter { display: inline-flex; flex: none; white-space: nowrap; align-items: center; gap: 6px; height: 24px; box-sizing: border-box; padding: 0 10px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: transparent; color: rgba(0, 0, 0, .87); cursor: pointer; transition: background-color .15s, border-color .15s; }
 .pub-cmp-filter:hover { background: rgba(0, 0, 0, .04); }
 .pub-cmp-filter.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .pub-cmp-filter.on:hover { filter: brightness(1.08); }
@@ -161,6 +161,13 @@
   .pub-cmp { min-width: 640px; }
   /* Row buttons stay in view just left of Qty instead of sitting at the far end of the scrolled item. */
   .pub-cmp-actions { position: sticky; right: calc(var(--status-w, 84px) + var(--qty-w, 72px)); z-index: 1; padding-left: 16px; background: linear-gradient(to right, transparent, #fff 14px); }
+}
+
+/* The pane is narrower than the window when the details are open beside it, so the filters pick their layout from the pane: the chips would
+   squeeze and overlap, so under 760px they become the Filters drop-down. */
+@container bompane (max-width: 760px) {
+  .pub-cmp-filters .pub-cmp-filter { display: none; }
+  .pub-cmp-menu { display: block; }
 }
 
 /* Drag handle on the right edge of each column header. */
