@@ -374,23 +374,19 @@
   // The mark at the right of the tab bar says whether the tab shown matches the open design: only a spinner while it is checked, then
   // "Out of Date" or "Check failed" when there is something to say. A tab with a check has Python's ``start`` and ``result`` actions and
   // the words for how many things differ (``differs(count)``); a tab with none shows no mark.
-  // ``title``, ``lead`` and ``columns`` (what each of ``name``, ``design`` and ``item`` of a difference is called) are for the dialog the pill opens.
+  // ``section`` and ``columns`` (what each of ``name``, ``design`` and ``item`` of a difference is called) are for the dialog the pill opens.
   const CHECKS = {
     item: {
       start: 'sync_check_load', result: 'sync_check_result',
       differs: function (n) { return n + (n === 1 ? ' mapped field differs' : ' mapped fields differ') + ' from the open design'; },
-      title: 'Item details are out of date',
-      lead: 'These mapped fields hold something other than what the open design says. Republish to update them in Fusion Manage.',
+      section: 'Attributes',
       columns: ['Field', 'Component Value', 'Fusion Manage Value'],
-      absent: 'Empty',
     },
     bom: {
       start: 'bom_check_load', result: 'bom_check_result',
       differs: function (n) { return n + (n === 1 ? ' component is' : ' components are') + ' not in this Bill of Materials as in the open design (not under the same parent, or in another quantity)'; },
-      title: 'Bill of Materials is out of date',
-      lead: 'These components are not in this Bill of Materials as they are in the open design: under another parent, or in another quantity. Republish to update it.',
+      section: 'Bill of Materials',
       columns: ['Component', 'Quantity in design', 'Quantity in Fusion Manage'],
-      absent: 'Not in this Bill of Materials',
     },
   };
   const LABELS = { changes: 'Out of Date', error: 'Check failed' };   // the pill; while checking there is only the spinner, and an up-to-date tab shows nothing
@@ -452,7 +448,7 @@
       const row = el('tr');
       row.appendChild(el('td', '', difference.name));
       [difference.design, difference.item].forEach(function (value) {
-        row.appendChild(el('td', value ? '' : 'item-diff-none', value || check.absent));
+        row.appendChild(el('td', '', value || '-'));
       });
       body.appendChild(row);
     });
@@ -469,13 +465,14 @@
     body.replaceChildren();
     dialog.dataset.state = mark.state;
     if (mark.state === 'changes') {
-      $('item-diff-badge').textContent = '!';
-      $('item-diff-title').textContent = mark.check.title;
-      $('item-diff-lead').textContent = mark.check.lead;
+      $('item-diff-title').textContent = 'Out of date';
+      $('item-diff-lead').textContent = mark.check.differs(mark.details.length) + '.';
+      const heading = el('h3', 'item-diff-section', mark.check.section);
+      heading.appendChild(el('span', 'item-diff-count', String(mark.details.length)));
+      body.appendChild(heading);
       body.appendChild(diffTable(mark.check, mark.details));
       if (mark.details.length > DETAILS_SHOWN) body.appendChild(el('p', 'item-diff-more', '... and ' + (mark.details.length - DETAILS_SHOWN) + ' more.'));
     } else {
-      $('item-diff-badge').textContent = '×';
       $('item-diff-title').textContent = 'Could not check';
       $('item-diff-lead').textContent = 'Fusion Manage could not be compared with the open design.';
       body.appendChild(el('p', 'item-diff-error', mark.message));
@@ -568,6 +565,7 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeLightbox(); closeDiff(); } });
     $('item-check-label').addEventListener('click', openDiff);
     $('item-diff-close').addEventListener('click', closeDiff);
+    $('item-diff-x').addEventListener('click', closeDiff);
     $('item-diff').addEventListener('click', function (e) { if (e.target === this) closeDiff(); });   // the backdrop, not the card
     $('item-diff-republish').addEventListener('click', function () { closeDiff(); bridge.send('open_publish'); });
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
