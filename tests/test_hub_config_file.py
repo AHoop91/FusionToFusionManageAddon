@@ -99,7 +99,7 @@ class ApplyTests(unittest.TestCase):
 
     def test_without_a_client_id_nothing_is_applied(self):
         problems = self.service.apply_hub_file(config_from_hub_file(file_bytes(), HUB_A, "Hub A"), self.ref)
-        self.assertEqual(problems, ["Client ID is required."])
+        self.assertEqual(problems, ["Client ID: enter the Client ID of your Autodesk app."])
         self.assertIsNone(self.service.config.hub_file)
 
     def test_saving_by_hand_forgets_the_file(self):

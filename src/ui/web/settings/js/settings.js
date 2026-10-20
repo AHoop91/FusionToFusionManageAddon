@@ -206,15 +206,11 @@
     }, { folder: true, hubId: hubId, title: 'Save to Fusion Hub', action: 'Save here', fileName: CONFIG_FILE_NAME });
   }
 
-  /** A Hub Admin chooses where to save; anyone else's Save is a local save. */
+  /** Save the settings. A Hub Admin is asked, once they are saved, whether to share them with the hub too. */
   function saveClicked(source) {
     saveSource = source;
-    if (roleState !== 'admin') { bridge.send('save_settings', readSettings()); return; }
-    ns.saveMenu.open(document.querySelector('[data-hub-name]').textContent, function (choice) {
-      saveSource = source;
-      toHubAfterSave = choice === 'hub';
-      bridge.send('save_settings', readSettings());
-    });
+    askShareAfterSave = roleState === 'admin';
+    bridge.send('save_settings', readSettings());
   }
 
   /** A member of the hub cannot change its settings: every form and Save is switched off. */
@@ -293,7 +289,7 @@
 
   // Set when the wizard's sign-in is waiting for the Client ID to be saved.
   let signInAfterSave = false;
-  let toHubAfterSave = false;   // the admin chose "Save to Fusion Hub": once the save has passed validation, the file goes to the hub
+  let askShareAfterSave = false;   // an admin pressed Save: once the save has passed validation, they are asked about the hub
 
   /** The wizard replaces the sign-in card until a Client ID is saved; the automatic sign-in waits too (it would fail without one). */
   function showWizard(needed) {
@@ -355,7 +351,8 @@
     const tenant = signedInNow && !checking && !member && !tenantStepDone;
     $('role-check').hidden = !checking;
     $('member-prompt').hidden = !prompt;
-    $('tenant-wizard').hidden = !tenant;    const tabs = !(checking || prompt || tenant);
+    $('tenant-wizard').hidden = !tenant;
+    const tabs = !(checking || prompt || tenant);
     $('settings-tabs').hidden = !tabs;
     $('settings-main').hidden = !tabs;
     $('hub-file-bar').hidden = !(member && hubFile);
@@ -404,15 +401,16 @@
       // Report the result on the tab whose Save button was pressed.
       const msg = $(saveSource + '-msg');
       const error = $(saveSource + '-error');
-      ns.info.showValidation(error, r.ok ? '' : r.error);
+      const problems = r.ok ? (r.result.problems || []) : [{ message: r.error, where: {} }];
+      ns.validation.show(error, problems);
       const signIn = signInAfterSave;
-      const toHub = toHubAfterSave;
-      signInAfterSave = toHubAfterSave = false;
-      if (!r.ok) return;
+      const askShare = askShareAfterSave;
+      signInAfterSave = askShareAfterSave = false;
+      if (problems.length) return;
       fillSettings(r.result);
       msg.textContent = 'Saved';
       setTimeout(function () { msg.textContent = ''; }, 2000);
-      if (toHub) saveToHub();   // a file in the hub never holds settings that failed validation
+      if (askShare) ns.shareDialog.open(document.querySelector('[data-hub-name]').textContent, saveToHub);   // a file in the hub never holds settings that failed validation
       // Refresh sign-in state now that the connection details changed (or sign in, from the wizard).
       if (signIn) bridge.send('auth_login'); else ns.auth.refresh();
     });

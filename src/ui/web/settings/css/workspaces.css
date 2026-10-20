@@ -163,11 +163,15 @@
 .val-title { margin: 0 0 3px; font-size: 17px; font-weight: 600; color: #7a1717; }
 .val-sub { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .val-list { margin: 0; padding: 14px 22px 4px; list-style: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; counter-reset: issue; }
-.val-item { position: relative; margin: 0 0 10px; padding: 10px 12px 10px 40px; border: 1px solid #f1d0d0; border-left: 3px solid var(--danger); border-radius: 6px; background: #fffafa; counter-increment: issue; }
+.val-item { display: block; position: relative; width: 100%; margin: 0 0 10px; padding: 10px 12px 10px 40px; border: 1px solid #f1d0d0; border-left: 3px solid var(--danger); border-radius: 6px; background: #fffafa; font: inherit; text-align: left; counter-increment: issue; }
+button.val-item { cursor: pointer; }
+button.val-item:hover { background: #fdeeee; }
+button.val-item:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
 .val-item::before { content: counter(issue); position: absolute; left: 12px; top: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
-.val-area { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 10px; background: #fde2e2; color: #8f1d1d; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
 .val-text { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text); }
-.val-fix { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
-.val-fix strong { color: var(--text); }
+.val-go { display: block; margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--danger); }
 .val-dialog .ws-dialog-actions { flex: none; margin: 0; padding: 12px 22px 18px; }
 
+/* Messages of a failed save under a row: one line, each in the column of its field. */
+.ws-row-notes { display: grid; column-gap: 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 24px; margin: -4px 0 8px; }
+.ws-row-notes .field-error { margin: 0; }

@@ -11,6 +11,8 @@ To offer another source field, add a ``SourceField`` to ``SOURCE_FIELDS``.
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
+from .problems import Problem
+
 
 @dataclass(frozen=True)
 class WorkspaceKind:
@@ -96,6 +98,12 @@ def is_valid_source(source: str) -> bool:
     return source in _SOURCES_BY_ID
 
 
+def _source_label(source: str) -> str:
+    """What the panel calls a source field: its label, or the property name for a named hub property."""
+    known = _SOURCES_BY_ID.get(source)
+    return known.label if known else data_model_name(source) or source
+
+
 def data_model_name(source: str) -> str:
     """Name of the Data Model property a source reads ("" for a file source or an unknown one)."""
     if source.startswith(PHYSICAL_PREFIX):   # listed as "Physical Mass", so it never meets a hub property of the same name
@@ -155,36 +163,49 @@ class WorkspaceConfig:
         """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings."""
         if not self.workspace_id:
             return f"The {title} workspace ID is not set."
-        problems = self.validate(title)
+        problems = self.validate()
         return problems[0] if problems else ""
 
-    def validate(self, title: str) -> List[str]:
-        """Return human-readable problems; ``title`` names the workspace."""
-        problems = []
+    def validate(self) -> List[str]:
+        """Return human-readable problems, each saying which row it is in and what to do."""
+        problems: List[str] = []
         if self.workspace_id and not self.workspace_id.isdigit():
-            problems.append(f"{title}: Workspace ID must be a number.")
-        seen = set()
-        for row in self.mappings:
+            problems.append(Problem("Workspace: the ID must be a number. Choose a workspace from the list.", area="id"))
+        first_row_of_source: Dict[str, int] = {}
+        for index, row in enumerate(self.mappings):
+            name = f"Mapped field {index + 1}"
             if not is_valid_source(row.source):
-                problems.append(f"{title}: choose a source field (and name any custom property) for every mapping.")
-            elif row.source in seen:
-                problems.append(f"{title}: source field '{row.source}' is mapped twice.")
-            seen.add(row.source)
-            if not row.fm_field_id:
-                problems.append(f"{title}: enter a Fusion Manage field ID for every mapping.")
-        # A Fusion Manage field can be filled once, by a mapping or a static value.
-        targets = [row.fm_field_id for row in self.mappings if row.fm_field_id]
-        if self.component_field:
-            targets.append(self.component_field)
-        for row in self.static_values:
-            if not row.fm_field_id:
-                problems.append(f"{title}: choose a Fusion Manage field for every static value.")
+                what = "enter the name of the property" if row.source.strip() else "choose a Component Property"
+                problems.append(Problem(f"{name}: {what}.", area="mapping", row=index, part="source"))
+            elif row.source in first_row_of_source:
+                problems.append(Problem(
+                    f"{name}: the Component Property '{_source_label(row.source)}' is already used by mapped field "
+                    f"{first_row_of_source[row.source] + 1}. Each property can be mapped once.", area="mapping", row=index, part="source"))
             else:
-                targets.append(row.fm_field_id)
-        for fm_field_id in sorted({t for t in targets if targets.count(t) > 1}):
-            problems.append(f"{title}: Fusion Manage field '{fm_field_id}' is filled more than once.")
-        if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE and row.fm_field_id for row in self.mappings):
-            problems.append(f"{title}: Item Number must be mapped to the Fusion Manage Number field (NUMBER).")
+                first_row_of_source[row.source] = index
+            if not row.fm_field_id:
+                problems.append(Problem(f"{name}: choose a Fusion Manage Item Field.", area="mapping", row=index, part="field"))
+        for index, row in enumerate(self.static_values):
+            if not row.fm_field_id:
+                problems.append(Problem(f"Default value {index + 1}: choose a Fusion Manage Item Field.", area="static", row=index, part="field"))
+        # A Fusion Manage field can be filled once: by a mapped field, the Component field or a default value.
+        filled: Dict[str, str] = {}
+        places = ([("mapping", i, f"Mapped field {i + 1}", r.fm_field_id) for i, r in enumerate(self.mappings)]
+                  + [("component", 0, "The Component field", self.component_field)]
+                  + [("static", i, f"Default value {i + 1}", r.fm_field_id) for i, r in enumerate(self.static_values)])
+        for area, index, name, fm_field_id in places:
+            if not fm_field_id:
+                continue
+            if fm_field_id in filled:
+                problems.append(Problem(
+                    f"{name}: the Fusion Manage Item Field '{fm_field_id}' is already filled by {filled[fm_field_id].lower()}. "
+                    "Each field can be filled once.", area=area, row=index, part="field"))
+            else:
+                filled[fm_field_id] = name
+        if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE for row in self.mappings):
+            problems.append(Problem(
+                "Item Number is not mapped. Add a mapped field with the Component Property 'Item Number' and the Fusion Manage Item Field "
+                f"'{LEGACY_NUMBER_FIELD}' (Add default fields adds it).", area="mappings"))
         return problems
 
     def to_dict(self) -> Dict[str, Any]:
@@ -226,7 +247,9 @@ class WorkspaceSettings:
     def validate(self) -> List[str]:
         problems: List[str] = []
         for kind in WORKSPACE_KINDS:
-            problems += self.workspaces[kind.kind_id].validate(kind.title)
+            for problem in self.workspaces[kind.kind_id].validate():
+                problem.where["workspace"] = kind.kind_id
+                problems.append(problem)
         return problems
 
     def to_dict(self) -> Dict[str, Any]:

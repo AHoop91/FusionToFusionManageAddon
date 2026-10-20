@@ -2,7 +2,7 @@
  * Info tips and the confirm dialog of the Item Workspace tab, as ``ns.info``.
  *
  * ``tip(text)`` is an info icon that shows a tip on hover; ``confirmDefaults(kind, onYes)`` asks
- * before "Add default fields" replaces the mapped fields; ``showValidation`` reports a failed save.
+ * before "Add default fields" replaces the mapped fields.
  */
 (function (ns) {
   'use strict';
@@ -68,89 +68,5 @@
     ok.addEventListener('click', function () { close(); onYes(); });
   }
 
-  const ALERT_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2.5 22 20H2z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 9v5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.2" fill="#fff"/></svg>';
-
-  // What to do about a known problem, shown under it in the dialog.
-  const FIXES = [
-    ['Item Number must be mapped', 'On the Item Workspace tab, choose Add field mapping, set the Component Property to Item Number and the Fusion Manage Item Field to NUMBER. Add default fields includes this mapping.'],
-  ];
-
-  /** `{area, text, fix}` for one problem line such as "Items: Workspace ID must be a number.". */
-  function describeProblem(line) {
-    const match = /^([A-Za-z][A-Za-z ]{0,24}): (.+)$/.exec(line);
-    const text = match ? match[2] : line;
-    const found = FIXES.find(function (f) { return text.indexOf(f[0]) !== -1; });
-    return { area: match ? match[1] : '', text: text, fix: found ? found[1] : '' };
-  }
-
-  /** The lines of a save error, one problem each. */
-  function problemLines(message) {
-    return String(message).split('\n').map(function (l) { return l.trim(); })
-      .filter(function (l, i, all) { return l && all.indexOf(l) === i; });   // a problem found on several rows is listed once
-  }
-
-  /** Fill a validation bar with its summary, or hide it when ``message`` is empty. Clicking it opens the details. */
-  function showValidation(bar, message) {
-    const lines = problemLines(message);
-    bar.hidden = lines.length === 0;
-    bar.textContent = '';
-    if (!lines.length) return;
-    const icon = el('span', 'vbar-icon');
-    icon.innerHTML = ALERT_ICON;
-    const text = el('span', 'vbar-text');
-    text.appendChild(el('strong', '', 'Validation failed'));
-    text.appendChild(el('span', '', lines.length === 1 ? '1 issue needs your attention' : lines.length + ' issues need your attention'));
-    bar.appendChild(icon);
-    bar.appendChild(text);
-    bar.appendChild(el('span', 'vbar-action', 'View details'));
-    bar.onclick = function () { validationDialog(lines); };
-  }
-
-  /** The dialog listing each validation problem, with how to fix it where that is known. */
-  function validationDialog(lines) {
-    const overlay = el('div', 'ws-dialog-overlay');
-    const box = el('div', 'ws-dialog val-dialog');
-    box.setAttribute('role', 'alertdialog');
-    box.setAttribute('aria-modal', 'true');
-    box.setAttribute('aria-labelledby', 'val-title');
-
-    const head = el('div', 'val-head');
-    const badge = el('span', 'val-badge');
-    badge.innerHTML = ALERT_ICON;
-    const heading = el('div', 'val-heading');
-    const title = el('h3', 'val-title', 'Validation failed');
-    title.id = 'val-title';
-    heading.appendChild(title);
-    heading.appendChild(el('p', 'val-sub', 'Your settings were not saved. Resolve ' + (lines.length === 1 ? 'the issue' : 'these issues') + ' below, then save again.'));
-    head.appendChild(badge);
-    head.appendChild(heading);
-    box.appendChild(head);
-
-    const list = el('ol', 'val-list');
-    lines.forEach(function (line) {
-      const p = describeProblem(line);
-      const item = el('li', 'val-item');
-      if (p.area) item.appendChild(el('span', 'val-area', p.area));
-      item.appendChild(el('p', 'val-text', p.text));
-      if (p.fix) {
-        const fix = el('p', 'val-fix');
-        fix.appendChild(el('strong', '', 'How to fix: '));
-        fix.appendChild(document.createTextNode(p.fix));
-        item.appendChild(fix);
-      }
-      list.appendChild(item);
-    });
-    box.appendChild(list);
-
-    const actions = el('div', 'ws-dialog-actions');
-    const ok = el('button', 'btn', 'Got it');
-    ok.type = 'button';
-    actions.appendChild(ok);
-    box.appendChild(actions);
-    overlay.appendChild(box);
-
-    ok.addEventListener('click', present(overlay, ok));
-  }
-
-  ns.info = { tip: infoTip, confirmDefaults: confirmDefaults, showValidation: showValidation };
+  ns.info = { tip: infoTip, confirmDefaults: confirmDefaults };
 })(window.MfgUi);

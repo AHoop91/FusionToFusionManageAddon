@@ -284,7 +284,7 @@
     const remove = removeButton();
     remove.type = 'button';
     remove.title = 'Remove mapping';
-    remove.addEventListener('click', function () { row.remove(); });
+    remove.addEventListener('click', function () { ns.validation.forget(row); row.remove(); });
     row.appendChild(remove);
     return row;
   }
@@ -323,7 +323,7 @@
     const remove = removeButton();
     remove.type = 'button';
     remove.title = 'Remove default value';
-    remove.addEventListener('click', function () { row.remove(); });
+    remove.addEventListener('click', function () { ns.validation.forget(row); row.remove(); });
     row.appendChild(remove);
     return row;
   }

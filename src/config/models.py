@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from .export_models import ExportSettings
 from .hub import tenant_code
+from .problems import Problem
 from .workspace_models import WorkspaceSettings
 
 MODE_LOCAL = "local"
@@ -38,17 +39,17 @@ class ConnectionSettings:
 
         ``require_tenant`` is False for the saved settings, which may be saved before the tenant is known (sign-in does not need it).
         """
-        problems = []
+        problems: List[str] = []
         if not self.client_id.strip():
-            problems.append("Client ID is required.")
+            problems.append(Problem("Client ID: enter the Client ID of your Autodesk app.", input="f-client-id"))
         if self.tenant.strip() and not tenant_code(self.tenant):
-            problems.append("Tenant must be a single name such as mycompany, not an address.")
+            problems.append(Problem("Tenant: enter a single name such as mycompany, not an address.", input="f-tenant"))
         elif require_tenant and not self.tenant.strip():
-            problems.append("Tenant is required: use Find in Preferences ▸ Connection, or enter it.")
+            problems.append(Problem("Tenant: use Find in Preferences ▸ Connection, or enter it.", input="f-tenant"))
         if not (1024 <= int(self.callback_port) <= 65535):
-            problems.append("Callback port must be between 1024 and 65535.")
+            problems.append(Problem("Callback port: enter a number between 1024 and 65535.", input="f-port"))
         if not self.scopes:
-            problems.append("At least one scope is required.")
+            problems.append(Problem("Scopes: enter at least one scope.", input="f-scopes"))
         return problems
 
     def to_dict(self) -> Dict[str, Any]:

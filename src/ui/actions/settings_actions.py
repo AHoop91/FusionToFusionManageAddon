@@ -6,6 +6,7 @@ from typing import Any, Dict
 from ...config.config_service import ConfigService
 from ...config.export_models import ExportSettings
 from ...config.models import ConnectionSettings
+from ...config.problems import problem_payload
 from ...config.workspace_models import WorkspaceSettings, catalog
 from ..message_bridge import MessageBridge
 
@@ -42,7 +43,7 @@ def register_settings_actions(bridge: MessageBridge, config: ConfigService) -> N
         problems = config.update(payload.get("mode", "local"), local, workspaces,
                                  str(payload.get("company_source", config.config.company_source)).strip(), exports)
         if problems:
-            raise ValueError("\n".join(problems))   # one problem per line: the Settings page lists them
+            return {"problems": problem_payload(problems)}   # the panel marks the fields they are in and lists them
         return settings_payload(config)
 
     bridge.register("get_settings", get_settings)

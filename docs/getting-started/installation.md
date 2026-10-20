@@ -165,7 +165,7 @@ A Client ID, a valid port and at least one scope are required before you can sig
 
 Each Fusion hub has its own settings, so switching hubs in Fusion switches the settings too. Only a **Hub Admin** of the hub can change them. When you open **Preferences** the add-in checks your role in the active hub.
 
-- **Hub Admin**: click **Save** and choose **Save locally**, or **Save to Fusion Hub...**. The second saves on this computer first, then asks for a project and folder in the hub and stores the Configuration File there (`Fusion-Manage-Item-Management-config.json`). It never contains sign-in tokens.
+- **Hub Admin**: click **Save**. Once the settings pass validation and are saved on this computer, you are asked whether to share them: **Save to Fusion Hub** asks for a project and folder in the hub and stores the Configuration File there (`Fusion-Manage-Item-Management-config.json`). It never contains sign-in tokens.
 - **Everyone else**: the add-in asks you to find the hub's Configuration File. Click **Find Configuration File**, pick the file in the hub, and its tenant, workspaces, field mappings and exports become your settings, read-only. You still sign in with your own Client ID. The file is read again each time Preferences opens.
 - A file saved from another hub is refused, and files over 1 MB or that are not an MfgToFm configuration are rejected.
 
