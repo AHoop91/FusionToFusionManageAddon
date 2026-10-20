@@ -71,8 +71,8 @@
     return box;
   }
 
-  /** Item cell: indent (``item.iconX`` is where the icon starts), chevron (when ``toggle`` is given), icon, sequence, part number and name. */
-  function itemCell(side, item, isAssembly, toggle, actions) {
+  /** Item cell: indent (``item.iconX`` is where the icon starts), chevron (when ``toggle`` is given), icon, sequence, part number and name, then ``actions`` and the status ``chip``. */
+  function itemCell(side, item, isAssembly, toggle, actions, chip) {
     const td = el('td', 'pub-cmp-item');
     const box = el('div', 'pub-tree-cell');
     box.style.setProperty('--indent', (item.iconX - (toggle ? SLOT : 0)) + 'px');
@@ -85,7 +85,12 @@
     if (side.name) label.appendChild(el('span', 'pub-tree-name', side.name));
     box.appendChild(label);
     if (item.hidden) box.appendChild(hiddenIcon());
-    if (actions) box.appendChild(actions);   // at the end of the item; shown while the row is hovered
+    if (actions || chip) {   // at the end of the item: the buttons (shown while the row is hovered), then the status chip
+      const end = el('span', 'pub-cmp-end');
+      if (actions) end.appendChild(actions);
+      if (chip) end.appendChild(chip);
+      box.appendChild(end);
+    }
     td.appendChild(box);
     return td;
   }
@@ -116,26 +121,19 @@
     return { tone: 'extra', label: 'Keep', text: 'Publishing keeps ' + item.fm.pn + ' in Fusion Manage' };
   }
 
-  /** Status chip. A differing pair has two rows: the design line (``fmRow`` false) and the Fusion Manage line. */
-  function statusCell(item, fmRow) {
-    const td = el('td', 'pub-cmp-status');
+  /** Status chip, or null when there is nothing to say. A differing pair has two rows: the design line (``fmRow`` false) and the Fusion Manage line. */
+  function statusChip(item, fmRow) {
     const status = model.statusOf(item);
-    if (status === 'match') {   // nothing to do: a quiet dash, not a chip
-      const dash = el('span', 'pub-cmp-none', '–');
-      dash.title = STATUS.match.text;
-      td.appendChild(dash);
-      return td;
-    }
+    if (status === 'match') return null;   // nothing to do
     let chip;
     if (status === 'mismatch') chip = pairChip(item, fmRow);
     else if (status !== 'extra') chip = STATUS[status];
     else if (decisions[item.key] === 'remove') chip = { tone: 'removed', label: 'Remove', text: 'Publishing will remove ' + item.fm.pn + ' from Fusion Manage' };
     else chip = model.quantityDiffers(item) ? STATUS.changed : null;   // the ticks already say it is only in Fusion Manage
-    if (!chip) return td;
+    if (!chip) return null;
     const node = el('span', 'pub-cmp-chip pub-cmp-chip-' + chip.tone, chip.label);
     node.title = chip.text;
-    td.appendChild(node);
-    return td;
+    return node;
   }
 
   /** A line drawn from its Fusion Manage side: one only Fusion Manage has, or one picked with Add Items. */
@@ -365,9 +363,9 @@
 
   // Column widths (px; 0 = takes the rest). The user can drag a header edge; each layout remembers its own widths.
   const NARROW = window.matchMedia('(max-width: 760px)');
-  const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84, 116], narrow: [0, 76, 76, 72, 84] };
-  const MIN_WIDTHS = [120, 64, 64, 56, 72];
-  const HEADS = [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num'], ['Status', 'pub-cmp-status']];
+  const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84], narrow: [0, 76, 76, 72] };
+  const MIN_WIDTHS = [120, 64, 64, 56];
+  const HEADS = [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num']];
   const dragged = { wide: {}, narrow: {} };   // layout -> column index -> width the user chose
 
   function layoutKey() { return NARROW.matches ? 'narrow' : 'wide'; }
@@ -394,8 +392,7 @@
         cols[last].style.width = tail + 'px';
       }
       table.style.width = fixed ? (others + tail) + 'px' : '';
-      table.style.setProperty('--status-w', tail + 'px');          // Qty sticks beside Status
-      table.style.setProperty('--qty-w', widthOf(3) + 'px');      // row buttons stick beside Qty
+      table.style.setProperty('--qty-w', tail + 'px');   // row buttons stick beside Qty
     }
     // Once the table is in the page, follow the width of its panel.
     requestAnimationFrame(function () {
@@ -498,11 +495,10 @@
       const actions = withRevert(item.status === 'kept' ? actionButtons(item, redraw) : item.status === 'linked' ? unstageActions(item, redraw)
         : item.status === 'extra' ? removeAction(item, redraw) : null, item, redraw);
       if (item.status === 'extra' && decisions[item.key] === 'remove') tr.classList.add('pub-cmp-removing');
-      tr.appendChild(itemCell(fmOnly ? item.fm : item.design, item, isAssembly, toggle, actions));
+      tr.appendChild(itemCell(fmOnly ? item.fm : item.design, item, isAssembly, toggle, actions, statusChip(item, false)));
       tr.appendChild(presenceCell(!fmOnly, 'the design'));
       tr.appendChild(presenceCell(!['new', 'mismatch', 'added', 'linked'].includes(item.status), 'Fusion Manage'));
       tr.appendChild(quantityCell(item, redraw));
-      tr.appendChild(statusCell(item, false));
       if (item.component && (item.root || item.component.id !== '')) {
         tr.classList.add('pub-cmp-pick');
         tr.addEventListener('click', function (event) {
@@ -518,13 +514,12 @@
       if (item.status === 'mismatch') {   // the Fusion Manage line at this position gets its own row
         const fmTr = el('tr', 'pub-cmp-row pub-cmp-fmline' + (decisions[item.key] === 'remove' ? ' pub-cmp-removing' : ''));
         const spacer = chevronLevels[item.level] ? Object.assign(el('button', 'pub-tree-toggle'), { type: 'button', disabled: true }) : null;
-        const fmCell = itemCell(item.fm, Object.assign({}, item, { hidden: false }), false, spacer, actionButtons(item, redraw));   // the buttons sit on the line that is not in the design
+        const fmCell = itemCell(item.fm, Object.assign({}, item, { hidden: false }), false, spacer, actionButtons(item, redraw), statusChip(item, true));   // the buttons sit on the line that is not in the design
         fmCell.querySelector('.pub-tree-pn').classList.add('pub-cmp-diff');
         fmTr.appendChild(fmCell);
         fmTr.appendChild(presenceCell(false, 'the design'));
         fmTr.appendChild(presenceCell(true, 'Fusion Manage'));
         fmTr.appendChild(el('td', 'num pub-cmp-qty', item.fm.quantity));
-        fmTr.appendChild(statusCell(item, true));
         table.appendChild(fmTr);
         fmTrs[fmTrs.length - 1] = fmTr;
       }

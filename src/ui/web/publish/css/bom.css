@@ -56,7 +56,6 @@
 
 /* Status chip: a small 4px chip. */
 .pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 76px; padding: 0; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
-.pub-cmp td.pub-cmp-status, .pub-cmp th.pub-cmp-status { text-align: center; }
 .pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
 .pub-cmp-chip-added { color: #1e7a3a; background: #dff3e5; }
 .pub-cmp-chip-changed { color: #a86400; background: #fdf0d8; }
@@ -71,8 +70,9 @@
 /* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
 .pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
 
-/* Action buttons: at the end of the item, shown while the row is hovered or has focus (a chosen one stays visible). */
-.pub-cmp-actions { flex: none; display: inline-flex; gap: 4px; margin-left: auto; padding: 0 6px 0 8px; visibility: hidden; }
+/* End of the item: the action buttons (shown while the row is hovered or has focus; a chosen one stays visible), then the status chip. */
+.pub-cmp-end { flex: none; display: inline-flex; align-items: center; margin-left: auto; padding-right: 8px; }
+.pub-cmp-actions { flex: none; display: inline-flex; gap: 4px; padding: 0 8px; visibility: hidden; }
 .pub-cmp tr:hover .pub-cmp-actions, .pub-cmp-actions:focus-within { visibility: visible; }
 .pub-cmp-actions .pub-cmp-act.chosen { visibility: visible; }
 .pub-cmp-qty-input { box-sizing: border-box; width: 52px; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: inherit; font: inherit; text-align: right; outline: none; }
@@ -96,7 +96,7 @@
 .pub-cmp-extra .pub-tree-icon { border-right-color: #9a9a9a; }
 .pub-cmp-extra .pub-tree-icon svg { stroke: #9a9a9a; }
 
-/* Small panel: the table is a compact list that scrolls sideways (Fusion and Manage scroll with the item; Qty and Status stay fixed). */
+/* Small panel: the table is a compact list that scrolls sideways (Fusion and Manage scroll with the item; Qty stays fixed, and the status chip stays beside it). */
 @media (max-width: 760px) {
   .pub-cmp td.num { padding: 0 6px; }
   .pub-cmp-qty-input { width: 40px; }
@@ -134,7 +134,7 @@
   .pub-cmp td, .pub-cmp-chip, .pub-cmp-filter, .pub-cmp-act, .pub-cmp-actions, .pub-cmp-fresh td, .pub-cmp-fresh .pub-tree-cell { transition: none; animation: none; }
 }
 
-/* ---- Filters drop-down (narrow panel) and a scrolling table with Qty and Status fixed on the right ---- */
+/* ---- Filters drop-down (narrow panel) and a scrolling table with Qty fixed on the right ---- */
 .pub-cmp-menu { display: none; position: relative; }
 .pub-cmp-menu-btn { display: inline-flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 8px 0 12px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: #fff; color: rgba(0, 0, 0, .87); cursor: pointer; transition: border-color .15s, background-color .15s; }
 .pub-cmp-menu-btn:hover { border-color: rgba(0, 0, 0, .6); }
@@ -150,17 +150,15 @@
 .pub-cmp-menu-clear { display: block; width: 100%; margin-top: 4px; padding: 8px 14px; border: 0; border-top: 1px solid rgba(0, 0, 0, .12); background: transparent; font: inherit; font-size: 11px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; text-align: left; color: var(--accent); cursor: pointer; }
 .pub-cmp-menu-clear:disabled { color: rgba(0, 0, 0, .38); cursor: default; }
 
-/* Qty and Status stay in view on the right while the rest of the row scrolls sideways. */
-.pub-cmp th:nth-child(4), .pub-cmp td:nth-child(4), .pub-cmp th:nth-child(5), .pub-cmp td:nth-child(5) { position: sticky; z-index: 2; }
-.pub-cmp th:nth-child(5), .pub-cmp td:nth-child(5) { right: 0; }
-.pub-cmp th:nth-child(4), .pub-cmp td:nth-child(4) { right: var(--status-w, 116px); box-shadow: -6px 0 6px -6px rgba(0, 0, 0, .25); }
+/* Qty stays in view on the right while the rest of the row scrolls sideways. */
+.pub-cmp th:nth-child(4), .pub-cmp td:nth-child(4) { position: sticky; right: 0; z-index: 2; box-shadow: -6px 0 6px -6px rgba(0, 0, 0, .25); }
 
 @media (max-width: 760px) {
   .pub-cmp-filters .pub-cmp-filter { display: none; }
   .pub-cmp-menu { display: block; }
   .pub-cmp { min-width: 640px; }
   /* Row buttons stay in view just left of Qty instead of sitting at the far end of the scrolled item. */
-  .pub-cmp-actions { position: sticky; right: calc(var(--status-w, 84px) + var(--qty-w, 72px)); z-index: 1; padding-left: 16px; background: linear-gradient(to right, transparent, #fff 14px); }
+  .pub-cmp-end { position: sticky; right: var(--qty-w, 72px); z-index: 1; padding-left: 16px; background: linear-gradient(to right, transparent, #fff 14px); }
 }
 
 /* The pane is narrower than the window when the details are open beside it, so the filters pick their layout from the pane: the chips would
@@ -172,7 +170,7 @@
 
 /* Drag handle on the right edge of each column header. */
 .pub-cmp th { position: relative; }
-.pub-cmp th:nth-child(4), .pub-cmp th:nth-child(5) { position: sticky; }
+.pub-cmp th:nth-child(4) { position: sticky; }
 .pub-cmp-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
 .pub-cmp-grip::after { content: ""; position: absolute; top: 25%; bottom: 25%; right: 3px; width: 1px; background: rgba(0, 0, 0, .18); transition: background-color .15s, top .15s, bottom .15s; }
 .pub-cmp-grip:hover::after, .pub-cmp-grip.dragging::after { top: 8%; bottom: 8%; width: 2px; right: 2px; background: var(--accent); }
