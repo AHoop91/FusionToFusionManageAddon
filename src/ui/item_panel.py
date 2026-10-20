@@ -564,9 +564,10 @@ class ItemPanel:
                  time.monotonic() - began, referenced - began, time.monotonic() - referenced)
         return self._export_read.put(key, (ref, source))
 
-    def warm_export_target(self) -> None:
+    def warm_export_target(self, found: Callable[[str, str], None]) -> None:
         """Read the item number of what Export will export ahead of the click, on a worker thread, so that the Data Model (about two seconds
-        the first time for a design) is already read, and kept, when Export is pressed. A failure is left for the click to report. UI thread."""
+        the first time for a design) is already read, and kept, when Export is pressed. ``found(part number, item number)`` is called from the
+        worker once it is known, with "" when it could not be read. A failure is left for the click to report. UI thread."""
         number, _problem = self.export_target()
         if not number:
             return
@@ -580,7 +581,9 @@ class ItemPanel:
                 return
             except Exception as exc:  # noqa: BLE001 - only an optimisation
                 log.info("Item number of %s not read ahead: %s", number, exc)
+                found(number, "")   # no item number: the title is left empty
                 return
+            found(number, subject.item_number)
             self._uploads.warm_component(subject.item_number, cancel)
 
         threading.Thread(target=work, daemon=True).start()

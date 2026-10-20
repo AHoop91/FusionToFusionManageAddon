@@ -142,7 +142,7 @@ class ExportDialog:
             self._checking = True
             threading.Thread(target=self._check_access, args=(setup,), daemon=True).start()
             if document and not problem:
-                self._panel.warm_export_target()   # while the user chooses, so Find item has nothing left to read
+                self._panel.warm_export_target(self._item_found)   # while the user chooses, so Find item has nothing left to read
         destinations = []
         for key in (ITEM, COMPONENT):
             reason = setup[key] or self._access.get(key, "")
@@ -154,6 +154,12 @@ class ExportDialog:
                 "formats": [describe(key) for key in formats_for(document)],
                 "destinations": destinations, "destination": usable[0] if usable else "",
                 "defaults": {key: exports.destination_of(key) for key in formats_for(document)}}   # set in Preferences ▸ Export
+
+    def _item_found(self, part_number: str, item_number: str) -> None:
+        """Tell the page the item number of what is exported, for its title (the window shows a grey bar until this, the item number taking longer
+        than the part number to read). A worker thread."""
+        message = json.dumps({"ok": True, "result": {"target": part_number, "item_number": item_number}, "error": None})
+        self._tasks.post(lambda: self._host.send("export_item", message))
 
     def _files(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the files attached where the export would go, to tell the page whether it adds a file or makes a new version of one

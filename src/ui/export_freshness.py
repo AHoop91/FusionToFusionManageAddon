@@ -39,7 +39,7 @@ def _when(moment: datetime) -> str:
 def compare(uploaded: Any, source: Dict[str, Any]) -> Dict[str, str]:
     """Whether a file uploaded at ``uploaded`` (a stamp) is as recent as ``source``: ``saved`` (when the latest version was saved, as a Unix
     time, or None) in ``saved_in`` (which document: "The design Universal Joint"), ``unsaved`` (changes were made since) in ``unsaved_in`` and
-    ``reason`` (why ``saved`` is None). The answer is a ``state`` and a ``message``.
+    ``reason`` (why ``saved`` is None). The answer is a ``state``, a ``message`` and, when the last save is known, ``modified`` (when, as an ISO stamp).
 
     A file uploaded after the latest save is current: an upload always follows the save it was made from, so no allowance is made for clocks.
     """
@@ -53,5 +53,5 @@ def compare(uploaded: Any, source: Dict[str, Any]) -> Dict[str, str]:
         return {"state": UNKNOWN, "message": "When the attached file was uploaded could not be read."}
     saved_at = datetime.fromtimestamp(saved, timezone.utc)
     if uploaded_at >= saved_at:
-        return {"state": CURRENT, "message": f"Uploaded {_when(uploaded_at)}, after the last save of {what[:1].lower() + what[1:]} on {_when(saved_at)}."}
-    return {"state": STALE, "message": f"{what} was saved {_when(saved_at)}, after this file was uploaded on {_when(uploaded_at)}."}
+        return {"state": CURRENT, "modified": saved_at.isoformat(), "message": f"Uploaded {_when(uploaded_at)}, after the last save of {what[:1].lower() + what[1:]} on {_when(saved_at)}."}
+    return {"state": STALE, "modified": saved_at.isoformat(), "message": f"{what} was saved {_when(saved_at)}, after this file was uploaded on {_when(uploaded_at)}."}

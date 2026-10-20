@@ -22,6 +22,7 @@
   const FILES_WAIT_MS = 30000;    // how long to wait for the attached files before saying they could not be read
 
   let context = null;      // what Python said is on offer
+  let itemNumber = null;    // the item number of what is exported: null until it has been read, then it (empty when there is none)
   let format = '';         // the key of the format chosen
   let destination = '';    // the key of the destination chosen
   let access = null;       // why each destination may not be attached to, once the permission check has answered
@@ -100,13 +101,7 @@
     if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton('Checking permissions'));
   }
 
-  /** Fold the destination section away or open it; the destination chosen shows beside its title either way. */
-  function setDestinationOpen(open) {
-    $('export-destination-toggle').setAttribute('aria-expanded', String(open));
-    $('export-destination-panel').hidden = !open;
-  }
-
-  /** What shows beside the title of the folded section: the destination chosen, or why there is none. */
+  /** What shows in the pill at the top: the destination chosen, or why there is none. */
   function summarizeDestination() {
     const chosen = context.destinations.filter(function (d) { return d.key === destination; })[0];
     const waiting = context.destinations.some(function (d) { return d.checking; });
@@ -129,7 +124,6 @@
     });
     summarizeDestination();
     renderDestinationNote();
-    if (!context.destinations.some(function (d) { return d.checking || !d.reason; })) setDestinationOpen(true);   // none can be used: show why
   }
 
   // ---- The files attached where the export would go -------------------------------------
@@ -166,15 +160,15 @@
     return row;
   }
 
-  const FILE_STATES = {   // how the card names, and what it says of, each state of the attached file
-    new: { badge: 'New file', note: 'Not attached yet. Exporting attaches it as a new file.' },
-    current: { badge: 'Up to date', note: '' },
-    stale: { badge: 'Out of date', note: 'Exporting uploads a new version of this file.' },
-    unsaved: { badge: 'Unsaved changes', note: 'Save the document first, then export, so the file matches.' },
-    unknown: { badge: 'Not known', note: 'Exporting uploads a new version of this file.' },
+  const FILE_STATES = {   // how the card names each state of the attached file
+    new: 'New file',
+    current: 'Up to date',
+    stale: 'Out of date',
+    unsaved: 'Unsaved changes',
+    unknown: 'Not known',
   };
 
-  /** The card for the file the export affects: its name and whether it is up to date, why, and what is attached now. */
+  /** The card for the file the export affects: its name and whether it is up to date, and what is attached now. */
   function renderFiles() {
     const box = $('export-files');
     box.replaceChildren();
@@ -193,14 +187,11 @@
     const card = el('div', 'export-file is-' + state);
     const head = el('div', 'export-file-head');
     head.appendChild(el('span', 'export-file-name', files.name));
-    head.appendChild(el('span', 'export-file-badge', FILE_STATES[state].badge));
+    head.appendChild(el('span', 'export-file-badge', FILE_STATES[state]));
     card.appendChild(head);
-    const status = el('div', 'export-file-status');
-    if (old && old.freshness) status.appendChild(el('span', 'export-file-why', old.freshness.message));
-    if (FILE_STATES[state].note) status.appendChild(el('span', 'export-file-note', FILE_STATES[state].note));
-    card.appendChild(status);
     if (old) {
       const rows = el('dl', 'export-file-rows');
+      if (old.freshness && old.freshness.modified) rows.appendChild(detail('Component Last Modified', shortDate(old.freshness.modified)));
       rows.appendChild(detail('Version', old.version || 'Unknown'));
       if (old.size) rows.appendChild(detail('Size', fileSize(old.size)));
       rows.appendChild(detail('Last changed', old.updated ? shortDate(old.updated) : 'Unknown'));
@@ -245,12 +236,21 @@
     renderFiles();
   }
 
+  /** The title: the item number once it is known; a grey bar until then (empty when there is none). */
+  function paintTarget() {
+    const title = $('export-target');
+    title.replaceChildren();
+    if (!context.target) return;   // nothing to export yet
+    if (itemNumber === null) title.appendChild(skeleton('Reading the item number'));
+    else title.textContent = itemNumber;
+  }
+
   /** The choices: what is exported, any problem with it, the formats and destinations, and what pressing Export will do. */
   function renderForm() {
     if (access) applyAccess();
     const waiting = context.destinations.some(function (d) { return d.checking; });
     if (waiting && !accessTimer) accessTimer = setTimeout(accessTimedOut, ACCESS_WAIT_MS);
-    $('export-target').textContent = context.target;
+    paintTarget();
     $('export-description').textContent = context.description;   // when Fusion has one for the design
     const problem = $('export-problem');
     problem.textContent = context.problem;
@@ -371,6 +371,11 @@
     progressCard = ns.uploadProgress.mount($('export-progress'));
 
     bridge.on('export_context', function (r) { if (r.ok) load(r.result); else showError(r.error); });
+    bridge.on('export_item', function (r) {
+      if (!r.ok) return;
+      itemNumber = r.result.item_number;
+      if (context && context.target === r.result.target) paintTarget();   // else it is shown when the context arrives
+    });
     bridge.on('export_access', function (r) {
       if (!r.ok) return;
       access = r.result.reasons;
@@ -383,9 +388,6 @@
     });
     bridge.on('upload_status', followUpload);
 
-    $('export-destination-toggle').addEventListener('click', function () {
-      setDestinationOpen($('export-destination-panel').hidden);
-    });
     $('export-cancel').addEventListener('click', function () { bridge.send('export_close'); });
     $('export-done').addEventListener('click', function () { bridge.send('export_close'); });
     $('export-retry').addEventListener('click', retry);
