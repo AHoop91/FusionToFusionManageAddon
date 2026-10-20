@@ -209,7 +209,7 @@ For each parent assembly, the lines of the design are matched to the Fusion Mana
 |---|---|---|
 | **New** | The design has the line; Fusion Manage does not. | Adds the line. |
 | **Changed** (quantity differs) | Same item, different quantity. | Updates the quantity in Fusion Manage. |
-| **Match** | Same item and quantity. | Nothing. Shown as a quiet dash. |
+| **Match** | Same item and quantity. | Nothing. No chip is shown. |
 | **Extra** (**Fusion Manage Only**) | Fusion Manage has a line the design does not. | **Keeps it** unless you choose **Remove**. |
 
 If a parent does not exist in Fusion Manage yet, every child is **New**.
