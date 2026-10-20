@@ -32,8 +32,13 @@ class ShownItem(NamedTuple):
     item_id: str
 
 
-def _verdict(differing: List[str]) -> Dict[str, Any]:
-    return {"state": CHANGES if differing else OK, "differences": len(differing), "names": differing}
+def _verdict(differing: List[Dict[str, str]]) -> Dict[str, Any]:
+    """``differing``: one ``{name, design, item}`` for each thing that differs, the design's value beside the item's ("" for none)."""
+    return {"state": CHANGES if differing else OK, "differences": len(differing), "names": [d["name"] for d in differing], "details": differing}
+
+
+def _text(value: Any) -> str:
+    return "" if value is None else str(value)
 
 
 def _summary_of_item(shown: ShownItem) -> Dict[str, Any]:
@@ -51,7 +56,8 @@ def check_properties(shown: ShownItem) -> Dict[str, Any]:
                                    summary, shown.cfg, shown.fm, known_id=shown.item_id)
     if compared["fm"]["state"] != FOUND:
         return {"state": ERROR, "message": compared["fm"]["message"] or "Fusion Manage could not be read."}
-    return _verdict([r["name"] for r in compared["rows"] if r["status"] in (MISMATCH, NEW)])
+    return _verdict([{"name": r["name"], "design": _text(r.get("shown") or r.get("value")), "item": _text(r.get("fm_value"))}
+                     for r in compared["rows"] if r["status"] in (MISMATCH, NEW)])
 
 
 def check_bom(shown: ShownItem) -> Dict[str, Any]:
@@ -62,4 +68,6 @@ def check_bom(shown: ShownItem) -> Dict[str, Any]:
         return {"state": UNAVAILABLE}
     rows = shown.reads.structure(shown.mfg, shown.model_id, shown.time, summary)
     compared = read_and_compare_bom(rows, shown.number, shown.fm, shown.cfg.workspace_id, shown.item_id)
-    return _verdict([item_number_of(r) or str(r.get("part_number") or "") for r in compared if r["status"] in BOM_DIFFERING])
+    return _verdict([{"name": item_number_of(r) or _text(r.get("part_number")), "design": _text(r.get("quantity")),
+                      "item": _text(r.get("fm_quantity"))}   # no quantity: it is not under that parent at all
+                     for r in compared if r["status"] in BOM_DIFFERING])

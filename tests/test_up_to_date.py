@@ -38,6 +38,10 @@ class BomCheckTests(unittest.TestCase):
         found = self.check([row("A"), row("B", 1)], {"TOP": [line("A"), line("B")]})
         self.assertEqual((found["state"], found["names"], found["differences"]), ("changes", ["B"], 1))
 
+    def test_a_component_not_under_the_parent_has_no_quantity_in_the_item(self):
+        found = self.check([row("B", 1)], {"TOP": []})
+        self.assertEqual(found["details"], [{"name": "B", "design": "1", "item": ""}])
+
     def test_a_line_only_fusion_manage_has_is_ok(self):
         self.assertEqual(self.check([row("A")], {"TOP": [line("A"), line("OIL")]})["state"], "ok")
 
@@ -59,6 +63,10 @@ class PropertiesCheckTests(unittest.TestCase):
         found, _ = self.check([{"name": "Mass", "status": "mismatch"}, {"name": "Colour", "status": "new"},
                                {"name": "Part Number", "status": "match"}, {"name": "Notes", "status": "unmapped"}])
         self.assertEqual((found["state"], found["names"]), ("changes", ["Mass", "Colour"]))
+
+    def test_each_difference_says_what_the_design_and_the_item_hold(self):
+        found, _ = self.check([{"name": "Mass", "status": "mismatch", "value": "1.234567", "shown": "1.23", "fm_value": "2"}])
+        self.assertEqual(found["details"], [{"name": "Mass", "design": "1.23", "item": "2"}])
 
     def test_fields_that_match_are_ok(self):
         self.assertEqual(self.check([{"name": "Mass", "status": "match"}])[0]["state"], "ok")

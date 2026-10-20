@@ -140,6 +140,12 @@ class PaletteHost:
         log.debug("Centred '%s' (%sx%s) at %s,%s in the area %sx%s at screen %s,%s",
                  self._title, palette.width, palette.height, left, top, width, height, x, y)
 
+    def hide(self) -> None:
+        """Close the palette on screen (its page stays loaded, as when the user closes it). Main thread only."""
+        palette = self._ui.palettes.itemById(self._palette_id)
+        if palette:
+            palette.isVisible = False
+
     @property
     def visible(self) -> bool:
         """Whether the palette is open on screen."""

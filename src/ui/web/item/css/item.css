@@ -27,7 +27,13 @@
 .item-check[data-state="idle"], .item-check[data-state="ok"] { display: none; }   /* up to date says nothing: only the spinner, Out of Date and a failed check show */
 .item-check-spin { display: none; width: 14px; height: 14px; box-sizing: border-box; border: 2px solid rgba(6, 150, 215, .25); border-top-color: var(--accent); border-radius: 50%; animation: item-check-spin .7s linear infinite; }
 .item-check[data-state="checking"] .item-check-spin { display: inline-block; }
-.item-check-label { display: none; padding: 5px 10px; border-radius: 4px; border: 1px solid transparent; letter-spacing: .01em; }
+.item-check-label { display: none; padding: 5px 10px; border-radius: 4px; border: 1px solid transparent; font: inherit; color: inherit; text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
+.item-check-label::after { content: ""; display: inline-block; width: 5px; height: 5px; margin: -2px 1px 0 8px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform .15s; }   /* a chevron: it opens something */
+.item-check-label:hover { box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+.item-check-label:hover::after { transform: translateX(2px) rotate(-45deg); }
+.item-check[data-state="changes"] .item-check-label:hover { background: #fbe6bd; border-color: #e5bd6c; }
+.item-check[data-state="error"] .item-check-label:hover { background: #f7d9db; border-color: #e6a5a8; }
+.item-check-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .item-check:not([data-state="checking"]) .item-check-label { display: inline-block; }
 .item-check[data-state="changes"] { color: #8a5300; }
 .item-check[data-state="changes"] .item-check-label { background: #fdf0d5; border-color: #f0d49a; }
@@ -35,6 +41,25 @@
 .item-check[data-state="error"] .item-check-label { background: #fbe9ea; border-color: #f0c2c4; }
 @keyframes item-check-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .item-check-spin { animation-duration: 2s; } }
+
+/* What is out of date: a card over the panel, opened from the pill. */
+.item-diff { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 32, .45); }
+.item-diff[hidden] { display: none; }
+.item-diff-card { display: flex; flex-direction: column; width: 100%; max-width: 520px; max-height: 100%; border-radius: 12px; background: var(--surface); box-shadow: 0 16px 48px rgba(0, 0, 0, .3); overflow: hidden; }
+.item-diff-head { display: flex; gap: 14px; align-items: flex-start; padding: 20px 22px 14px; }
+.item-diff-badge { flex: none; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #fdf0d5; color: #8a5300; font-size: 20px; font-weight: 700; line-height: 1; }
+.item-diff[data-state="error"] .item-diff-badge { background: #fbe9ea; color: #b3262a; }
+.item-diff-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.item-diff-lead { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.item-diff-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 22px 8px; }
+.item-diff-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.item-diff-table th { padding: 6px 8px; text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+.item-diff-table td { padding: 8px; border-bottom: 1px solid #eceef0; vertical-align: top; overflow-wrap: anywhere; }
+.item-diff-table td:first-child { font-weight: 600; }
+.item-diff-table .item-diff-none { color: var(--muted); font-style: italic; }
+.item-diff-more { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.item-diff-error { margin: 0; padding: 10px 12px; border-radius: 6px; background: #fbe9ea; color: #7a1c1f; font-size: 12px; overflow-wrap: anywhere; }
+.item-diff-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px 18px; }
 
 .item-tabs {
   display: flex;

@@ -58,7 +58,6 @@ from src.core.constants import (  # noqa: E402
     MENU_PUBLISH_COMMAND_ID,
     MENU_UPLOAD_DRAWING_COMMAND_ID,
     MENU_UPLOAD_STEP_COMMAND_ID,
-    PUBLISH_COMMAND_ID,
     PUBLISH_HEIGHT,
     PUBLISH_PALETTE_ID,
     PUBLISH_TITLE,
@@ -197,10 +196,6 @@ def run(context) -> None:
                                   "Open the Fusion Manage item of the selected component, or of the open design or drawing.",
                                   _item_panel.open_selected,
                                   _icon("item"), needs_setup=True)
-        publish_item = RibbonCommand(PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
-                                     PUBLISH_TOOLTIP,
-                                     _publish_host.show,
-                                     _icon("publish"), needs_setup=True)
         # Not held back by the setup or the drawing loading: the Export window says what is missing, and which destination that leaves off.
         export = RibbonCommand(EXPORT_COMMAND_ID, "Export",
                                "Export the open design or drawing, and attach the file to its item or component in Fusion Manage.",
@@ -215,11 +210,11 @@ def run(context) -> None:
                           _palette_host.show,
                           _icon("settings")),
         ], RIBBON_ADMINISTRATION_NAME, _icon("settings"))
-        # Panels appear in this order, Export on the left. A drawing is not published (that is for the design), so it has no Publish.
+        # Panels appear in this order, Export on the left. Publishing is opened from the item panel and the right-click menu, not the ribbon.
         export_panel = RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [RibbonGroup([export])])
         panels = {
             RIBBON_DESIGN_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME,
-                                                                [RibbonGroup([open_item, publish_item]), administration])],
+                                                                [RibbonGroup([open_item]), administration])],
             RIBBON_DRAWING_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME,
                                                                  [RibbonGroup([open_item]), administration])],
         }

@@ -110,7 +110,7 @@
       <!-- Is the item up to date with the open design (its mapped fields)? Read once when the item is shown; item.js fills it in. -->
       <span id="item-check" class="item-check" data-state="idle" role="status">
         <span class="item-check-spin" aria-hidden="true"></span>
-        <span id="item-check-label" class="item-check-label"></span>
+        <button id="item-check-label" class="item-check-label" type="button" aria-haspopup="dialog"></button>
       </span>
     </nav>
 
@@ -128,6 +128,24 @@
   <!-- A clicked image, enlarged over the panel. A click or Escape closes it. -->
   <div id="item-lightbox" class="item-lightbox" role="dialog" aria-modal="true" aria-label="Image" hidden>
     <img id="item-lightbox-img" alt="">
+  </div>
+
+  <!-- What is out of date, from the pill in the tab bar; item.js fills it in. A click outside it, Close or Escape closes it. -->
+  <div id="item-diff" class="item-diff" role="dialog" aria-modal="true" aria-labelledby="item-diff-title" hidden>
+    <div class="item-diff-card">
+      <header class="item-diff-head">
+        <span id="item-diff-badge" class="item-diff-badge" aria-hidden="true"></span>
+        <div class="item-diff-heading">
+          <h2 id="item-diff-title" class="item-diff-title"></h2>
+          <p id="item-diff-lead" class="item-diff-lead"></p>
+        </div>
+      </header>
+      <div id="item-diff-body" class="item-diff-body"></div>
+      <footer class="item-diff-foot">
+        <button id="item-diff-close" class="btn btn-secondary" type="button">Close</button>
+        <button id="item-diff-republish" class="btn" type="button">Republish</button>
+      </footer>
+    </div>
   </div>
 
   <!-- Progress of the STEP upload, over the panel while it runs. -->

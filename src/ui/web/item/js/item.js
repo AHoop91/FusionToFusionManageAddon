@@ -374,14 +374,23 @@
   // The mark at the right of the tab bar says whether the tab shown matches the open design: only a spinner while it is checked, then
   // "Out of Date" or "Check failed" when there is something to say. A tab with a check has Python's ``start`` and ``result`` actions and
   // the words for how many things differ (``differs(count)``); a tab with none shows no mark.
+  // ``title``, ``lead`` and ``columns`` (what each of ``name``, ``design`` and ``item`` of a difference is called) are for the dialog the pill opens.
   const CHECKS = {
     item: {
       start: 'sync_check_load', result: 'sync_check_result',
       differs: function (n) { return n + (n === 1 ? ' mapped field differs' : ' mapped fields differ') + ' from the open design'; },
+      title: 'Item details are out of date',
+      lead: 'These mapped fields hold something other than what the open design says. Republish to update them in Fusion Manage.',
+      columns: ['Field', 'Component Value', 'Fusion Manage Value'],
+      absent: 'Empty',
     },
     bom: {
       start: 'bom_check_load', result: 'bom_check_result',
       differs: function (n) { return n + (n === 1 ? ' component is' : ' components are') + ' not in this Bill of Materials as in the open design (not under the same parent, or in another quantity)'; },
+      title: 'Bill of Materials is out of date',
+      lead: 'These components are not in this Bill of Materials as they are in the open design: under another parent, or in another quantity. Republish to update it.',
+      columns: ['Component', 'Quantity in design', 'Quantity in Fusion Manage'],
+      absent: 'Not in this Bill of Materials',
     },
   };
   const LABELS = { changes: 'Out of Date', error: 'Check failed' };   // the pill; while checking there is only the spinner, and an up-to-date tab shows nothing
@@ -395,9 +404,9 @@
       case 'ok': return { state: 'ok', text: '' };   // an up-to-date tab shows nothing
       case 'changes': {
         const names = found.names.slice(0, NAMES_SHOWN).join(', ') + (found.names.length > NAMES_SHOWN ? ', ...' : '');
-        return { state: 'changes', text: check.differs(found.differences) + ' (' + names + '). Republish to update.' };
+        return { state: 'changes', text: check.differs(found.differences) + ' (' + names + '). Click for details.', check: check, details: found.details || [] };
       }
-      case 'error': return { state: 'error', text: 'Could not check: ' + found.message };
+      case 'error': return { state: 'error', text: 'Could not check: ' + found.message + ' Click for details.', message: found.message };
       default: return { state: 'idle', text: '' };   // nothing to compare with: no saved design, or the item of a component below its top
     }
   }
@@ -405,6 +414,7 @@
   function paintCheck() {
     const mark = checkOf[shownTab] || { state: 'idle', text: '' };
     const element = $('item-check');
+    closeDiff();   // what it says has changed: the dialog open for the old answer is not wanted
     element.dataset.state = mark.state;
     element.title = mark.text;
     element.setAttribute('aria-label', mark.text);
@@ -423,8 +433,56 @@
     setCheck(name, { state: 'checking', text: 'Checking Fusion Manage...' });
     ns.itemTree.load(check.start, check.result, { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, found) {
       if (!currentView || currentView.item_id !== view.item_id) return;   // another item is shown now
-      setCheck(name, error ? { state: 'error', text: 'Could not check: ' + error } : describe(check, found));
+      setCheck(name, error ? { state: 'error', text: 'Could not check: ' + error + ' Click for details.', message: error } : describe(check, found));
     });
+  }
+
+  // ---- The dialog the pill opens: what is out of date, and Republish ----------------------
+  const DETAILS_SHOWN = 50;   // rows listed; a long list of differences says how many more there are
+
+  function closeDiff() { $('item-diff').hidden = true; }
+
+  function diffTable(check, details) {
+    const table = el('table', 'item-diff-table');
+    const head = el('tr');
+    check.columns.forEach(function (title) { head.appendChild(el('th', '', title)); });
+    table.appendChild(el('thead')).appendChild(head);
+    const body = el('tbody');
+    details.slice(0, DETAILS_SHOWN).forEach(function (difference) {
+      const row = el('tr');
+      row.appendChild(el('td', '', difference.name));
+      [difference.design, difference.item].forEach(function (value) {
+        row.appendChild(el('td', value ? '' : 'item-diff-none', value || check.absent));
+      });
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+    return table;
+  }
+
+  /** Open the dialog for what the pill of the tab shown says (nothing when it says nothing). */
+  function openDiff() {
+    const mark = checkOf[shownTab];
+    if (!mark || (mark.state !== 'changes' && mark.state !== 'error')) return;
+    const dialog = $('item-diff');
+    const body = $('item-diff-body');
+    body.replaceChildren();
+    dialog.dataset.state = mark.state;
+    if (mark.state === 'changes') {
+      $('item-diff-badge').textContent = '!';
+      $('item-diff-title').textContent = mark.check.title;
+      $('item-diff-lead').textContent = mark.check.lead;
+      body.appendChild(diffTable(mark.check, mark.details));
+      if (mark.details.length > DETAILS_SHOWN) body.appendChild(el('p', 'item-diff-more', '... and ' + (mark.details.length - DETAILS_SHOWN) + ' more.'));
+    } else {
+      $('item-diff-badge').textContent = '×';
+      $('item-diff-title').textContent = 'Could not check';
+      $('item-diff-lead').textContent = 'Fusion Manage could not be compared with the open design.';
+      body.appendChild(el('p', 'item-diff-error', mark.message));
+    }
+    $('item-diff-republish').hidden = mark.state !== 'changes';   // a failed check says nothing is out of date to publish
+    dialog.hidden = false;
+    (mark.state === 'changes' ? $('item-diff-republish') : $('item-diff-close')).focus();
   }
 
   function render(view, keepCheck) {
@@ -507,7 +565,11 @@
       }
     });
     $('item-lightbox').addEventListener('click', closeLightbox);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeLightbox(); closeDiff(); } });
+    $('item-check-label').addEventListener('click', openDiff);
+    $('item-diff-close').addEventListener('click', closeDiff);
+    $('item-diff').addEventListener('click', function (e) { if (e.target === this) closeDiff(); });   // the backdrop, not the card
+    $('item-diff-republish').addEventListener('click', function () { closeDiff(); bridge.send('open_publish'); });
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
     $('item-open').addEventListener('click', function () { if (itemUrl) bridge.send('open_url', { url: itemUrl }); });
     $('item-empty-publish').addEventListener('click', function () { bridge.send('open_publish'); });

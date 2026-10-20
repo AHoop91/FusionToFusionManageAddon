@@ -6,7 +6,6 @@ SETTINGS_TITLE = "Fusion Manage Settings"
 # Fusion UI identifiers. Prefixed so they cannot collide with other add-ins.
 COMMAND_ID = "MfgToFm_ShowPanelCmd"
 SETTINGS_PALETTE_ID = "MfgToFm_SettingsPalette"
-PUBLISH_COMMAND_ID = "MfgToFm_PublishItemCmd"
 PUBLISH_PALETTE_ID = "MfgToFm_PublishPalette"
 PUBLISH_TITLE = "Publish Item"
 JOBS_COMMAND_ID = "MfgToFm_PublishJobsCmd"

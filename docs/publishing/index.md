@@ -20,7 +20,7 @@ Runs are tracked in the [Job Queue](../job-queue/index.md), and the result can b
 
 ## Open the Publish panel
 
-With the design open, choose **Manage ▸ Item Management ▸ Publish Fusion Manage Item**, or right-click the top-level component and choose **Publish Fusion Manage Item**. The right-click entry is offered for the root component only, because publishing always starts from the top of the design.
+With the design open, right-click the top-level component and choose **Publish Fusion Manage Item**. The right-click entry is offered for the root component only, because publishing always starts from the top of the design. From the **Fusion Manage Item** panel, choose **Republish** in the **...** menu, or **Publish** when the item has not been uploaded yet, or click the **OUT OF DATE** pill and then **Republish**; the item panel closes as the Publish panel opens.
 
 The panel shows the design's thumbnail and summary, and below it the **Bill of Materials** of the design compared with Fusion Manage. The thumbnail arrives a moment after the rest, so you can start on the BOM while it loads. Click a row to open the **Details Panel** beside it, which lists each property, the Fusion Manage field it maps to, its current value in Fusion Manage and what publishing will do. A row's details are read when you open it, and the design's own row reads its properties the first time you open it.
 

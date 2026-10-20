@@ -442,10 +442,12 @@ class ItemPanel:
         return self._upload_for_item(DXF_JOB, payload)
 
     def _open_publish(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Open the Publish panel (Republish, or Publish for an item not yet in Fusion Manage). A design is published, not a drawing. UI thread."""
+        """Open the Publish panel (Republish, or Publish for an item not yet in Fusion Manage) and close this one. A design is published, not a
+        drawing. UI thread."""
         if drawing_source.active_drawing() is not None:
             return {"opened": False, "message": "Open the design to publish it: a drawing is not published."}
         self._show_publish()
+        self._host.hide()
         return {"opened": True}
 
     def _saved_source(self) -> Dict[str, Any]:
