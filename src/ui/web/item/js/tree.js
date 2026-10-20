@@ -20,8 +20,10 @@
   // The icon of the item itself, as in the Publish Bill of Materials.
   const ROOT = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h7V3"/><path d="M8 21v-7h8v7"/></svg>';
 
-  const waiting = {};   // request id -> callback(error text, result)
+  const waiting = {};   // request id -> { done: callback(error text, result), tab: the tab it was asked for (see ``leave``) }
   const listening = {};   // result action -> true once its listener is registered
+  // The tab each kind of look-up is for. Leaving a tab ends its look-ups, in Python too (the request to Fusion Manage is cancelled).
+  const TAB_OF = { files_load: 'files', bom_load: 'bom', where_used_load: 'whereused', workflows_load: 'workflows', changelog_load: 'changelog', sync_check_load: 'item', bom_check_load: 'bom', tab_counts_load: 'counts' };
   let counter = 0;
 
   function poll(resultAction, id) {
@@ -34,17 +36,29 @@
       listening[resultAction] = true;
       bridge.on(resultAction, function (r) {
         const entry = r.ok ? r.result : { request: '', pending: false, ok: false, message: r.error };
-        const callback = waiting[entry.request];
-        if (!callback) return;
+        const asked = waiting[entry.request];
+        if (!asked) return;
         if (entry.pending) { poll(resultAction, entry.request); return; }
         delete waiting[entry.request];
-        if (entry.ok) callback('', entry.result); else callback(entry.message || 'Could not read it from Fusion Manage.', null);
+        if (entry.cancelled) return;   // it was left: nobody waits for it
+        if (entry.ok) asked.done('', entry.result); else asked.done(entry.message || 'Could not read it from Fusion Manage.', null);
       });
     }
     const id = 'lk' + (++counter);
-    waiting[id] = done;
+    waiting[id] = { done: done, tab: TAB_OF[startAction] || '' };
     bridge.send(startAction, Object.assign({ request: id }, payload));
     poll(resultAction, id);
+  }
+
+  /**
+   * End the look-ups of a tab (``tab``), or of every tab when none is given: nothing waits for their answers any more, and Python is told to
+   * stop reading for them. Returns how many were ended.
+   */
+  function leave(tab) {
+    const ids = Object.keys(waiting).filter(function (id) { return !tab || waiting[id].tab === tab; });
+    ids.forEach(function (id) { delete waiting[id]; });
+    if (ids.length) bridge.send('lookup_cancel', { requests: ids });
+    return ids.length;
   }
 
   /**
@@ -179,5 +193,5 @@
     return td;
   }
 
-  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable };
+  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, leave: leave, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable };
 })(window.MfgUi);

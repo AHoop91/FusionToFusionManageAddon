@@ -3,7 +3,7 @@
 import unittest
 from unittest import mock
 
-from src.fusion_mfg import graphql_client
+from src.core.cancel import Cancelled, CancelToken
 from src.fusion_mfg.graphql_client import MfgApiError, MfgGraphQlClient
 
 
@@ -23,7 +23,7 @@ def client(outcomes):
 
 class RetryTests(unittest.TestCase):
     def setUp(self):
-        patch = mock.patch.object(graphql_client.time, "sleep")
+        patch = mock.patch.object(CancelToken, "wait")   # the pause before another try
         patch.start()
         self.addCleanup(patch.stop)
 
@@ -37,6 +37,13 @@ class RetryTests(unittest.TestCase):
     def test_it_gives_up_after_three_tries(self):
         with self.assertRaises(MfgApiError):
             client([MfgApiError("503", transient=True)] * 3).query("q")
+
+    def test_a_cancel_while_waiting_to_try_again_stops_it(self):
+        made = client([MfgApiError("503", transient=True), {"ok": 1}])
+        made.cancel = CancelToken()
+        with mock.patch.object(CancelToken, "wait", side_effect=Cancelled):
+            with self.assertRaises(Cancelled):
+                made.query("q")
 
 
 if __name__ == "__main__":

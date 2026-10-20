@@ -19,6 +19,22 @@
 .item-status { margin: 6px 0 0; font-size: 14px; }
 .item-status-sep { margin: 0 10px; color: var(--border); }
 .item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+/* A file made from an earlier save of the open document, to the left of its icon */
+.item-file-stale { display: inline-block; margin-right: 8px; padding: 2px 7px; border: 1px solid #f0d49a; border-radius: 4px; background: #fdf0d5; color: #8a5300; font-size: 11px; font-weight: 600; line-height: 1.3; vertical-align: middle; white-space: nowrap; cursor: help; }
+
+/* Up-to-date check, at the right end of the tabs: a small spinning circle while it reads, then a pill saying what it found. */
+.item-check { display: inline-flex; align-items: center; gap: 6px; flex: none; align-self: center; margin: 2px 0 2px auto; font-size: 12px; font-weight: 600; line-height: 1; cursor: default; }
+.item-check[data-state="idle"], .item-check[data-state="ok"] { display: none; }   /* up to date says nothing: only the spinner, Out of Date and a failed check show */
+.item-check-spin { display: none; width: 14px; height: 14px; box-sizing: border-box; border: 2px solid rgba(6, 150, 215, .25); border-top-color: var(--accent); border-radius: 50%; animation: item-check-spin .7s linear infinite; }
+.item-check[data-state="checking"] .item-check-spin { display: inline-block; }
+.item-check-label { display: none; padding: 5px 10px; border-radius: 4px; border: 1px solid transparent; letter-spacing: .01em; }
+.item-check:not([data-state="checking"]) .item-check-label { display: inline-block; }
+.item-check[data-state="changes"] { color: #8a5300; }
+.item-check[data-state="changes"] .item-check-label { background: #fdf0d5; border-color: #f0d49a; }
+.item-check[data-state="error"] { color: #b3262a; }
+.item-check[data-state="error"] .item-check-label { background: #fbe9ea; border-color: #f0c2c4; }
+@keyframes item-check-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .item-check-spin { animation-duration: 2s; } }
 
 .item-tabs {
   display: flex;
@@ -167,6 +183,9 @@
 
 .item-menu-icon { display: inline-flex; flex-shrink: 0; }
 .item-menu-item .item-file-icon { margin-right: 0; flex-shrink: 0; }
+/* Republish: a line glyph the size of the file icons, and a line under it when uploads follow */
+.item-menu-glyph { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.item-menu-divided { margin-bottom: 4px; border-bottom: 1px solid var(--border); border-radius: 4px 4px 0 0; padding-bottom: 12px; }
 
 .item-menu-list {
   position: absolute;
@@ -266,6 +285,7 @@
 .item-empty { color: var(--muted); text-align: center; }
 .item-empty-text { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .item-empty-hint { margin: -8px 0 0; max-width: 320px; font-size: 12px; color: var(--muted); }
+.item-empty .btn[hidden] { display: none; }
 
 .item-empty-icon {
   width: 96px;
@@ -470,6 +490,17 @@ a.item-bom-attachments:hover { color: var(--accent); }
 .item-bom-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 12px; color: var(--text); cursor: pointer; }
 .item-bom-menu label:hover { background: #eceef0; }
 
+
+/* The bar over the Files tab: a button to export each kind of file the open document makes and attach it. */
+.item-files-bar { display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+.item-files-bar[hidden] { display: none; }
+.item-files-tool {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 8px;
+  border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font: inherit; cursor: pointer;
+}
+.item-files-tool:hover:enabled { background: #eceef0; }
+.item-files-tool:disabled { opacity: 0.4; cursor: default; }
+.item-files-tool .item-file-icon { margin-right: 0; }
 
 .item-menu-item:disabled { opacity: 0.5; cursor: default; }
 .item-menu-item:disabled:hover { background: none; }

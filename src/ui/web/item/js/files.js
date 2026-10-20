@@ -2,6 +2,7 @@
  * The Files tab: the files attached to the item, as a table that sorts by any column.
  *
  * A file name opens the file: Python downloads it and opens it with the program the system uses for it.
+ * Files the open document makes (its STEP file, or its PDF, DWG and DXF) are marked Out of Date when the document was saved since.
  */
 (function (ns) {
   'use strict';
@@ -82,21 +83,67 @@
   let current = 0;   // the tab being drawn; an answer for an older item is ignored
 
   /** Read the files of the item of ``view`` and fill ``target`` with them; ``open(file)`` runs when a file name is clicked. */
-  function render(target, view, open) {
+  function render(target, view, open, tools) {
     const mine = ++current;
     tree.loading(target, CLASS, 'Reading the files...');
     tree.load('files_load', 'files_result', { workspace_id: view.workspace_id, item_id: view.item_id, item_urn: view.item_urn }, function (error, files) {
       if (mine !== current) return;
       if (error) { tree.centred(target, CLASS, 'Could not read the files: ' + error, true); return; }
-      draw(target, files, open);
+      const mark = draw(target, files, open, tools);
+      if (files.length) checkFresh(files, function (stale) { if (mine === current) mark(stale); });
     });
   }
 
+  let listening = false;
+  let waiting = null;   // told which files are out of date, when Python answers
+
+  /** Ask Python which of ``files`` are older than the latest save of the open document (the STEP file of a design, the PDF, DWG and DXF of a drawing). */
+  function checkFresh(files, done) {
+    if (!listening) {
+      listening = true;
+      ns.bridge.on('files_freshness', function (r) {
+        const callback = waiting;
+        waiting = null;
+        if (callback && r.ok && r.result) callback(r.result.stale || {});   // a check that failed leaves the files unmarked
+      });
+    }
+    waiting = done;
+    ns.bridge.send('files_freshness', { files: files.map(function (f) { return { name: f.name, updated: f.updated }; }) });
+  }
+
+  /**
+   * The bar over the table, as over the Bill of Materials: a button for each file the open document can be exported as and attached
+   * (``tools.actions``: the STEP file of a design, the PDF, DWG and DXF of a drawing). ``tools`` also says when one is under way
+   * (``busy``), starts one (``run``) and calls the function given to ``listen`` when any of it changes.
+   */
+  function toolbar(tools) {
+    const bar = el('div', 'item-files-bar');
+    function paint() {
+      bar.replaceChildren();
+      tools.actions.forEach(function (action) {
+        const button = el('button', 'item-files-tool');
+        button.type = 'button';
+        button.append(icon(action.ext), el('span', '', action.label));
+        button.title = action.ready ? action.label + ' and attach it to this item' : 'The drawing is still loading';
+        button.disabled = tools.busy || !action.ready;
+        button.addEventListener('click', function () { tools.run(action.action); });
+        bar.appendChild(button);
+      });
+      bar.hidden = !tools.actions.length;
+    }
+    tools.listen(paint);
+    paint();
+    tools.refresh();
+    return bar;
+  }
+
   /** Fill ``target`` with the table of ``files``. */
-  function draw(target, files, open) {
+  function draw(target, files, open, tools) {
     target.className = 'view-scroll ' + CLASS;
     target.replaceChildren();
+    target.appendChild(toolbar(tools));
 
+    let stale = {};   // file name -> why it is out of date, once Python has checked
     let sortKey = 'name';
     let ascending = true;
     const table = el('table', 'item-files-table');
@@ -148,6 +195,11 @@
         COLUMNS.forEach(function (c) {
           const td = el('td');
           if (c.key === 'name') {
+            if (stale[file.name]) {   // made from an earlier save of the open document
+              const pill = el('span', 'item-file-stale', 'Out of Date');
+              pill.title = stale[file.name];
+              td.appendChild(pill);
+            }
             td.appendChild(icon(file.ext));
             const link = el('a', 'item-link', file.name);
             link.href = '#';
@@ -170,6 +222,7 @@
     if (!files.length) {   // the columns stay, and the empty message fills the space under them
       tree.emptyUnder(target, EMPTY_FOLDER, 'No files attached', 'Files attached to this item in Fusion Manage will be listed here.');
     }
+    return function (found) { stale = found; draw(); };   // mark the files found out of date
   }
 
   ns.itemFiles = { render: render, icon: icon };

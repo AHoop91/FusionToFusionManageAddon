@@ -10,7 +10,7 @@ import urllib.request
 from typing import Any, Dict
 
 from ..auth.errors import AuthError
-from ..core.http import OPENER
+from ..core.http import open_url
 from ..core.logging_setup import get_logger
 from .client import REQUEST_TIMEOUT_SECONDS, FmClient
 
@@ -45,7 +45,7 @@ class ProfileService:
         """
         try:
             request = urllib.request.Request(USERINFO_URL, headers={"Accept": "application/json", "Authorization": f"Bearer {self._client.access_token()}"})
-            with OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with open_url(request, REQUEST_TIMEOUT_SECONDS, self._client.cancel) as response:
                 data = json.loads(response.read())
             if not isinstance(data, dict):
                 raise ValueError("unexpected user profile")

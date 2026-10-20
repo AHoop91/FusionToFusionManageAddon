@@ -18,11 +18,13 @@
   let shownSeq = 0;   // the open that is on screen, so a poll for it does not redraw
   let itemUrl = '';
   let currentView = null;
+  let offerPublish = false;   // the empty state is the "not published" one, which may offer Publish
   let quietRead = false;   // the item is being read again from its tab: no loading screen over what is shown
 
   /** Show the bouncing balls (and hide the item) while Python is still reading everything the item needs. */
   function setLoading(on, text) {
     $('item-empty').hidden = true;
+    offerPublish = false;
     $('item-loader').hidden = !on;
     $('item-loader-text').textContent = text || 'Loading item...';
     document.querySelectorAll('.item-part').forEach(function (part) { part.hidden = on; });
@@ -33,8 +35,11 @@
   const ICON_DENIED = '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>';
 
   /** Say, in the middle of the panel and in place of the item, ``text`` with a ``hint`` under it. */
-  function showEmpty(icon, text, hint) {
+  function showEmpty(icon, text, hint, canPublish) {
     setLoading(false);
+    offerPublish = !!canPublish;
+    $('item-empty-publish').hidden = true;   // shown once Python says the open document is a design, not a drawing
+    if (offerPublish) bridge.send('upload_context');
     document.querySelectorAll('.item-part').forEach(function (part) { part.hidden = true; });
     $('item-empty-icon').innerHTML = icon;   // static markup
     $('item-empty-text').textContent = text;
@@ -55,7 +60,7 @@
     if (name === 'files') {
       ns.itemFiles.render(target, currentView, function (file) {
         if (file.url) bridge.send('open_url', { url: file.url });   // the file's page in Fusion Manage
-      });
+      }, uploadTool);
     } else {
       ({ bom: ns.itemBom, whereused: ns.itemWhereUsed, workflows: ns.itemWorkflows, changelog: ns.itemChangeLog })[name].render(target, currentView);
     }
@@ -75,13 +80,29 @@
     });
   }
 
+  /**
+   * The one place reads are ended. Nothing waits for what ``tab`` (every tab when none is given) was still reading, any more: Python is told to
+   * cancel it, and no mark is left on "checking". Returns how many reads were cut short. Called when a tab is left or clicked again, when
+   * the item is read afresh and when the panel is hidden. (The reads started afterwards are not in the cancel: the bridge delivers in order.)
+   */
+  function leaveReads(tab) {
+    const cut = ns.itemTree.leave(tab);
+    Object.keys(checkOf).forEach(function (key) {
+      if ((!tab || key === tab) && checkOf[key].state === 'checking') delete checkOf[key];
+    });
+    return cut;
+  }
+
   /** Show one tab (one of ``TABS``) and mark its button. */
   function showTab(name, keep) {
+    if (name !== shownTab) leaveReads(shownTab);
     TABS.forEach(function (key) { $(key === 'item' ? 'item-body' : 'item-' + key).hidden = key !== name; });
     if (!keep) loadTab(name);   // ``keep``: the caller reads the tab itself
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
       tab.classList.toggle('item-tab-active', tab.dataset.tab === name);
     });
+    shownTab = name;
+    paintCheck();
   }
 
   /**
@@ -91,7 +112,14 @@
   function openTab(name) {
     if (!currentView) return;
     showTab(name, true);
-    if (name === 'item') { quietRead = true; bridge.send('refresh_item_view'); return; }   // the item stays on screen until the new one is ready
+    if (name === 'item') {   // the item stays on screen until the new one is ready (and is not checked again if it was)
+      quietRead = true;
+      if (!checkOf.item) runCheck('item', currentView);
+      bridge.send('refresh_item_view');
+      return;
+    }
+    leaveReads(name);   // what this tab was still reading from the last click is not wanted
+    runCheck(name, currentView);   // a tab is read again on every click, and so checked again
     const view = currentView;
     ns.itemTree.load('tab_counts_load', 'tab_counts_result', { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, counts) {
       if (view !== currentView) return;   // another item has been opened meanwhile
@@ -248,6 +276,18 @@
     $('item-open').hidden = !itemUrl;
   }
 
+  // What the open document uploads, shared with the Files tab's toolbar: ``actions`` as Python's ``upload_context`` gives them, whether one
+  // is under way (``busy``), ``run(action)`` to start one, and the one function ``listen`` was given, called when any of it changes.
+  const uploadTool = {
+    actions: [],
+    busy: false,
+    run: function () {},
+    listener: null,
+    listen: function (fn) { uploadTool.listener = fn; },
+    changed: function () { if (uploadTool.listener) uploadTool.listener(); },
+    refresh: function () { bridge.send('upload_context'); },   // the open document may have changed since the last look
+  };
+
   /** The Actions drop-down: opens under its button, closes on a choice, a click elsewhere or Escape. */
   function initActions() {
     const button = $('item-actions-btn');
@@ -269,8 +309,14 @@
     /** The Upload entries for what the open document uploads (``actions``: each has ``action``, ``label``, ``ext`` of the file, ``ready``). */
     function setUpload(context) {
       const offered = context.actions || [];
-      $('item-actions-menu').hidden = !offered.length;   // nothing offered: no three dots
-      if (!offered.length) setOpen(false);
+      uploadTool.actions = offered;
+      uploadTool.changed();
+      $('item-republish').hidden = !context.publish;
+      $('item-empty-publish').hidden = !(offerPublish && context.publish);
+      $('item-republish').classList.toggle('item-menu-divided', offered.length > 0);
+      const empty = !offered.length && !context.publish;
+      $('item-actions-menu').hidden = empty;   // nothing offered: no three dots
+      if (empty) setOpen(false);
       uploads.forEach(function (entry) {
         const found = offered.find(function (a) { return a.action === entry.dataset.action; });
         entry.hidden = !found;
@@ -286,6 +332,8 @@
     function showUpload(state) {
       uploading = !!state.active;
       $('progress').hidden = !uploading;
+      uploadTool.busy = uploading;
+      uploadTool.changed();
       syncUpload();
       if (uploading) card.show(state);
     }
@@ -295,14 +343,16 @@
       if (open) bridge.send('upload_context');   // the document may have changed since the last time
     }
     button.addEventListener('click', function (event) { event.stopPropagation(); toggleMenu(list.hidden); });
-    list.querySelectorAll('[data-action]').forEach(function (entry) {
-      entry.addEventListener('click', function () {
-        setOpen(false);
-        if (!currentView) return;
-        if (uploads.indexOf(entry) >= 0) showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
-        bridge.send(entry.dataset.action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: entry.dataset.action });
-      });
-    });
+    /** Start the upload ``action`` for the item shown (from the menu, or the Files tab's toolbar). */
+    function startUpload(action) {
+      setOpen(false);
+      if (!currentView) return;
+      showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
+      bridge.send(action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: action });
+    }
+    uploadTool.run = startUpload;
+    uploads.forEach(function (entry) { entry.addEventListener('click', function () { startUpload(entry.dataset.action); }); });
+    $('item-republish').addEventListener('click', function () { setOpen(false); bridge.send('open_publish'); });
     function started(r) {
       if (r.ok && r.result && r.result.started) pollUpload(); else showUpload({ active: false });   // not started: declined, or one is under way
     }
@@ -320,14 +370,73 @@
     bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
   }
 
-  function render(view) {
+  // ---- Up-to-date check of a tab ----------------------------------------------------
+  // The mark at the right of the tab bar says whether the tab shown matches the open design: only a spinner while it is checked, then
+  // "Out of Date" or "Check failed" when there is something to say. A tab with a check has Python's ``start`` and ``result`` actions and
+  // the words for how many things differ (``differs(count)``); a tab with none shows no mark.
+  const CHECKS = {
+    item: {
+      start: 'sync_check_load', result: 'sync_check_result',
+      differs: function (n) { return n + (n === 1 ? ' mapped field differs' : ' mapped fields differ') + ' from the open design'; },
+    },
+    bom: {
+      start: 'bom_check_load', result: 'bom_check_result',
+      differs: function (n) { return n + (n === 1 ? ' component is' : ' components are') + ' not in this Bill of Materials as in the open design (not under the same parent, or in another quantity)'; },
+    },
+  };
+  const LABELS = { changes: 'Out of Date', error: 'Check failed' };   // the pill; while checking there is only the spinner, and an up-to-date tab shows nothing
+  const NAMES_SHOWN = 5;   // of what differs, in the tooltip
+  let checkOf = {};   // tab -> what its mark shows ({state, text}), for the item shown
+  let shownTab = 'item';
+
+  /** What the mark shows for ``found``, Python's answer to ``check``. */
+  function describe(check, found) {
+    switch (found.state) {
+      case 'ok': return { state: 'ok', text: '' };   // an up-to-date tab shows nothing
+      case 'changes': {
+        const names = found.names.slice(0, NAMES_SHOWN).join(', ') + (found.names.length > NAMES_SHOWN ? ', ...' : '');
+        return { state: 'changes', text: check.differs(found.differences) + ' (' + names + '). Republish to update.' };
+      }
+      case 'error': return { state: 'error', text: 'Could not check: ' + found.message };
+      default: return { state: 'idle', text: '' };   // nothing to compare with: no saved design, or the item of a component below its top
+    }
+  }
+
+  function paintCheck() {
+    const mark = checkOf[shownTab] || { state: 'idle', text: '' };
+    const element = $('item-check');
+    element.dataset.state = mark.state;
+    element.title = mark.text;
+    element.setAttribute('aria-label', mark.text);
+    $('item-check-label').textContent = LABELS[mark.state] || '';
+  }
+
+  function setCheck(name, mark) {
+    checkOf[name] = mark;
+    if (name === shownTab) paintCheck();
+  }
+
+  /** Check tab ``name`` of ``view`` (nothing for a tab with no check). */
+  function runCheck(name, view) {
+    const check = CHECKS[name];
+    if (!check) return;
+    setCheck(name, { state: 'checking', text: 'Checking Fusion Manage...' });
+    ns.itemTree.load(check.start, check.result, { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, found) {
+      if (!currentView || currentView.item_id !== view.item_id) return;   // another item is shown now
+      setCheck(name, error ? { state: 'error', text: 'Could not check: ' + error } : describe(check, found));
+    });
+  }
+
+  function render(view, keepCheck) {
     setLoading(false);
     bridge.send('upload_context');   // the three dots show once there is something in them
     renderHeader(view);
     currentView = view;
+    if (!keepCheck) { leaveReads(); checkOf = {}; }   // the item is read afresh: what was still being read for the last read is not wanted
     labelTabs(view);
     if (startOnItemTab || document.querySelector('.item-tab-active').disabled) showTab('item');   // just opened, or the tab open for the last item is not allowed for this one
     startOnItemTab = false;
+    if (!keepCheck) runCheck(shownTab, view);   // the tab shown is checked; the others when they are opened
     // these are read from Fusion Manage only when their tab is opened
     LAZY_TABS.forEach(function (name) {
       const tab = $('item-' + name);
@@ -350,13 +459,17 @@
       timer = setTimeout(poll, POLL_INTERVAL_MS);
       return;
     }
+    const quiet = quietRead;   // the Item tab was clicked: the item is drawn again, but not checked again
     quietRead = false;
     shownSeq = entry.seq;
     if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
-    if (entry.missing) { showEmpty(ICON_MISSING, 'No item exists for ' + entry.missing, 'Check the item number, or publish the item to Fusion Manage first.'); return; }
+    if (entry.missing) {
+      showEmpty(ICON_MISSING, 'This item has not been uploaded to the Fusion Manage Items workspace.', 'No item exists for ' + entry.missing + '. Would you like to publish it?', true);
+      return;
+    }
     if (!entry.seq) { message('Select a component and choose Open Fusion Manage Item.'); return; }
     if (!entry.ok) { message(entry.message || 'Could not read the item.', true); return; }
-    render(entry.view);
+    render(entry.view, quiet);
   }
 
   function poll() { bridge.send('get_item_view'); }
@@ -382,10 +495,26 @@
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
       tab.addEventListener('click', function () { openTab(tab.dataset.tab); });
     });
+    // The panel is hidden or closed: stop reading for it (every request to Fusion Manage that is still going is cancelled in Python). Shown again,
+    // the tab that was cut short is read once more.
+    let cutShort = false;
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        cutShort = leaveReads() > 0;
+      } else if (cutShort) {
+        cutShort = false;
+        if (currentView) openTab(shownTab);
+      }
+    });
     $('item-lightbox').addEventListener('click', closeLightbox);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
     $('item-open').addEventListener('click', function () { if (itemUrl) bridge.send('open_url', { url: itemUrl }); });
+    $('item-empty-publish').addEventListener('click', function () { bridge.send('open_publish'); });
+    bridge.on('open_publish', function (r) {
+      const message = r.ok ? (r.result && r.result.message) : r.error;
+      if (message) ns.toast.show(message, { tone: 'error' });   // a drawing cannot be published
+    });
     initActions();
     ns.auth.onChange(function (signedIn) { if (signedIn) poll(); });   // read the item once signed in
     ns.auth.refresh();

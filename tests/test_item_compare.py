@@ -6,7 +6,7 @@ from unittest import mock
 
 from src.fm.client import FmApiError
 from src.sync import item_compare
-from src.sync.item_compare import item_number_of, lookup_item
+from src.sync.item_compare import item_number_of, known_lookup, lookup_item
 from src.sync.property_compare import FOUND, MULTIPLE, NEW, UNKNOWN
 
 CFG = SimpleNamespace(workspace_id="242", mappings=[])
@@ -82,6 +82,32 @@ class LookupTests(unittest.TestCase):
             lookup = lookup_item(ITEM, CFG, None)
         self.assertEqual(lookup.info["state"], UNKNOWN)
         self.assertIn("down", lookup.info["message"])
+
+
+class KnownLookupTests(unittest.TestCase):
+    def setUp(self):
+        patch = mock.patch.object(item_compare, "display_values", side_effect=lambda values: values)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_the_item_is_read_by_its_id_without_a_search(self):
+        with service(error=AssertionError("searched")):   # a search would fail the test
+            lookup = known_lookup(ITEM, CFG, None, "77")
+        self.assertEqual(lookup.info["state"], FOUND)
+        self.assertEqual(lookup.info["item_id"], "77")
+        self.assertEqual(lookup.values, {"read": "77"})
+
+    def test_a_failure_of_fusion_manage_is_unknown(self):
+        class Failing:
+            def __init__(self, _fm):
+                pass
+
+            def read(self, _workspace, _item_id):
+                raise FmApiError("503")
+        with mock.patch.object(item_compare, "ItemService", Failing):
+            lookup = known_lookup(ITEM, CFG, None, "77")
+        self.assertEqual(lookup.info["state"], UNKNOWN)
+        self.assertIsNone(lookup.values)
 
 
 if __name__ == "__main__":

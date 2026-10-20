@@ -23,6 +23,7 @@ for _name in [m for m in sys.modules if m == "src" or m.startswith("src.")]:
 
 from src.auth.auth_service import AuthService  # noqa: E402
 from src.config.config_service import ConfigService  # noqa: E402
+from src.core.cancel import ADDIN  # noqa: E402
 from src.core.logging_setup import get_logger, shutdown_logging  # noqa: E402
 from src.ui import drawing_source  # noqa: E402
 from src.ui import ribbon as ribbon_module  # noqa: E402
@@ -151,6 +152,7 @@ def _push_to_panels(action: str, data: str) -> None:
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
     global _bridge, _config, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
+    ADDIN.reset()   # work is allowed again (the add-in may be started once more in the same process)
     try:
         _ui = adsk.core.Application.get().userInterface
 
@@ -168,7 +170,7 @@ def run(context) -> None:
         _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, JOBS_TITLE, "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, "Upload", "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
-        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host)
+        _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host, _publish_host.show)
         _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, EXPORT_TITLE, "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
         _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
         bridge.set_pusher(_push_to_panels)   # background work can now tell the panels when it is done, instead of being asked
@@ -238,6 +240,7 @@ def run(context) -> None:
 
 def stop(context) -> None:
     """Add-in stop: remove every UI element this add-in created."""
+    ADDIN.cancel()   # every request still waiting on the network ends now, so no thread outlives the add-in holding a connection
     try:
         if _bridge:
             _bridge.set_pusher(None)   # nothing may be sent to panels that are going away

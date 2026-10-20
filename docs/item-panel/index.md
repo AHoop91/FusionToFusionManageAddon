@@ -24,7 +24,7 @@ The add-in looks the item up in the Items workspace by the component's part numb
 
     Save the image as `docs/images/item-panel.png`, then replace this box with `![Item Panel showing the Item tab](../images/item-panel.png)`.
 
-If no item has the number, the panel says **No item exists for …** and suggests checking the part number or publishing the item first. If you may not view the workspace, it tells you so.
+If no item has the number, the panel says the item has not been uploaded to the Fusion Manage Items workspace and asks whether you would like to publish it. Click **Publish** to open the [Publish panel](../publishing/index.md). If you may not view the workspace, it tells you so.
 
 !!! example "Screenshot placeholder: Item Panel: no item exists"
     **Show:** The empty state saying No item exists for the part number.
@@ -41,9 +41,10 @@ If no item has the number, the panel says **No item exists for …** and suggest
 | Control | What it does |
 |---|---|
 | Title and status line | The item's title, and a line with its version, lifecycle state and Type. |
+| **Up-to-date check** (at the right end of the tabs) | A small circle turns while the panel compares the item's mapped fields with the open design, the same comparison the Publish panel makes. When all is well it disappears; when something differs it becomes an amber **Out of Date** pill (hover for the fields that differ), and a red **Check failed** if the check could not be made. The mark belongs to the tab shown, and the Item and Bill of Materials tabs have a check so far: the other tabs show no mark. (The Files tab marks out-of-date files on their own rows instead; see [Files](#files).) It is checked once each time the item is read in full (opening it, **Refresh**, an upload), not when you click the Item tab again. It is not shown for a component below the top of the design. |
 | **Open in browser** | Opens the item in Fusion Manage in your web browser. |
 | **Refresh** | Reads the item again from Fusion Manage. |
-| **Actions** (⋯) | Uploads the technical representation: **Export STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). |
+| **Actions** (⋯) | Uploads the technical representation: **Export STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). In a design the menu also has **Republish**, which opens the Publish panel. |
 
 ## Required permission
 
@@ -75,6 +76,10 @@ The item's sections and fields as label and value, and matrices as grids. Sectio
 
 The files attached to the item, with a type icon, sortable by any column. This is where you check that a [STEP file](../publishing/index.md#step-file) or [drawing PDF](../publishing/index.md#drawing-representation) arrived. Empty state: *No files attached*.
 
+A bar over the table, on the right as in the Bill of Materials, has a button for each file the open document can be exported as and attached to the item: **Export STEP File** in a design, **Export PDF**, **Export DWG** and **Export DXF** in a drawing, each with its file-type icon. They do the same as the entries of the Actions menu, including the progress dialog, and are greyed while an upload is under way. The bar is hidden when the open document offers nothing.
+
+A file made from the open document is marked **Out of Date** (an amber label to the left of its icon) when that document was saved after the file was uploaded: the STEP file when a design is open, and the PDF, DWG and DXF when a drawing is open. It is the same check the Export window makes, against the latest saved version of the document. Hover the label for the dates. A document with unsaved changes marks them too, as the file cannot show changes that were never saved.
+
 ### Bill of Materials
 
 !!! example "Screenshot placeholder: Bill of Materials tab"
@@ -83,6 +88,8 @@ The files attached to the item, with a type icon, sortable by any column. This i
     Save the image as `docs/images/tab-bom.png`, then replace this box with `![Bill of Materials tab](../images/tab-bom.png)`.
 
 The item's lines as a tree, with the same columns as Fusion Manage's own BOM view, a **Views** selector and a column chooser. Use it to check the BOM you published. See [Bill of Materials](../publishing/index.md#bill-of-materials). Empty state: *No Bill of Materials*.
+
+Each time the tab is opened, the mark at the right of the tab bar compares the open design's components with this Bill of Materials, as the Publish panel does: **Out of Date** when a component of the design is not under the same parent here, or is there in another quantity (hover for the item numbers). Nothing shows when it is up to date. Lines only Fusion Manage has, such as manufacturing lines added there, are not a difference. It is shown only for the top of the design.
 
 ### Where Used
 

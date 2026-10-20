@@ -51,6 +51,7 @@
       <svg id="item-empty-icon" class="item-empty-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
       <p id="item-empty-text" class="item-empty-text"></p>
       <p id="item-empty-hint" class="item-empty-hint"></p>
+      <button id="item-empty-publish" class="btn" type="button" hidden>Publish</button>
     </div>
 
     <!-- Header: the item's title, its life cycle line, and its actions. -->
@@ -71,6 +72,11 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3.5"/></svg>
           </button>
           <div id="item-actions-list" class="item-menu-list" role="menu" hidden>
+            <!-- Opens the Publish panel; offered for a design only (item.js) -->
+            <button id="item-republish" class="item-menu-item" type="button" role="menuitem" hidden>
+              <span class="item-menu-icon"><svg class="item-menu-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></span>
+              <span class="item-menu-label">Republish</span>
+            </button>
             <!-- One entry per upload; item.js shows the ones the open document offers -->
             <button class="item-menu-item" type="button" role="menuitem" data-action="add_step_file" data-upload hidden>
               <span class="item-menu-icon"></span>
@@ -101,6 +107,11 @@
       <button id="item-tab-whereused" class="item-tab" type="button" data-tab="whereused"></button>
       <button id="item-tab-workflows" class="item-tab" type="button" data-tab="workflows"></button>
       <button id="item-tab-changelog" class="item-tab" type="button" data-tab="changelog"></button>
+      <!-- Is the item up to date with the open design (its mapped fields)? Read once when the item is shown; item.js fills it in. -->
+      <span id="item-check" class="item-check" data-state="idle" role="status">
+        <span class="item-check-spin" aria-hidden="true"></span>
+        <span id="item-check-label" class="item-check-label"></span>
+      </span>
     </nav>
 
     <!-- The item's sections: fields as label and value, matrices as grids. -->

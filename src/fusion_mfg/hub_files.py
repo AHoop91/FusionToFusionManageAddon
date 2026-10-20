@@ -13,7 +13,8 @@ from typing import Any, Dict, List, NamedTuple, Optional
 from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.models import ConnectionSettings
-from ..core.http import OPENER
+from ..core.cancel import ADDIN, CancelToken
+from ..core.http import open_url
 from ..core.logging_setup import get_logger
 
 log = get_logger("hub_files")
@@ -41,9 +42,10 @@ def _by_name(entries: List[Dict[str, str]]) -> List[Dict[str, str]]:
 class HubFiles:
     """Reads the structure and the files of a hub for the signed-in user."""
 
-    def __init__(self, settings: ConnectionSettings, auth: AuthService) -> None:
+    def __init__(self, settings: ConnectionSettings, auth: AuthService, cancel: Optional[CancelToken] = None) -> None:
         self._settings = settings
         self._auth = auth
+        self.cancel = cancel or ADDIN   # every request checks it, and is ended by it
 
     # ---- Requests -------------------------------------------------------------
 
@@ -55,7 +57,7 @@ class HubFiles:
             except AuthError as exc:
                 raise HubFilesError(str(exc)) from exc
         try:
-            with OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
+            with open_url(request, TIMEOUT_SECONDS, self.cancel) as response:
                 return response.read()
         except urllib.error.HTTPError as exc:
             log.warning("Hub files: HTTP %s for %s", exc.code, url.split("?")[0])

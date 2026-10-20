@@ -6,14 +6,14 @@ covers both), so no second login is needed.
 
 import json
 import re
-import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
 from ..auth.auth_service import AuthService
 from ..config.models import ConnectionSettings
-from ..core.http import OPENER
+from ..core.cancel import ADDIN, CancelToken
+from ..core.http import open_url
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 
@@ -45,9 +45,10 @@ class MfgApiError(Exception):
 class MfgGraphQlClient:
     """Authenticated GraphQL access to the Manufacturing Data Model."""
 
-    def __init__(self, settings: ConnectionSettings, auth: AuthService) -> None:
+    def __init__(self, settings: ConnectionSettings, auth: AuthService, cancel: Optional[CancelToken] = None) -> None:
         self._settings = settings
         self._auth = auth
+        self.cancel = cancel or ADDIN   # every request checks it, and is ended by it
 
     def query(self, text: str, variables: Optional[Dict[str, Any]] = None, label: str = "") -> Dict[str, Any]:
         """Run a query and return its ``data`` object.
@@ -64,7 +65,7 @@ class MfgGraphQlClient:
                 if attempt == ATTEMPTS or not exc.transient:
                     raise
                 log.warning("Manufacturing Data Model query failed (%s), attempt %d of %d", exc, attempt, ATTEMPTS)
-                time.sleep(RETRY_SECONDS * attempt)
+                self.cancel.wait(RETRY_SECONDS * attempt)
 
     def _query_once(self, text: str, variables: Optional[Dict[str, Any]], label: str = "") -> Dict[str, Any]:
         watch = Stopwatch()
@@ -76,7 +77,7 @@ class MfgGraphQlClient:
             "Authorization": f"Bearer {token}"})
         name = label or _first_field(text)
         try:
-            with OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with open_url(request, REQUEST_TIMEOUT_SECONDS, self.cancel) as response:
                 first_byte_seconds = watch.lap()   # until the response headers arrived
                 raw = response.read()
                 payload = json.loads(raw)

@@ -15,7 +15,8 @@ from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 from ..auth.auth_service import AuthService
 from ..config.hub import tenant_code
 from ..config.models import ConnectionSettings
-from ..core.http import OPENER
+from ..core.cancel import ADDIN, CancelToken
+from ..core.http import open_url
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 
@@ -83,9 +84,10 @@ class FmApiError(Exception):
 class FmClient:
     """Authenticated access to one Fusion Manage tenant."""
 
-    def __init__(self, settings: ConnectionSettings, auth: AuthService) -> None:
+    def __init__(self, settings: ConnectionSettings, auth: AuthService, cancel: Optional[CancelToken] = None) -> None:
         self._settings = settings
         self._auth = auth
+        self.cancel = cancel or ADDIN   # every request checks it, and is ended by it: work for a tab or panel gives its own
 
     @property
     def tenant(self) -> str:
@@ -124,9 +126,10 @@ class FmClient:
                 if attempt == READ_ATTEMPTS or not (exc.status in RETRY_STATUSES or exc.status == 0):
                     raise
                 log.warning("Fusion Manage read of %s failed (%s), attempt %d of %d", path, exc, attempt, READ_ATTEMPTS)
-                time.sleep(RETRY_SECONDS * attempt)
+                self.cancel.wait(RETRY_SECONDS * attempt)
 
     def _get_once(self, path: str, accept: str) -> Any:
+        self.cancel.check()
         watch = Stopwatch()
         token = self._auth.get_access_token(self._settings)
         token_seconds = watch.lap()
@@ -135,7 +138,7 @@ class FmClient:
             headers={"Accept": accept, "Authorization": f"Bearer {token}"},
         )
         try:
-            with OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with open_url(request, REQUEST_TIMEOUT_SECONDS, self.cancel) as response:
                 first_byte_seconds = watch.lap()   # until the response headers arrived
                 body = response.read()
                 if log.isEnabledFor(logging.DEBUG):
@@ -161,22 +164,23 @@ class FmClient:
 
         A file is often served from another host after a redirect; the sign-in is not sent there.
         """
+        self.cancel.check()
         token = self._auth.get_access_token(self._settings)
         request = urllib.request.Request(f"{self.base_url}{path}", headers={"Accept": "*/*", "Authorization": f"Bearer {token}"})
         try:
-            with OPENER.open(request, timeout=timeout) as response:
+            with open_url(request, timeout, self.cancel) as response:
                 return response.read(), str(response.headers.get("Content-Type") or "")
         except urllib.error.HTTPError as exc:
             raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
         except OSError as exc:
             raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
 
-    @staticmethod
-    def put_bytes(url: str, content: bytes, headers: Optional[Dict[str, str]] = None, timeout: int = UPLOAD_TIMEOUT_SECONDS,
+    def put_bytes(self, url: str, content: bytes, headers: Optional[Dict[str, str]] = None, timeout: int = UPLOAD_TIMEOUT_SECONDS,
                   progress: Optional[Callable[[float], None]] = None) -> int:
         """PUT ``content`` to a signed https ``url`` (it carries its own access, so no sign-in is sent); return the status.
 
-        ``progress(fraction)`` is called as the bytes go out (0 to 1).
+        ``progress(fraction)`` is called as the bytes go out (0 to 1). Only the client's own token ends it (the add-in's, unless
+        the caller gave one): a file being attached is not stopped by leaving a tab.
         """
         if not url.lower().startswith("https://"):
             raise FmApiError("The upload address Fusion Manage gave is not https.")
@@ -186,7 +190,7 @@ class FmClient:
         request = urllib.request.Request(url, data=body, method="PUT", headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(content)), **signed_headers(headers or {})})
         began = time.monotonic()
         try:
-            with OPENER.open(request, timeout=timeout) as response:
+            with open_url(request, timeout, self.cancel) as response:
                 log.info("PUT of %d bytes -> %s in %.1fs", len(content), response.status, time.monotonic() - began)
                 return response.status
         except urllib.error.HTTPError as exc:
@@ -203,6 +207,7 @@ class FmClient:
         A refusal raises ``FmApiError`` whose message carries what Fusion Manage said, since that is
         the reason the user needs.
         """
+        self.cancel.check()
         token = self._auth.get_access_token(self._settings)
         payload = None if body is None else json.dumps(body).encode("utf-8")
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
@@ -213,7 +218,7 @@ class FmClient:
             log.debug("%s %s body: %s", method, path, _clip(payload or b""))
         began = time.monotonic()
         try:
-            with OPENER.open(request, timeout=WRITE_TIMEOUT_SECONDS) as response:
+            with open_url(request, WRITE_TIMEOUT_SECONDS, self.cancel) as response:
                 raw = response.read()
                 try:
                     data = json.loads(raw) if raw.strip() else None

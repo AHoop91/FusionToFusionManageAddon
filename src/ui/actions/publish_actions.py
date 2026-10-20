@@ -11,18 +11,17 @@ from typing import Any, Dict, List, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
-from ...config.workspace_models import ITEMS_KIND, KINDS_BY_ID, PHYSICAL_PREFIX, WorkspaceConfig
+from ...config.workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceConfig
+from ...core.cancel import ADDIN, Cancelled, CancelToken
 from ...core.logging_setup import get_logger
 from ...core.timing import Stopwatch
-from ...fm.bom import BomService
 from ...fm.client import FmClient
 from ...fm.items import ItemService
 from ...fm.permissions import denial
-from ...fm.picklists import PicklistResolver
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
-from ...sync.bom_compare import compare_bom
-from ...sync.item_compare import compare_with_item, item_number_of, lookup_item
+from ...sync.bom_compare import compare_bom, read_and_compare_bom
+from ...sync.item_compare import item_number_of, read_and_compare
 from ..message_bridge import MessageBridge
 
 log = get_logger("publish_actions")
@@ -69,16 +68,11 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
     if not picked:
         return {"rows": rows, "pick": True}
-    depth = max([int(r["level"]) for r in rows] + [0]) + 1
     # A Fusion Manage or sign-in failure is not caught: the section fails and the panel offers Retry,
     # rather than caching a table that looks compared but is not.
     watch = Stopwatch()
-    fm_bom = BomService(fm).read(cfg.workspace_id, picked["id"], depth)
-    read_seconds = watch.lap()
-    log.info("Fusion Manage BOM of %s: %d parent(s), %d line(s)", number, len(fm_bom), sum(len(v) for v in fm_bom.values()))
-    compared = compare_bom(rows, number, fm_bom)
-    log.debug("Compared the BOM of %s: Fusion Manage read %.2fs (depth %d), compare %.3fs, %d rows", number, read_seconds, depth,
-              watch.lap(), len(rows))
+    compared = read_and_compare_bom(rows, number, fm, cfg.workspace_id, picked["id"])
+    log.debug("Read and compared the BOM of %s in %.2fs, %d rows", number, watch.lap(), len(rows))
     return {"rows": compared, "pick": False, "fm_item_id": picked["id"]}
 
 
@@ -117,6 +111,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
     # One slot per section; a component's properties get a slot each ("component:<id>").
     sections: Dict[str, Dict[str, Any]] = {name: _entry(name) for name in SECTION_NAMES}
     lock = threading.Lock()
+    tokens: Dict[str, CancelToken] = {}   # slot -> the token of the load that fills it, ended when a newer load replaces it
 
     def run(slot: str, name: str, key: str, client: MfgGraphQlClient, fm: FmClient, cfg: WorkspaceConfig,
             model_id: str, time: str, component: Dict[str, str], chosen: str) -> None:
@@ -131,7 +126,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
             reading = Stopwatch()
             with lock:
                 summary = dict(sections["summary"]["data"] or {}) if sections["summary"]["key"] == key else {}
-            physical = any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in cfg.mappings) if cfg else False
+            physical = cfg.maps_physical() if cfg else False
             read_seconds = 0.0
 
             def note(**changes: Any) -> None:
@@ -150,13 +145,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
 
             if name in ("properties", "component"):
                 subject = component if name == "component" else summary
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    pending = pool.submit(read)
-                    lookup = lookup_item(subject, cfg, fm, chosen)   # Fusion Manage is asked while the Data Model is read
-                properties = pending.result()
-                resolver = PicklistResolver(fm, cfg.workspace_id) if cfg and cfg.workspace_id else None
-                data = {"compare": compare_with_item(properties, subject, cfg, lookup, resolver.fit_number if resolver else None,
-                                                     convert_unit=resolver.convert_unit if resolver else None)}
+                properties, compared = read_and_compare(read, subject, cfg, fm, chosen)
+                data = {"compare": compared}
                 if name == "properties":
                     data["count"] = len(properties)
             elif name == "structure":
@@ -173,6 +163,9 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
             log.info("Loaded %s of %s", slot, model_id)
             log.debug("TIMING %s: %.2fs in all, %.2fs of it reading the Data Model (physical=%s)", slot, whole.lap(), read_seconds, physical)
             outcome = _entry(slot, ok=True, data=data, key=key)
+        except Cancelled:   # a newer load replaced this one (another design, or a reload): the slot is left for that to fill
+            log.info("Loading %s was cancelled", slot)
+            return
         except PublishDenied as exc:   # not an error: the panel says so, in place of the item
             log.info("No permission to publish: %s", exc)
             outcome = _entry(slot, message=str(exc), denied=str(exc), key=key)
@@ -193,7 +186,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
         try:
             model_id, time = _model_ref()
             settings = config.effective_settings()
-            client, fm = MfgGraphQlClient(settings, auth), FmClient(settings, auth)
+            token = ADDIN.child(f"loading {slot} for the Publish panel")
+            client, fm = MfgGraphQlClient(settings, auth, token), FmClient(settings, auth, token)
             cfg = config.config.workspaces.get(ITEMS_KIND)
         except Exception as exc:
             log.exception("Could not start loading %s", slot)
@@ -207,6 +201,9 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
                 log.debug("%s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
                 return dict(current)
             log.debug("%s requested: starting", slot)
+            if slot in tokens:
+                tokens[slot].cancel()   # what the slot was still reading for an earlier design (or the last try) is not wanted
+            tokens[slot] = token
             sections[slot] = _entry(slot, pending=True, key=key)
             snapshot = dict(sections[slot])
         threading.Thread(target=run, args=(slot, name, key, client, fm, cfg, model_id, time, component, chosen),

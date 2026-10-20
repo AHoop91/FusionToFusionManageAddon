@@ -159,6 +159,10 @@ class WorkspaceConfig:
     # The Fusion Manage field that links an item to its component ("" = not linked).
     component_field: str = ""
 
+    def maps_physical(self) -> bool:
+        """Whether a mapped field takes a physical property (mass, volume ...): they are slow to read, so only a caller that maps them asks."""
+        return any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in self.mappings)
+
     def setup_problem(self, title: str) -> str:
         """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings."""
         if not self.workspace_id:

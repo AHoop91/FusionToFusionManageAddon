@@ -21,6 +21,7 @@ from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
+from ..core.cancel import Cancelled
 from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.components import ComponentService
@@ -95,6 +96,8 @@ class ExportDialog:
         """What ``check`` says, or why it could not be asked."""
         try:
             return check(client)
+        except Cancelled:   # the window was closed
+            raise
         except (FmApiError, AuthError) as exc:
             return f"Permissions could not be checked: {exc}"
         except Exception as exc:  # noqa: BLE001 - shown to the user, never raised into a thread nobody watches
@@ -106,12 +109,15 @@ class ExportDialog:
         up keeps its setup reason and is not asked about."""
         reasons = dict(setup)
         try:
-            client = FmClient(self._config.effective_settings(), self._auth)
+            client = FmClient(self._config.effective_settings(), self._auth, self._panel.export_token)
             checks = {key: check for key, check in ((ITEM, self._item_denial), (COMPONENT, self._component_denial)) if not setup[key]}
             with ThreadPoolExecutor(max_workers=2) as pool:   # one workspace does not wait for the other
                 asked = {key: pool.submit(self._asked, check, client) for key, check in checks.items()}
                 for key, future in asked.items():
                     reasons[key] = future.result()
+        except Cancelled:   # the window was closed: nobody waits for the answer
+            log.info("The check of the permissions to attach files was cancelled")
+            return
         except Exception as exc:  # noqa: BLE001 - as above
             log.exception("Could not start the permission check")
             for key in reasons:
@@ -185,5 +191,6 @@ class ExportDialog:
         return {"started": True}
 
     def _close(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
+        self._panel.cancel_export()   # the window is going: what it was still reading is not wanted
         self._tasks.post(self._host.dispose)
         return {}

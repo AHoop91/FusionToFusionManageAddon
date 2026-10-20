@@ -7,6 +7,7 @@ from src.auth import auth_service, oauth_pkce
 from src.auth.auth_service import AuthService
 from src.auth.errors import AuthError
 from src.config.models import ConnectionSettings
+from src.core import http
 
 
 class Store:
@@ -42,7 +43,7 @@ class RefreshFailureTests(unittest.TestCase):
     def test_token_endpoint_answers_are_told_apart(self):
         def post(code):
             error = urllib.error.HTTPError("https://x", code, "m", {}, io.BytesIO(b"{}"))
-            with mock.patch.object(oauth_pkce.OPENER, "open", side_effect=error):
+            with mock.patch.object(http.OPENER, "open", side_effect=error):
                 with self.assertRaises(AuthError) as caught:
                     oauth_pkce.refresh_tokens("c", "r", [])
             error.close()
@@ -51,7 +52,7 @@ class RefreshFailureTests(unittest.TestCase):
         self.assertTrue(post(401))
         self.assertFalse(post(503))
         self.assertFalse(post(429))
-        with mock.patch.object(oauth_pkce.OPENER, "open", side_effect=urllib.error.URLError("down")):
+        with mock.patch.object(http.OPENER, "open", side_effect=urllib.error.URLError("down")):
             with self.assertRaises(AuthError) as caught:
                 oauth_pkce.refresh_tokens("c", "r", [])
         self.assertFalse(caught.exception.rejected)

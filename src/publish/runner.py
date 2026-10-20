@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..auth.errors import AuthError
-from ..config.workspace_models import KINDS_BY_ID, PHYSICAL_PREFIX, WorkspaceConfig
+from ..config.workspace_models import KINDS_BY_ID, WorkspaceConfig
 from ..core.logging_setup import get_logger
 from ..fm.client import LOOKUPS, FmApiError, FmClient
 from ..fm.components import ComponentService, manage_link
@@ -62,7 +62,7 @@ class PublishRun(JobState):
                             for parent, lines in self._bom_requests.items()} if send else {}
         self.rows.extend(self._bom_row_of.values())
         self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
-        self._physical = any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in cfg.mappings)   # read them only when something maps them
+        self._physical = cfg.maps_physical()   # read them only when something maps them
         self._picklists = PicklistResolver(self._fm, cfg.workspace_id)   # options of the picklist fields, read once per run
 
     # ---- Worker thread ----------------------------------------------------------

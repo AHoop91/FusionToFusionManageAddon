@@ -26,6 +26,7 @@ from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
+from ..core.cancel import ADDIN, Cancelled, CancelToken, TokenSlot
 from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
@@ -39,10 +40,13 @@ from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.tabs import TabService
 from ..fm.ttl_cache import TtlCache
 from ..fm.where_used import WhereUsedService
+from ..fusion_mfg.graphql_client import MfgGraphQlClient
 from ..publish.writer import safe_name
+from ..sync.up_to_date import UNAVAILABLE, ShownItem, check_bom, check_properties
 from . import drawing_source
 from .attachment_upload import AttachmentUpload, UploadJob
 from .design_history import saved_state
+from .export_freshness import STALE, UNSAVED, compare as compare_freshness
 from .export_options import FORMATS
 from .item_numbers import DesignRef, ItemNumbers, NoItemNumber, Subject, active_design_ref, design_ref
 from .message_bridge import MessageBridge
@@ -54,6 +58,7 @@ from .upload_jobs import DRAWING_JOB, DWG_JOB, DXF_JOB, STEP_JOB, export_job, pi
 log = get_logger("item_panel")
 
 LINE_ID = "MfgToFm_MenuLine"   # the line above the add-in's entries in the right-click menu
+SAVED_STATE_SECONDS = 30   # how long when a document was last saved is kept for the Files tab (see ``_saved_source``)
 LOOKUPS_KEPT = 200   # answers held for the page to read before the oldest finished ones are dropped
 # Only these are opened with their program; any other attachment (a program, a script, a macro document, a shortcut, a web page) has its folder shown.
 SAFE_TO_OPEN = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".txt", ".csv", ".md",
@@ -170,8 +175,9 @@ class ItemPanel:
     """Finds an item by number and shows it in the item palette."""
 
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, bridge: MessageBridge,
-                 config: ConfigService, auth: AuthService, progress: PaletteHost) -> None:
+                 config: ConfigService, auth: AuthService, progress: PaletteHost, show_publish: Callable[[], None]) -> None:
         self._ui = ui
+        self._show_publish = show_publish
         self._uploads = AttachmentUpload(ui, tasks, host, progress, config, auth, self._reload)
         self._tasks = tasks
         self._host = host
@@ -180,6 +186,7 @@ class ItemPanel:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
         self._numbers = ItemNumbers(config, auth)
+        self._saved = TtlCache(SAVED_STATE_SECONDS)   # when the document was last saved, by (document, modified, part number)
         self._export_read = TtlCache()   # what Fusion says of what the Export window exports (its design reference, when it was saved), read once per window
         self._number = ""   # the item number the panel shows, for Refresh
         self._part = ""   # the part number Fusion gives that component
@@ -190,6 +197,8 @@ class ItemPanel:
         bridge.register("upload_drawing", self._upload_drawing)
         bridge.register("upload_dwg", self._upload_dwg)
         bridge.register("upload_dxf", self._upload_dxf)
+        bridge.register("open_publish", self._open_publish)
+        bridge.register("files_freshness", self._files_freshness)
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
         bridge.register("open_attachment", self._open_attachment)
@@ -204,9 +213,32 @@ class ItemPanel:
         bridge.register("bom_result", self._lookup_result)
         bridge.register("changelog_load", self._changelog_load)
         bridge.register("changelog_result", self._lookup_result)
+        bridge.register("sync_check_load", lambda payload: self._design_check(payload, check_properties))   # whether the item matches the open design: its mapped fields
+        bridge.register("sync_check_result", self._lookup_result)
+        bridge.register("bom_check_load", lambda payload: self._design_check(payload, check_bom))   # whether its Bill of Materials does
+        bridge.register("bom_check_result", self._lookup_result)
         bridge.register("tab_counts_load", self._tab_counts_load)
         bridge.register("tab_counts_result", self._lookup_result)
         self._lookups: Dict[str, Dict[str, Any]] = {}   # request id (from the page) -> its answer
+        # What is read for the item shown ends when it is left (another item, the panel hidden or the add-in stopped); see ``core.cancel``.
+        self._session = TokenSlot(lambda: ADDIN, "the reads of the item panel")
+        self._item_read = TokenSlot(lambda: self._session.token, "the read of the item")   # the read of the item itself
+        self._follow = TokenSlot(lambda: self._session.token, "finding the item of the selection")   # of a component just selected
+        self._export = TokenSlot(lambda: ADDIN, "the Export window's look at the attached files")
+        self._tokens: Dict[str, CancelToken] = {}   # request id -> the token of a look-up still running
+        bridge.register("lookup_cancel", self._cancel_lookups)
+
+    def _new_session(self) -> None:
+        """Another item is shown: end what was being read for the last one."""
+        self._session.replace()
+
+    def _cancel_lookups(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """End the look-ups the page names (``requests``: the ids it gave): the tab they were for was left."""
+        with self._lock:
+            tokens = [self._tokens[r] for r in map(str, payload.get("requests") or []) if r in self._tokens]
+        for token in tokens:
+            token.cancel()
+        return {"cancelled": len(tokens)}
 
     def _where_used_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the parents of an item (or of one of those parents, given its ``up`` link); the page polls for them."""
@@ -240,6 +272,22 @@ class ItemPanel:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         return self._lookup(payload, lambda client: TabService(client).counts(workspace_id, item_id))
 
+    def _design_check(self, payload: Dict[str, Any], check: Callable[[ShownItem], Dict[str, Any]]) -> Dict[str, Any]:
+        """Run ``check`` (``sync.up_to_date``) of the item shown against the open design on a worker thread, as a look-up the page polls. UI thread."""
+        self._workspace_id(payload)   # checks the page said which item
+        item_id = str(payload.get("item_id") or "")
+        ref, number = _active_ref(), self._number
+
+        def work(fm: FmClient) -> Dict[str, Any]:
+            try:
+                ref_found = self._numbers.model_of(ref, fm.cancel)
+            except NoItemNumber:   # no saved design is open
+                return {"state": UNAVAILABLE}
+            mfg = MfgGraphQlClient(self._config.effective_settings(), self._auth, fm.cancel)
+            cfg = self._config.config.workspaces.get(ITEMS_KIND)
+            return check(ShownItem(self._numbers.reads, mfg, fm, cfg, ref_found.model_id, ref_found.time, number, item_id))
+        return self._lookup(payload, work)
+
     @staticmethod
     def _workspace_id(payload: Dict[str, Any]) -> str:
         """The workspace id of a look-up (the item id is checked with it)."""
@@ -256,7 +304,8 @@ class ItemPanel:
                 for key in [k for k, v in self._lookups.items() if not v["pending"]][:LOOKUPS_KEPT // 2]:
                     del self._lookups[key]
             self._lookups[request] = {"pending": True, "ok": False, "message": "", "result": None}
-        threading.Thread(target=self._run_lookup, args=(request, work), daemon=True).start()
+            token = self._tokens[request] = self._session.token.child(f"look-up {request}")
+        threading.Thread(target=self._run_lookup, args=(request, work, token), daemon=True).start()
         return {"started": True}
 
     def _lookup_result(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -265,15 +314,20 @@ class ItemPanel:
             state = self._lookups.get(request) or {"pending": False, "ok": False, "message": "That look-up is no longer known.", "result": None}
             return {**state, "request": request}
 
-    def _run_lookup(self, request: str, work: Callable[[FmClient], Any]) -> None:
+    def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken) -> None:
         try:
-            client = FmClient(self._config.effective_settings(), self._auth)
+            client = FmClient(self._config.effective_settings(), self._auth, token)
             state = {"pending": False, "ok": True, "message": "", "result": work(client)}
+            token.check()   # cancelled just as it finished: the page has moved on
+        except Cancelled:   # not a failure: the tab or the item was left, and the page no longer waits for this
+            log.info("Look-up %s was cancelled", request)
+            state = {"pending": False, "ok": False, "cancelled": True, "message": "", "result": None}
         except Exception as exc:  # shown in the panel, never raised into a thread nobody watches
             log.exception("Look-up %s failed", request)
             state = {"pending": False, "ok": False, "message": str(exc) or type(exc).__name__, "result": None}
         with self._lock:
             self._lookups[request] = state
+            self._tokens.pop(request, None)
 
     def _status(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """The page's poll: still looking (``pending``), done (``ok`` with ``view``) or failed (``message``)."""
@@ -290,9 +344,10 @@ class ItemPanel:
             return
         number = _selected_component_number(_active_selection())
         if number and number != self._part:
-            self._find(number, lambda subject: self._open(subject, show=False), quiet=True)   # it is open already
+            self._find(number, lambda subject: self._open(subject, show=False), quiet=True, cancel=self._follow.replace())   # it is open already; a find for the last selection still going is not wanted
 
-    def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False, fail: Optional[Callable[[str], None]] = None) -> None:
+    def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False, fail: Optional[Callable[[str], None]] = None,
+              cancel: Optional[CancelToken] = None) -> None:
         """Read the item number of the component with ``part_number`` from the Data Model (a worker thread), then call ``then`` with it on the
         UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log; ``fail`` is
         given the reason instead of a message box showing it). UI thread."""
@@ -303,7 +358,9 @@ class ItemPanel:
         def work() -> None:
             self._warm()   # the workspace's layouts are read while the Data Model answers
             try:
-                subject = self._numbers.resolve(ref, part_number)
+                subject = self._numbers.resolve(ref, part_number, cancel)
+            except Cancelled:   # a newer selection replaced this one
+                return
             except Exception as exc:  # shown to the user, never raised into a thread nobody watches
                 if isinstance(exc, NoItemNumber):
                     log.info("No item number for %s: %s", part_number, exc)
@@ -318,6 +375,8 @@ class ItemPanel:
         threading.Thread(target=work, daemon=True).start()
 
     def dispose(self) -> None:
+        self._session.cancel()
+        self._export.cancel()
         try:
             self._ui.activeSelectionChanged.remove(self._selection_handler)
         except RuntimeError:
@@ -330,6 +389,7 @@ class ItemPanel:
     def _open(self, subject: Subject, show: bool = True) -> None:
         self._number = subject.item_number
         self._part = subject.part_number
+        self._new_session()   # what was being read for the item shown before is not wanted
         self._start()
         if show:
             self._host.show()
@@ -341,7 +401,7 @@ class ItemPanel:
             cfg = self._config.config.workspaces.get(ITEMS_KIND)
             if cfg and cfg.workspace_id and not self._config.items_setup_problem():
                 threading.Thread(target=ItemViewService(FmClient(self._config.effective_settings(), self._auth)).prepare,
-                                 args=(cfg.workspace_id,), daemon=True).start()
+                                 args=(cfg.workspace_id,), daemon=True).start()   # on the add-in's token: what the next item reads too
         except Exception:  # noqa: BLE001 - only an optimisation
             log.debug("Could not prepare the Items workspace", exc_info=True)
 
@@ -381,6 +441,44 @@ class ItemPanel:
         """Upload the open drawing as the DXF file of the item shown (the Actions menu). UI thread."""
         return self._upload_for_item(DXF_JOB, payload)
 
+    def _open_publish(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Open the Publish panel (Republish, or Publish for an item not yet in Fusion Manage). A design is published, not a drawing. UI thread."""
+        if drawing_source.active_drawing() is not None:
+            return {"opened": False, "message": "Open the design to publish it: a drawing is not published."}
+        self._show_publish()
+        return {"opened": True}
+
+    def _saved_source(self) -> Dict[str, Any]:
+        """When the document of the item shown was last saved (``design_history.saved_state``), kept for a short while: it reads the document's
+        version history, which holds Fusion's thread (it needs Fusion's objects, so it cannot move to a worker). Saving, or changing the document
+        after a save, is a different key, so a change is never missed. UI thread."""
+        document = adsk.core.Application.get().activeDocument
+        key = (document.name if document is not None else "", bool(document and document.isModified), self._part)
+        return self._saved.get(key) or self._saved.put(key, saved_state(self._part, _active_selection()))
+
+    def _files_freshness(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Which attached files are older than the latest save of the open document (the Files tab's Out of Date): the STEP file of a design, the
+        PDF, DWG and DXF of a drawing, by the names an export gives them. Of the ``files`` the page sends (each a ``name`` and when it was
+        ``updated``) it answers ``stale``: name -> why. The same comparison as the Export window's (``export_freshness.compare``). UI thread."""
+        if drawing_source.active_drawing() is not None:
+            extensions = (".pdf", ".dwg", ".dxf")
+        elif adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
+            extensions = (".step",)
+        else:
+            return {"stale": {}}
+        base = safe_name(self._number)
+        expected = {base + extension for extension in extensions}
+        attached = {str(f.get("name")): f.get("updated") for f in payload.get("files") or [] if isinstance(f, dict) and f.get("name") in expected}
+        if not (self._number and attached):
+            return {"stale": {}}
+        source = self._saved_source()
+        stale = {}
+        for name, updated in attached.items():
+            found = compare_freshness(updated, source)
+            if found["state"] in (STALE, UNSAVED):   # saved since it was uploaded, or changed since the last save: the file does not show the open document
+                stale[name] = found["message"]
+        return {"stale": stale}
+
     def _upload_for_item(self, job: UploadJob, payload: Dict[str, Any]) -> Dict[str, Any]:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         if not self._number:
@@ -390,15 +488,15 @@ class ItemPanel:
 
     def _upload_context(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """What the Actions menu uploads for the open document, as ``actions``: the STEP file of a design, the PDF, DWG and DXF of a
-        drawing, else nothing (an empty list)."""
+        drawing, else nothing (an empty list). ``publish`` says whether Republish is offered: for a design only."""
         if drawing_source.active_drawing() is not None:
             ready = bool(drawing_source.cached_number())
-            return {"actions": [{"action": "upload_drawing", "label": "Export PDF", "ext": ".pdf", "ready": ready},
+            return {"publish": False, "actions": [{"action": "upload_drawing", "label": "Export PDF", "ext": ".pdf", "ready": ready},
                                 {"action": "upload_dwg", "label": "Export DWG", "ext": ".dwg", "ready": ready},
                                 {"action": "upload_dxf", "label": "Export DXF", "ext": ".dxf", "ready": ready}]}
         if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
-            return {"actions": [{"action": "add_step_file", "label": "Export STEP File", "ext": ".step", "ready": True}]}
-        return {"actions": []}   # neither a design nor a drawing is open: nothing to offer
+            return {"publish": True, "actions": [{"action": "add_step_file", "label": "Export STEP File", "ext": ".step", "ready": True}]}
+        return {"publish": False, "actions": []}   # neither a design nor a drawing is open: nothing to offer
 
     def upload_selected_step(self) -> None:
         """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
@@ -462,19 +560,32 @@ class ItemPanel:
         if not number:
             return
         ref = _active_ref()
+        cancel = self._export.token
 
         def work() -> None:
             try:
-                subject = self._numbers.resolve(ref, number)
+                subject = self._numbers.resolve(ref, number, cancel)
+            except Cancelled:   # the window was closed
+                return
             except Exception as exc:  # noqa: BLE001 - only an optimisation
                 log.info("Item number of %s not read ahead: %s", number, exc)
                 return
-            self._uploads.warm_component(subject.item_number)
+            self._uploads.warm_component(subject.item_number, cancel)
 
         threading.Thread(target=work, daemon=True).start()
 
+    @property
+    def export_token(self) -> CancelToken:
+        """The token of what the Export window is reading now (see ``cancel_export``)."""
+        return self._export.token
+
+    def cancel_export(self) -> None:
+        """End what the Export window is still reading from Fusion Manage and the Data Model (it was closed, or is opened again). UI thread."""
+        self._export.replace()
+
     def reset_export(self) -> None:
         """Forget what was read for an earlier Export window: the document may have been saved since. UI thread."""
+        self.cancel_export()   # what an earlier window was still reading is not wanted
         self._export_read.clear()
         self._numbers.forget_files()
 
@@ -486,11 +597,14 @@ class ItemPanel:
             return
         ref, source = self._export_state(number)
         extension = FORMATS[key].extension
+        cancel = self._export.token   # the window's: its other looks are not ended by this one, but closing it ends them all
 
         def work() -> None:
             try:
-                item_number = self._numbers.resolve(ref, number).item_number
-                done(self._uploads.preview(destination, item_number, f"{safe_name(item_number)}{extension}", source))
+                item_number = self._numbers.resolve(ref, number, cancel).item_number
+                done(self._uploads.preview(destination, item_number, f"{safe_name(item_number)}{extension}", source, cancel))
+            except Cancelled:   # the window was closed: nobody waits for the answer
+                log.info("The look at the files for the export of %s was cancelled", number)
             except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches
                 log.info("Files for the export of %s not read: %s", number, exc)
                 done({"state": "unavailable", "message": str(exc)})
@@ -532,11 +646,15 @@ class ItemPanel:
         with self._lock:
             seq = self._state["seq"] + 1
             self._state = _answer(seq=seq, pending=True)
-        threading.Thread(target=self._load, args=(seq, self._number), daemon=True).start()
+        token = self._item_read.replace()   # the read of the item before this one, if it is still going, is not wanted
+        threading.Thread(target=self._load, args=(seq, self._number, token), daemon=True).start()
 
-    def _load(self, seq: int, number: str) -> None:
+    def _load(self, seq: int, number: str, token: CancelToken) -> None:
         try:
-            state = _answer(ok=True, view=self._read(number))
+            state = _answer(ok=True, view=self._read(number, token))
+        except Cancelled:   # a newer read (or another item, or the add-in stopping) replaced this one: it has nothing to say
+            log.info("The read of item %s was cancelled", number)
+            return
         except ItemNotFound as exc:   # not an error: the panel says there is no such item
             log.info("No Fusion Manage item for %s", exc.number)
             state = _answer(message=str(exc), missing=exc.number)
@@ -550,12 +668,12 @@ class ItemPanel:
             if self._state["seq"] == seq:   # a newer open replaces this one
                 self._state.update(state)
 
-    def _read(self, number: str) -> Dict[str, Any]:
+    def _read(self, number: str, cancel: CancelToken) -> Dict[str, Any]:
         problem = self._config.items_setup_problem()   # the ribbon greys the command out too; this covers the other ways in
         if problem:
             raise ValueError(f"{problem} Complete it in Preferences.")
         cfg = self._config.config.workspaces.get(ITEMS_KIND)
-        client = FmClient(self._config.effective_settings(), self._auth)
+        client = FmClient(self._config.effective_settings(), self._auth, cancel)
         with ThreadPoolExecutor(max_workers=1) as pool:
             searching = pool.submit(ItemService(client).search, cfg.workspace_id, number)   # asked while the permissions are checked
             try:

@@ -17,10 +17,11 @@ import adsk.fusion
 
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
+from ..core.cancel import CancelToken
 from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
+from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
-from ..fusion_mfg.model_service import read_section
 from ..fusion_mfg.properties import HUBS_QUERY, find_hub_id
 
 log = get_logger("item_numbers")
@@ -137,11 +138,8 @@ class ItemNumbers:
         self._config = config
         self._auth = auth
         self._remembered = _Remembered(remembered_path or _remembered_path())
-        self._lock = threading.Lock()   # one read of the Data Model at a time, so a burst of selections reads the bill of materials once
-        self._key: Tuple[str, str] = ("", "")
-        self._summary: Dict[str, Any] = {}
-        self._rows: Any = None   # the bill of materials of ``_key``, once read
-        self._file_lock = threading.Lock()   # likewise for finding a design by its file (the read ahead and the click arrive together)
+        self.reads = DesignReads()   # the Data Model's summary and bill of materials of the design in use, read once per saved version
+        self._file_lock = threading.Lock()   # one find of a design by its file at a time (the read ahead and the click arrive together)
         self._files: Dict[str, Tuple[str, str]] = {}   # design file id -> (model id, time), kept while the Export window is open
         self._hubs: Dict[str, str] = {}   # hub name -> hub id
 
@@ -161,12 +159,20 @@ class ItemNumbers:
                 self._files[ref.file_id] = kept
         return ref._replace(model_id=kept[0], time=kept[1])
 
+    def model_of(self, ref: DesignRef, cancel: Optional[CancelToken] = None) -> DesignRef:
+        """``ref`` with its Data Model id (a design a drawing shows is found by its file). Raises ``NoItemNumber`` when the design is not saved. Worker thread."""
+        if ref.model_id:
+            return ref
+        if not ref.file_id:
+            raise NoItemNumber("The design has not been saved, so it has no item number.")
+        return self._model_of_file(MfgGraphQlClient(self._config.effective_settings(), self._auth, cancel), ref)
+
     def forget_files(self) -> None:
         """Drop the models found for design files, so the next lookup asks again (the design may have been saved since)."""
         with self._file_lock:
             self._files.clear()
 
-    def resolve(self, ref: DesignRef, part_number: str) -> Subject:
+    def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""
         if not ref.model_id and not ref.file_id:
             raise NoItemNumber("The design has not been saved, so it has no item number.")
@@ -174,7 +180,7 @@ class ItemNumbers:
 
         def data_model() -> MfgGraphQlClient:
             nonlocal client
-            client = client or MfgGraphQlClient(self._config.effective_settings(), self._auth)
+            client = client or MfgGraphQlClient(self._config.effective_settings(), self._auth, cancel)
             return client
         if not ref.model_id:   # a design a drawing references: Fusion has not loaded it, so it is found by its file
             ref = self._model_of_file(data_model(), ref)
@@ -184,18 +190,13 @@ class ItemNumbers:
             log.info("Part number %s is item number %s (kept from an earlier read)", known.part_number or "(the design)", known.item_number)
             return known
         began = time.monotonic()
-        with self._lock:
-            key = (ref.model_id, ref.time)
-            if self._key != key:
-                self._key, self._summary, self._rows = key, read_section(data_model(), "summary", ref.model_id, ref.time), None
-            summary = self._summary
-            top_part = str(summary.get("part_number") or "")
-            if not part_number or _same(part_number, top_part):
-                found, part_number = {str(summary.get("item_number") or "")}, top_part
-            else:
-                if self._rows is None:
-                    self._rows = read_section(data_model(), "structure", ref.model_id, ref.time, summary)
-                found = {str(r["item_number"]) for r in self._rows if _same(str(r["part_number"]), part_number)}
+        summary = self.reads.summary(data_model(), ref.model_id, ref.time)
+        top_part = str(summary.get("part_number") or "")
+        if not part_number or _same(part_number, top_part):
+            found, part_number = {str(summary.get("item_number") or "")}, top_part
+        else:
+            rows = self.reads.structure(data_model(), ref.model_id, ref.time, summary)
+            found = {str(r["item_number"]) for r in rows if _same(str(r["part_number"]), part_number)}
         label = part_number or "The design"
         if not found:
             raise NoItemNumber(f"{label} was not found in the Data Model's bill of materials of the open design.")

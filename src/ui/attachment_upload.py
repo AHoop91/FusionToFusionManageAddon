@@ -22,6 +22,7 @@ from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
 from ..config.workspace_models import ITEMS_KIND
+from ..core.cancel import Cancelled, CancelToken
 from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
@@ -120,6 +121,9 @@ class AttachmentUpload:
         began = time.monotonic()
         try:
             workspace_id, item_id = self._find_component(number) if destination == COMPONENT else self._find_item(number)
+        except Cancelled:   # the add-in is stopping
+            self._end()
+            return
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
             log.exception("Could not find the %s of %s to attach a %s to", destination, number, job.label)
             self._fail(f"Could not attach a {job.label}:\n{exc}")
@@ -127,44 +131,48 @@ class AttachmentUpload:
         log.info("Found the %s of %s in %.2fs", destination, number, time.monotonic() - began)
         self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject, destination))
 
-    def _find_item(self, number: str) -> Tuple[str, str]:
+    def _find_item(self, number: str, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
         """``(workspace id, item id)`` of the item numbered ``number`` in the Items workspace."""
         problem = self._config.items_setup_problem()
         if problem:
             raise ValueError(f"{problem} Complete it in Preferences.")
         workspace_id = self._config.config.workspaces.get(ITEMS_KIND).workspace_id
-        hits = ItemService(FmClient(self._config.effective_settings(), self._auth)).search(workspace_id, number)
+        hits = ItemService(FmClient(self._config.effective_settings(), self._auth, cancel)).search(workspace_id, number)
         if not hits:
             raise LookupError(f"No item exists for {number}.")
         return workspace_id, pick_hit(hits, number)["id"]
 
-    def _find_component(self, number: str) -> Tuple[str, str]:
+    def _find_component(self, number: str, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
         """``(workspace id, item id)`` of the working version of the component numbered ``number`` in the Components workspace. A worker thread."""
         known = self._components.get(number)
         if known:
             return known
-        link, reason = ComponentService(FmClient(self._config.effective_settings(), self._auth)).find_working(number)
+        link, reason = ComponentService(FmClient(self._config.effective_settings(), self._auth, cancel)).find_working(number)
         workspace_id, item_id = link_ids(link)
         if not item_id:
             raise LookupError(reason or f"No component exists for {number}.")
         log.info("Working version of the component %s: workspace %s, item %s (%s)", number, workspace_id, item_id, link)
         return self._components.put(number, (workspace_id, item_id))
 
-    def warm_component(self, number: str) -> None:
+    def warm_component(self, number: str, cancel: Optional[CancelToken] = None) -> None:
         """Find the working version of the component numbered ``number`` ahead of the export, so the export finds it kept. A worker thread;
         a failure is left for the export to report."""
         try:
-            self._find_component(number)
+            self._find_component(number, cancel)
+        except Cancelled:
+            pass
         except Exception as exc:  # noqa: BLE001 - only an optimisation
             log.info("Component %s not found ahead: %s", number, exc)
 
-    def preview(self, destination: str, number: str, name: str, source: Dict[str, Any]) -> Dict[str, Any]:
+    def preview(self, destination: str, number: str, name: str, source: Dict[str, Any], cancel: Optional[CancelToken] = None) -> Dict[str, Any]:
         """What attaching the file called ``name`` to the item (or component) numbered ``number`` would do. ``state`` is "ok", with the
         ``existing`` file it would make a new version of (None when it would be attached as new) and whether that file is as recent as the
         ``source`` it is made from (``export_freshness.compare``); or "unavailable", with a ``message``. A worker thread; nothing is changed."""
         try:
-            workspace_id, item_id = self._find_component(number) if destination == COMPONENT else self._find_item(number)
-            files = AttachmentService(FmClient(self._config.effective_settings(), self._auth)).files(workspace_id, item_id)
+            workspace_id, item_id = self._find_component(number, cancel) if destination == COMPONENT else self._find_item(number, cancel)
+            files = AttachmentService(FmClient(self._config.effective_settings(), self._auth, cancel)).files(workspace_id, item_id)
+        except Cancelled:   # the window moved on to another look: nothing to say
+            raise
         except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches
             log.info("Could not read the files of the %s of %s: %s", destination, number, exc)
             return {"state": "unavailable", "message": str(exc)}
@@ -213,6 +221,9 @@ class AttachmentUpload:
             client = FmClient(self._config.effective_settings(), self._auth)
             kind = AttachmentService(client).upload(workspace_id, item_id, name, content,
                                                     progress=lambda fraction: self._stage(job, SEND, int(fraction * 100)))
+        except Cancelled:   # the add-in is stopping
+            self._end()
+            return
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
             log.exception("Could not attach %s", name)
             self._fail(f"Could not attach {name}:\n{exc}")

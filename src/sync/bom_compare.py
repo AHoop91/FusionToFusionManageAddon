@@ -12,9 +12,12 @@ Fusion Manage does not know yet have every child ``new``.
 
 from typing import Any, Dict, List, Set
 
+from ..fm.bom import BomService
+from ..fm.client import FmClient
 from .item_compare import item_number_of
 
 NEW, CHANGED, MATCH, EXTRA = "new", "changed", "match", "extra"
+DIFFERING = (NEW, CHANGED)   # the design's lines that Fusion Manage lacks under that parent or holds with another quantity; ``extra`` lines only Fusion Manage has are not a difference
 
 
 def _key(number: str) -> str:
@@ -80,3 +83,10 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
     while stack:
         close()
     return out
+
+
+def read_and_compare_bom(rows: List[Dict[str, Any]], root_number: str, fm: FmClient, workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
+    """``compare_bom`` of the design's ``rows`` with the Fusion Manage BOM of the item ``item_id``, read deep enough for the whole tree in one
+    call. Runs on a worker thread; the publish panel and the item panel's up-to-date check both use it."""
+    depth = max([int(r["level"]) for r in rows] + [0]) + 1
+    return compare_bom(rows, root_number, BomService(fm).read(workspace_id, item_id, depth))

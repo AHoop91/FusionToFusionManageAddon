@@ -1,5 +1,6 @@
 """Compare one design or component with its Fusion Manage item (shared by the panel and by publishing)."""
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from ..auth.errors import AuthError
@@ -8,6 +9,7 @@ from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..fm.client import FmApiError, FmClient
 from ..fm.items import ItemService, display_values
+from ..fm.picklists import PicklistResolver
 from .property_compare import FOUND, MULTIPLE, NEW, UNKNOWN, compare_properties
 
 log = get_logger("item_compare")
@@ -63,6 +65,32 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, cho
         else:
             info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items match {number}. Choose one.")
     return ItemLookup(info, values)
+
+
+def known_lookup(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, item_id: str) -> ItemLookup:
+    """The lookup of an item whose id is known (the item panel shows it): its values are read, with no search for it by number."""
+    info: Dict[str, Any] = {"state": FOUND, "message": "", "item_id": item_id, "item_number": item_number_of(summary), "candidates": []}
+    try:
+        return ItemLookup(info, ItemService(fm).read(cfg.workspace_id, item_id))
+    except (FmApiError, AuthError) as exc:
+        log.warning("Fusion Manage lookup failed: %s", exc)
+        info.update(state=UNKNOWN, message=f"Could not read Fusion Manage: {exc}")
+        return ItemLookup(info, None)
+
+
+def read_and_compare(read: Callable[[], List[Dict[str, str]]], subject: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, chosen: str = "",
+                     known_id: str = "") -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
+    """``(properties, comparison)``: read the properties with ``read`` while Fusion Manage is asked for the item of ``subject``, then compare
+    them (``compare_with_item``, with the digits and units of the mapped fields). ``known_id`` is the id of the item when the caller has it, which
+    saves the search for it. Runs on a worker thread; the publish panel and the item panel's
+    up-to-date check both use it."""
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(read)
+        lookup = known_lookup(subject, cfg, fm, known_id) if known_id else lookup_item(subject, cfg, fm, chosen)   # Fusion Manage is asked while the Data Model is read
+    properties = pending.result()
+    resolver = PicklistResolver(fm, cfg.workspace_id) if cfg and cfg.workspace_id else None
+    return properties, compare_with_item(properties, subject, cfg, lookup, resolver.fit_number if resolver else None,
+                                         convert_unit=resolver.convert_unit if resolver else None)
 
 
 def compare_with_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig, lookup: ItemLookup,
