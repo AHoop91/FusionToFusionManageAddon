@@ -212,7 +212,7 @@ For each parent assembly, the lines of the design are matched to the Fusion Mana
 | **Match** | Same item and quantity. | Nothing. No chip is shown. |
 | **Extra** (**Fusion Manage Only**) | Fusion Manage has a line the design does not. | **Keeps it** unless you choose **Remove**. |
 
-If a parent does not exist in Fusion Manage yet, every child is **New**.
+If an assembly inside the design does not exist in Fusion Manage yet, every child of it is **New**. If the design itself is not in Fusion Manage, its lines show no status: the panel says publishing creates the design, and does not look up every component. When you publish, each component is searched for by item number, an item that exists is used, and one that does not is created.
 
 Fusion Manage often extends the design BOM with manufacturing lines such as oil or panels. For that reason lines found only in Fusion Manage are never deleted automatically.
 

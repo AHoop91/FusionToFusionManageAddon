@@ -7,7 +7,7 @@ BOM (oil, panels and other manufacturing lines), so lines only Fusion Manage has
 parent when there is one, and the two carry each other's item number in ``pair``:
 the item number differs at that position, which may be a replaced item, so the user
 decides. Extras without a partner go after the parent's other children. Parents that
-Fusion Manage does not know yet have every child ``new``.
+Fusion Manage does not know yet have every child ``new``; a design that is not in Fusion Manage at all has its lines ``uncompared``.
 """
 
 from typing import Any, Dict, List, Set
@@ -17,6 +17,7 @@ from ..fm.client import FmClient
 from .item_compare import item_number_of
 
 NEW, CHANGED, MATCH, EXTRA = "new", "changed", "match", "extra"
+UNCOMPARED = "uncompared"   # the design is not in Fusion Manage at all: its lines are not compared, and not asked about one by one
 DIFFERING = (NEW, CHANGED)   # the design's lines that Fusion Manage lacks under that parent or holds with another quantity; ``extra`` lines only Fusion Manage has are not a difference
 
 

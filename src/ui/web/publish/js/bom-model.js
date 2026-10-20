@@ -24,7 +24,7 @@
 
   // Quantities the user typed over a line's own, keyed by ``item.qkey`` (see ``buildItems``).
   const quantities = {};
-  const EDITABLE = ['match', 'new', 'changed', 'added', 'mismatch', 'extra'];
+  const EDITABLE = ['match', 'new', 'changed', 'added', 'mismatch', 'extra', 'uncompared'];
 
   /** A quantity the way Fusion writes it: Fusion Manage's "1.0" and "2.50" read "1" and "2.5". Anything that is not a number is left as it is. */
   function plainQuantity(value) {
@@ -244,7 +244,7 @@
       if (item.root) { components.push(Object.assign({}, item.component, { root: true })); return; }
       const line = { parent: parent, number: own, quantity: quantityOf(item), sequence: item.design.sequence };
       switch (item.status) {
-        case 'new': case 'added': operations.push(Object.assign({ op: 'add' }, line)); break;
+        case 'new': case 'added': case 'uncompared': operations.push(Object.assign({ op: 'add' }, line)); break;
         case 'mismatch':   // only a pair that chose 'remove' is still a mismatch here
           operations.push(Object.assign({ op: 'add' }, line));
           operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence, edge: item.fm.edge });

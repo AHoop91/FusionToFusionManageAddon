@@ -20,7 +20,7 @@ from ...fm.items import ItemService
 from ...fm.permissions import denial
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import SECTION_NAMES, read_section
-from ...sync.bom_compare import compare_bom, read_and_compare_bom
+from ...sync.bom_compare import UNCOMPARED, read_and_compare_bom
 from ...sync.item_compare import item_number_of, read_and_compare
 from ..message_bridge import MessageBridge
 
@@ -64,7 +64,9 @@ def _compare_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: Works
     if not cfg or not cfg.workspace_id or not number:
         return {"rows": rows, "pick": False}
     if not hits:
-        return {"rows": compare_bom(rows, number, {}), "pick": False}   # the design is new, so every line is
+        # The design is not in Fusion Manage, so there is nothing to compare with. Each line is left unmarked, not asked about one by one (a
+        # large design would be many requests): publishing looks each item up by its number then, and uses the one that is there.
+        return {"rows": [{**row, "status": UNCOMPARED} for row in rows], "pick": False}
     picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
     if not picked:
         return {"rows": rows, "pick": True}

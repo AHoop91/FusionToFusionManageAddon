@@ -497,7 +497,7 @@
       if (item.status === 'extra' && decisions[item.key] === 'remove') tr.classList.add('pub-cmp-removing');
       tr.appendChild(itemCell(fmOnly ? item.fm : item.design, item, isAssembly, toggle, actions, statusChip(item, false)));
       tr.appendChild(presenceCell(!fmOnly, 'the design'));
-      tr.appendChild(presenceCell(!['new', 'mismatch', 'added', 'linked'].includes(item.status), 'Fusion Manage'));
+      tr.appendChild(presenceCell(!['new', 'mismatch', 'added', 'linked', 'uncompared'].includes(item.status), 'Fusion Manage'));
       tr.appendChild(quantityCell(item, redraw));
       if (item.component && (item.root || item.component.id !== '')) {
         tr.classList.add('pub-cmp-pick');
