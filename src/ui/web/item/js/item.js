@@ -8,8 +8,8 @@
   const bridge = ns.bridge;
   const $ = ns.$;
   const el = ns.el;
-  const POLL_INTERVAL_MS = 400;
-  const UPLOAD_POLL_MS = 300;   // how often the progress of an upload is asked for
+  const POLL_INTERVAL_MS = 2000;   // Python pushes the item when it is read; this only asks now and then, in case a push is missed
+  const UPLOAD_POLL_MS = 2000;   // likewise for the progress of an upload
   const LABEL_COLUMN_WIDTH = '16%';   // the row labels; the other columns share the rest equally
   const MIN_COLUMN_PX = 50;
   const MIN_MATRIX_COLUMN_PX = 120;   // a matrix column is never squeezed below this by a narrow panel
@@ -301,6 +301,7 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
     const uploads = Array.prototype.slice.call(list.querySelectorAll('[data-upload]'));   // the STEP file of a design, or the PDF, DWG and DXF of a drawing: Python says which are offered
     let uploading = false;
+    let following = false;   // an upload started here is under way; the progress of one started elsewhere is not shown
     let uploadTimer = 0;
     const card = ns.uploadProgress.mount($('progress-card'));
     function syncUpload() {
@@ -347,6 +348,7 @@
     function startUpload(action) {
       setOpen(false);
       if (!currentView) return;
+      following = true;
       showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
       bridge.send(action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: action });
     }
@@ -354,7 +356,9 @@
     uploads.forEach(function (entry) { entry.addEventListener('click', function () { startUpload(entry.dataset.action); }); });
     $('item-republish').addEventListener('click', function () { setOpen(false); bridge.send('open_publish'); });
     function started(r) {
-      if (r.ok && r.result && r.result.started) pollUpload(); else showUpload({ active: false });   // not started: declined, or one is under way
+      if (r.ok && r.result && r.result.started) { pollUpload(); return; }
+      following = false;
+      showUpload({ active: false });   // not started: declined, or one is under way
     }
     bridge.on('add_step_file', started);
     bridge.on('upload_drawing', started);
@@ -363,9 +367,12 @@
     bridge.on('upload_context', function (r) { if (r.ok) setUpload(r.result); });
     window.addEventListener('focus', function () { if (currentView) bridge.send('upload_context'); });   // the open document may have changed
     bridge.on('upload_status', function (r) {
-      if (!r.ok) { showUpload({ active: false }); return; }
+      if (!following) return;   // pushed for an upload started in another window
+      if (!r.ok) { following = false; showUpload({ active: false }); return; }
+      following = !!r.result.active;
       showUpload(r.result);
-      if (r.result.active) uploadTimer = setTimeout(pollUpload, UPLOAD_POLL_MS);
+      clearTimeout(uploadTimer);
+      if (following) uploadTimer = setTimeout(pollUpload, UPLOAD_POLL_MS);
     });
     bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
   }

@@ -15,7 +15,7 @@
   const el = ns.el;
 
   const CONTEXT_POLL_MS = 2000;   // how often to ask again while there is nothing to export yet
-  const UPLOAD_POLL_MS = 250;     // how often to ask how far the export has got
+  const UPLOAD_POLL_MS = 2000;    // Python pushes every change of how far the export has got; this only asks now and then, in case a push is missed
   const START_WAIT_MS = 30000;    // how long an export may go without saying how far it is, before it is called failed
   const ACCESS_WAIT_MS = 20000;   // how long to wait for the permission check before saying it could not be done
   const FILES_ASK_DELAY_MS = 120; // how long a choice stays still before the attached files are asked for
@@ -306,7 +306,9 @@
     $('export-result').hidden = next !== 'result';
   }
 
-  function pollUpload() { bridge.send('upload_status'); }
+  let uploadTimer = 0;
+
+  function pollUpload() { clearTimeout(uploadTimer); bridge.send('upload_status'); }
 
   /** The export has been accepted: follow it on the progress card until Python says how it went. */
   function startWorking() {
@@ -333,7 +335,8 @@
     if (state.active) progressCard.show(state);
     else if (state.result) { showResult(state.result.ok, state.result.message); return; }
     else if (Date.now() - startedAt > START_WAIT_MS) { showResult(false, 'The export did not start.'); return; }
-    setTimeout(pollUpload, UPLOAD_POLL_MS);
+    clearTimeout(uploadTimer);
+    uploadTimer = setTimeout(pollUpload, UPLOAD_POLL_MS);
   }
 
   function run() {

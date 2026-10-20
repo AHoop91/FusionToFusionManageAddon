@@ -2,8 +2,9 @@
 
 What file is made is an ``UploadJob``: a STEP file of a design, or a PDF, DWG or DXF of a drawing. It starts from the Actions menu of the
 Item panel (the item shown), from the right-click menu (the item of a number) or from the Export window (the item or the component of a number). The file is made on Fusion's UI
-thread; finding the item and the upload run on a worker thread. How far it has got is kept in ``status`` for a page to poll
-(``upload_status``): the Item panel shows it over itself, and the other starts in a small window of their own.
+thread; finding the item and the upload run on a worker thread. How far it has got is kept in ``status``, and pushed to the pages
+(``upload_status``) each time it changes; a page also asks for it now and then, in case a push is missed. The Item panel shows it over
+itself, and the other starts in a small window of their own.
 """
 
 import json
@@ -64,7 +65,8 @@ class AttachmentUpload:
     """One upload at a time, from the Item panel, the right-click menu or the ribbon."""
 
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, window: PaletteHost,
-                 config: ConfigService, auth: AuthService, reload: Callable[[], None]) -> None:
+                 config: ConfigService, auth: AuthService, reload: Callable[[], None],
+                 announce: Optional[Callable[[Dict[str, Any]], None]] = None) -> None:
         self._ui = ui
         self._tasks = tasks
         self._host = host   # the Item panel: it shows the green tick, and the progress of an upload started in it
@@ -72,6 +74,7 @@ class AttachmentUpload:
         self._config = config
         self._auth = auth
         self._reload = reload   # read the item shown again (its tab counts change)
+        self._announce = announce   # told ``status()`` each time it changes, from any thread: the pages are pushed it, and also ask now and then
         self._lock = threading.Lock()
         self._components = TtlCache(60)   # (workspace id, item id) of a component's working version by item number, found ahead of an export
         self._status: Dict[str, Any] = {"active": False}   # when over, with the ``result`` of the last one: ``ok`` and a ``message``
@@ -263,6 +266,11 @@ class AttachmentUpload:
         with self._lock:
             return dict(self._status)
 
+    def _tell(self, status: Dict[str, Any]) -> None:
+        """Push ``status`` to the pages that follow an upload."""
+        if self._announce:
+            self._announce(status)
+
     def _begin(self, job: UploadJob, step: int, in_window: bool = False) -> bool:
         """Start an upload of ``job`` at ``step`` (one the Export window follows if ``in_window``); False when one is already under way."""
         with self._lock:
@@ -270,20 +278,29 @@ class AttachmentUpload:
                 return False
             self._in_window = in_window
             self._status = {"active": True, "title": job.title, "steps": list(job.steps), "step": step, "stage": job.stage(step), "percent": None}
-            return True
+            status = dict(self._status)
+        self._tell(status)
+        return True
 
     def _stage(self, job: UploadJob, step: int, percent: Optional[int] = None) -> None:
         with self._lock:
+            if (self._status.get("step"), self._status.get("percent")) == (step, percent):   # nothing new to say
+                return
             self._status.update(step=step, stage=job.stage(step), percent=percent)
+            status = dict(self._status)
+        self._tell(status)
 
     def _finish(self, result: Dict[str, Any]) -> None:
         """End an upload the Export window follows, keeping ``result`` for its next poll."""
         with self._lock:
             self._status = {"active": False, "result": result}
+            status = dict(self._status)
+        self._tell(status)
 
     def _end(self) -> None:
         with self._lock:
             self._status = {"active": False}
+        self._tell({"active": False})
         if self._window_open:
             self._tasks.post(self._close_window)
 

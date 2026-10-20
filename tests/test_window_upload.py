@@ -103,5 +103,29 @@ class UploadEndTests(unittest.TestCase):
         self.assertEqual(self.ui.messages, ["no"])
 
 
+class UploadAnnounceTests(unittest.TestCase):
+    def setUp(self):
+        self.told = []
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Host(), None, None, lambda: None, self.told.append)
+        self.job = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), lambda *a: None, lambda *a: True)
+
+    def test_each_change_is_pushed_and_a_repeat_is_not(self):
+        self.upload.begin_in_window(self.job)
+        self.upload._stage(self.job, 2, 10)
+        self.upload._stage(self.job, 2, 10)
+        self.upload._stage(self.job, 2, 40)
+        self.assertEqual([(t["step"], t["percent"]) for t in self.told], [(0, None), (2, 10), (2, 40)])
+
+    def test_the_end_is_pushed_with_its_result(self):
+        self.upload.begin_in_window(self.job)
+        self.upload._fail("no")
+        self.assertEqual(self.told[-1], {"active": False, "result": {"ok": False, "message": "no"}})
+
+    def test_an_end_with_no_result_is_pushed_too(self):
+        self.upload._begin(self.job, 0)
+        self.upload._end()
+        self.assertEqual(self.told[-1], {"active": False})
+
+
 if __name__ == "__main__":
     unittest.main()

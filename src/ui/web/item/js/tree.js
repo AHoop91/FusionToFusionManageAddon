@@ -7,7 +7,7 @@
 
   const bridge = ns.bridge;
   const el = ns.el;
-  const POLL_INTERVAL_MS = 300;
+  const POLL_INTERVAL_MS = 2000;   // Python pushes the answer when it is ready; this only asks now and then, in case a push is missed
   const MIN_COLUMN_PX = 40;
   const ITEM_COLUMN_PX = 380;   // the first column of a tree table
   const COLUMN_PX = 120;   // the others

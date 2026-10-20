@@ -136,7 +136,7 @@ def setup_problem() -> str:
 def _push_to_panels(action: str, data: str) -> None:
     """Send ``data`` to every panel, from any thread: the send itself is done on the main thread, by a custom event."""
     def send() -> None:
-        for host in (_palette_host, _publish_host, _jobs_host, _item_host, _export_host):   # the panels that can show a hub's state
+        for host in (_palette_host, _publish_host, _jobs_host, _item_host, _export_host, _progress_host):   # the panels that can show a hub's state, or an upload's
             try:
                 if host:
                     host.send(action, data)

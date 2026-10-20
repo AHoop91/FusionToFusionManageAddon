@@ -178,7 +178,8 @@ class ItemPanel:
                  config: ConfigService, auth: AuthService, progress: PaletteHost, show_publish: Callable[[], None]) -> None:
         self._ui = ui
         self._show_publish = show_publish
-        self._uploads = AttachmentUpload(ui, tasks, host, progress, config, auth, self._reload)
+        self._uploads = AttachmentUpload(ui, tasks, host, progress, config, auth, self._reload,
+                                         lambda status: bridge.push("upload_status", status))   # the pages are told how far it has got
         self._tasks = tasks
         self._host = host
         self._config = config
@@ -213,9 +214,9 @@ class ItemPanel:
         bridge.register("bom_result", self._lookup_result)
         bridge.register("changelog_load", self._changelog_load)
         bridge.register("changelog_result", self._lookup_result)
-        bridge.register("sync_check_load", lambda payload: self._design_check(payload, check_properties))   # whether the item matches the open design: its mapped fields
+        bridge.register("sync_check_load", lambda payload: self._design_check(payload, check_properties, "sync_check_result"))   # whether the item matches the open design: its mapped fields
         bridge.register("sync_check_result", self._lookup_result)
-        bridge.register("bom_check_load", lambda payload: self._design_check(payload, check_bom))   # whether its Bill of Materials does
+        bridge.register("bom_check_load", lambda payload: self._design_check(payload, check_bom, "bom_check_result"))   # whether its Bill of Materials does
         bridge.register("bom_check_result", self._lookup_result)
         bridge.register("tab_counts_load", self._tab_counts_load)
         bridge.register("tab_counts_result", self._lookup_result)
@@ -241,39 +242,39 @@ class ItemPanel:
         return {"cancelled": len(tokens)}
 
     def _where_used_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading the parents of an item (or of one of those parents, given its ``up`` link); the page polls for them."""
+        """Start reading the parents of an item (or of one of those parents, given its ``up`` link); the answer is pushed to the page."""
         workspace_id, item_id, up = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("up") or "")
-        return self._lookup(payload, lambda client: WhereUsedService(client).read(workspace_id, item_id, up))
+        return self._lookup(payload, lambda client: WhereUsedService(client).read(workspace_id, item_id, up), "where_used_result")
 
     def _files_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading the item's files; the page polls for them."""
+        """Start reading the item's files; the answer is pushed to the page."""
         workspace_id, item_id, item_urn = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("item_urn") or "")
-        return self._lookup(payload, lambda client: AttachmentService(client).files(workspace_id, item_id, item_urn))
+        return self._lookup(payload, lambda client: AttachmentService(client).files(workspace_id, item_id, item_urn), "files_result")
 
     def _workflows_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading the associated workflows that reference the item; the page polls for them."""
+        """Start reading the associated workflows that reference the item; the answer is pushed to the page."""
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
-        return self._lookup(payload, lambda client: AssociatedWorkflowService(client).read(workspace_id, item_id))
+        return self._lookup(payload, lambda client: AssociatedWorkflowService(client).read(workspace_id, item_id), "workflows_result")
 
     def _bom_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading the item's bill of materials; the page polls for it."""
+        """Start reading the item's bill of materials; the answer is pushed to the page."""
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         view_id, flat = str(payload.get("view_id") or ""), bool(payload.get("flat"))
-        return self._lookup(payload, lambda client: BomViewService(client).read(workspace_id, item_id, view_id, flat))
+        return self._lookup(payload, lambda client: BomViewService(client).read(workspace_id, item_id, view_id, flat), "bom_result")
 
     def _changelog_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading one page of the item's change log (from ``offset``); the page polls for it."""
+        """Start reading one page of the item's change log (from ``offset``); the answer is pushed to the page."""
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         offset = int(payload.get("offset") or 0)
-        return self._lookup(payload, lambda client: ChangeLogService(client).read(workspace_id, item_id, offset))
+        return self._lookup(payload, lambda client: ChangeLogService(client).read(workspace_id, item_id, offset), "changelog_result")
 
     def _tab_counts_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Start reading how many entries each tab of the item holds now (a tab's Refresh button); the page polls for them."""
+        """Start reading how many entries each tab of the item holds now (a tab's Refresh button); the answer is pushed to the page."""
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
-        return self._lookup(payload, lambda client: TabService(client).counts(workspace_id, item_id))
+        return self._lookup(payload, lambda client: TabService(client).counts(workspace_id, item_id), "tab_counts_result")
 
-    def _design_check(self, payload: Dict[str, Any], check: Callable[[ShownItem], Dict[str, Any]]) -> Dict[str, Any]:
-        """Run ``check`` (``sync.up_to_date``) of the item shown against the open design on a worker thread, as a look-up the page polls. UI thread."""
+    def _design_check(self, payload: Dict[str, Any], check: Callable[[ShownItem], Dict[str, Any]], result_action: str) -> Dict[str, Any]:
+        """Run ``check`` (``sync.up_to_date``) of the item shown against the open design on a worker thread, as a look-up whose answer is pushed to the page. UI thread."""
         self._workspace_id(payload)   # checks the page said which item
         item_id = str(payload.get("item_id") or "")
         ref, number = _active_ref(), self._number
@@ -286,7 +287,7 @@ class ItemPanel:
             mfg = MfgGraphQlClient(self._config.effective_settings(), self._auth, fm.cancel)
             cfg = self._config.config.workspaces.get(ITEMS_KIND)
             return check(ShownItem(self._numbers.reads, mfg, fm, cfg, ref_found.model_id, ref_found.time, number, item_id))
-        return self._lookup(payload, work)
+        return self._lookup(payload, work, result_action)
 
     @staticmethod
     def _workspace_id(payload: Dict[str, Any]) -> str:
@@ -296,8 +297,9 @@ class ItemPanel:
             raise ValueError("Which item to look up was not given.")
         return workspace_id
 
-    def _lookup(self, payload: Dict[str, Any], work: Callable[[FmClient], Any]) -> Dict[str, Any]:
-        """Run ``work`` on a worker thread; the page asks for its answer by the request id it gave."""
+    def _lookup(self, payload: Dict[str, Any], work: Callable[[FmClient], Any], result_action: str) -> Dict[str, Any]:
+        """Run ``work`` on a worker thread. The answer is pushed to the page as ``result_action`` when it is done; the page also asks for it
+        (by the request id it gave) every so often, in case the push is missed."""
         request = str(payload["request"])
         with self._lock:
             if len(self._lookups) > LOOKUPS_KEPT:   # the page has long read the old answers
@@ -305,7 +307,7 @@ class ItemPanel:
                     del self._lookups[key]
             self._lookups[request] = {"pending": True, "ok": False, "message": "", "result": None}
             token = self._tokens[request] = self._session.token.child(f"look-up {request}")
-        threading.Thread(target=self._run_lookup, args=(request, work, token), daemon=True).start()
+        threading.Thread(target=self._run_lookup, args=(request, work, token, result_action), daemon=True).start()
         return {"started": True}
 
     def _lookup_result(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -314,7 +316,7 @@ class ItemPanel:
             state = self._lookups.get(request) or {"pending": False, "ok": False, "message": "That look-up is no longer known.", "result": None}
             return {**state, "request": request}
 
-    def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken) -> None:
+    def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken, result_action: str) -> None:
         try:
             client = FmClient(self._config.effective_settings(), self._auth, token)
             state = {"pending": False, "ok": True, "message": "", "result": work(client)}
@@ -328,6 +330,13 @@ class ItemPanel:
         with self._lock:
             self._lookups[request] = state
             self._tokens.pop(request, None)
+        self._tell_page(result_action, {**state, "request": request})
+
+    def _tell_page(self, action: str, result: Dict[str, Any]) -> None:
+        """Push ``result`` to the Item page as ``action``, in the envelope of a reply, from any thread (the send is done on Fusion's thread).
+        Only this page is told: a Bill of Materials is not for the other panels."""
+        data = json.dumps({"ok": True, "result": result, "error": None})
+        self._tasks.post(lambda: self._host.send(action, data))
 
     def _status(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """The page's poll: still looking (``pending``), done (``ok`` with ``view``) or failed (``message``)."""
@@ -667,8 +676,11 @@ class ItemPanel:
             log.exception("Could not read the Fusion Manage item")
             state = _answer(message=str(exc) or type(exc).__name__)
         with self._lock:
-            if self._state["seq"] == seq:   # a newer open replaces this one
-                self._state.update(state)
+            if self._state["seq"] != seq:   # a newer open replaces this one
+                return
+            self._state.update(state)
+            answer = dict(self._state)
+        self._tell_page("get_item_view", answer)
 
     def _read(self, number: str, cancel: CancelToken) -> Dict[str, Any]:
         problem = self._config.items_setup_problem()   # the ribbon greys the command out too; this covers the other ways in
