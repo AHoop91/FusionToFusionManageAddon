@@ -99,6 +99,10 @@ class FmClient:
             raise FmApiError("No usable Fusion hub is active; open the hub of your Fusion Manage tenant.")
         return f"https://{self.tenant}{FM_HOST_SUFFIX}"
 
+    def access_token(self) -> str:
+        """A valid access token (an expired one is refreshed); raises ``AuthError`` when not signed in."""
+        return self._auth.get_access_token(self._settings)
+
     @staticmethod
     def https_only(url: Any) -> str:
         """Accept only https links so a bad response cannot inject other schemes."""

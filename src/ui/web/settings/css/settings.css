@@ -5,23 +5,98 @@
 /* Connection form shown on the login screen while signed out. */
 #login-settings-slot { margin-top: 14px; }
 
-/* ---- General tab: configuration mode options ---------------------------- */
-.card .mode-option {
-  display: flex; gap: 10px; align-items: flex-start; margin: 10px 0;
-  padding: 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
-}
-.card .mode-option:has(input:checked) { border-color: var(--accent); background: #f2f9fd; }
-.mode-option input { margin-top: 3px; }
-.mode-text { display: flex; flex-direction: column; gap: 4px; }
-.mode-title { font-weight: 600; }
-.mode-desc { font-weight: 400; font-size: 12px; color: var(--muted); }
+/* The hub the settings on a screen are for. */
+.hub-line { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
 
-/* The path of the shared file, under the mode options. */
-.shared-source { margin: 0 0 10px; }
-.shared-status { margin: 8px 0 0; padding: 8px 12px; font-size: 12px; border-radius: 4px; border: 1px solid; }
-.shared-status[data-state="ok"] { color: #1b5e20; background: #e8f5e9; border-color: #a5d6a7; }
-.shared-status[data-state="cached"] { color: var(--text); background: #fff8e1; border-color: #f0d98a; }
-.shared-status[data-state="error"] { color: #b71c1c; background: #fdecea; border-color: #f1aeb5; }
+/* ---- Connection tab: one card, each field with a label, its input and a line of help ---- */
+.conn-card { padding: 20px 22px 22px; }
+.conn-head { margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.conn-card .conn-head h2 { margin: 0; font-size: 16px; line-height: 1.25; }
+/* What the APS app must be set to, under the title. */
+.conn-guide { margin: 0 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.conn-guide p { margin: 0; line-height: 1.3; }
+.conn-guide .link-btn { margin-top: 0; font-size: 12px; line-height: 1.3; }   /* the shared link-btn margin would add a gap above the line */
+/* The settings the APS app needs: a bold name with its value beside it. */
+.app-types { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--text); }
+.req-row { display: grid; grid-template-columns: 130px 1fr; align-items: baseline; gap: 4px 10px; }
+.req-row strong { font-weight: 700; }
+.pills { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pill { padding: 2px 10px; border-radius: 999px; background: #e1f1fa; color: #0b5d8a; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.field { margin-bottom: 18px; }
+.field > label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--text); }
+.field input { width: 100%; box-sizing: border-box; margin-top: 0; }
+.field .inline-row { margin-top: 0; }
+/* Info icon beside a label; its tooltip opens on hover or keyboard focus. */
+.info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 4px; border-radius: 50%;
+  background: var(--muted); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; cursor: help; vertical-align: 1px; }
+.info:hover, .info:focus-visible { background: var(--accent); outline: 0; }
+.tip { display: none; position: absolute; top: 20px; left: -8px; z-index: 5; width: 240px; padding: 8px 10px; border-radius: 6px; background: #2b3340; color: #fff;
+  font-size: 12px; font-weight: 400; line-height: 1.45; text-transform: none; text-align: left; letter-spacing: 0; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); }
+.tip-end { left: auto; right: -8px; }
+.info:hover .tip, .info:focus .tip { display: block; }
+.field .hint { margin: 6px 0 0; }
+.field-pair { display: grid; grid-template-columns: 110px 1fr; gap: 16px; }
+.field-pair .field { margin-bottom: 0; min-width: 0; }
+.conn-card .url-box { padding: 8px 10px; font-size: 12px; color: var(--muted); }
+
+/* ---- First setup wizard on the login screen ------------------------------ */
+.wiz-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; }
+.wiz-head h2 { margin: 0; font-size: 16px; }
+.hub-pill { flex: none; max-width: 50%; padding: 3px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-radius: 3px; background: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; }
+.wizard > .muted { margin: 0 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); font-size: 12px; line-height: 1.4; }
+.wiz-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.wiz-step { position: relative; display: flex; gap: 12px; align-items: flex-start; padding-bottom: 22px; }
+.wiz-step:last-child { padding-bottom: 0; }
+/* The line joining one step number to the next. */
+.wiz-step:not(:last-child)::before { content: ""; position: absolute; left: 11px; top: 28px; bottom: 4px; width: 2px; background: var(--border); }
+.wiz-num { position: relative; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.wiz-step.done .wiz-num { background: #2e7d32; }
+.wiz-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.wiz-body > strong { font-size: 14px; line-height: 24px; }
+.wiz-body .hint, .wiz-body .row { margin: 0; }
+.wiz-body .hint { line-height: 1.4; }
+.wiz-body .link-btn { margin-top: 0; font-size: 12px; }
+.wiz-body .app-types { margin-top: 4px; font-size: 12px; }
+.wiz-body .req-row { grid-template-columns: 1fr; gap: 3px; }   /* the panel is narrow: name above its value */
+.wiz-body .row { margin-top: 4px; }
+.wiz-field input { width: 100%; box-sizing: border-box; }
+.wiz-callback { flex: 1; min-width: 0; padding: 6px 8px; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
+
+#view-app > [hidden] { display: none; }   /* beats the display set on main above, so the loader, prompt and tenant step can replace the tabs */
+
+/* A member of the hub is asked to find the Configuration File: one sentence, one button. */
+.member-card { padding: 28px 24px; text-align: center; }
+.member-hub { display: inline-block; max-width: 100%; margin-bottom: 14px; padding: 3px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--muted); }
+.member-card h2 { margin: 0 0 10px; font-size: 18px; }
+.member-card p { margin: 0 0 18px; line-height: 1.5; }
+.member-card .btn { min-width: 220px; }
+.member-card .hint { margin: 18px 0 0; }
+.member-status { margin: 14px 0 0; font-size: 12px; color: var(--muted); }
+.member-status[data-state="error"] { color: #b71c1c; }
+.member-status[hidden] { display: none; }
+
+/* Where a member's settings were read from, over the (read-only) Connection tab. */
+.hub-file-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 16px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.hub-file-bar[hidden] { display: none; }
+.hub-file-info { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; }
+.hub-file-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.hub-file-label { color: var(--muted); }
+.hub-file-actions { display: flex; gap: 8px; }
+.hub-file-msg { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--muted); }
+.hub-file-msg[data-state="error"] { color: #b71c1c; }
+.hub-file-msg[hidden] { display: none; }
+/* Tenant step: one field with Find beside it, the outcome as one line under it. */
+#tenant-wizard .field { margin-bottom: 20px; }.wt-msg { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.wt-msg[data-state="ok"] { color: #1b5e20; }
+.wt-msg[data-state="error"] { color: #b71c1c; }
+.wt-msg[hidden] { display: none; }
+
+/* ---- Connection tab: the callback URL to copy ---- */
+.url-box { flex: 1; min-width: 0; padding: 6px 8px; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
 
 /* ---- Shared Configuration lock ------------------------------------------ */
 /* Fieldsets used only to disable a group of controls at once. */
@@ -39,8 +114,7 @@
 #view-app > main { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 main > .tab-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 /* The lockable form wraps the body and footer, so it fills the panel too. */
-main > .tab-panel.active > .lockable, #settings-slot { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-#settings-slot > .lockable { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+main > .tab-panel.active > .lockable, #settings-slot, #conn-settings { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .tab-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
 .tab-footer { flex: none; padding: 10px 16px; background: var(--surface); border-top: 1px solid var(--border); }
 .tab-footer .row { justify-content: flex-end; }
@@ -58,3 +132,34 @@ main > .tab-panel.active > .lockable, #settings-slot { flex: 1; display: flex; f
 /* The connection form on the sign-in screen scrolls with that screen. */
 .view-scroll .tab-body { overflow: visible; padding: 0; }
 .view-scroll .tab-footer { padding: 12px 0 0; background: none; border-top: 0; }
+
+/* ---- Save dialog: where a Hub Admin's Save keeps the settings ---- */
+.sm-dialog { max-width: 460px; padding: 22px; }
+.sm-sub { margin: 4px 0 16px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.sm-sub strong { color: var(--text); }
+.sm-choices { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.sm-choice { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; font: inherit; text-align: left; cursor: pointer; }
+.sm-choice:hover { border-color: var(--accent); }
+.sm-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sm-choice.selected { border-color: var(--accent); background: #f2f9fd; box-shadow: 0 0 0 1px var(--accent); }
+.sm-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--surface); color: var(--muted); }
+.sm-choice.selected .sm-icon { background: #d9edf9; color: var(--accent); }
+.sm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sm-text strong { font-size: 14px; }
+.sm-note { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.sm-radio { flex: none; width: 16px; height: 16px; border: 2px solid var(--border); border-radius: 50%; box-sizing: border-box; }
+.sm-choice.selected .sm-radio { border-color: var(--accent); background: radial-gradient(var(--accent) 0 40%, #fff 45%); }
+
+/* ---- Progress of a save to the Fusion Hub ---- */
+.sp-dialog { max-width: 380px; padding: 32px 28px 26px; text-align: center; }
+.sp-content { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.sp-content .balls { margin-bottom: 4px; }
+.sp-title { margin: 0; font-size: 17px; font-weight: 600; }
+.sp-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.sp-content .btn { margin-top: 10px; min-width: 120px; }
+.sp-badge { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; }
+.sp-badge svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sp-content[data-state="done"] .sp-badge { background: #e3f4e6; color: #1b7a2e; }
+.sp-content[data-state="failed"] .sp-badge { background: #fdecec; color: #b71c1c; }

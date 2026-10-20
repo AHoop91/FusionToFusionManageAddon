@@ -1,23 +1,34 @@
-"""Current-user profile from the Fusion Manage REST API.
+"""Current-user profile from the Autodesk user profile API.
 
-``GET /api/v3/users/@me`` returns the signed-in user, including
-``image.small|medium|large`` links. The links point at Autodesk's public
-profile image host, so the panel loads them directly.
+``GET /userinfo`` (scope ``user-profile:read``) returns the signed-in user, including a ``picture`` link. It needs no Fusion Manage
+tenant, so the avatar can show before one is set. The link points at Autodesk's public profile image host, so the panel loads it
+directly.
 """
 
+import json
+import urllib.request
 from typing import Any, Dict
 
 from ..auth.errors import AuthError
+from ..core.http import OPENER
 from ..core.logging_setup import get_logger
-from .client import FmApiError, FmClient
+from .client import REQUEST_TIMEOUT_SECONDS, FmClient
 
 log = get_logger("fm.profile")
 
-PROFILE_PATH = "/api/v3/users/@me"
+USERINFO_URL = "https://api.userprofile.autodesk.com/userinfo"   # a fixed host: the access token goes nowhere else
+
+
+def parse_userinfo(data: Dict[str, Any], tenant: str) -> Dict[str, Any]:
+    """The panel's profile from an Autodesk ``/userinfo`` answer."""
+    name = data.get("name") or " ".join(p for p in (data.get("given_name"), data.get("family_name")) if p)
+    picture = FmClient.https_only(data.get("picture"))
+    return {"name": name or "", "email": data.get("email", ""), "picture": picture, "picture_large": picture,
+            "tenant": tenant, "user_id": str(data.get("sub") or "")}
 
 
 class ProfileService:
-    """Reads the signed-in user's profile through an ``FmClient``."""
+    """Reads the signed-in user's profile with the access token of an ``FmClient``."""
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -28,28 +39,17 @@ class ProfileService:
                 "tenant": self._client.tenant, "user_id": ""}
 
     def current(self) -> Dict[str, Any]:
-        """Return the user's name, email, avatar URLs, tenant and id.
+        """Return the user's name, email, avatar URL, tenant and id.
 
-        Failure is non-fatal: values are empty and the panel falls back to a
-        generic avatar.
+        Failure is non-fatal: values are empty and the panel falls back to a generic avatar.
         """
         try:
-            data = self._client.get_json(PROFILE_PATH)
-        except (AuthError, FmApiError) as exc:
-            log.warning("Could not load Fusion Manage user profile: %s", exc)
+            request = urllib.request.Request(USERINFO_URL, headers={"Accept": "application/json", "Authorization": f"Bearer {self._client.access_token()}"})
+            with OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+                data = json.loads(response.read())
+            if not isinstance(data, dict):
+                raise ValueError("unexpected user profile")
+        except (AuthError, OSError, ValueError) as exc:   # OSError: the network, or a refusal such as 403 for a sign-in without the scope
+            log.warning("Could not load the Autodesk user profile: %s", exc)
             return self.empty()
-
-        https_only = self._client.https_only
-        name = data.get("displayName") or " ".join(
-            p for p in (data.get("firstName"), data.get("lastName")) if p)
-        image = data.get("image") or {}
-        return {
-            "name": name or "",
-            "email": data.get("email", ""),
-            # Header avatar is small on screen; the account card shows a bigger
-            # one, so prefer the largest image there to avoid pixelation.
-            "picture": https_only(image.get("medium") or image.get("small") or image.get("large")),
-            "picture_large": https_only(image.get("large") or image.get("medium") or image.get("small")),
-            "tenant": self._client.tenant,
-            "user_id": str(data.get("userId") or data.get("id") or ""),
-        }
+        return parse_userinfo(data, self._client.tenant)

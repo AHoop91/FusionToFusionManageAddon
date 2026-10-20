@@ -106,7 +106,7 @@ A new item is created with:
 | Content | Where it comes from |
 |---|---|
 | Every **mapped property** that has a value | The Manufacturing Data Model, through your [field mapping](../configuration/index.md#workspace-and-field-mapping) |
-| Every **static value** | Your workspace settings. Static values are set on every new item |
+| Every **default value** | Your workspace settings. Default values are set on every new item |
 | The **thumbnail** | The Data Model, when the thumbnail is mapped to an image field |
 | The **component link** | The Fusion Manage component for the part, when a linking field is chosen |
 
@@ -153,7 +153,7 @@ The add-in searches the Items workspace for the component's item number.
 An update sends only what has changed:
 
 - **Mapped properties whose values differ.** These are the ones marked **Update** in the Details Panel.
-- **Static values the item does not hold yet.** A static value that is already set is left alone.
+- **Default values the item does not hold yet.** A default value that is already set is left alone.
 - **The component link, if the item lacks it.**
 - **The thumbnail.** Images cannot be compared, so the thumbnail goes along with an update that already has a difference. It is not sent on its own.
 

@@ -104,35 +104,35 @@ Tell the add-in which Fusion Manage workspace to write to and which property fil
 
 ## Workspace and Field Mapping
 
-The add-in reads each component's properties from the [Manufacturing Data Model](#manufacturing-data-model). This page explains how you tell it where to put them: which Fusion Manage workspace to write to, and which Data Model property fills which Fusion Manage field. That is called the **mapping**, and you set it on the **Workspaces** tab of **Preferences**.
+The add-in reads each component's properties from the [Manufacturing Data Model](#manufacturing-data-model). This page explains how you tell it where to put them: which Fusion Manage workspace to write to, and which Data Model property fills which Fusion Manage field. That is called the **mapping**, and you set it on the **Item Workspace** tab of **Preferences**.
 
 You normally set it up once, then share it with colleagues by export and import ([Installation and Authentication](../getting-started/installation.md#sharing-a-setup-with-colleagues)).
 
 ### The Items workspace
 
-The add-in currently works with one workspace kind, **Items** ("Manufacturing items created in Fusion Manage"). On the **Workspaces** tab you will find a card for it with:
+The add-in currently works with one workspace kind, **Items** ("Manufacturing items created in Fusion Manage"). On the **Item Workspace** tab you will find a card for it with:
 
 1. **Items Workspace**: a drop-down of the revision controlled workspaces in your tenant. Choose the one that holds your items by name.
 2. **Validation**: happens automatically when you pick a workspace or open the tab. It checks the workspace and loads its field list so the pickers below can show real field names. The mapping controls stay disabled until the workspace validates (a tick appears next to the workspace).
 3. **Component linking**: optional, see below.
 4. **Field mapping**: which Data Model property fills which Fusion Manage field. **Add default fields** loads the standard set (see [Default fields](#default-fields)).
-5. **Static values**: fields set to a fixed value on every published item.
+5. **Default Fusion Manage Values**: fields set to a fixed value on every published item.
 
 Click **Save** when you are done. Saving is refused while the settings have problems, and the message says what to fix.
 
-!!! example "Screenshot placeholder: Preferences, Workspaces tab with a validated Items workspace"
+!!! example "Screenshot placeholder: Preferences, Item Workspace tab with a validated Items workspace"
     **Show:** The Items card with the chosen workspace with its validation tick, and the mapping sections.
 
-    Save the image as `docs/images/workspaces-tab.png`, then replace this box with `![Preferences, Workspaces tab with a validated Items workspace](../images/workspaces-tab.png)`.
+    Save the image as `docs/images/workspaces-tab.png`, then replace this box with `![Preferences, Item Workspace tab with a validated Items workspace](../images/workspaces-tab.png)`.
 
 ### Field mapping
 
-Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Manage field (right):
+Each row of **Mapped fields** pairs a Fusion Manage item field (left) with the component property that fills it (right):
 
 | Column | Meaning |
 |---|---|
-| **Fusion field** | The source: a Data Model property. |
-| **Manage field** | The Fusion Manage field it fills, shown with its title and ID. |
+| **Fusion Manage Item Field** | The Fusion Manage field it fills, shown with its title and ID. |
+| **Component Property** | The source: a Data Model property. |
 
 #### Available sources
 
@@ -145,7 +145,7 @@ Each row of **Mapped fields** pairs a Data Model source (left) with a Fusion Man
 - The workspace ID must be a number.
 - Every row needs both a source and a Fusion Manage field.
 - **Item Number** must be mapped to the Fusion Manage field that holds it (usually `NUMBER`). Without it the add-in cannot tell Fusion Manage which field carries the item number, so a workspace with no such mapping is reported as not set up.
-- A source can be mapped only once, and a Fusion Manage field can be filled only once, whether by a mapping, a static value or the component-linking field.
+- A source can be mapped only once, and a Fusion Manage field can be filled only once, whether by a mapping, a default value or the component-linking field.
 
 #### Picklist and number fields
 
@@ -161,7 +161,7 @@ If the target field is a picklist, the add-in looks up the picklist's options an
     Save the image as `docs/images/load-defaults-dialog.png`, then replace this box with `![Load default fields confirmation](../images/load-defaults-dialog.png)`.
 
 !!! warning "It replaces your mappings"
-    Loading the defaults **replaces all existing field mappings** with the standard set. Any mapping you added or changed is removed. A confirmation (**Load default fields?**) asks first, and you can cancel. Static values and the component-linking field are not part of the defaults.
+    Loading the defaults **replaces all existing field mappings** with the standard set. Any mapping you added or changed is removed. A confirmation (**Load default fields?**) asks first, and you can cancel. Default Fusion Manage Values and the component-linking field are not part of the defaults.
 
 #### What is added
 
@@ -172,31 +172,30 @@ If the target field is a picklist, the add-in looks up the picklist's options an
 | 3 | Description | `DESCRIPTION` | |
 | 4 | Thumbnail | `IMAGE` | The component's image, sent as a file |
 | 5 | Material | `MATERIAL` | Read from the Data Model's `materialName` |
-| 6 | Custom property `Type` | `TYPE` | A picklist. See [the Type field](#the-type-field-and-its-picklist) |
-| 7 | Physical Height | `HEIGHT` | Bounding box |
-| 8 | Physical Width | `WIDTH` | Bounding box |
-| 9 | Physical Length | `LENGTH` | Bounding box |
-| 10 | Physical Mass | `ITEM_WEIGHT` | Converted to kilograms |
+| 6 | Physical Height | `HEIGHT` | Bounding box |
+| 7 | Physical Width | `WIDTH` | Bounding box |
+| 8 | Physical Length | `LENGTH` | Bounding box |
+| 9 | Physical Mass | `ITEM_WEIGHT` | Converted to kilograms |
 
 Dimensions are sent as plain numbers in the unit the Data Model reports. Only mass is converted, to kilograms, because that is the unit of the Fusion Manage weight field. Physical properties are only available once the Data Model has finished calculating them ([Manufacturing Data Model](#physical-properties)).
 
 #### Fields your workspace must have
 
-Each default writes to a Fusion Manage field **by its field ID**, so the workspace must contain a field with that exact ID: `NUMBER`, `TITLE`, `DESCRIPTION`, `IMAGE`, `MATERIAL`, `TYPE`, `HEIGHT`, `WIDTH`, `LENGTH` and `ITEM_WEIGHT`.
+Each default writes to a Fusion Manage field **by its field ID**, so the workspace must contain a field with that exact ID: `NUMBER`, `TITLE`, `DESCRIPTION`, `IMAGE`, `MATERIAL`, `HEIGHT`, `WIDTH`, `LENGTH` and `ITEM_WEIGHT`.
 
 !!! important "Missing fields are skipped, not reported"
     Once the workspace has been validated, **Add default fields** leaves out any default whose field ID does not exist in your workspace. It does not warn you. If you load the defaults and a row you expected is missing, the field is missing, or its ID is different, in Fusion Manage.
 
-Check the result after loading: the **Mapped fields** list should show all ten rows. If your workspace has been customised, add or correct the missing rows by hand.
+Check the result after loading: the **Mapped fields** list should show all nine rows. If your workspace has been customised, add or correct the missing rows by hand.
 
 !!! example "Screenshot placeholder: Mapped fields after Add default fields"
-    **Show:** The ten default mappings in the Mapped fields list.
+    **Show:** The nine default mappings in the Mapped fields list.
 
     Save the image as `docs/images/mapped-fields-defaults.png`, then replace this box with `![Mapped fields after Add default fields](../images/mapped-fields-defaults.png)`.
 
 #### The Type field and its picklist
 
-The `Type` default connects two systems, and **the values must be identical in both** for it to map. If they differ, the value cannot be sent.
+A `Type` mapping, which you add by hand, connects two systems, and **the values must be identical in both** for it to map. If they differ, the value cannot be sent.
 
 ```mermaid
 flowchart TB
@@ -283,18 +282,18 @@ The picklist is not fixed. You can extend it as your organisation needs, provide
 
 Do the Fusion Manage change **first** if you can. That way a component given the new Type can be published straight away, instead of having its Type skipped until the option exists.
 
-The same rule applies to **any picklist field** you map: the Fusion custom property and the Fusion Manage field must offer the same values. `Type` is simply the one included in the defaults.
+The same rule applies to **any picklist field** you map: the Fusion custom property and the Fusion Manage field must offer the same values. `Type` is the usual example.
 
 The Item panel shows an item's Type in the line under its title, next to its version and lifecycle, so the field is worth having even if you map nothing else.
 
-### Static values
+### Default Fusion Manage Values
 
-A static value sets a Fusion Manage field to the same value on every published item, regardless of the design. Pick the field, then enter or choose the value (a picklist field offers its options). For an existing item, a static value is applied when the item lacks it.
+A default value sets a Fusion Manage item field to the same value on every published item, regardless of the design. Choose **Add default value**, pick the field, then enter or choose the value (a picklist field offers its options). For an existing item, a default value is applied when the item lacks it.
 
-!!! example "Screenshot placeholder: Static values"
-    **Show:** A static value row, with a Fusion Manage field and its value.
+!!! example "Screenshot placeholder: Default Fusion Manage Values"
+    **Show:** A default value row, with a Fusion Manage item field and its value.
 
-    Save the image as `docs/images/static-values.png`, then replace this box with `![Static values](../images/static-values.png)`.
+    Save the image as `docs/images/static-values.png`, then replace this box with `![Default Fusion Manage Values](../images/static-values.png)`.
 
 ### Component linking
 

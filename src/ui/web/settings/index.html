@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/settings.css">
   <link rel="stylesheet" href="css/workspaces.css">
   <link rel="stylesheet" href="css/exports.css">
+  <link rel="stylesheet" href="css/hub-picker.css">
 </head>
 <body>
   <!-- Shared top bar, filled in by shell.js. -->
@@ -20,8 +21,66 @@
   <!-- ===== Signed-out view: sign-in only ================================ -->
   <div id="view-login" class="view">
     <div id="login-form" class="view-scroll" hidden>
-      <div class="card login-card">
+      <!-- First setup, until a Client ID is saved: replaces the sign-in card. -->
+      <div id="setup-wizard" class="card wizard" hidden>
+        <header class="wiz-head">
+          <h2>Set up Fusion Manage</h2>
+          <span class="hub-pill" data-hub-name></span>
+        </header>
+        <p class="muted">Sign-in needs an app of your own on the Autodesk Platform Services (APS) portal. Follow these steps once.</p>
+        <ol class="wiz-steps">
+          <li class="wiz-step">
+            <span class="wiz-num">1</span>
+            <div class="wiz-body">
+              <strong>Create an APS app</strong>
+              <p class="hint">Create it on the APS portal with the settings below. <button id="wiz-guide" class="link-btn" type="button">Open the setup guide</button></p>
+              <div class="app-types">
+                <div class="req-row"><strong>Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
+                <div class="req-row"><strong>Grant Type</strong><span>Authorization Code with PKCE</span></div>
+                <div class="req-row"><strong>API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
+              </div>
+            </div>
+          </li>
+          <li class="wiz-step">
+            <span class="wiz-num">2</span>
+            <div class="wiz-body">
+              <strong>Add the callback URL</strong>
+              <p class="hint">On your app's page, add this as a Callback URL, and save the app.</p>
+              <span class="inline-row">
+                <code id="wiz-callback" class="wiz-callback"></code>
+                <button id="wiz-copy" class="btn btn-secondary" type="button">Copy</button>
+              </span>
+            </div>
+          </li>
+          <li class="wiz-step">
+            <span class="wiz-num">3</span>
+            <div class="wiz-body">
+              <strong>Enter the Client ID</strong>
+              <p class="hint">Copy it from your app's page on the APS portal.</p>
+              <label class="wiz-field">
+                <input id="wiz-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the Client ID of your app">
+              </label>
+            </div>
+          </li>
+          <li class="wiz-step">
+            <span class="wiz-num">4</span>
+            <div class="wiz-body">
+              <strong>Sign in</strong>
+              <p class="hint">Saves the Client ID and opens the Autodesk sign-in in your browser.</p>
+              <div class="row">
+                <button id="wiz-signin" class="btn" type="button" disabled>Save and sign in</button>
+                <button class="btn btn-secondary" type="button" data-close>Close</button>
+              </div>
+            </div>
+          </li>
+        </ol>
+        <button id="wiz-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
+        <span id="wiz-msg" class="muted"></span>
+      </div>
+
+      <div id="login-card" class="card login-card">
         <h2>Sign in to Fusion Manage</h2>
+        <p class="hub-line">Hub: <b data-hub-name></b></p>
         <p id="conn-summary" class="muted">Loading...</p>
         <div class="row">
           <button id="signin-btn" class="btn">Sign in</button>
@@ -44,100 +103,116 @@
 
   <!-- ===== Signed-in view ============================================== -->
   <div id="view-app" class="view" hidden>
-    <nav class="tabs" data-group="settings" role="tablist">
-      <button class="tab active" data-tab="general">General</button>
-      <button class="tab" data-tab="connection">Connection</button>
-      <button class="tab" data-tab="workspaces">Workspaces</button>
+    <!-- Shown while the user's role in the hub is checked, each time the panel opens. -->
+    <div id="role-check" class="loader" hidden>
+      <div class="balls" role="status" aria-label="Validating"><span></span><span></span><span></span></div>
+      <p class="muted">Validating your access to this hub...</p>
+    </div>
+
+    <!-- A member of the hub (not a Hub Admin) does not set it up: they find the Configuration File a Hub Admin saved in the Hub. -->
+    <div id="member-prompt" class="view-scroll" hidden>
+      <div class="card member-card">
+        <span class="member-hub" data-hub-name></span>
+        <h2>Find your Configuration File</h2>
+        <p>A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
+        <button id="member-find" class="btn" type="button">Find Configuration File</button>
+        <p id="member-status" class="member-status" hidden></p>
+        <p class="hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
+      </div>
+    </div>
+
+    <!-- Last step of the first setup, after signing in: replaces the tabs until a tenant is saved. Required. -->
+    <div id="tenant-wizard" class="view-scroll" hidden>
+      <div class="card wizard">
+        <header class="wiz-head">
+          <h2>Connect your Tenant</h2>
+          <span class="hub-pill" data-hub-name></span>
+        </header>
+        <p class="muted">Enter your Fusion Manage tenant, or select <b>Find</b> to detect it automatically.</p>
+        <div class="field">
+          <label for="wt-tenant">Tenant <span class="info" tabindex="0" aria-label="About Tenant">i<span class="tip" role="tooltip">The first part of your Fusion Manage address: mycompany in https://mycompany.autodeskplm360.net. Find reads it from the item the open design is linked to, so open a linked design first.</span></span></label>
+          <span class="inline-row">
+            <input id="wt-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
+            <button id="wt-find" type="button" class="btn btn-secondary">Find</button>
+          </span>
+          <p id="wt-msg" class="wt-msg" hidden></p>
+        </div>
+        <button id="wt-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
+        <div class="row">
+          <button id="wt-save" class="btn" type="button" disabled>Save and finish</button>
+        </div>
+      </div>
+    </div>
+
+    <nav id="settings-tabs" class="tabs" data-group="settings" role="tablist">
+      <button class="tab active" data-tab="connection">Connection</button>
+      <button class="tab" data-tab="workspaces">Item Workspace</button>
       <button class="tab" data-tab="exports">Export</button>
-      <button class="tab" data-tab="profile">Profile</button>
     </nav>
 
-    <main>
-      <section id="sub-general" class="tab-panel active" data-group="settings">
-        <div class="tab-body">
-          <div class="card">
-            <h2>Configuration mode</h2>
-            <p class="hint">
-              The mode decides where the add-in gets its Fusion Manage connection
-              details (Client ID, tenant, callback port and scopes). Workspace
-              IDs and field mappings are configured separately on the Workspaces tab.
-            </p>
-
-            <label class="mode-option">
-              <input type="radio" name="mode" value="local" checked>
-              <span class="mode-text">
-                <span class="mode-title">Local Configuration</span>
-                <span class="mode-desc">
-                  You enter the connection details yourself on the Connection tab.
-                  They are stored in your user profile on this machine only, and
-                  sign-in tokens are kept encrypted by the operating system.
-                  Best for individual use, testing and setup.
-                </span>
-              </span>
-            </label>
-
-            <label class="mode-option">
-              <input type="radio" name="mode" value="company">
-              <span class="mode-text">
-                <span class="mode-title">Shared Configuration</span>
-                <span class="mode-desc">
-                  The connection details, workspaces, mappings and exports are read
-                  from one configuration file on a network path or shared folder, so
-                  everyone uses the same setup. They cannot be changed here. Create
-                  the file with Export on a machine that is set up.
-                </span>
-              </span>
-            </label>
-
-            <div id="shared-source" class="shared-source" hidden>
-              <label>Shared configuration file
-                <span class="inline-row">
-                  <input id="f-company-source" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. \\server\share\Fusion-Manage-Item-Management-config.json">
-                  <button id="f-company-browse" type="button" class="btn btn-secondary">Browse...</button>
-                </span>
-              </label>
-              <p id="shared-status" class="shared-status" hidden></p>
-            </div>
-
-          </div>
-        </div>
-        <button id="gen-save-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
-        <div class="tab-footer">
-          <div class="row">
-            <span id="gen-save-msg" class="muted"></span>
-            <button class="btn btn-secondary" type="button" data-close>Close</button>
-            <button id="gen-save-btn" class="btn">Save</button>
-          </div>
-        </div>
-      </section>
-
-      <section id="sub-connection" class="tab-panel" data-group="settings">
-        <!-- Connection settings live here while signed in. -->
+    <main id="settings-main">
+      <section id="sub-connection" class="tab-panel active" data-group="settings">
+        <!-- Configuration source and connection details. The form moves to the sign-in screen while signed out. -->
         <div id="settings-slot">
-          <fieldset id="conn-settings" class="lockable">
-            <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+          <div id="conn-settings">
             <div class="tab-body">
-              <div class="card">
-                <h2>Local Configuration</h2>
-                <label>Client ID
-                  <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">
-                </label>
-                <label>Tenant
-                  <span class="inline-row">
-                    <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
-                    <button id="f-tenant-find" type="button" class="btn btn-secondary">Find</button>
-                  </span>
-                </label>
-                <p class="hint">The part before .autodeskplm360.net in your Fusion Manage address. <b>Find</b> reads it from the Fusion Manage item the open design is linked to; sign in first.</p>
-                <p id="f-tenant-msg" class="hint" hidden></p>
-                <label>Callback port
-                  <input id="f-port" type="number" min="1024" max="65535">
-                </label>
-                <label>Scopes <span class="muted">(space separated)</span>
-                  <input id="f-scopes" type="text" autocomplete="off" spellcheck="false">
-                </label>
-                <p class="hint">Register this callback URL on your APS app:
-                  <code id="callback-url"></code></p>
+              <!-- A member of the hub: where its settings were read from. -->
+              <div id="hub-file-bar" class="hub-file-bar" hidden>
+                <div class="hub-file-info">
+                  <span class="hub-file-label">Configuration File</span>
+                  <strong id="hub-file-name"></strong>
+                  <span id="hub-file-when" class="muted"></span>
+                </div>
+                <div class="hub-file-actions">
+                  <button id="hub-file-update" class="btn btn-secondary" type="button">Update</button>
+                  <button id="hub-file-change" class="btn btn-secondary" type="button">Change file</button>
+                </div>
+                <p id="hub-file-msg" class="hub-file-msg" hidden></p>
+              </div>
+              <div class="card conn-card">
+                <header class="conn-head">
+                  <h2>Connection settings</h2>
+                </header>
+                <div class="conn-guide">
+                  <p>Need help setting up your APS app? <button id="conn-guide" class="link-btn" type="button">Open the setup guide</button></p>
+                  <div class="app-types">
+                    <div class="req-row"><strong>Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
+                    <div class="req-row"><strong>Grant Type</strong><span>Authorization Code with PKCE</span></div>
+                    <div class="req-row"><strong>API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
+                  </div>
+                </div>
+                <fieldset id="lock-connection" class="lockable">
+                  <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+                  <div class="field">
+                    <label for="f-client-id">Client ID <span class="info" tabindex="0" aria-label="About Client ID">i<span class="tip" role="tooltip">The Client ID of your app on the Autodesk Platform Services (APS) portal.</span></span></label>
+                    <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">
+                  </div>
+                  <div class="field">
+                    <label for="f-tenant">Tenant <span class="info" tabindex="0" aria-label="About Tenant">i<span class="tip" role="tooltip">The first part of your Fusion Manage address: <b>mycompany</b> in https://mycompany.autodeskplm360.net. Find reads it from the design open in Fusion.</span></span></label>
+                    <span class="inline-row">
+                      <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
+                      <button id="f-tenant-find" type="button" class="btn btn-secondary">Find</button>
+                    </span>
+                    <p id="f-tenant-msg" class="hint" hidden></p>
+                  </div>
+                  <div class="field">
+                    <label for="callback-url">Callback URL <span class="info" tabindex="0" aria-label="About Callback URL">i<span class="tip" role="tooltip">Add this as a Callback URL on your APS app. It follows the callback port.</span></span></label>
+                    <span class="inline-row">
+                      <code id="callback-url" class="url-box"></code>
+                      <button id="callback-copy" type="button" class="btn btn-secondary">Copy</button>
+                    </span>
+                  </div>
+                  <div class="field-pair">
+                    <div class="field">
+                      <label for="f-port">Callback port <span class="info" tabindex="0" aria-label="About Callback port">i<span class="tip" role="tooltip">A free port between 1024 and 65535.</span></span></label>
+                      <input id="f-port" type="number" min="1024" max="65535">
+                    </div>
+                    <div class="field">
+                      <label for="f-scopes">Scopes <span class="info" tabindex="0" aria-label="About Scopes">i<span class="tip tip-end" role="tooltip">The access the add-in asks for at sign-in, separated by spaces.</span></span></label>
+                      <input id="f-scopes" type="text" autocomplete="off" spellcheck="false">
+                    </div>
+                  </div>
+                </fieldset>
               </div>
             </div>
             <button id="save-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
@@ -148,7 +223,7 @@
                 <button id="save-btn" class="btn">Save</button>
               </div>
             </div>
-          </fieldset>
+          </div>
         </div>
       </section>
 
@@ -179,11 +254,13 @@
         <fieldset id="lock-exports" class="lockable">
           <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
           <div class="tab-body">
-            <div class="card">
-              <h2>Export</h2>
+            <div class="card conn-card">
+              <header class="conn-head">
+                <h2>Export settings</h2>
+              </header>
               <p class="hint">
-                Where each kind of file is attached in Fusion Manage when you export it from a design or drawing. <b>Item</b> attaches it to
-                the item in the Items workspace; <b>Component</b> attaches it to the component in the Components workspace. The Export
+                Where each kind of file is attached in Fusion Manage when you export it from a design or drawing. <b>Component</b> attaches it to
+                the component in the Components workspace; <b>Item</b> attaches it to the item in the Items workspace. The Export
                 window starts on the destination set here, and you can still change it there for one export.
               </p>
               <div id="export-rows" class="ex-rows"></div>
@@ -198,32 +275,6 @@
             </div>
           </div>
         </fieldset>
-      </section>
-
-      <section id="sub-profile" class="tab-panel" data-group="settings">
-        <div class="tab-body">
-          <p class="lock-note" hidden>Managed by Shared Configuration. Import is disabled.</p>
-          <div class="card">
-            <h2>Export / Import</h2>
-            <p class="hint">
-              Save your configuration (mode, connection details, workspace IDs and
-              field mappings) to a JSON file, or load one to set up another machine
-              or share a standard setup. Sign-in tokens are never included.
-              Importing replaces your current settings.
-            </p>
-            <div class="row">
-              <button id="export-btn" class="btn btn-secondary">Export...</button>
-              <button id="import-btn" class="btn btn-secondary">Import...</button>
-              <span id="transfer-msg" class="muted"></span>
-            </div>
-            <p id="transfer-error" class="error" hidden></p>
-          </div>
-        </div>
-        <div class="tab-footer">
-          <div class="row">
-            <button class="btn btn-secondary" type="button" data-close>Close</button>
-          </div>
-        </div>
       </section>
     </main>
   </div>
@@ -242,8 +293,10 @@
   <script src="js/info.js"></script>
   <script src="js/workspaces.js"></script>
   <script src="js/exports.js"></script>
+  <script src="js/hub-picker.js"></script>
+  <script src="js/save-menu.js"></script>
+  <script src="js/progress.js"></script>
   <script src="js/settings.js"></script>
-  <script src="js/transfer.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

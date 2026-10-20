@@ -17,7 +17,6 @@
 
     // Settings-specific.
     ns.settings.init();
-    ns.transfer.init();
 
     ns.settings.load();
     ns.auth.refresh();

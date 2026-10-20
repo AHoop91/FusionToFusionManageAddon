@@ -39,7 +39,7 @@ RIBBON_DESIGN_WORKSPACE = "FusionSolidEnvironment"
 RIBBON_DRAWING_WORKSPACE = "FusionDocumentationEnvironment"
 
 # Palette geometry (pixels).
-PALETTE_WIDTH = 480
+PALETTE_WIDTH = 600
 PALETTE_HEIGHT = 720
 PUBLISH_WIDTH = 1400
 PUBLISH_HEIGHT = 720

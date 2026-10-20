@@ -22,6 +22,8 @@ def settings_payload(config: ConfigService) -> Dict[str, Any]:
         "company_source": cfg.company_source,
         "shared": asdict(config.shared_status),
         "callback_url": cfg.local.callback_url,
+        "hub": {"id": config.hub_id, "name": config.hub_name},   # the settings are those of this hub
+        "hub_file": cfg.hub_file,   # the Configuration File in the Hub they were taken from, if they were
     }
 
 
@@ -32,6 +34,8 @@ def register_settings_actions(bridge: MessageBridge, config: ConfigService) -> N
         return settings_payload(config)
 
     def save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
+        if payload.get("hub_id", config.hub_id) != config.hub_id:   # the page still shows another hub's settings: saving them would overwrite this one's
+            raise ValueError("The active hub has changed since these settings were loaded. They were not saved; reopen the panel to see this hub's settings.")
         local = ConnectionSettings.from_dict(payload.get("local", {}))
         workspaces = WorkspaceSettings.from_dict(payload.get("workspaces", {}))
         exports = ExportSettings.from_dict(payload["exports"]) if "exports" in payload else None

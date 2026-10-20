@@ -8,7 +8,7 @@
  *      groups(value, wrap) -> [{title, items: [{value, label, detail}]}],
  *      empty(wrap) -> text shown when nothing is listed or matches,
  *      taken(wrap) -> values already used elsewhere, shown greyed out,
- *      alignRight -> open the list leftwards, tip() -> button tooltip.
+ *      alignRight -> open the list leftwards, tip() -> button tooltip, onOpen(wrap) -> called as the list opens.
  * ``make(cfg, selected)`` builds one; it fires a `pick` event on its wrapper when the value changes.
  */
 (function (ns) {
@@ -148,6 +148,7 @@
       if (open) {
         // Built on open so it reflects the other rows and the latest lists.
         search.value = '';
+        if (cfg.onOpen) cfg.onOpen(wrap);
         buildMenu(wrap, cfg);
         placeMenu(wrap, menu);
         search.focus();
@@ -172,5 +173,11 @@
     }
   });
 
-  ns.picker = { make: makePicker, refresh: refreshPicker };
+  /** Rebuild the list of an open picker, e.g. when the items it waited for arrive. */
+  function rebuildOpen(wrap, cfg) {
+    const menu = wrap.querySelector('.ws-pick-menu');
+    if (!menu.hidden) buildMenu(wrap, cfg);
+  }
+
+  ns.picker = { make: makePicker, refresh: refreshPicker, rebuildOpen: rebuildOpen };
 })(window.MfgUi);

@@ -23,8 +23,8 @@ def _active_hub_name() -> str:
 def register_property_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:
     """Register ``list_custom_properties`` and ``list_custom_properties_status``.
 
-    Like workspace validation, the query runs on a worker thread and the
-    panel polls for the answer so Fusion's UI thread is never blocked.
+    Like workspace validation, the query runs on a worker thread, which pushes the answer to the panel when it is done, so Fusion's UI
+    thread is never blocked.
     """
 
     state: Dict[str, Any] = {"pending": False, "ok": False, "properties": [], "message": ""}
@@ -40,6 +40,7 @@ def register_property_actions(bridge: MessageBridge, config: ConfigService, auth
             outcome = {"pending": False, "ok": False, "properties": [], "message": str(exc) or type(exc).__name__}
         with lock:
             state.update(outcome)
+        bridge.push("list_custom_properties_status", outcome)   # the panel is told, not left to ask
 
     def list_custom_properties(_payload: Dict[str, Any]) -> Dict[str, Any]:
         with lock:

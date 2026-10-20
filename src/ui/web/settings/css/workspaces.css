@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Workspaces tab: workspace cards, panel tabs and mapping rows.
+   Item Workspace tab: workspace cards, panel tabs and mapping rows.
    ========================================================================== */
 
 .ws-card {
@@ -132,15 +132,8 @@
 .ws-dialog-text { margin: 0 0 12px; line-height: 1.4; }
 .ws-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
-/* Info icon next to a block title; clicking it opens a tip. */
-.ws-block-namebox { display: flex; align-items: center; gap: 6px; }
-.ws-tip-wrap { position: relative; display: inline-flex; }
-.ws-tip-btn { display: inline-flex; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--accent); cursor: pointer; }
-.ws-tip-btn:hover, .ws-tip-wrap.open .ws-tip-btn { color: #0b5f9a; }
-.ws-tip { display: none; position: absolute; z-index: 20; top: calc(100% + 6px); left: -8px; width: 240px; padding: 8px 10px;
-  border-radius: 4px; background: #323232; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.4; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
-.ws-tip::before { content: ''; position: absolute; top: -4px; left: 12px; width: 8px; height: 8px; background: #323232; transform: rotate(45deg); }
-.ws-tip-wrap.open .ws-tip { display: block; }
+/* Info icon next to a block title: the shared .info tooltip. */
+.ws-block-namebox { display: flex; align-items: center; }
 
 /* Static value slot: the picker or plain input fills it. */
 .ws-cols span:nth-child(4) { text-align: center; }
@@ -148,7 +141,9 @@
 .ws-static-slot .ws-static-value:not([type="hidden"]) { width: 100%; box-sizing: border-box; }
 
 /* ---- Flat layout: sections on the page, divided by thin rules, not boxed ---- */
-.ws-card.card { margin-bottom: 14px; }
+.ws-card.card { margin-bottom: 14px; padding: 20px 22px 22px; }
+.ws-card-head { margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.ws-card .ws-card-head h2 { margin: 0; font-size: 16px; line-height: 1.25; }
 .ws-body { padding: 0; }
 .ws-tabs { padding: 0; margin-bottom: 14px; }
 .ws-tabs[hidden] { display: none; }
@@ -176,13 +171,3 @@
 .val-fix strong { color: var(--text); }
 .val-dialog .ws-dialog-actions { flex: none; margin: 0; padding: 12px 22px 18px; }
 
-/* ---- Offer to follow an exported file as the Shared Configuration (the validation dialog's layout, in the accent colour) ---- */
-.share-dialog .val-head { border-bottom-color: #cfe6f5; background: linear-gradient(180deg, #eef7fd, #fff); }
-.share-dialog .val-badge { background: #d9edf9; color: var(--accent); box-shadow: 0 0 0 6px #eaf5fc; }
-.share-dialog .val-title { color: #12517a; }
-.share-body { flex: 1 1 auto; min-height: 0; padding: 16px 22px 4px; overflow-y: auto; }
-.share-label { display: block; margin: 0 0 6px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.share-path { margin: 0 0 16px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; background: #f7f9fb; color: var(--text); font: 12px/1.45 Consolas, Menlo, monospace; overflow-wrap: anywhere; }
-.share-list { margin: 0 0 12px; padding: 0 0 0 18px; font-size: 13px; line-height: 1.45; color: var(--text); }
-.share-list li { margin: 0 0 6px; padding-left: 2px; }
-.share-hint { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--muted); }

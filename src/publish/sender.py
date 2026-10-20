@@ -118,10 +118,6 @@ class Dispatcher:
             if item_id or number.casefold() not in self._ids:
                 self._ids[number.casefold()] = item_id
 
-    def sent_before(self, key: str) -> bool:
-        with self._lock:
-            return key in self._sent
-
     # ---- Items ---------------------------------------------------------------------
 
     def send_item(self, number: str, request: Dict[str, Any]) -> str:

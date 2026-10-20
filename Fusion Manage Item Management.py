@@ -25,6 +25,7 @@ from src.auth.auth_service import AuthService  # noqa: E402
 from src.config.config_service import ConfigService  # noqa: E402
 from src.core.logging_setup import get_logger, shutdown_logging  # noqa: E402
 from src.ui import drawing_source  # noqa: E402
+from src.ui import ribbon as ribbon_module  # noqa: E402
 from src.ui.actions import register_actions  # noqa: E402
 from src.ui.availability import GateWatcher, SetupGate  # noqa: E402
 from src.ui.export_dialog import ExportDialog  # noqa: E402
@@ -107,20 +108,59 @@ _ribbon = None
 _tasks = None
 _gate = None
 _watcher = None
+_bridge = None
+
+
+# ---- Active hub ---------------------------------------------------------------
+
+_config = None
+
+
+def sync_hub() -> None:
+    """Tell the settings which hub is active. Main thread (it asks Fusion): called at start, before each command, and whenever the
+    commands' availability is looked at again (a document or workspace was opened). Settings are kept for each hub."""
+    try:
+        hub = adsk.core.Application.get().data.activeHub
+        if _config is not None:
+            _config.use_hub(hub.id if hub else "", hub.name if hub else "")
+    except Exception:  # noqa: BLE001 - never raise into Fusion
+        log.exception("Could not read the active hub")
+
+
+def setup_problem() -> str:
+    """Why the active hub's settings are not complete (the active hub is looked at first)."""
+    sync_hub()
+    return _config.items_setup_problem()
+
+
+def _push_to_panels(action: str, data: str) -> None:
+    """Send ``data`` to every panel, from any thread: the send itself is done on the main thread, by a custom event."""
+    def send() -> None:
+        for host in (_palette_host, _publish_host, _jobs_host, _item_host, _export_host):   # the panels that can show a hub's state
+            try:
+                if host:
+                    host.send(action, data)
+            except Exception:  # noqa: BLE001 - one panel that cannot be reached must not keep the others from the answer
+                log.exception("Could not send %s to a panel", action)
+    if _tasks:
+        _tasks.post(send)
 
 
 # ---- Fusion lifecycle -------------------------------------------------------
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
+    global _bridge, _config, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
     try:
         _ui = adsk.core.Application.get().userInterface
 
-        bridge = MessageBridge()
+        bridge = _bridge = MessageBridge()
         _tasks = UiThread()
         badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, JOBS_TOOLTIP, os.path.join(_ADDIN_DIR, "resources"))
-        config, auth = ConfigService(), AuthService()
+        config, auth = ConfigService(hub_aware=True), AuthService()
+        _config = config
+        ribbon_module.before_command = sync_hub
+        sync_hub()   # the settings are those of the hub that is open now
         register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks))
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
@@ -131,6 +171,7 @@ def run(context) -> None:
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host)
         _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, EXPORT_TITLE, "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
         _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
+        bridge.set_pusher(_push_to_panels)   # background work can now tell the panels when it is done, instead of being asked
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
                           "Open the Fusion Manage item of the selected component.",
@@ -184,7 +225,7 @@ def run(context) -> None:
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
-        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), config.items_setup_problem, drawing_source.problem)
+        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), setup_problem, drawing_source.problem)
         _watcher = GateWatcher(_ui, _tasks, _gate, lambda: drawing_source.active_drawing() is not None and bool(drawing_source.problem()))
         _watcher.check()
         config.on_change(lambda: _tasks.post(_gate.refresh))   # saving the settings can come from any thread
@@ -198,6 +239,8 @@ def run(context) -> None:
 def stop(context) -> None:
     """Add-in stop: remove every UI element this add-in created."""
     try:
+        if _bridge:
+            _bridge.set_pusher(None)   # nothing may be sent to panels that are going away
         if _palette_host:
             _palette_host.dispose()
         if _publish_host:

@@ -26,7 +26,17 @@
 .card-avatar { width: 48px; height: 48px; font-size: 17px; }
 
 /* ---- Avatar button and presence dot ------------------------------------- */
-.user { position: relative; }
+.user { position: relative; display: flex; align-items: center; gap: 10px; }
+
+/* Hub role next to the avatar. */
+.role-pill { padding: 4px 10px; border-radius: 4px; background: #607d8b; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.role-pill[hidden] { display: none; }
+.role-pill[data-state="admin"] { background: #00a651; }
+.role-pill[data-state="member"] { background: #0696d7; }
+.card-link { padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.card-link:hover { text-decoration: underline; }
+.card-link:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.card-row[hidden] { display: none; }
 .avatar-btn {
   position: relative; display: block; padding: 0; border: 0; background: none;
   cursor: pointer; border-radius: 50%;

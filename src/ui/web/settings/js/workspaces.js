@@ -1,5 +1,5 @@
 /**
- * Workspaces tab: one card with a tab per Fusion Manage workspace ("Items", ...).
+ * Item Workspace tab: one card with a tab per Fusion Manage workspace ("Items", ...).
  *
  * Each tab stacks that workspace's sections: Workspace picker (validated on choosing), then Field
  * mapping (source field -> Fusion Manage field id). Kinds and source fields come from the catalog Python
@@ -53,7 +53,8 @@
 
   const sourceCfg = {
     valueClass: 'ws-source',
-    placeholder: 'Source field...',
+    alignRight: true,
+    placeholder: 'Component property...',
     search: 'Search fields...',
     tip: function () { return propsTip; },
     empty: function () { return 'No matching fields'; },
@@ -96,6 +97,7 @@
     placeholder: 'Choose a workspace...',
     search: 'Search workspaces...',
     tip: function () { return workspacesTip; },
+    onOpen: function () { if (workspacesState === 'idle' || workspacesState === 'error') loadWorkspaces(); },   // read when the list is opened, not before
     empty: function () {
       if (workspacesState === 'loading') return 'Loading workspaces...';
       return workspacesTip || 'No revision controlled workspaces found';
@@ -114,24 +116,28 @@
     },
   };
 
+  const WAIT_MS = 60000;   // how long Python is given to push an answer before the panel gives up
+  let stopWorkspacesWait = function () {};
+
   function onWorkspaces(r) {
     const result = r.ok ? r.result : { pending: false, ok: false, message: r.error };
-    if (result.pending) {
-      setTimeout(function () { ns.bridge.send('list_workspaces_status', {}); }, POLL_MS);
-      return;
-    }
+    if (result.pending) return;   // only the start: Python pushes the list when it has read it
+    stopWorkspacesWait();
     workspacesState = result.ok ? 'ready' : 'error';
     workspaceList = result.workspaces || [];
     workspacesTip = result.ok ? '' : 'Could not load the workspaces: ' + (result.message || 'unknown error');
     document.querySelectorAll('.ws-id').forEach(function (input) {
       refreshPicker(input.parentNode, workspaceCfg);   // shows names for saved ids
+      ns.picker.rebuildOpen(input.parentNode, workspaceCfg);   // a list opened while loading
     });
   }
 
-  /** Ask Python for the revision controlled workspaces; called each time the tab opens. */
+  /** Ask Python for the revision controlled workspaces; called when a picker opens, or at load to name saved ids. */
   function loadWorkspaces() {
     if (workspacesState === 'loading') return;
     workspacesState = 'loading';
+    stopWorkspacesWait();
+    stopWorkspacesWait = ns.bridge.expect(WAIT_MS, function () { onWorkspaces({ ok: false, error: 'Fusion Manage did not answer in time. Try again.' }); });
     ns.bridge.send('list_workspaces', {});
   }
 
@@ -147,8 +153,7 @@
 
   const fmFieldCfg = {
     valueClass: 'ws-fm-field',
-    alignRight: true,
-    placeholder: 'FM field...',
+    placeholder: 'Fusion Manage item field...',
     search: 'Search fields...',
     empty: function (wrap) {
       const kind = kindOf(wrap);
@@ -238,12 +243,12 @@
     },
   };
 
+  let stopPropsWait = function () {};
+
   function onProperties(r) {
     const result = r.ok ? r.result : { pending: false, ok: false, message: r.error };
-    if (result.pending) {
-      setTimeout(function () { ns.bridge.send('list_custom_properties_status', {}); }, POLL_MS);
-      return;
-    }
+    if (result.pending) return;   // only the start: Python pushes the properties when it has read them
+    stopPropsWait();
     propsState = result.ok ? 'ready' : 'error';
     hubProps = result.properties || [];
     propsTip = result.ok ? '' : 'Could not load the hub\'s properties: ' + (result.message || 'unknown error');
@@ -256,6 +261,8 @@
   function loadProperties() {
     if (propsState === 'loading') return;
     propsState = 'loading';
+    stopPropsWait();
+    stopPropsWait = ns.bridge.expect(WAIT_MS, function () { onProperties({ ok: false, error: 'Fusion Manage did not answer in time. Try again.' }); });
     ns.bridge.send('list_custom_properties', {});
   }
 
@@ -270,10 +277,9 @@
   function mappingRow(kindId, mapping) {
     const row = el('div', 'ws-row');
     const stored = mapping.source || '';
-    const picker = makePicker(sourceCfg, stored);
-    row.appendChild(picker);
-    row.appendChild(el('span', 'ws-arrow', '→'));
     row.appendChild(makePicker(fmFieldCfg, mapping.fm_field_id || ''));
+    row.appendChild(el('span', 'ws-arrow', '='));
+    row.appendChild(makePicker(sourceCfg, stored));
 
     const remove = removeButton();
     remove.type = 'button';
@@ -302,7 +308,7 @@
       }
       const value = el('input', 'ws-static-value');
       value.type = 'text';
-      value.placeholder = 'Static value';
+      value.placeholder = 'Default value';
       value.autocomplete = 'off';
       value.spellcheck = false;
       value.value = current;
@@ -316,7 +322,7 @@
     buildValue(item.value || '');
     const remove = removeButton();
     remove.type = 'button';
-    remove.title = 'Remove static value';
+    remove.title = 'Remove default value';
     remove.addEventListener('click', function () { row.remove(); });
     row.appendChild(remove);
     return row;
@@ -354,13 +360,14 @@
   }
 
   // Validations in flight: kindId -> workspace id being checked. Python answers
-  // `validate_workspace` at once with `pending`, so the panel polls the status.
+  // `validate_workspace` at once with `pending`, and pushes the outcome when it is known.
   const polling = {};
-  const POLL_MS = 300;
+  const waits = {};   // kindId -> cancels the wait for that validation's answer
 
   /** Abandon an in-flight validation (id edited, or the call itself failed). */
   function stopBusy(card, kindId) {
     delete polling[kindId];
+    if (waits[kindId]) { waits[kindId](); delete waits[kindId]; }
     setBusy(card, false);
   }
 
@@ -370,6 +377,11 @@
     if (!workspaceId) return;
     setBusy(card, true);
     polling[kindId] = workspaceId;
+    if (waits[kindId]) waits[kindId]();
+    waits[kindId] = ns.bridge.expect(WAIT_MS, function () {
+      stopBusy(card, kindId);
+      setValid(card, false, 'Fusion Manage did not answer in time. Try again.');
+    });
     ns.bridge.send('validate_workspace', { kind: kindId, workspace_id: workspaceId });
   }
 
@@ -389,14 +401,7 @@
     const card = cardOf(result.kind);
     // Ignore answers for a validation that was abandoned or is for an old id.
     if (!card || polling[result.kind] !== result.workspace_id) return;
-    if (result.pending) {
-      setTimeout(function () {
-        if (polling[result.kind] === result.workspace_id) {
-          ns.bridge.send('validate_workspace_status', { kind: result.kind });
-        }
-      }, POLL_MS);
-      return;
-    }
+    if (result.pending) return;   // only the start: Python pushes the outcome when it is known
     stopBusy(card, result.kind);
     if (result.valid) {
       validated[result.kind] = card.querySelector('.ws-id').value.trim();
@@ -429,8 +434,8 @@
     return box;
   }
 
-  /** A line under a heading saying what the section is for. */
-  function describe(text) { return el("p", "ws-sub muted", text); }
+  /** A line under a block title saying what the block is for. */
+  function describe(text) { return el('p', 'ws-sub muted', text); }
 
   function hint() {
     return el('p', 'ws-hint muted', 'Choose a workspace to enable these settings.');
@@ -439,8 +444,9 @@
   /** Workspace picker with its status line. */
   function buildIdSection(kind, config) {
     const section = el('div', 'ws-section');
-    section.appendChild(el('label', 'ws-id-label', 'Workspace'));
-    section.appendChild(describe('The Fusion Manage workspace your published items are created in. Only revision controlled workspaces are listed.'));
+    const label = el('label', 'ws-id-label', 'Workspace');
+    label.appendChild(infoTip('The Fusion Manage workspace your published items are created in. Only revision controlled workspaces are listed.'));
+    section.appendChild(label);
     const idRow = el('div', 'ws-id-row');
     // The picker sits in a wrapper so a green tick can overlay its right edge.
     const wrap = el('div', 'ws-id-wrap');
@@ -479,11 +485,10 @@
   function buildComponentSection(kind, config) {
     const section = el('div', 'ws-section');
     section.appendChild(heading('Component linking'));
-    section.appendChild(describe('Links each published item to its component in Fusion Manage.'));
     section.appendChild(hint());
     const block = el('div', 'ws-block');
     block.appendChild(blockTitle('Component field',
-      'The Fusion Manage field that links an item to its component. It must be a picklist that uses the component workspace list (' + kind.component_lookup + ').'));
+      'Links each published item to its component in Fusion Manage. It must be a picklist that uses the component workspace list (' + kind.component_lookup + ').'));
     block.appendChild(makePicker(componentCfg, config.component_field || ''));
     section.appendChild(lockedSection([block]));
     return section;
@@ -493,9 +498,10 @@
   function buildMappingSection(kind, config) {
     const section = el('div', 'ws-section');
     const head = el('div', 'ws-section-head');   // heading on the left, Add default fields on the right
-    head.appendChild(heading('Field mapping'));
+    const title = heading('Field mapping');
+    title.appendChild(infoTip('Choose which Fusion data fills which Fusion Manage field on each published item.'));
+    head.appendChild(title);
     section.appendChild(head);
-    section.appendChild(describe('Choose which Fusion data fills which Fusion Manage field on each published item.'));
     section.appendChild(hint());
 
     const rows = el('div', 'ws-rows');
@@ -521,24 +527,23 @@
     });
     head.appendChild(defaults);
     const mapping = el('div', 'ws-block');
-    mapping.appendChild(blockTitle('Mapped fields',
-      'Maps each Fusion field to a field in the Fusion Manage workspace. Existing items are found by their item number.'));
-    mapping.appendChild(describe('Each row copies one Fusion value into a Manage field.'));
-    mapping.appendChild(columnHeads(['Fusion field', '', 'Manage field', ''], 'ws-cols-map'));
+    mapping.appendChild(blockTitle('Mapped fields'));
+    mapping.appendChild(describe('Each row copies one component property into a Fusion Manage item field. Existing items are found by their item number.'));
+    mapping.appendChild(columnHeads(['Fusion Manage Item Field', '', 'Component Property', ''], 'ws-cols-map'));
     mapping.appendChild(rows);
     mapping.appendChild(add);
 
     const statics = el('div', 'ws-rows');
     (config.static_values || []).forEach(function (s) { statics.appendChild(staticRow(kind.id, s)); });
-    const addStatic = el('button', 'ws-add-btn', '+ Add static value');
+    const addStatic = el('button', 'ws-add-btn', '+ Add default value');
     addStatic.type = 'button';
     addStatic.addEventListener('click', function () {
       statics.appendChild(staticRow(kind.id, { fm_field_id: '', value: '' }));
     });
     const fixed = el('div', 'ws-block');
-    fixed.appendChild(blockTitle('Static values', 'Sets a Fusion Manage field to the same fixed value on every published item, regardless of the design.'));
-    fixed.appendChild(describe('Fields set to the same fixed value on every published item.'));
-    fixed.appendChild(columnHeads(['Manage field', '', 'Value', ''], 'ws-cols-static'));
+    fixed.appendChild(blockTitle('Default Fusion Manage Values'));
+    fixed.appendChild(describe('Sets a Fusion Manage item field to the same fixed value on every published item, regardless of the design.'));
+    fixed.appendChild(columnHeads(['Fusion Manage Item Field', '', 'Value', ''], 'ws-cols-static'));
     fixed.appendChild(statics);
     fixed.appendChild(addStatic);
 
@@ -573,7 +578,11 @@
   /** Build the card: a tab strip of workspace kinds over their panels. */
   function buildCard(kinds, settings) {
     const card = el('section', 'card ws-card');
-    if (kinds.length === 1) card.appendChild(el('h2', '', kinds[0].title + ' Workspace'));
+    if (kinds.length === 1) {
+      const head = el('header', 'ws-card-head');   // styled like the Connection card's title
+      head.appendChild(el('h2', '', kinds[0].title + ' Workspace'));
+      card.appendChild(head);
+    }
     const strip = el('div', 'ws-tabs');
     strip.setAttribute('role', 'tablist');
     strip.hidden = kinds.length < 2;   // a lone workspace needs no tab
@@ -605,7 +614,6 @@
 
   /** Validate every workspace that has an id but is not validated yet (on opening the tab). */
   function autoValidate() {
-    loadWorkspaces();
     $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
       const kindId = card.dataset.kind;
       if (validated[kindId] !== card.querySelector('.ws-id').value.trim() && !polling[kindId]) validateKind(card, kindId);
@@ -637,6 +645,8 @@
         if (tab.textContent === active.textContent) tab.click();
       });
     }
+    // Saved ids show as names, so read the list once in the background; with none saved it waits for a picker to open.
+    if (workspacesState === 'idle' && Array.prototype.some.call(container.querySelectorAll('.ws-id'), function (i) { return i.value; })) loadWorkspaces();
     // Settings can load while the Workspaces tab is already showing.
     if ($('sub-workspaces').classList.contains('active')) autoValidate();
   }

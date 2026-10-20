@@ -2,13 +2,15 @@
 
 The configuration is wrapped in a small envelope so a reader can reject files that are not ours or come from a newer version::
 
-    {"format": "MfgToFm.config", "version": 1, "exported": "...", "config": {...}}
+    {"format": "MfgToFm.config", "version": 1, "exported": "...", "hub": {"id": "...", "name": "..."}, "config": {...}}
 
-Only non-secret configuration is written. Sign-in tokens are never part of the config.
+``hub`` says which Fusion hub the configuration was exported from (older files have none). Only non-secret configuration is written.
+Sign-in tokens are never part of the config.
 """
 
 import json
 import os
+from typing import Union
 
 FORMAT_ID = "MfgToFm.config"
 FORMAT_VERSION = 1
@@ -19,16 +21,13 @@ class ConfigTransferError(ValueError):
     """Raised with a user-safe message when a configuration file cannot be written or read."""
 
 
-def read_envelope(path: str) -> dict:
-    """Load and check the envelope; raise ConfigTransferError on any problem."""
+def parse_envelope(raw: Union[bytes, str]) -> dict:
+    """Check the envelope in the file's content; raise ConfigTransferError on any problem."""
+    if len(raw) > MAX_CONFIG_BYTES:
+        raise ConfigTransferError("The file is too large to be a configuration.")
     try:
-        if os.path.getsize(path) > MAX_CONFIG_BYTES:
-            raise ConfigTransferError("The file is too large to be a configuration.")
-        with open(path, "r", encoding="utf-8") as handle:
-            envelope = json.load(handle)
-    except OSError as exc:
-        raise ConfigTransferError(f"Could not read the file: {exc}") from exc
-    except ValueError as exc:
+        envelope = json.loads(raw.decode("utf-8-sig") if isinstance(raw, bytes) else raw)
+    except ValueError as exc:   # includes bytes that are not UTF-8
         raise ConfigTransferError("The file is not valid JSON.") from exc
 
     if not isinstance(envelope, dict) or envelope.get("format") != FORMAT_ID:
@@ -39,3 +38,15 @@ def read_envelope(path: str) -> dict:
     if not isinstance(envelope.get("config"), dict):
         raise ConfigTransferError("The file has no configuration data.")
     return envelope
+
+
+def read_envelope(path: str) -> dict:
+    """Load and check the envelope of the file at ``path``; raise ConfigTransferError on any problem."""
+    try:
+        if os.path.getsize(path) > MAX_CONFIG_BYTES:
+            raise ConfigTransferError("The file is too large to be a configuration.")
+        with open(path, "rb") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        raise ConfigTransferError(f"Could not read the file: {exc}") from exc
+    return parse_envelope(raw)

@@ -6,6 +6,7 @@ loopback interface only, receives that one request, validates the ``state``
 value (CSRF protection) and hands the authorization code back to the caller.
 """
 
+import html
 import secrets
 import threading
 import time
@@ -17,15 +18,40 @@ from .errors import AuthError
 
 CALLBACK_PATH = "/callback"
 
-_PAGE_STYLE = b"font-family:Segoe UI,sans-serif;text-align:center;margin-top:80px"
-_SUCCESS_PAGE = (
-    b"<html><body style='" + _PAGE_STYLE + b"'>"
-    b"<h2>Signed in</h2><p>You can close this tab and return to Fusion.</p></body></html>"
-)
-_FAILURE_PAGE = (
-    b"<html><body style='" + _PAGE_STYLE + b"'>"
-    b"<h2>Sign-in failed</h2><p>Return to Fusion for details.</p></body></html>"
-)
+_PAGE = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>{title}</title><style>
+body {{ margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: #f3f5f7; font-family: "Segoe UI", system-ui, sans-serif; color: #1f2933; }}
+.card {{ box-sizing: border-box; width: min(420px, 90vw); padding: 36px 32px; text-align: center;
+  background: #fff; border: 1px solid #dde2e7; border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, .08); }}
+.icon {{ width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%; color: #fff; font-size: 30px;
+  line-height: 56px; background: {colour}; }}
+h1 {{ margin: 0 0 8px; font-size: 22px; }}
+p {{ margin: 0 0 8px; color: #52606d; line-height: 1.5; }}
+.detail {{ margin-top: 12px; padding: 10px 12px; text-align: left; font-size: 13px; color: #8f1d1d;
+  background: #fdecea; border: 1px solid #f1aeb5; border-radius: 6px; overflow-wrap: anywhere; }}
+button {{ margin-top: 18px; padding: 9px 22px; font: inherit; color: #fff; background: #0696d7; border: 0;
+  border-radius: 6px; cursor: pointer; }}
+button:hover {{ background: #0579b0; }}
+</style></head><body><div class="card">
+<div class="icon">{icon}</div><h1>{title}</h1><p>{text}</p>{detail}
+<button type="button" onclick="window.close()">Close this tab</button>
+</div><script>{script}</script></body></html>"""
+
+
+def _page(ok: bool, error: str = "") -> bytes:
+    """The page the browser shows after the redirect. ``error`` is shown as the reason sign-in failed."""
+    if ok:
+        title, icon, colour = "Authorization received", "&#10003;", "#2e7d32"
+        text = "Return to Fusion to finish signing in. You can close this tab."
+        detail = ""
+        script = ""
+    else:
+        title, icon, colour = "Sign-in failed", "!", "#c62828"
+        text = "Return to Fusion and try again."
+        detail = '<div class="detail">' + html.escape(error) + "</div>" if error else ""
+        script = ""
+    return _PAGE.format(title=title, icon=icon, colour=colour, text=text, detail=detail, script=script).encode("utf-8")
 
 
 class CallbackServer:
@@ -69,9 +95,9 @@ class CallbackServer:
                         result["error"] = "No authorization code returned."
 
                 self.send_response(200 if result["code"] else 400)
-                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(_SUCCESS_PAGE if result["code"] else _FAILURE_PAGE)
+                self.wfile.write(_page(bool(result["code"]), result["error"] or ""))
                 done.set()
 
             def log_message(self, *args: Any) -> None:  # silence stdlib logging

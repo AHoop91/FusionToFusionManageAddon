@@ -17,8 +17,8 @@ def register_workspace_actions(bridge: MessageBridge, config: ConfigService, aut
     Validation makes network calls, so it runs on a worker thread. Blocking
     the handler would freeze Fusion's UI thread, and with it the palette's
     animations. ``validate_workspace`` starts the work and returns at once;
-    the panel then polls ``validate_workspace_status`` until it is no longer
-    pending.
+    the worker then pushes the outcome to the panel as ``validate_workspace_status``
+    (and ``list_workspaces_status``) when it is done.
     """
 
     results: Dict[str, Dict[str, Any]] = {}   # kind id -> latest result
@@ -36,6 +36,7 @@ def register_workspace_actions(bridge: MessageBridge, config: ConfigService, aut
             outcome = failure(kind_id, workspace_id, f"Validation failed: {exc}")
         with lock:
             results[kind_id] = outcome
+        bridge.push("validate_workspace_status", outcome)   # the panel is told, not left to ask
 
     def validate_workspace(payload: Dict[str, Any]) -> Dict[str, Any]:
         kind_id = str(payload.get("kind", ""))
@@ -68,6 +69,7 @@ def register_workspace_actions(bridge: MessageBridge, config: ConfigService, aut
                        "message": str(exc) or type(exc).__name__}
         with lock:
             listing.update(outcome)
+        bridge.push("list_workspaces_status", outcome)
 
     def list_workspaces(_payload: Dict[str, Any]) -> Dict[str, Any]:
         with lock:

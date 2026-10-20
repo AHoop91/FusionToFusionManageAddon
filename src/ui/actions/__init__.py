@@ -9,7 +9,7 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``property_actions``: the hub's custom properties for field mapping.
 * ``publish_actions``: the open model for the Publish Item panel.
 * ``search_actions``: the Add Items picker: search matches, filterable fields and picklist options.
-* ``transfer_actions``: export and import the configuration file.
+* ``hub_actions``, ``hub_file_actions``, ``hub_save_actions``: the user's role in the hub, and finding or saving its Configuration File.
 
 ``register_actions`` is the only function the add-in entry point needs.
 """
@@ -21,13 +21,15 @@ from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
 from .auth_actions import register_auth_actions
+from .hub_actions import register_hub_actions
+from .hub_file_actions import register_hub_file_actions
+from .hub_save_actions import register_hub_save_actions
 from .search_actions import register_search_actions
 from .property_actions import register_property_actions
 from .publish_actions import register_publish_actions
 from .publish_run_actions import register_publish_run_actions
 from .settings_actions import register_settings_actions
 from .tenant_actions import register_tenant_actions
-from .transfer_actions import register_transfer_actions
 from .workspace_actions import register_workspace_actions
 
 
@@ -38,8 +40,10 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)
     register_tenant_actions(bridge, config, auth)
+    register_hub_actions(bridge, config, auth)
+    register_hub_file_actions(bridge, config, auth)
+    register_hub_save_actions(bridge, config)
     register_property_actions(bridge, config, auth)
     register_publish_actions(bridge, config, auth)
     register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)
     register_search_actions(bridge, config, auth)
-    register_transfer_actions(bridge, config, dialogs)

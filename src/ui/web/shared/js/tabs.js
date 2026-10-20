@@ -81,7 +81,7 @@
         button.classList.add('active');
         $(idPrefix + button.dataset.tab).classList.add('active');
         // Bring the selected tab fully into view if it is partly clipped.
-        button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        if (nav.scrollWidth > nav.clientWidth) button.scrollIntoView({ block: 'nearest', inline: 'nearest' });   // only a strip that overflows has anything to scroll
       });
     });
   }

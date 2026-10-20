@@ -5,7 +5,7 @@ stored here; see ``auth.token_store``.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .export_models import ExportSettings
 from .hub import tenant_code
@@ -14,8 +14,8 @@ from .workspace_models import WorkspaceSettings
 MODE_LOCAL = "local"
 MODE_COMPANY = "company"
 
-# data:search is needed by the Manufacturing Data Model (custom properties).
-DEFAULT_SCOPES = ["data:read", "data:write", "data:search"]
+# data:search is needed by the Manufacturing Data Model (custom properties); user-profile:read, by the avatar (the Identity API).
+DEFAULT_SCOPES = ["data:read", "data:write", "data:search", "user-profile:read"]
 DEFAULT_CALLBACK_PORT = 8765
 
 
@@ -83,15 +83,21 @@ class AppConfig:
     # HTTPS URL to the shared JSON. Not used yet.
     company_source: str = ""
     exports: ExportSettings = field(default_factory=ExportSettings)
+    # The Configuration File in the Fusion Hub that this hub's settings were taken from (a member of the hub, not a Hub Admin, has no
+    # other source): ``project_id``, ``item_id``, ``name`` and ``read_at``. None when the settings are the user's own.
+    hub_file: Optional[Dict[str, str]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             "mode": self.mode,
             "local": self.local.to_dict(),
             "workspaces": self.workspaces.to_dict(),
             "exports": self.exports.to_dict(),
             "company": {"source": self.company_source},
         }
+        if self.hub_file:
+            data["hub_file"] = dict(self.hub_file)
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AppConfig":
@@ -99,10 +105,14 @@ class AppConfig:
         local = data.get("local", {})
         # Older files kept the workspace id under ``local.workspace_id``.
         workspaces = data.get("workspaces") or {"items_workspace_id": local.get("workspace_id", "")}
+        kept = data.get("hub_file")
+        hub_file = {key: str(kept.get(key, "")) for key in ("project_id", "item_id", "name", "read_at")} \
+            if isinstance(kept, dict) and kept.get("item_id") else None
         return cls(
             mode=mode if mode in (MODE_LOCAL, MODE_COMPANY) else MODE_LOCAL,
             local=ConnectionSettings.from_dict(local),
             workspaces=WorkspaceSettings.from_dict(workspaces),
             company_source=str(data.get("company", {}).get("source", "")),
             exports=ExportSettings.from_dict(data.get("exports")),
+            hub_file=hub_file,
         )

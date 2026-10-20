@@ -24,6 +24,7 @@
 
       // Account avatar and card: only visible while signed in.
       '<div id="user-wrap" class="user" hidden>' +
+      '  <span id="role-pill" class="role-pill" hidden></span>' +
       '  <button id="avatar-btn" class="avatar-btn" aria-haspopup="true" aria-expanded="false" title="Account">' +
       '    <span id="avatar" class="avatar">' +
       '      <span id="avatar-icon">' + AVATAR_ICON.replace(/{size}/g, '20') + '</span>' +
@@ -48,6 +49,10 @@
       '    <div class="card-row">' +
       '      <span class="card-label">Status</span>' +
       '      <span id="card-status" class="card-status"><span class="card-status-dot"></span><span id="card-status-text"></span></span>' +
+      '    </div>' +
+      '    <div id="card-role-row" class="card-row" hidden>' +
+      '      <span class="card-label">Permissions</span>' +
+      '      <button id="card-role-refresh" class="card-link" type="button">Refresh</button>' +
       '    </div>' +
       '    <button id="card-signout" class="btn btn-secondary btn-block" hidden>Sign out</button>' +
       '  </div>' +

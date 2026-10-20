@@ -8,7 +8,7 @@ so one cannot undo the other.
 
 import threading
 import time
-from typing import Callable, Dict, Optional, Sequence
+from typing import Callable, Dict, Sequence
 
 import adsk.core
 

@@ -21,7 +21,7 @@ def register_tenant_actions(bridge: MessageBridge, config: ConfigService, auth: 
     """Register ``detect_tenant`` and ``detect_tenant_status``.
 
     The Data Model knows the Fusion Manage item the open design is linked to, and that item's address names the tenant. The read
-    runs on a worker thread and the panel polls for the answer, so Fusion's UI thread is never blocked.
+    runs on a worker thread, which pushes the answer to the panel when it is done, so Fusion's UI thread is never blocked.
     """
 
     state: Dict[str, Any] = {"pending": False, "ok": False, "tenant": "", "message": ""}
@@ -39,6 +39,7 @@ def register_tenant_actions(bridge: MessageBridge, config: ConfigService, auth: 
             outcome = {"pending": False, "ok": False, "tenant": "", "message": str(exc) or type(exc).__name__}
         with lock:
             state.update(outcome)
+        bridge.push("detect_tenant_status", outcome)   # the panel is told, not left to ask
 
     def detect_tenant(_payload: Dict[str, Any]) -> Dict[str, Any]:
         with lock:

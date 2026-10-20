@@ -44,6 +44,11 @@ class RibbonCommand:
     context: str = ""   # a right-click entry offered only in "design" or "drawing" documents; "" in either
 
 
+# Run before every command, on the main thread: the add-in sets it to look at which hub is active, so a command never uses
+# the settings of the hub that was active before.
+before_command: Callable[[], None] = lambda: None
+
+
 class _ExecuteHandler(adsk.core.CommandEventHandler):
     """Runs a button's action when its command executes."""
 
@@ -55,6 +60,7 @@ class _ExecuteHandler(adsk.core.CommandEventHandler):
     def notify(self, args) -> None:
         try:
             log.info("Command executed: %s", self._command.command_id)
+            before_command()
             self._command.on_click()
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Ribbon action failed: %s", self._command.command_id)

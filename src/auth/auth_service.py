@@ -7,7 +7,7 @@ Login runs on a background thread so Fusion's UI never blocks; the panel polls
 import threading
 import time
 import webbrowser
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from ..config.models import ConnectionSettings
 from ..core.logging_setup import get_logger
@@ -43,17 +43,26 @@ class AuthService:
         self._refresh_lock = threading.Lock()   # one refresh at a time: refresh tokens rotate, a second use of the old one fails
         self._state = STATE_SIGNED_OUT
         self._error = ""
+        self._client_id = ""   # the Client ID the last sign-in was started for
         self._cancel = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._on_login_done: Optional[Callable[[], None]] = None
+
+    def set_on_login_done(self, callback: Optional[Callable[[], None]]) -> None:
+        """Call ``callback`` (on the sign-in's thread) when a sign-in ends, however it ends, so the panel need not ask how it went."""
+        self._on_login_done = callback
 
     # ---- State -------------------------------------------------------------
 
     def status(self, settings: ConnectionSettings) -> Dict[str, Any]:
-        """Current state; restores a saved session on first call."""
+        """Current state for ``settings``; restores a saved session on first call. Settings differ from hub to hub, so being signed in
+        means a session is kept for this Client ID: another hub's sign-in is not this one's."""
         with self._lock:
-            if self._state == STATE_SIGNED_OUT and settings.client_id \
-                    and self._store.load(settings.client_id):
-                self._state = STATE_SIGNED_IN
+            if self._state == STATE_ERROR and settings.client_id != self._client_id:
+                self._state, self._error = STATE_SIGNED_OUT, ""   # the failure was of another connection
+            if self._state in (STATE_SIGNED_OUT, STATE_SIGNED_IN):
+                has_session = bool(settings.client_id and self._store.load(settings.client_id))
+                self._state = STATE_SIGNED_IN if has_session else STATE_SIGNED_OUT
             return {"state": self._state, "error": self._error}
 
     # ---- Sign-in flow ------------------------------------------------------
@@ -66,7 +75,7 @@ class AuthService:
         with self._lock:
             if self._state == STATE_SIGNING_IN:
                 raise AuthError("Sign-in already in progress.")
-            self._state, self._error = STATE_SIGNING_IN, ""
+            self._state, self._error, self._client_id = STATE_SIGNING_IN, "", settings.client_id
             self._cancel.clear()
         pkce = generate_pkce()
         try:
@@ -100,6 +109,13 @@ class AuthService:
         except Exception as exc:  # noqa: BLE001 - background thread must not die silently
             log.exception("Unexpected sign-in failure")
             self._fail(f"Unexpected error: {exc}")
+        finally:
+            callback = self._on_login_done
+            if callback is not None:
+                try:
+                    callback()
+                except Exception:  # noqa: BLE001 - telling the panel is a courtesy
+                    log.exception("Could not report the end of the sign-in")
 
     def _fail(self, message: str) -> None:
         with self._lock:

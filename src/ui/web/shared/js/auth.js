@@ -14,7 +14,6 @@
   const $ = ns.$;
   const bridge = ns.bridge;
 
-  const POLL_INTERVAL_MS = 1000;
   const STATE_TEXT = {
     signed_out: 'Sign in with your Autodesk account to continue.',
     signing_in: 'Logging in...',
@@ -22,9 +21,9 @@
     error: 'Sign-in failed.',
   };
 
-  let pollTimer = null;
   let profileLoaded = false;
   let autoLoginTried = false;
+  let loginHeld = false;   // a panel that has nothing to sign in with yet (no Client ID) holds the automatic sign-in back
   const changeListeners = [];
 
   /** Call `callback(signedIn)` every time the sign-in state is rendered. */
@@ -33,7 +32,7 @@
   function renderAuth(status) {
     // Opening a panel while signed out starts the login straight away, once.
     // After a cancel, an error or a sign-out the sign-in card stays.
-    if (status.state === 'signed_out' && !autoLoginTried) {
+    if (status.state === 'signed_out' && !autoLoginTried && !loginHeld) {
       autoLoginTried = true;
       bridge.send('auth_login');
       status = { state: 'signing_in', error: '' };
@@ -64,11 +63,7 @@
       // message before reading the next, and the profile (a Fusion Manage call) would otherwise hold them up.
       if (signedIn && !profileLoaded) { profileLoaded = true; bridge.send('auth_profile'); }
 
-      // Poll only while a browser sign-in is pending.
-      clearTimeout(pollTimer);
-      if (state === 'signing_in') {
-        pollTimer = setTimeout(function () { bridge.send('auth_status'); }, POLL_INTERVAL_MS);
-      }
+      // While a browser sign-in is pending nothing is asked: Python pushes the state when the sign-in ends (Cancel ends it too).
     }
   }
 
@@ -87,5 +82,6 @@
     init: init,
     onChange: onChange,
     refresh: function () { bridge.send('auth_status'); },
+    holdLogin: function (held) { loginHeld = held; },
   };
 })(window.MfgUi);

@@ -78,6 +78,26 @@
     $('card-signout').hidden = !online;
   }
 
+  // ---- Role in the hub ------------------------------------------------------
+
+  const ROLE_LABEL = { admin: 'ADMIN', member: 'MEMBER' };
+
+  /** Show the hub role as a pill beside the avatar. `state` is admin or member; anything else, a read under way included, shows nothing. */
+  function renderRole(state) {
+    const pill = $('role-pill');
+    pill.hidden = !ROLE_LABEL[state];
+    pill.dataset.state = state;
+    pill.textContent = ROLE_LABEL[state] || '';
+    const refresh = $('card-role-refresh');
+    refresh.disabled = state === 'pending';
+  }
+
+  /** A page that knows the hub role asks to be told when the user wants it read again; this shows the card row for it. */
+  function onRefreshRole(handler) {
+    $('card-role-row').hidden = false;
+    $('card-role-refresh').addEventListener('click', function () { handler(); });
+  }
+
   // ---- Account card -------------------------------------------------------
 
   function setCardOpen(open) {
@@ -99,7 +119,11 @@
       bridge.send('auth_logout');
     });
 
-    bridge.on('auth_profile', function (r) { if (r.ok) renderProfile(r.result); });
+    // Python reads the profile in the background: the answer is `pending` first, and the profile is pushed when it is read.
+    bridge.on('auth_profile', function (r) {
+      if (!r.ok || r.result.pending) return;
+      renderProfile(r.result);
+    });
     renderPresence(false);
   }
 
@@ -107,6 +131,8 @@
     init: init,
     renderProfile: renderProfile,
     renderPresence: renderPresence,
+    renderRole: renderRole,
+    onRefreshRole: onRefreshRole,
     closeCard: function () { setCardOpen(false); },
   };
 })(window.MfgUi);

@@ -36,9 +36,10 @@ def _first_field(query_text: str) -> str:
 class MfgApiError(Exception):
     """Raised when a Manufacturing Data Model request fails or returns errors."""
 
-    def __init__(self, message: str, transient: bool = False) -> None:
+    def __init__(self, message: str, transient: bool = False, code: str = "") -> None:
         super().__init__(message)
         self.transient = transient   # worth trying again: the service was busy or unreachable, not the query wrong
+        self.code = code   # the service's own code for a GraphQL error (``FHQ-403``: not allowed), when it gave one
 
 
 class MfgGraphQlClient:
@@ -100,7 +101,7 @@ class MfgGraphQlClient:
             first = errors[0] if isinstance(errors[0], dict) else {}
             extensions = first.get("extensions") if isinstance(first.get("extensions"), dict) else {}
             transient = extensions.get("code") in TRANSIENT_CODES or (extensions.get("http") or {}).get("status") in RETRY_HTTP
-            raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=bool(transient))
+            raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=bool(transient), code=str(extensions.get("code") or ""))
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, dict):
             raise MfgApiError("Manufacturing Data Model returned no data.")

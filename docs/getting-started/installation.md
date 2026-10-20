@@ -144,7 +144,7 @@ Open **Manage ▸ Item Management ▸ Administration ▸ Preferences**. Signed o
 |---|---|
 | **Client ID** | The Client ID from [stage 2.5](#25-copy-the-client-id). |
 | **Callback port** | The port in your callback URL. Default `8765`; allowed range 1024–65535. |
-| **Scopes** | Leave as `data:read data:write data:search`. |
+| **Scopes** | Leave as `data:read data:write data:search user-profile:read`. |
 
 The panel shows the callback URL it will use. It must be registered on your APS application exactly as shown. With the default port:
 
@@ -163,18 +163,11 @@ A Client ID, a valid port and at least one scope are required before you can sig
 
 ### Sharing a setup with colleagues
 
-On the **Profile** tab, **Export…** saves your mode, connection details, workspace IDs and field mappings to a JSON file. **Import…** loads one, which is the quickest way to configure a new user.
+Each Fusion hub has its own settings, so switching hubs in Fusion switches the settings too. Only a **Hub Admin** of the hub can change them. When you open **Preferences** the add-in checks your role in the active hub.
 
-- Tokens are never included in an export.
-- An import replaces your current settings and is checked like a manual save. If the file is invalid, nothing changes.
-- Files over 1 MB, files that are not valid JSON, and files that are not an MfgToFm configuration are rejected.
-
-### Configuration modes
-
-On the **General** tab:
-
-- **Local Configuration**: you enter the details on the **Connection** tab. They are stored in your user profile on this machine.
-- **Shared Configuration**: the connection, workspaces, mappings and exports are read from one file on a network path or shared folder, so everyone uses the same setup and cannot change it locally. Choose the file with **Browse...** or type its path. To make the file, set up one machine and use **Export...**, then put the file where everyone can read it. After exporting, the add-in offers to switch you to that file; to change the shared setup later, switch back to Local Configuration, edit, and export over the file again. The add-in checks the file about every 30 seconds and keeps the last good copy, so it keeps working, with a warning on the General tab, while the share cannot be reached. Switching back to Local Configuration brings back your own settings.
+- **Hub Admin**: click **Save** and choose **Save locally**, or **Save to Fusion Hub...**. The second saves on this computer first, then asks for a project and folder in the hub and stores the Configuration File there (`Fusion-Manage-Item-Management-config.json`). It never contains sign-in tokens.
+- **Everyone else**: the add-in asks you to find the hub's Configuration File. Click **Find Configuration File**, pick the file in the hub, and its tenant, workspaces, field mappings and exports become your settings, read-only. You still sign in with your own Client ID. The file is read again each time Preferences opens.
+- A file saved from another hub is refused, and files over 1 MB or that are not an MfgToFm configuration are rejected.
 
 ---
 
@@ -182,7 +175,7 @@ On the **General** tab:
 
 1. In **Preferences**, click **Sign in**.
 2. Your browser opens the Autodesk sign-in page. Sign in and approve access.
-3. The browser shows **Signed in**. Return to Fusion.
+3. The browser shows **Authorization received**. Return to Fusion.
 4. The panel unlocks its tabs.
 
 Sign-in waits up to 180 seconds; click **Cancel** to abort it sooner. Access tokens are refreshed automatically shortly before they expire.
@@ -217,7 +210,7 @@ sequenceDiagram
     APS-->>Browser: Redirect to localhost callback<br/>with code and state
     Browser->>Addin: GET /callback?code=...&state=...
     Note over Addin: Check state matches,<br/>otherwise reject the sign-in
-    Addin-->>Browser: "Signed in. You can close this tab."
+    Addin-->>Browser: "Authorization received. Return to Fusion."
     Addin->>APS: Exchange code and code verifier for tokens<br/>(no client secret)
     APS-->>Addin: Access token and refresh token
     Addin->>Store: Save tokens, encrypted<br/>(Windows DPAPI or macOS Keychain)

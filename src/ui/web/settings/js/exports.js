@@ -14,7 +14,7 @@
     { key: 'dwg', label: 'DWG', desc: 'The open drawing, for AutoCAD.' },
     { key: 'dxf', label: 'DXF', desc: 'The open drawing, for CAM and laser cutting.' },
   ];
-  const DESTINATIONS = [{ key: 'item', label: 'Item' }, { key: 'component', label: 'Component' }];
+  const DESTINATIONS = [{ key: 'component', label: 'Component' }, { key: 'item', label: 'Item' }];
 
   /** One row: the format, what it is, and the radio buttons for where it goes. */
   function row(f, chosen) {
