@@ -12,9 +12,10 @@ from .ttl_cache import TtlCache
 
 # the permission that lets the user see each tab
 TAB_PERMISSIONS = {"item": "view_items", "files": "view_attachments", "bom": "view_bom", "whereused": "view_where_used",
-                   "workflows": "view_associated_workflow"}
+                   "workflows": "view_associated_workflow", "changelog": "view_change_log"}
 # the tabs the page shows, by the name Fusion Manage gives them
-TABS = {"item": "ITEM_DETAILS", "files": "PART_ATTACHMENTS", "bom": "BOM_LIST", "whereused": "BOM_WHERE_USED", "workflows": "WORKFLOW_REFERENCES"}
+TABS = {"item": "ITEM_DETAILS", "files": "PART_ATTACHMENTS", "bom": "BOM_LIST", "whereused": "BOM_WHERE_USED", "workflows": "WORKFLOW_REFERENCES",
+        "changelog": "PART_HISTORY"}
 # a tab counts only the entries it lists: the Files tab lists the item's own files, not the ones related items bring (those are in the total)
 COUNTED = {"PART_ATTACHMENTS": "PART_ATTACHMENTS/DIRECT_ATTACHMENTS"}
 
@@ -54,9 +55,14 @@ class TabService:
         """``{"files": {"label", "count", "allowed"}, ...}`` for each tab the page shows that the workspace has; ``allowed`` is whether
         the user's permissions (``held``) let them see it. Raises ``FmApiError`` when the names or counts cannot be read."""
         labels = self.labels(workspace_id)
-        counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
-        return {key: {"label": labels[name], "count": counts.get(COUNTED.get(name, ""), counts.get(name, 0)), "allowed": TAB_PERMISSIONS[key] in held}
+        counts = self.counts(workspace_id, item_id)
+        return {key: {"label": labels[name], "count": counts.get(key, 0), "allowed": TAB_PERMISSIONS[key] in held}
                 for key, name in TABS.items() if name in labels}
+
+    def counts(self, workspace_id: str, item_id: str) -> Dict[str, int]:
+        """``{"files": count, ...}``: how many entries each tab the page shows holds now (read afresh, not kept)."""
+        counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
+        return {key: counts.get(COUNTED.get(name, ""), counts.get(name, 0)) for key, name in TABS.items()}
 
     def labels(self, workspace_id: str) -> Dict[str, str]:
         key = (self._client.tenant, workspace_id)

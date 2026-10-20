@@ -348,9 +348,39 @@
 .item-files-empty { flex: 1; display: flex; }
 .item-files-empty.item-centred { min-height: 240px; }
 
+/* Files, Bill of Materials, Where Used and Associated Workflows: the tab is a column and its table scrolls inside it, so the heading row stays fixed
+   at the top while the rows move under it (a heading can only stick to the box that scrolls it). */
+:is(#item-files, #item-bom, #item-whereused, #item-workflows):not(.item-centred) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+:is(#item-files, #item-bom, #item-whereused, #item-workflows)[hidden] { display: none; }
+:is(#item-files, #item-bom, #item-whereused, #item-workflows):not(.item-centred) .item-files-wrap { flex: 1; min-height: 0; overflow: auto; }
+:is(#item-files, #item-bom, #item-whereused, #item-workflows).item-files-stack .item-files-wrap { flex: none; }   /* nothing to list: just the heading row */
+/* Borders of a collapsed table stay behind when a cell sticks, so these tables keep each cell's own borders (separate, with no gap). */
+:is(.item-files-wrap, .item-log-scroll) .item-files-table { border-collapse: separate; border-spacing: 0; }
+:is(.item-files-wrap, .item-log-scroll) .item-files-table th { position: sticky; top: 0; z-index: 2; }
+.item-files-wrap::-webkit-scrollbar { width: 8px; }
+
 /* The Where Used tab: the same table, as a tree. Headings do not sort, so no pointer or hover. */
-#item-whereused, #item-bom, #item-workflows { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
-#item-whereused.item-centred, #item-bom.item-centred, #item-workflows.item-centred { min-height: 240px; }
+#item-whereused, #item-bom, #item-workflows, #item-changelog { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
+#item-whereused.item-centred, #item-bom.item-centred, #item-workflows.item-centred, #item-changelog.item-centred { min-height: 240px; }
+.item-changelog .item-tree-table td { padding-top: 10px; padding-bottom: 10px; vertical-align: top; white-space: normal; }
+.item-log-changes { margin: 4px 0 0; padding-left: 20px; }
+.item-log-old { color: #d93025; text-decoration: line-through; }
+.item-log-new { color: #1e8e3e; }
+/* The tab is a column: the table scrolls in the space above, with its header row fixed, and the footer is under it, never over the rows. */
+#item-changelog.item-log-ready { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+#item-changelog[hidden] { display: none; }
+.item-log-scroll { flex: 1; min-height: 0; overflow: auto; }
+.item-log-spacer td { padding: 0; border: 0; }
+.item-log-spacer:hover { background: none; }
+/* The footer is a slim bar in the heading's grey: how far the log has been read on the left, the progress of the next page on the right. */
+.item-log-foot { display: flex; align-items: center; gap: 12px; flex: none; min-height: 36px; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 12px; font-weight: 600; }
+.item-log-status { margin-right: auto; color: var(--muted); }
+.item-log-retry { padding: 2px 12px; font-size: 12px; }
+.item-log-foot[hidden], .item-log-progress[hidden], .item-log-retry[hidden] { display: none; }
+/* An endless bar: a stretch of accent colour slides along the track while the next page is read. */
+.item-log-progress { position: relative; width: 160px; height: 4px; overflow: hidden; border-radius: 2px; background: rgba(0, 0, 0, 0.12); }
+.item-log-progress span { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px; background: var(--accent); animation: item-log-slide 1.1s ease-in-out infinite; }
+@keyframes item-log-slide { from { left: -40%; } to { left: 100%; } }
 .item-workflows .item-tree-table td { padding-top: 10px; padding-bottom: 10px; }   /* roomier rows than the tree tabs */
 .item-tree-table th { cursor: default; }
 .item-tree-table th:hover { background: var(--bg); }

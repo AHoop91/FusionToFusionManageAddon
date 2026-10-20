@@ -31,10 +31,12 @@ from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
 from ..fm.bom_view import BomViewService
 from ..fm.associated_workflows import AssociatedWorkflowService
+from ..fm.change_log import ChangeLogService
 from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
 from ..fm.items import ItemService, pick_hit
 from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
+from ..fm.tabs import TabService
 from ..fm.ttl_cache import TtlCache
 from ..fm.where_used import WhereUsedService
 from ..publish.writer import safe_name
@@ -200,6 +202,10 @@ class ItemPanel:
         bridge.register("workflows_result", self._lookup_result)
         bridge.register("bom_load", self._bom_load)
         bridge.register("bom_result", self._lookup_result)
+        bridge.register("changelog_load", self._changelog_load)
+        bridge.register("changelog_result", self._lookup_result)
+        bridge.register("tab_counts_load", self._tab_counts_load)
+        bridge.register("tab_counts_result", self._lookup_result)
         self._lookups: Dict[str, Dict[str, Any]] = {}   # request id (from the page) -> its answer
 
     def _where_used_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -222,6 +228,17 @@ class ItemPanel:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         view_id, flat = str(payload.get("view_id") or ""), bool(payload.get("flat"))
         return self._lookup(payload, lambda client: BomViewService(client).read(workspace_id, item_id, view_id, flat))
+
+    def _changelog_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Start reading one page of the item's change log (from ``offset``); the page polls for it."""
+        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        offset = int(payload.get("offset") or 0)
+        return self._lookup(payload, lambda client: ChangeLogService(client).read(workspace_id, item_id, offset))
+
+    def _tab_counts_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Start reading how many entries each tab of the item holds now (a tab's Refresh button); the page polls for them."""
+        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        return self._lookup(payload, lambda client: TabService(client).counts(workspace_id, item_id))
 
     @staticmethod
     def _workspace_id(payload: Dict[str, Any]) -> str:

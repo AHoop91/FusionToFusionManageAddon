@@ -60,6 +60,7 @@ The tabs are named as Fusion Manage names them and show a count where there is o
 | [Bill of Materials](#bill-of-materials) | The item's BOM lines |
 | [Where Used](#where-used) | The assemblies that hold the item |
 | [Associated Workflows](#associated-workflows) | Workflow items that reference the item |
+| [Change Log](#change-log) | What was done to the item, and by whom |
 
 ### Item
 
@@ -100,6 +101,10 @@ The assemblies that hold the item, as a tree. Expand a parent to read the next l
     Save the image as `docs/images/tab-workflows.png`, then replace this box with `![Associated Workflows tab](../images/tab-workflows.png)`.
 
 The workflow items, such as change orders, that reference the item. Each row shows the workflow item's current state and its last workflow step: when, by whom, the action taken and any comments. Empty state: *No associated workflows*.
+
+### Change Log
+
+What was done to the item, newest first: when, by whom, the action, and a description. Fields a change edited are listed under the description with the old value struck through and the new value beside it. The first 100 entries are read, and more are read as you scroll towards the end (a progress bar shows while they load). Only the rows in view are drawn, so a long log stays smooth. Needs the View Change Log permission. Empty state: *No changes logged*.
 
 ## Review and Release
 

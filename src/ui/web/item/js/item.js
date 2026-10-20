@@ -18,6 +18,7 @@
   let shownSeq = 0;   // the open that is on screen, so a poll for it does not redraw
   let itemUrl = '';
   let currentView = null;
+  let quietRead = false;   // the item is being read again from its tab: no loading screen over what is shown
 
   /** Show the bouncing balls (and hide the item) while Python is still reading everything the item needs. */
   function setLoading(on, text) {
@@ -41,29 +42,28 @@
     $('item-empty').hidden = false;
   }
 
-  const LAZY_TABS = ['files', 'bom', 'whereused', 'workflows'];
-  const loaded = { files: false, bom: false, whereused: false, workflows: false };   // tabs read for the item shown
+  const LAZY_TABS = ['files', 'bom', 'whereused', 'workflows', 'changelog'];
+  const TABS = ['item'].concat(LAZY_TABS);
+  const loaded = {};   // tabs read for the item shown
+  LAZY_TABS.forEach(function (name) { loaded[name] = false; });
 
   /** Read a lazy tab the first time it is opened for the item shown. */
   function loadTab(name) {
     if (!currentView || loaded[name] !== false) return;
     loaded[name] = true;
+    const target = $('item-' + name);
     if (name === 'files') {
-      ns.itemFiles.render($('item-files'), currentView, function (file) {
+      ns.itemFiles.render(target, currentView, function (file) {
         if (file.url) bridge.send('open_url', { url: file.url });   // the file's page in Fusion Manage
       });
-    } else if (name === 'bom') {
-      ns.itemBom.render($('item-bom'), currentView);
-    } else if (name === 'whereused') {
-      ns.itemWhereUsed.render($('item-whereused'), currentView);
     } else {
-      ns.itemWorkflows.render($('item-workflows'), currentView);
+      ({ bom: ns.itemBom, whereused: ns.itemWhereUsed, workflows: ns.itemWorkflows, changelog: ns.itemChangeLog })[name].render(target, currentView);
     }
   }
 
   /** Name each tab as Fusion Manage does, with how many entries it holds; a tab the workspace does not have is hidden. */
   function labelTabs(view) {
-    ['item', 'files', 'bom', 'whereused', 'workflows'].forEach(function (key) {
+    TABS.forEach(function (key) {
       const tab = view.tabs[key];
       const button = $('item-tab-' + key);
       button.hidden = !tab;
@@ -75,17 +75,33 @@
     });
   }
 
-  /** Show one tab ('item', 'files', 'bom', 'whereused' or 'workflows') and mark its button. */
-  function showTab(name) {
-    $('item-body').hidden = name !== 'item';
-    $('item-files').hidden = name !== 'files';
-    $('item-bom').hidden = name !== 'bom';
-    $('item-whereused').hidden = name !== 'whereused';
-    $('item-workflows').hidden = name !== 'workflows';
-    loadTab(name);
+  /** Show one tab (one of ``TABS``) and mark its button. */
+  function showTab(name, keep) {
+    TABS.forEach(function (key) { $(key === 'item' ? 'item-body' : 'item-' + key).hidden = key !== name; });
+    if (!keep) loadTab(name);   // ``keep``: the caller reads the tab itself
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
       tab.classList.toggle('item-tab-active', tab.dataset.tab === name);
     });
+  }
+
+  /**
+   * Open a tab the user clicked, reading it again from Fusion Manage every time (also when it is the tab shown). The Item tab
+   * reads the whole item again; any other tab reads only its own entries and the counts of every tab.
+   */
+  function openTab(name) {
+    if (!currentView) return;
+    showTab(name, true);
+    if (name === 'item') { quietRead = true; bridge.send('refresh_item_view'); return; }   // the item stays on screen until the new one is ready
+    const view = currentView;
+    ns.itemTree.load('tab_counts_load', 'tab_counts_result', { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, counts) {
+      if (view !== currentView) return;   // another item has been opened meanwhile
+      if (error) { ns.toast.show('Could not refresh the counts: ' + error, { tone: 'error' }); return; }
+      Object.keys(counts).forEach(function (key) { if (view.tabs[key]) view.tabs[key].count = counts[key]; });
+      labelTabs(view);
+    });
+    loaded[name] = false;
+    $('item-' + name).replaceChildren();
+    loadTab(name);
   }
 
   function message(text, isError) {
@@ -330,10 +346,11 @@
     if (!r.ok) { message(r.error || 'Could not read the item.', true); return; }
     const entry = r.result;
     if (entry.pending) {
-      if (shownSeq !== entry.seq) { shownSeq = entry.seq; setLoading(true, 'Finding the Fusion Manage item...'); }
+      if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, 'Finding the Fusion Manage item...'); }
       timer = setTimeout(poll, POLL_INTERVAL_MS);
       return;
     }
+    quietRead = false;
     shownSeq = entry.seq;
     if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
     if (entry.missing) { showEmpty(ICON_MISSING, 'No item exists for ' + entry.missing, 'Check the item number, or publish the item to Fusion Manage first.'); return; }
@@ -356,13 +373,14 @@
     ns.auth.init();
     bridge.on('get_item_view', handle);
     bridge.on('item_changed', function (note) {   // Python opened another item in this palette
+      quietRead = false;   // another item (or an upload's reload): the loading screen is right
       if (note && note.item_tab) startOnItemTab = true;   // the panel was opened, not just following the selection: back to the Item tab
       setLoading(true, 'Finding the Fusion Manage item...');   // at once, not after the answer to the poll
       poll();
     });
     bridge.on('refresh_item_view', handle);
     document.querySelectorAll('.item-tab[data-tab]').forEach(function (tab) {
-      tab.addEventListener('click', function () { if (currentView) showTab(tab.dataset.tab); });
+      tab.addEventListener('click', function () { openTab(tab.dataset.tab); });
     });
     $('item-lightbox').addEventListener('click', closeLightbox);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
