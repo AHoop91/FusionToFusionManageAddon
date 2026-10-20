@@ -91,6 +91,7 @@
     added: 'Added with Add Existing Items',
   };
 
+  const REPORT_TITLES = { ok: 'Up to date', changes: 'Out of date', error: 'Could not check' };   // of the dialog behind the check button
   let report = { state: 'checking', text: '', props: [], lines: [], subject: '' };   // what the button last said, listed in its dialog
 
   function quantityText(quantity) { return quantity === '' || quantity === undefined ? '-' : 'Qty ' + quantity; }
@@ -146,8 +147,24 @@
 
   function checkClicked() {
     if (report.state === 'checking' || report.state === 'idle') return;
-    ns.pubCheckReport.open(report, {
-      onLine: details.open,
+    const sections = [];
+    if (report.props.length) {
+      sections.push({
+        title: 'Attributes', columns: ['Property', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
+        rows: report.props.map(function (p) { return { cells: [p.name, p.fusion, p.fm] }; }),
+      });
+    }
+    if (report.lines.length) {
+      sections.push({
+        title: 'Bill of Materials', columns: ['Item', 'Issue', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
+        rows: report.lines.map(function (l) {
+          return { cells: [l.number, l.issue, l.fusion, l.fm], sub: l.name, onClick: l.component ? function () { details.open(l.component); } : null };
+        }),
+      });
+    }
+    ns.diffReport.open({
+      state: report.state, title: REPORT_TITLES[report.state] || 'Fusion Manage check', summary: report.text, sections: sections,
+      empty: report.state === 'ok' ? 'Attributes and Bill of Materials for ' + report.subject + ' are up to date.' : 'There is nothing to list.',
     });
   }
 

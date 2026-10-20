@@ -1,0 +1,30 @@
+/* The report of what differs from Fusion Manage (diff-report.js), a small dialog in the middle of the Publish and Item panels. */
+.diff-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .45); }
+.diff-dialog { display: flex; flex-direction: column; width: 640px; max-width: 100%; max-height: 100%; background: var(--surface, #fff); border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .35); overflow: hidden; }
+.diff-head { flex: none; display: flex; align-items: center; gap: 14px; padding: 18px 20px 16px; border-bottom: 1px solid var(--border); }
+.diff-icon { flex: none; width: 36px; height: 36px; box-sizing: border-box; padding: 7px; border-radius: 50%; border: 2px solid currentColor; }
+.diff-icon svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.diff-icon-ok { color: #2e9d4f; background: #e8f5ec; }
+.diff-icon-changes { color: #a86400; background: #fdf0d8; }
+.diff-icon-error { color: #b3262a; background: #fbe4e5; }
+.diff-headtext { flex: 1; min-width: 0; }
+.diff-title { margin: 0; font-size: 16px; font-weight: 600; }
+.diff-summary { margin: 2px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.diff-close { flex: none; align-self: flex-start; width: 28px; height: 28px; padding: 4px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.diff-close:hover { background: var(--header-bg); color: inherit; }
+.diff-close svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.diff-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 20px 8px; }
+.diff-section { margin-top: 14px; }
+.diff-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.diff-count { padding: 0 7px; border-radius: 9px; background: #fdf0d8; color: #a86400; font-size: 11px; line-height: 18px; }
+.diff-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.diff-table th { padding: 6px 8px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+.diff-table td { padding: 9px 8px; vertical-align: top; overflow-wrap: anywhere; border-bottom: 1px solid var(--border); }
+.diff-table tr:last-child td { border-bottom: 0; }
+.diff-name { font-weight: 500; }
+.diff-main, .diff-sub { display: block; }
+.diff-sub { margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.diff-click { cursor: pointer; }
+.diff-click:hover { background: #f6f8fa; }
+.diff-empty { margin: 18px 0 14px; font-size: 13px; color: var(--muted); }
+.diff-foot { flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 4px 20px 16px; }

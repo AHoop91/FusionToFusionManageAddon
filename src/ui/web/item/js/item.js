@@ -374,19 +374,19 @@
   // The mark at the right of the tab bar says whether the tab shown matches the open design: only a spinner while it is checked, then
   // "Out of Date" or "Check failed" when there is something to say. A tab with a check has Python's ``start`` and ``result`` actions and
   // the words for how many things differ (``differs(count)``); a tab with none shows no mark.
-  // ``section`` and ``columns`` (what each of ``name``, ``design`` and ``item`` of a difference is called) are for the dialog the pill opens.
+  // ``section`` and ``columns`` (what each of ``name``, ``design`` and ``item`` of a difference is called) are for the report the pill opens.
   const CHECKS = {
     item: {
       start: 'sync_check_load', result: 'sync_check_result',
       differs: function (n) { return n + (n === 1 ? ' mapped field differs' : ' mapped fields differ') + ' from the open design'; },
       section: 'Attributes',
-      columns: ['Field', 'Component Value', 'Fusion Manage Value'],
+      columns: ['Field', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
     },
     bom: {
       start: 'bom_check_load', result: 'bom_check_result',
       differs: function (n) { return n + (n === 1 ? ' component is' : ' components are') + ' not in this Bill of Materials as in the open design (not under the same parent, or in another quantity)'; },
       section: 'Bill of Materials',
-      columns: ['Component', 'Quantity in design', 'Quantity in Fusion Manage'],
+      columns: ['Component', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
     },
   };
   const LABELS = { changes: 'Out of Date', error: 'Check failed' };   // the pill; while checking there is only the spinner, and an up-to-date tab shows nothing
@@ -410,7 +410,7 @@
   function paintCheck() {
     const mark = checkOf[shownTab] || { state: 'idle', text: '' };
     const element = $('item-check');
-    closeDiff();   // what it says has changed: the dialog open for the old answer is not wanted
+    ns.diffReport.close();   // what it says has changed: the dialog open for the old answer is not wanted
     element.dataset.state = mark.state;
     element.title = mark.text;
     element.setAttribute('aria-label', mark.text);
@@ -433,53 +433,24 @@
     });
   }
 
-  // ---- The dialog the pill opens: what is out of date, and Republish ----------------------
-  const DETAILS_SHOWN = 50;   // rows listed; a long list of differences says how many more there are
+  // ---- The report the pill opens: what is out of date, and Republish -----------------------
 
-  function closeDiff() { $('item-diff').hidden = true; }
-
-  function diffTable(check, details) {
-    const table = el('table', 'item-diff-table');
-    const head = el('tr');
-    check.columns.forEach(function (title) { head.appendChild(el('th', '', title)); });
-    table.appendChild(el('thead')).appendChild(head);
-    const body = el('tbody');
-    details.slice(0, DETAILS_SHOWN).forEach(function (difference) {
-      const row = el('tr');
-      row.appendChild(el('td', '', difference.name));
-      [difference.design, difference.item].forEach(function (value) {
-        row.appendChild(el('td', '', value || '-'));
-      });
-      body.appendChild(row);
-    });
-    table.appendChild(body);
-    return table;
-  }
-
-  /** Open the dialog for what the pill of the tab shown says (nothing when it says nothing). */
+  /** Open the report (the one the Publish panel shows too) for what the pill of the tab shown says; nothing when it says nothing. */
   function openDiff() {
     const mark = checkOf[shownTab];
     if (!mark || (mark.state !== 'changes' && mark.state !== 'error')) return;
-    const dialog = $('item-diff');
-    const body = $('item-diff-body');
-    body.replaceChildren();
-    dialog.dataset.state = mark.state;
-    if (mark.state === 'changes') {
-      $('item-diff-title').textContent = 'Out of date';
-      $('item-diff-lead').textContent = mark.check.differs(mark.details.length) + '.';
-      const heading = el('h3', 'item-diff-section', mark.check.section);
-      heading.appendChild(el('span', 'item-diff-count', String(mark.details.length)));
-      body.appendChild(heading);
-      body.appendChild(diffTable(mark.check, mark.details));
-      if (mark.details.length > DETAILS_SHOWN) body.appendChild(el('p', 'item-diff-more', '... and ' + (mark.details.length - DETAILS_SHOWN) + ' more.'));
-    } else {
-      $('item-diff-title').textContent = 'Could not check';
-      $('item-diff-lead').textContent = 'Fusion Manage could not be compared with the open design.';
-      body.appendChild(el('p', 'item-diff-error', mark.message));
+    if (mark.state === 'error') {
+      ns.diffReport.open({ state: 'error', title: 'Could not check', summary: mark.message, sections: [], empty: 'Fusion Manage could not be compared with the open design.' });
+      return;
     }
-    $('item-diff-republish').hidden = mark.state !== 'changes';   // a failed check says nothing is out of date to publish
-    dialog.hidden = false;
-    (mark.state === 'changes' ? $('item-diff-republish') : $('item-diff-close')).focus();
+    ns.diffReport.open({
+      state: 'changes', title: 'Out of date', summary: mark.check.differs(mark.details.length) + '.',
+      sections: [{
+        title: mark.check.section, columns: mark.check.columns,
+        rows: mark.details.map(function (d) { return { cells: [d.name, d.design, d.item] }; }),
+      }],
+      actions: [{ label: 'Republish', onClick: function () { bridge.send('open_publish'); } }],
+    });
   }
 
   function render(view, keepCheck) {
@@ -562,12 +533,8 @@
       }
     });
     $('item-lightbox').addEventListener('click', closeLightbox);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeLightbox(); closeDiff(); } });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
     $('item-check-label').addEventListener('click', openDiff);
-    $('item-diff-close').addEventListener('click', closeDiff);
-    $('item-diff-x').addEventListener('click', closeDiff);
-    $('item-diff').addEventListener('click', function (e) { if (e.target === this) closeDiff(); });   // the backdrop, not the card
-    $('item-diff-republish').addEventListener('click', function () { closeDiff(); bridge.send('open_publish'); });
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
     $('item-open').addEventListener('click', function () { if (itemUrl) bridge.send('open_url', { url: itemUrl }); });
     $('item-empty-publish').addEventListener('click', function () { bridge.send('open_publish'); });

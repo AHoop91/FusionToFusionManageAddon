@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
+  <link rel="stylesheet" href="../shared/css/diff-report.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
   <link rel="stylesheet" href="../shared/css/upload-progress.css">
   <!-- Item panel styles -->
@@ -130,27 +131,6 @@
     <img id="item-lightbox-img" alt="">
   </div>
 
-  <!-- What is out of date, from the pill in the tab bar; item.js fills it in. A click outside it, Close or Escape closes it. -->
-  <div id="item-diff" class="item-diff" role="dialog" aria-modal="true" aria-labelledby="item-diff-title" hidden>
-    <div class="item-diff-card">
-      <header class="item-diff-head">
-        <span class="item-diff-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 7v6.5M12 17v.2"/></svg></span>
-        <div class="item-diff-heading">
-          <h2 id="item-diff-title" class="item-diff-title"></h2>
-          <p id="item-diff-lead" class="item-diff-lead"></p>
-        </div>
-        <button id="item-diff-x" class="item-diff-x" type="button" title="Close" aria-label="Close">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </button>
-      </header>
-      <div id="item-diff-body" class="item-diff-body"></div>
-      <footer class="item-diff-foot">
-        <button id="item-diff-close" class="btn btn-secondary" type="button">Close</button>
-        <button id="item-diff-republish" class="btn" type="button">Republish</button>
-      </footer>
-    </div>
-  </div>
-
   <!-- Progress of the STEP upload, over the panel while it runs. -->
   <div id="progress" class="progress-backdrop" hidden>
     <div id="progress-card" class="progress" role="dialog" aria-modal="true" aria-label="Uploading STEP File"></div>
@@ -161,6 +141,7 @@
   <script src="../shared/js/bridge.js"></script>
   <script src="../shared/js/shell.js"></script>
   <script src="../shared/js/toast.js"></script>
+  <script src="../shared/js/diff-report.js"></script>
   <script src="../shared/js/upload-progress.js"></script>
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
