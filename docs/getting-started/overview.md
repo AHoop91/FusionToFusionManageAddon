@@ -4,7 +4,19 @@ title: Overview
 
 # Overview
 
-The Fusion Manage add-in brings Vault-inspired item management to Fusion, powered by Fusion Manage. It bridges **engineering to enterprise**: it carries a **released engineering definition** from Fusion into **independently managed manufacturing items and BOMs** in Fusion Manage, together with the representations and information the wider supply chain needs to source, build and support the product.
+**In one sentence:** the add-in copies a released design from Fusion into Fusion Manage, as a manufacturing item with its parts list (BOM) and files, when you tell it to.
+
+Engineers keep working in Fusion. Manufacturing, purchasing and quality teams work from the item in Fusion Manage. Unfamiliar words are explained in the [Glossary](glossary.md).
+
+## What you can do
+
+- **Sign in** to Fusion Manage from Fusion with your Autodesk account ([Installation](installation.md)).
+- **Choose which design properties fill which Fusion Manage fields** ([Configuration](../configuration/index.md)).
+- **Create and update items** from a design, matched by item number ([Publishing](../publishing/index.md)).
+- **Compare and synchronise the BOM** between the design and Fusion Manage ([Bill of Materials](../publishing/index.md#bill-of-materials)).
+- **Attach a STEP file or drawing PDF** to an item, only when you choose to ([STEP File](../publishing/index.md#step-file), [Drawing Representation](../publishing/index.md#drawing-representation)).
+- **Review an item inside Fusion**: fields, files, BOM, where-used and workflows ([Item Panel](../item-panel/index.md)).
+- **Follow your publishes** and retry a failed one ([Job Queue](../job-queue/index.md)).
 
 ## Why it exists
 
@@ -21,21 +33,6 @@ The result is a single, traceable path from a released design to an item the ent
 ## How it works
 
 The add-in reads a design's components, properties, thumbnails and part numbers from the Manufacturing Data Model and compares them with what already exists in Fusion Manage. It shows you the differences before anything changes, then sends **only what needs to be created or updated**. Nothing is overwritten blindly, and you stay in control of every publish.
-
-## What it does
-
-| Capability | Where to read more |
-|---|---|
-| Sign in to Fusion Manage from Fusion using your Autodesk account | [Installation and Authentication](installation.md) |
-| Read components, properties and BOMs from the Manufacturing Data Model | [Manufacturing Data Model](../configuration/index.md#manufacturing-data-model) |
-| Map those properties to Fusion Manage fields | [Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping) |
-| Create and update items in a Fusion Manage workspace | [Publishing](../publishing/index.md) |
-| Compare and synchronise the design BOM with the Fusion Manage BOM | [Bill of Materials](../publishing/index.md#bill-of-materials) |
-| Attach a STEP file or a drawing PDF to an item, manually and only when you choose to | [STEP File](../publishing/index.md#step-file), [Drawing Representation](../publishing/index.md#drawing-representation) |
-| Browse an item's fields, files, BOM, where-used and workflows inside Fusion | [Item Panel](../item-panel/index.md) |
-| Follow publishes that are waiting, running and finished, and retry a failed one | [Job Queue](../job-queue/index.md) |
-
-To see how these fit together in practice, from engineering release through to release in Fusion Manage, read the [End-to-End Workflow](workflow.md).
 
 ## How it fits together
 
@@ -103,6 +100,10 @@ The same actions are available from the right-click menu of a component in the b
 - A Fusion Manage tenant and a user with permission to work in the target workspace.
 - An Autodesk Platform Services (APS) application registered for sign-in (see [Installation and Authentication](installation.md)).
 
-## Scope of this release
+## Scope
 
-This is version 0.1.0. It works with a single Fusion Manage workspace, **Items**. See [Troubleshooting and Limitations](../reference/troubleshooting.md) for what is not yet supported.
+The add-in works with a single Fusion Manage workspace, **Items**. See [Troubleshooting and Limitations](../reference/troubleshooting.md#limitations) for what is not yet supported. Get the latest version from the [Releases page](https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest).
+
+## Next step
+
+[Install the add-in and sign in](installation.md).

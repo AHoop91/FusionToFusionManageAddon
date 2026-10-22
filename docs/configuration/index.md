@@ -4,14 +4,25 @@ title: Configuration
 
 # Configuration
 
-Configuration tells the add-in where design data comes from and where in Fusion Manage it goes. Do it once, before the first publish.
+**What you'll do here:** tell the add-in which Fusion Manage workspace to write to and which design property fills which field. Do it once, before the first publish.
 
+## Quick steps
 
-## Order of work
+1. [Sign in](../getting-started/installation.md) and connect to your tenant.
+2. Open **Manage ▸ Item Management ▸ Administration ▸ Preferences ▸ Item Workspace**.
+3. Choose your **Items workspace** and wait for the tick.
+4. Click **Add default fields**, and check that all nine rows appear ([Default fields](#default-fields)).
+5. Click **Save**.
 
-1. Sign in and connect to your tenant. See [Installation and Authentication](../getting-started/installation.md).
-2. Check that the design data is ready to publish. See [Manufacturing Data Model](#manufacturing-data-model).
-3. Choose the Items workspace and map the fields. See [Workspace and Field Mapping](#workspace-and-field-mapping).
+If a Type or other picklist field is mapped, its values must match in both systems ([Type field](#the-type-field-and-its-picklist)). Unfamiliar words are in the [Glossary](../getting-started/glossary.md).
+
+## In this page
+
+| Section | Read it when |
+|---|---|
+| [Manufacturing Data Model](#manufacturing-data-model) | You want to know what the add-in reads from your design, and what must be true of the design first. |
+| [Workspace and Field Mapping](#workspace-and-field-mapping) | You are choosing the workspace, mapping fields or setting default values. |
+| [Export destinations](#export-destinations) | You want STEP, PDF, DWG or DXF files to attach to an item or a component. |
 
 ## Manufacturing Data Model
 

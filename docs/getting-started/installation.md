@@ -4,12 +4,19 @@ title: Installation and Authentication
 
 # Installation and Authentication
 
-Setting up the add-in takes four stages. Do them in this order.
+**What you'll do here:** install the add-in in Fusion and sign in to Fusion Manage. Allow about 15 minutes, plus time for an administrator if your organisation has no APS application yet.
+
+## Quick steps
+
+1. **Install:** download the latest release zip, unzip it, and add the folder in Fusion ([stage 1](#1-install-the-add-in)).
+2. **Get a Client ID:** ask your administrator for the organisation's Client ID, or create an APS application yourself ([stage 2](#2-get-a-client-id)).
+3. **Connect:** open **Preferences**, enter the Client ID and your tenant, and click **Save** ([stage 3](#3-configure-the-connection)).
+4. **Sign in:** click **Sign in** and approve access in your browser ([stage 4](#4-sign-in)).
 
 | Stage | What you do | Who |
 |---|---|---|
 | [1. Install the add-in](#1-install-the-add-in) | Load the add-in into Fusion | Each user |
-| [2. Create an APS application](#2-create-an-aps-application-and-get-a-client-id) | Register an application and obtain a **Client ID** | Once per organisation (or per developer) |
+| [2. Get a Client ID](#2-get-a-client-id) | Obtain the **Client ID** that identifies the add-in | Once per organisation (or per developer) |
 | [3. Configure the connection](#3-configure-the-connection) | Enter the Client ID, tenant and callback port | Each user, or import a shared file |
 | [4. Sign in](#4-sign-in) | Approve access in your browser | Each user |
 
@@ -17,70 +24,33 @@ Setting up the add-in takes four stages. Do them in this order.
 
 ## 1. Install the add-in
 
-1. Get the add-in folder (the one containing `MfgToFm.py` and `MfgToFm.manifest`).
+1. Download the latest zip from the [Releases page](https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest) and unzip it. You get a folder named **Fusion Manage Item Management**, which holds `Fusion Manage Item Management.py` and `Fusion Manage Item Management.manifest`.
 2. In Fusion open **Utilities ▸ Add-Ins ▸ Scripts and Add-Ins**, switch to the **Add-Ins** tab, click **+** (add existing add-in) and browse to the folder.
-3. Select **MfgToFm** in the list and click **Run**. Tick **Run on Startup** if you want it to load with Fusion.
+3. Select **Fusion Manage Item Management** in the list and click **Run**. Tick **Run on Startup** if you want it to load with Fusion.
 
 The add-in supports Windows and macOS. Once it is running, an **Export** panel and an **Item Management** panel appear in the **Manage** tab of the Design and Drawing workspaces. Most buttons stay greyed out until setup is complete.
 
-!!! example "Screenshot placeholder: Scripts and Add-Ins dialog with MfgToFm selected"
-    **Show:** The Add-Ins tab with MfgToFm selected, and the Run and Run on Startup options.
+!!! example "Screenshot placeholder: Scripts and Add-Ins dialog with the add-in selected"
+    **Show:** The Add-Ins tab with Fusion Manage Item Management selected, and the Run and Run on Startup options.
 
-    Save the image as `docs/images/scripts-and-addins.png`, then replace this box with `![Scripts and Add-Ins dialog with MfgToFm selected](../images/scripts-and-addins.png)`.
+    Save the image as `docs/images/scripts-and-addins.png`, then replace this box with `![Scripts and Add-Ins dialog with the add-in selected](../images/scripts-and-addins.png)`.
 
 ---
 
-## 2. Create an APS application and get a Client ID
+## 2. Get a Client ID
 
 The add-in signs in through Autodesk Platform Services (APS), so it needs an APS application. The application's **Client ID** identifies the add-in when you sign in. This is done on the APS website, not in Fusion.
 
 !!! info "You may already have one"
     If your organisation has already created an application for this add-in, ask for its **Client ID** and skip to [stage 3](#3-configure-the-connection). One application can be shared by everyone; each person still signs in with their own Autodesk account.
 
-### What you need first
+**What you need first:**
 
 - An Autodesk account that can sign in at [aps.autodesk.com](https://aps.autodesk.com).
 - An APS subscription (Free or Paid tier) assigned to a team.
-- A **Team Administrator** to set up the APS Developer Hub, if your organisation does not have one yet.
+- A **Team Administrator** to set up the APS Developer Hub, if your organisation does not have one yet. See [Administrator setup](#administrator-setup).
 
-### 2.1 Get an APS subscription (Team Administrator)
-
-Skip this if your organisation already has an APS offering assigned to a team.
-
-1. Go to [aps.autodesk.com](https://aps.autodesk.com) and sign in or sign up. Click **View options**.
-2. On the APS overview page, use the **Site Selector** (top right) to choose your country before signing in.
-3. Click **Pricing** in the left-hand menu, then **Add to Cart** under the offering you want, then **Checkout** and complete the customer details.
-    - A **Free** plan is not charged, but checkout still asks for a payment method.
-    - A **Paid** plan needs a valid payment method.
-4. Click **Access Account**, which opens the [Autodesk Account portal](https://manage.autodesk.com/home).
-5. If you administer more than one team, go to **Billing and Orders ▸ Subscriptions and Contracts** and confirm the APS offering is assigned to the right team.
-
-!!! note
-    If your region is not offered in the Autodesk Store, contact `aps.orders@autodesk.com`.
-
-### 2.2 Create the APS Developer Hub (Team Administrator)
-
-The Developer Hub is where your organisation's APS applications live, and where you control who can create them.
-
-1. Open [manage.autodesk.com](https://manage.autodesk.com/).
-2. Go to **Products and Services ▸ Hubs**.
-3. Choose the **team** the APS offering is assigned to.
-4. Click **Create Hub** and select **APS Developer Hub**.
-5. Enter a **Hub Name** and click **Create & Activate**.
-6. Under **Cloud Product**, click the **APS Developer Hub** link. This opens [aps.autodesk.com/hubs](https://aps.autodesk.com/hubs/).
-
-!!! warning "No “APS Developer Hub” option?"
-    The team has no APS offering assigned to it. Complete step 2.1 first.
-
-### 2.3 Add developers to the hub (Team Administrator)
-
-1. In the hub, open **Roles and Access**.
-2. Click **Add Member** and enter the person's **email address**.
-3. Choose an access level, **Admin** or **Developer**, and click **Add**.
-
-Anyone who needs to create the application must be a member of the hub.
-
-### 2.4 Create the application
+### 2.1 Create the application
 
 !!! example "Screenshot placeholder: APS: choosing the application type"
     **Show:** The Create application dialog with Desktop, Mobile, Single-Page App chosen, and the callback URL field.
@@ -109,7 +79,7 @@ Anyone who needs to create the application must be a member of the hub.
 !!! note "Labels can change"
     The APS portal is updated from time to time, so button names and field order may differ slightly from this list. The application type, the APIs and the callback URL are what matter.
 
-### 2.5 Copy the Client ID
+### 2.2 Copy the Client ID
 
 Open the application under **My Applications**. Its details page shows the **Client ID**, a 32-character string. Copy it. You will paste it into the add-in in the next stage.
 
@@ -120,19 +90,60 @@ Open the application under **My Applications**. Its details page shows the **Cli
 
 An application of this type has no client secret that you need. Never type one into the add-in.
 
-### 2.6 Moving an existing application into the hub
+### Administrator setup
 
-If you already created the application before your organisation had a Developer Hub, move it in:
+??? note "Team Administrators only: APS subscription and Developer Hub"
+    **A1. Get an APS subscription (Team Administrator)**
 
-1. Sign in at [aps.autodesk.com](https://aps.autodesk.com) and open **My Applications**.
-2. Select the application.
-3. Click **Move apps to Developer Hub**.
-4. Select the hub name and click **Next**.
+    Skip this if your organisation already has an APS offering assigned to a team.
 
-You must already be a member of the hub (see [2.3](#23-add-developers-to-the-hub-team-administrator)).
+    1. Go to [aps.autodesk.com](https://aps.autodesk.com) and sign in or sign up. Click **View options**.
+    2. On the APS overview page, use the **Site Selector** (top right) to choose your country before signing in.
+    3. Click **Pricing** in the left-hand menu, then **Add to Cart** under the offering you want, then **Checkout** and complete the customer details.
+        - A **Free** plan is not charged, but checkout still asks for a payment method.
+        - A **Paid** plan needs a valid payment method.
+    4. Click **Access Account**, which opens the [Autodesk Account portal](https://manage.autodesk.com/home).
+    5. If you administer more than one team, go to **Billing and Orders ▸ Subscriptions and Contracts** and confirm the APS offering is assigned to the right team.
 
-!!! tip "More reading"
-    This section follows Autodesk's own guide, [APS Developer Hub Setup and App Migration](https://aps.autodesk.com/blog/aps-developer-hub-setup-and-app-migration), and the post [New application types](https://aps.autodesk.com/blog/new-application-types). Refer to them if your portal looks different.
+    !!! note
+        If your region is not offered in the Autodesk Store, contact `aps.orders@autodesk.com`.
+
+    **A2. Create the APS Developer Hub (Team Administrator)**
+
+    The Developer Hub is where your organisation's APS applications live, and where you control who can create them.
+
+    1. Open [manage.autodesk.com](https://manage.autodesk.com/).
+    2. Go to **Products and Services ▸ Hubs**.
+    3. Choose the **team** the APS offering is assigned to.
+    4. Click **Create Hub** and select **APS Developer Hub**.
+    5. Enter a **Hub Name** and click **Create & Activate**.
+    6. Under **Cloud Product**, click the **APS Developer Hub** link. This opens [aps.autodesk.com/hubs](https://aps.autodesk.com/hubs/).
+
+    !!! warning "No “APS Developer Hub” option?"
+        The team has no APS offering assigned to it. Complete step A1 first.
+
+    **A3. Add developers to the hub (Team Administrator)**
+
+    1. In the hub, open **Roles and Access**.
+    2. Click **Add Member** and enter the person's **email address**.
+    3. Choose an access level, **Admin** or **Developer**, and click **Add**.
+
+    Anyone who needs to create the application must be a member of the hub.
+
+    **A4. Moving an existing application into the hub**
+
+    If you already created the application before your organisation had a Developer Hub, move it in:
+
+    1. Sign in at [aps.autodesk.com](https://aps.autodesk.com) and open **My Applications**.
+    2. Select the application.
+    3. Click **Move apps to Developer Hub**.
+    4. Select the hub name and click **Next**.
+
+    You must already be a member of the hub (see A3).
+
+    !!! tip "More reading"
+        This section follows Autodesk's own guide, [APS Developer Hub Setup and App Migration](https://aps.autodesk.com/blog/aps-developer-hub-setup-and-app-migration), and the post [New application types](https://aps.autodesk.com/blog/new-application-types). Refer to them if your portal looks different.
+
 
 ---
 
@@ -142,7 +153,7 @@ Open **Manage ▸ Item Management ▸ Administration ▸ Preferences**. Signed o
 
 | Setting | What to enter |
 |---|---|
-| **Client ID** | The Client ID from [stage 2.5](#25-copy-the-client-id). |
+| **Client ID** | The Client ID from [step 2.2](#22-copy-the-client-id). |
 | **Callback port** | The port in your callback URL. Default `8765`; allowed range 1024–65535. |
 | **Scopes** | Leave as `data:read data:write data:search user-profile:read`. |
 

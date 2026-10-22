@@ -4,84 +4,50 @@ title: Home
 
 # Fusion Manage Add-in for Fusion
 
-Vault-inspired item management for Fusion, powered by Fusion Manage. Bridge your released engineering designs into independently managed manufacturing items, BOMs and representations for the wider supply chain.
+Publish your released designs from Fusion into Fusion Manage as manufacturing items, bills of materials (BOMs) and files. Engineering keeps designing in Fusion. Manufacturing gets a controlled record in Fusion Manage. Nothing crosses until you choose to publish.
 
-[Get started](getting-started/installation.md){ .md-button .md-button--primary }
-[See the workflow](getting-started/workflow.md){ .md-button }
+[Install the add-in](getting-started/installation.md){ .md-button .md-button--primary }
+[See how it works](getting-started/overview.md){ .md-button }
 
-## Where to start
+## What do you want to do?
 
 <div class="grid cards" markdown>
 
--   **New to the add-in**
+-   **Understand what this is**
 
-    Learn what it does, and how a component moves from engineering release to a released item.
+    What the add-in does, who uses it, and how a design becomes a released item.
 
     [Overview](getting-started/overview.md) ·
-    [End-to-End Workflow](getting-started/workflow.md)
+    [End-to-End Workflow](getting-started/workflow.md) ·
+    [Glossary](getting-started/glossary.md)
 
--   **Setting up**
+-   **Set it up**
 
-    Install the add-in, sign in, and map your properties to Fusion Manage fields.
+    Install the add-in, sign in, and tell it which Fusion Manage fields to fill.
 
     [Installation and Authentication](getting-started/installation.md) ·
-    [Workspace and Field Mapping](configuration/index.md#workspace-and-field-mapping)
+    [Configuration](configuration/index.md)
 
--   **Publishing**
+-   **Publish a design**
 
     Create and update items, synchronise the BOM, and attach STEP files and drawings.
 
     [Publishing](publishing/index.md)
 
--   **Reviewing and tracking**
+-   **Check and track**
 
     Review an item inside Fusion, and follow your publishes.
 
     [Item Panel](item-panel/index.md) ·
     [Job Queue](job-queue/index.md)
 
--   **Something went wrong**
+-   **Fix a problem**
 
-    Find the cause of an error message, and the known limitations.
-
-    [Troubleshooting and Limitations](reference/troubleshooting.md)
-
-</div>
-
-## Browse the documentation
-
-<div class="grid cards" markdown>
-
--   **Getting Started**
-
-    [Overview](getting-started/overview.md) ·
-    [End-to-End Workflow](getting-started/workflow.md) ·
-    [Installation and Authentication](getting-started/installation.md)
-
--   **Configuration**
-
-    [Manufacturing Data Model](configuration/index.md#manufacturing-data-model) ·
-    [Workspace and Field Mapping](configuration/index.md#workspace-and-field-mapping)
-
--   **Publishing**
-
-    [Item Creation](publishing/index.md#item-creation) ·
-    [Item Update](publishing/index.md#item-update) ·
-    [Bill of Materials](publishing/index.md#bill-of-materials) ·
-    [STEP File](publishing/index.md#step-file) ·
-    [Drawing Representation](publishing/index.md#drawing-representation)
-
--   **Item Panel**
-
-    [Tabs](item-panel/index.md#tabs) ·
-    [Review and Release](item-panel/index.md#review-and-release)
-
--   **Job Queue**
-
-    [Request Files and Retry](job-queue/index.md#request-files-and-retry)
-
--   **Reference**
+    Find the cause of an error message, and read the known limitations.
 
     [Troubleshooting and Limitations](reference/troubleshooting.md)
 
 </div>
+
+!!! note "Unofficial project"
+    This is an independent add-in. It is not an Autodesk product and is not supported by Autodesk. Download the latest version from the [Releases page](https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest).

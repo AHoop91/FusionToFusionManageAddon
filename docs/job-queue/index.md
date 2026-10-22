@@ -4,9 +4,11 @@ title: Job Queue
 
 # Job Queue
 
+**What you'll do here:** see whether a publish worked, and retry it if it did not.
+
 Every publish is a **job**. The Job Queue shows the jobs that are waiting, running and finished, so you can see what the add-in is doing without keeping the Publish panel open.
 
-Open it with **Manage ▸ Item Management ▸ Administration ▸ Job Queue**.
+**Quick steps:** open it with **Manage ▸ Item Management ▸ Administration ▸ Job Queue**. Hover a row's status icon to see the reason for a failure. To send a failed job again, see [Retry a failed run](#retry-a-failed-run).
 
 
 ## How jobs run

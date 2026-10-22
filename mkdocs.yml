@@ -2,12 +2,19 @@ site_name: Fusion Manage - Item Management
 site_description: Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.
 site_url: https://ahoop91.github.io/FusionToFusionManageAddon/
 docs_dir: docs
+exclude_docs: |
+  images/SHOT-LIST.md
 
 extra_css:
   - stylesheets/extra.css
 
 theme:
   name: material
+  logo: images/logo.svg
+  favicon: images/logo.svg
+  font:
+    text: Inter
+    code: Roboto Mono
   features:
     - navigation.sections
     - navigation.indexes
@@ -50,12 +57,16 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
+  - Start here:
       - Overview: getting-started/overview.md
       - End-to-End Workflow: getting-started/workflow.md
+      - Glossary: getting-started/glossary.md
+  - Set up:
       - Installation and Authentication: getting-started/installation.md
-  - Configuration: configuration/index.md
-  - Publishing: publishing/index.md
-  - Item Panel: item-panel/index.md
-  - Job Queue: job-queue/index.md
-  - Troubleshooting and Limitations: reference/troubleshooting.md
+      - Configuration: configuration/index.md
+  - Use:
+      - Publishing: publishing/index.md
+      - Item Panel: item-panel/index.md
+      - Job Queue: job-queue/index.md
+  - Fix problems:
+      - Troubleshooting and Limitations: reference/troubleshooting.md

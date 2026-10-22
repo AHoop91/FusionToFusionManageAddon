@@ -4,6 +4,18 @@ title: Troubleshooting and Limitations
 
 # Troubleshooting and Limitations
 
+**What you'll do here:** find the cause of an error message and the fix. Find your message in the table for the area you were using.
+
+| I was… | Go to |
+|---|---|
+| Signing in or connecting | [Sign-in problems](#sign-in-problems) |
+| Looking at a greyed-out button | [Buttons are greyed out](#buttons-are-greyed-out) |
+| Publishing | [Publishing](#publishing) |
+| Uploading a STEP file or PDF | [Upload](#upload) |
+| Using the Item panel | [Item panel](#item-panel) |
+| Looking for logs or settings files (for support) | [Where files are kept](#where-files-are-kept) |
+| Wondering whether something is supported | [Limitations](#limitations) |
+
 ## Sign-in problems
 
 | Message | Cause and fix |
@@ -29,7 +41,7 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 
     Save the image as `docs/images/greyed-button.png`, then replace this box with `![Greyed-out button with its tooltip](../images/greyed-button.png)`.
 
-- Messages such as *The Items workspace ID is not set.* mean the Items workspace settings are incomplete. Fix them on the **Workspaces** tab ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
+- Messages such as *The Items workspace ID is not set.* mean the Items workspace settings are incomplete. Fix them on the **Item Workspace** tab ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
 - For the drawing PDF, *The drawing has no references yet.*, *… none of the designs is loaded yet.* and *The top-level component of … has no part number.* mean the drawing is not ready. Wait for it to finish loading, or give the top-level component a part number. The add-in rechecks every couple of seconds.
 
 ## Publishing

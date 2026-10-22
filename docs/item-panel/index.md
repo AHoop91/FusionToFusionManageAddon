@@ -4,7 +4,11 @@ title: Item Panel
 
 # Item Panel
 
+**What you'll do here:** check an item's Fusion Manage record without leaving Fusion.
+
 The **Item Panel** shows an item's Fusion Manage record inside Fusion, next to the design it came from. You can check a publish and see where an item stands in its lifecycle without switching to the browser.
+
+**Quick steps:** select a component, choose **Manage ▸ Item Management ▸ Open Fusion Manage Item**, then use the [tabs](#tabs) to check fields, files, BOM, where-used and workflows.
 
 !!! note "It is for reviewing"
     The panel reads the item. It does not move it through its workflow, and its only change to the item is attaching files you choose to upload. Release happens in Fusion Manage. See [Review and Release](#review-and-release).

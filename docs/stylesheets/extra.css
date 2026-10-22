@@ -61,3 +61,111 @@
   --md-accent-fg-color--transparent: #4da3ff1a;
   --md-typeset-a-color: #4da3ff;
 }
+
+/* Autodesk look: black header, Autodesk blue, white page, squared buttons and cards. */
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #000000;
+  --md-primary-fg-color--light: #3c3c3c;
+  --md-primary-fg-color--dark: #000000;
+  --md-accent-fg-color: #0696d7;
+  --md-accent-fg-color--transparent: #0696d71a;
+  --md-typeset-a-color: #0067a5;
+  --md-default-fg-color: #3c3c3c;
+  --md-typeset-color: #3c3c3c;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #000000;
+  --md-primary-fg-color--dark: #000000;
+  --md-default-bg-color: #1a1a1a;
+  --md-accent-fg-color: #0696d7;
+  --md-accent-fg-color--transparent: #0696d71a;
+  --md-typeset-a-color: #4cc2f1;
+}
+
+.md-header {
+  box-shadow: none;
+  border-bottom: 1px solid #ffffff26;
+}
+
+.md-header__button.md-logo img {
+  height: 1.6rem;
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h1 {
+  color: inherit;
+}
+
+.md-typeset h2 {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.3em;
+}
+
+/* Buttons: Autodesk style, solid blue and black outline. */
+.md-typeset .md-button {
+  border-radius: 2px;
+  font-weight: 600;
+  color: #000000;
+  border-color: #000000;
+}
+
+.md-typeset .md-button--primary {
+  background-color: #0696d7;
+  border-color: #0696d7;
+  color: #000000;
+}
+
+.md-typeset .md-button:hover,
+.md-typeset .md-button:focus {
+  background-color: #000000;
+  border-color: #000000;
+  color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button {
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+/* Cards, tables and callouts: flat, square, light border. */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > ol > li {
+  border-radius: 2px;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-top: 3px solid #0696d7;
+}
+
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid.cards > ol > li:hover {
+  border-color: #0696d7;
+  box-shadow: none;
+}
+
+.md-typeset table:not([class]) {
+  border-radius: 2px;
+  box-shadow: none;
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset table:not([class]) th {
+  background-color: #000000;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.md-typeset code {
+  border-radius: 2px;
+}

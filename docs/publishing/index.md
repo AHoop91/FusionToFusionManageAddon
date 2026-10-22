@@ -4,13 +4,28 @@ title: Publishing
 
 # Publishing
 
-Publishing is how a released design becomes manufacturing items in Fusion Manage. This section covers everything the add-in sends, from creating and updating items to the BOM and the technical representations.
-
+**What you'll do here:** turn a released design into manufacturing items in Fusion Manage, then attach STEP files and drawings.
 
 Items and BOMs are sent by **Publish**. STEP files and drawing PDFs are different: they are **never sent by a publish** and are uploaded one at a time by you. See [Technical representations are manual](#technical-representations-are-manual).
 
+## Quick steps
 
-Runs are tracked in the [Job Queue](../job-queue/index.md), and the result can be reviewed in the [Item Panel](../item-panel/index.md).
+1. Open the saved design.
+2. Right-click the top-level component and choose **Publish Fusion Manage Item**.
+3. Check the BOM and the **New** or **Update** marks in the Details Panel.
+4. Click **Publish**, and follow it in the [Job Queue](../job-queue/index.md).
+5. Optional: attach a [STEP file](#step-file) or [drawing PDF](#drawing-representation).
+
+Review the result in the [Item Panel](../item-panel/index.md).
+
+## In this page
+
+| Section | Read it when |
+|---|---|
+| [Open the Publish panel](#open-the-publish-panel) and [Publish](#publish) | You are publishing for the first time. |
+| [Item Creation](#item-creation) and [Item Update](#item-update) | You want to know what is created, changed or never overwritten. |
+| [Bill of Materials](#bill-of-materials) | You are comparing or editing the BOM. |
+| [STEP File](#step-file) and [Drawing Representation](#drawing-representation) | You are attaching files. |
 
 ## Before you start
 
