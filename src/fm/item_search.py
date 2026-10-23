@@ -31,7 +31,7 @@ def parse_search(data: Any, workspace_id: str, parent_id: str) -> Dict[str, Any]
     """``{"total", "raw", "items": [{"id", "link", "number", "name", "version", "linkable"}]}`` of a search answer.
 
     ``raw`` is how many rows the page held, to continue from: the parent item is left out of ``items`` (it cannot hold
-    itself) and ``total`` is as the search counted, so it is one too high once the parent is among the matches."""
+    itself; there is none while the design is not in Fusion Manage) and ``total`` is as the search counted, so it is one too high once the parent is among the matches."""
     data = data if isinstance(data, dict) else {}
     items: List[Dict[str, Any]] = []
     rows = data.get("items") if isinstance(data.get("items"), list) else []
@@ -51,7 +51,7 @@ def parse_search(data: Any, workspace_id: str, parent_id: str) -> Dict[str, Any]
         version = _revision_label(row.get("version") or row.get("revision") or (found.group(1) if found else ""))
         items.append({"id": item_id, "link": f"{WORKSPACES}/{workspace_id}/items/{item_id}",
                       "number": number_of(title), "name": name_of(title) or title, "version": version,
-                      "linkable": linkable_row(workspace_id, parent_id, item_id)})
+                      "linkable": linkable_row(workspace_id, parent_id, item_id) if parent_id else None})   # no parent yet: the publish writes the row once it exists
     return {"total": int(data.get("totalCount") or data.get("totalHits") or 0), "raw": len(rows), "items": items}
 
 

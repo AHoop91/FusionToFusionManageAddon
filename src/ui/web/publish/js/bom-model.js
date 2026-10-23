@@ -13,8 +13,8 @@
   'use strict';
 
   // What the user chose for each line whose item numbers differ: 'remove' (the Fusion Manage line goes,
-  // the design line is added) or 'add' (keep both). Keyed "design number|Fusion Manage number|n"
-  // (see ``buildItems``), so a choice survives a redraw. Publishing will read it.
+  // the design line is added) or 'add' (keep both). Keyed by where the line sits and its two numbers
+  // (see ``buildItems``), so a choice survives a redraw and lines read later. Publishing reads it.
   const decisions = {};
 
   // Fusion Manage items the user picked with Add Items: lines of the Fusion Manage BOM that publishing adds
@@ -55,10 +55,16 @@
     return typed === undefined ? baseQuantity(item) : typed;
   }
 
+  /** ``value`` as a number above 0, or null when it is not one. */
+  function positive(value) {
+    const n = Number(String(value).trim());
+    return isFinite(n) && n > 0 ? n : null;
+  }
+
   /** Set a line's quantity; returns the quantity now held (unchanged when ``value`` is not a positive number). */
   function setQuantity(item, value) {
-    const n = Number(String(value).trim());
-    if (isFinite(n) && n > 0) {
+    const n = positive(value);
+    if (n !== null) {
       if (n === Number(baseQuantity(item))) delete quantities[item.qkey]; else quantities[item.qkey] = String(n);
     }
     return quantityOf(item);
@@ -102,8 +108,8 @@
   function setStagedQuantity(id, value) {
     const line = staged.find(function (s) { return s.id === id; });
     if (!line) return '';
-    const n = Number(String(value).trim());
-    if (isFinite(n) && n > 0) line.quantity = String(n);
+    const n = positive(value);
+    if (n !== null) line.quantity = String(n);
     return line.quantity;
   }
 
@@ -114,12 +120,12 @@
   /** The component a line stands for, in the form publish.js opens: the design itself, or a BOM line. */
   function rootComponent(root) {
     return { id: root.component_id || '', root: true, item_number: root.item_number, part_number: root.part_number, description: root.description,
-             title: [root.part_number, root.description].filter(Boolean).join(' - ') || 'This design' };
+             title: [root.item_number || root.part_number, root.name || root.description].filter(Boolean).join(' - ') || 'This design' };
   }
 
   function lineComponent(r) {
     return { id: r.id, root: false, item_number: r.item_number, part_number: r.part_number, description: r.description, name: r.name,
-             title: [r.part_number, r.name].filter(Boolean).join(' - ') };
+             title: [r.item_number || r.part_number, r.name || r.description].filter(Boolean).join(' - ') };
   }
 
   /**
@@ -127,34 +133,50 @@
    * sits beside a design line with another item number is folded into that design line.
    */
   function buildItems(rows, root) {
-    const rootName = root.description || '';
-    const rootPn = root.part_number || '';
+    const rootName = root.name || root.description || '';
+    const rootPn = root.item_number || root.part_number || '';   // the item number is the master; the part number only stands in when there is none
     const items = [{ level: 0, root: true, sequence: '', status: 'root', hidden: false, component: rootComponent(root),
                      design: { pn: rootPn, name: rootName || (rootPn ? '' : 'This design'), quantity: '', sequence: '' },
                      fm: { pn: rootPn, name: rootName, quantity: '', sequence: '' } }];
     const repeats = {};
     let held = null;   // paired Fusion Manage line waiting for its design line, which follows it
     function side(r, quantity, edge) {
-      return { pn: r.part_number, name: r.name, quantity: plainQuantity(quantity), sequence: String(r.sequence), edge: edge || '' };
+      // "Item Number - Part Name"; a line without an item number shows its part number, and the description when it has no name.
+      return { pn: r.item_number || r.part_number, name: r.name || r.description, quantity: plainQuantity(quantity), sequence: String(r.sequence), edge: edge || '' };
     }
+    // The choices are keyed by where a line sits (the numbers of the lines above it), not by its place in the whole list: lines read later
+    // (an assembly opened, the rest of the tree) must not move the choices already made.
+    const pathAt = [];   // level -> number of the latest line on it
+    function where(level) { return pathAt.slice(1, level).join('>'); }
     rows.forEach(function (r) {
+      if (r.status === 'skipped') {   // no item number, or below a line with none: nothing is published for it, and it has no details to open
+        const line = { level: r.level + 1, root: false, sequence: String(r.sequence), status: 'skipped', hidden: !!r.hidden, skip: r.skip || '', componentName: r.name || '',
+                       assembly: !!r.has_children, lineId: r.id || '', design: side(r, r.quantity), fm: side(r, '') };
+        pathAt[line.level] = line.design.pn;
+        items.push(line);
+        return;
+      }
       if (r.status === 'extra' && r.pair) { held = r; return; }
       if (r.status === 'extra') {
-        items.push({ level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity, r.edge_id),
-                     key: 'only|' + r.part_number + '|' + r.sequence + '|' + r.level });   // so the user can choose to remove it
+        const line = { level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity, r.edge_id),
+                       key: 'only|' + where(r.level + 1) + '|' + r.part_number + '|' + r.sequence + '|' + r.level };   // so the user can choose to remove it
+        pathAt[line.level] = line.fm.pn;
+        items.push(line);
         return;
       }
       const item = { level: r.level + 1, root: false, sequence: String(r.sequence), status: r.status || 'unchecked', hidden: !!r.hidden, component: lineComponent(r),
+                     assembly: !!r.has_children, lineId: r.id || '',
                      design: side(r, r.quantity), fm: side(r, r.status === 'match' ? r.quantity : r.fm_quantity || '', r.fm_edge_id) };
       if (held && held.pair === String(r.item_number)) {
         item.status = 'mismatch';
         item.fm = side(held, held.quantity, held.edge_id);
-        // Repeats of the same pair of numbers get their own choice: "design|Fusion Manage|n", n counting the repeats.
-        const base = item.design.pn + '|' + item.fm.pn;
+        // Repeats of the same pair of numbers under one parent get their own choice: "parent path|design|Fusion Manage|n", n counting the repeats.
+        const base = where(item.level) + '|' + item.design.pn + '|' + item.fm.pn;
         repeats[base] = (repeats[base] || 0) + 1;
         item.key = base + '|' + repeats[base];
       }
       held = null;
+      pathAt[item.level] = item.design.pn;
       items.push(item);
     });
     const seqAt = [];   // sequence of the latest line on each level, so a line's quantity edit has a key of its own
@@ -211,6 +233,7 @@
       case 'linked': groups = ['added']; break;   // picked with Add Items
       case 'kept': groups = ['extra']; break;
       case 'root': groups = []; break;
+      case 'skipped': groups = ['skipped']; break;
       case 'extra': groups = quantityDiffers(item) ? ['extra', 'changed'] : ['extra']; break;
       default: groups = [statusOf(item)];
     }
@@ -222,60 +245,9 @@
     return items.filter(function (item) { return item.status === 'mismatch' && !decisions[item.key]; }).length;
   }
 
-  /**
-   * What publishing does: the components whose Fusion Manage item is created or updated (the design and every
-   * component of it; the comparison finds out which of them differ) and the BOM operations (add, update the quantity,
-   * remove, renumber a kept line), each naming its parent by item number. Fusion Manage only lines are
-   * left alone unless the user chose to remove them.
-   */
-  function publishPlan(rows, root) {
-    const base = buildItems(rows, root);
-    const items = arrange(base);
-    const oldSequence = {};
-    base.forEach(function (item) { if (item.key) oldSequence[item.key] = item.fm.sequence; });
-    const numberAt = [];   // item number of the latest line on each level, so a line finds its parent
-    const components = [];
-    const seen = {};
-    const operations = [];
-    items.forEach(function (item) {
-      const own = item.component ? String(item.component.item_number || item.design.pn || '') : String(item.fm.pn || '');
-      const parent = item.level > 0 ? numberAt[item.level - 1] || '' : '';
-      numberAt[item.level] = own;
-      if (item.root) { components.push(Object.assign({}, item.component, { root: true })); return; }
-      const line = { parent: parent, number: own, quantity: quantityOf(item), sequence: item.design.sequence };
-      switch (item.status) {
-        case 'new': case 'added': case 'uncompared': operations.push(Object.assign({ op: 'add' }, line)); break;
-        case 'mismatch':   // only a pair that chose 'remove' is still a mismatch here
-          operations.push(Object.assign({ op: 'add' }, line));
-          operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence, edge: item.fm.edge });
-          break;
-        case 'linked':   // an existing Fusion Manage item: only the BOM line is added, never the item
-          operations.push({ op: 'add', parent: parent, number: own, quantity: item.fm.quantity, sequence: item.fm.sequence, link: item.link, linkable: item.linkable });
-          break;
-        case 'extra':   // only in Fusion Manage: left alone unless the user chose to remove it
-          if (decisions[item.key] === 'remove') operations.push({ op: 'remove', parent: parent, number: item.fm.pn, sequence: item.fm.sequence, edge: item.fm.edge });
-          else if (quantityDiffers(item)) operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity, edge: item.fm.edge }, line, { sequence: item.fm.sequence }));
-          break;
-        case 'match': case 'changed':   // an edit can turn either into an update, or an update back into nothing
-          if (quantityDiffers(item)) operations.push(Object.assign({ op: 'update', fm_quantity: item.fm.quantity, edge: item.fm.edge }, line));
-          break;
-        case 'kept':
-          operations.push({ op: 'renumber', parent: parent, number: item.fm.pn, from_sequence: oldSequence[item.key], sequence: item.sequence, edge: item.fm.edge });
-          break;
-        default: break;
-      }
-      // Every design component goes through the comparison, so an existing item is updated when its properties differ.
-      if (item.component && item.component.id && !seen[item.component.id]) {
-        seen[item.component.id] = true;
-        components.push(item.component);
-      }
-    });
-    return { components: components, operations: operations };
-  }
-
   ns.bomModel = {
     decisions: decisions, clearDecisions: clearDecisions, canEditQuantity: canEditQuantity, quantityOf: quantityOf, setQuantity: setQuantity,
     quantityDiffers: quantityDiffers, quantityEdited: quantityEdited, revertQuantity: revertQuantity, statusOf: statusOf, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent,
-    buildItems: buildItems, arrange: arrange, groupsOf: groupsOf, pendingReviews: pendingReviews, publishPlan: publishPlan,
+    buildItems: buildItems, arrange: arrange, groupsOf: groupsOf, pendingReviews: pendingReviews,
   };
 })(window.MfgUi);

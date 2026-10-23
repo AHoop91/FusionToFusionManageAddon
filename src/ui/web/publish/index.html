@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="css/details.css">
   <link rel="stylesheet" href="css/add-items.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
+  <link rel="stylesheet" href="../shared/css/tooltip.css">
   <link rel="stylesheet" href="../shared/css/diff-report.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
 </head>
@@ -62,12 +63,18 @@
       <div class="pub-summary">
         <div id="pub-thumb" class="pub-thumb" aria-hidden="true"></div>
         <div id="pub-summary" class="pub-summary-text"><p class="muted">Loading...</p></div>
+        <div class="pub-summary-tools">
+        <!-- Read the design, its Bill of Materials and Fusion Manage again. The panel never does this by itself for the design that is open. -->
+        <button id="pub-refresh" class="pub-tool" type="button" title="Refresh from Fusion Manage" aria-label="Refresh from Fusion Manage">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
+        </button>
         <!-- Is the design up to date in Fusion Manage? Scans in the background; filled in by publish.js. -->
         <button id="pub-check" class="pub-check" type="button" data-state="idle" aria-label="Checking Fusion Manage">
           <svg class="pub-check-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"/></svg>
           <svg class="pub-check-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="pub-check-tick" d="M6 12.5l4 4 8-9"/><path class="pub-check-bang" d="M12 7v6.5M12 17v.2"/></svg>
           <span id="pub-check-count" class="pub-check-count" hidden></span>
         </button>
+        </div>
       </div>
 
       <!-- The bill of materials; a row click opens that component's details beside it. -->
@@ -92,7 +99,8 @@
 
       <!-- Actions for the open item. -->
       <footer class="pub-footer">
-        <button id="pub-refresh" class="btn btn-secondary">Refresh</button>
+        <!-- What publishing covers (what is in view), filled in by publish-bom.js. -->
+        <div id="pub-pills" class="pub-pills" role="status" aria-label="What publishing covers"></div>
         <button class="btn btn-secondary" type="button" data-close>Close</button>
         <button id="pub-publish" class="btn" disabled title="Waiting for the Bill of Materials.">Publish</button>
       </footer>
@@ -132,12 +140,21 @@
   <!-- Publish panel -->
   <script src="js/ui.js"></script>
   <script src="../shared/js/toast.js"></script>
+  <script src="../shared/js/tooltip.js"></script>
   <script src="../shared/js/diff-report.js"></script>
+  <script src="js/bom-tree.js"></script>
   <script src="js/bom-model.js"></script>
+  <script src="js/bom-plan.js"></script>
+  <script src="js/bom-scope.js"></script>
+  <script src="js/bom-cells.js"></script>
+  <script src="js/bom-filters.js"></script>
+  <script src="js/bom-columns.js"></script>
   <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>
   <script src="js/add-items.js"></script>
   <script src="js/publish-jobs.js"></script>
+  <script src="js/publish-check.js"></script>
+  <script src="js/publish-bom.js"></script>
   <script src="js/publish.js"></script>
 </body>
 </html>

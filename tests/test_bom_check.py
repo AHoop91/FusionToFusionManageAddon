@@ -39,6 +39,17 @@ class ReadAndCompareBomTests(unittest.TestCase):
         result, _ = self.compared([row("A")], {"TOP": [line("A"), line("OIL")]})
         self.assertEqual(self.differing(result), [])
 
+    def test_a_line_without_an_item_number_and_the_lines_below_it_are_skipped(self):
+        rows = [row("A"), row("", 0), row("C", 1), row("D", 2), row("E", 0)]   # C and D hang under the numberless line
+        result, _ = self.compared(rows, {"TOP": [line("A"), line("E")]})
+        self.assertEqual([(r["item_number"], r["status"]) for r in result],
+                         [("A", "match"), ("", "skipped"), ("C", "skipped"), ("D", "skipped"), ("E", "match")])
+        self.assertEqual(self.differing(result), [])
+
+    def test_a_skipped_line_takes_no_fusion_manage_line(self):
+        result, _ = self.compared([row("")], {"TOP": [line("A")]})
+        self.assertEqual([(r["item_number"], r["status"]) for r in result], [("", "skipped"), ("A", "extra")])
+
     def test_the_bom_is_read_deep_enough_for_the_whole_tree(self):
         _, read = self.compared([row("A"), row("B", 1), row("C", 2)], {})
         read.assert_called_once_with("242", "9", 3)

@@ -146,4 +146,4 @@ The manufactured item is released through **its own workflow in Fusion Manage**,
 2. In Fusion Manage, run the workflow action your organisation uses to release the item.
 3. Back in Fusion, click **Refresh** to see the new state, or check the **Associated Workflows** tab for the workflow's progress.
 
-For how this fits into the wider process, see the [End-to-End Workflow](../getting-started/workflow.md#5-the-enterprise-item-is-released-in-fusion-manage).
+For how this fits into the wider process, see the [End-to-End Workflow](../getting-started/workflow.md#5-manufacturing-releases-the-item).

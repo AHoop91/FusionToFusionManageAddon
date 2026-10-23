@@ -1,7 +1,7 @@
 /**
- * Publish Item panel: summary and bill of materials of the open model. It loads the sections
- * from Python, one after the other, and hands them to the table (bom-table.js) and, through a
- * row click, to the Details Panel (details.js).
+ * Publish Item panel: summary of the open model and the loading of what it shows. It asks Python for the sections of the model, one
+ * after the other, and hands each answer on: the Bill of Materials to publish-bom.js (and its table, bom-table.js), the up-to-date
+ * check to publish-check.js, and a row click, through the table, to the Details Panel (details.js).
  */
 (function (ns) {
   'use strict';
@@ -11,21 +11,22 @@
   const ui = ns.pubUi;
   const details = ns.pubDetails;
   const jobs = ns.pubJobs;
+  const bom = ns.pubBom;
+  const check = ns.pubCheck;
 
   const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
-  const STALE_MS = 600000;   // the panel shown again after this long reads Fusion Manage afresh
   const SECTIONS = ['structure', 'thumbnail'];    // loaded for the open design once its summary is in
   const ALL_SECTIONS = ['properties', 'structure', 'thumbnail'];   // the design's own properties load last, once the Bill of Materials is in (for the up-to-date check), so they never slow it
 
   let currentSummary = null;   // summary of the open design
   let loadedKey = null;        // design the panel currently shows
   let lastLoad = 0;
-  let currentRows = [];        // compared rows of the Bill of Materials shown
-  let fmItemId = '';           // Fusion Manage item the BOM was compared with; empty when the design has none
+  let generation = 0;          // counts reloads of the design
   const loaded = {};           // section -> true once shown for the current design
   const inflight = {};         // section -> true while loading
   const timers = {};           // section (or "component:<id>") -> poll timer
   const forceNext = {};        // section -> skip the cached copy on the next load
+  const askedIn = {};          // slot -> the reload (``generation``) it was asked in; an answer for an older one is ignored
 
   // ---- Summary -----------------------------------------------------------------
 
@@ -75,221 +76,7 @@
     $('pub-denied').hidden = false;
   }
 
-  // ---- Up-to-date check ------------------------------------------------------------
-
-  let rootCompare = null;   // the design's own properties compared with Fusion Manage (null until read)
-  let rootFailed = '';      // why the design could not be checked
-
-  const DIFFERING = ['new', 'changed', 'added', 'mismatch'];   // BOM lines the design has that Fusion Manage lacks or holds differently; lines only Fusion Manage has (it extends the BOM) are ignored
-
-  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
-
-  const ISSUES = {
-    new: 'Not in Fusion Manage',
-    changed: 'Quantity differs',
-    mismatch: 'Different item at this position',
-    added: 'Added with Add Existing Items',
-  };
-
-  const REPORT_TITLES = { ok: 'Up to date', changes: 'Out of date', error: 'Could not check' };   // of the dialog behind the check button
-  let report = { state: 'checking', text: '', props: [], lines: [], subject: '' };   // what the button last said, listed in its dialog
-
-  function quantityText(quantity) { return quantity === '' || quantity === undefined ? '-' : 'Qty ' + quantity; }
-
-  /** The discrepancies, as the dialog lists them: attributes of the design, then the Bill of Materials lines. */
-  function discrepancies() {
-    const model = ns.bomModel;
-    const props = rootCompare.rows.filter(function (r) { return r.status === 'mismatch' || r.status === 'new'; }).map(function (r) {
-      const own = r.shown || r.value;
-      return { name: r.name, fusion: own ? own + (r.unit ? ' ' + r.unit : '') : '', fm: r.fm_value };
-    });
-    const items = currentRows.length ? model.arrange(model.buildItems(currentRows, currentSummary || {})) : [];
-    const lines = items.filter(function (item) { return DIFFERING.indexOf(model.statusOf(item)) >= 0; }).map(function (item) {
-      const status = model.statusOf(item);
-      const different = status === 'mismatch';
-      return {
-        number: item.design.pn, name: item.design.name, issue: ISSUES[status] || status, component: item.component,
-        fusion: different ? item.design.pn : quantityText(model.quantityOf(item)),
-        fm: status === 'new' || status === 'added' ? '-' : different ? item.fm.pn : quantityText(item.fm.quantity),
-      };
-    });
-    return { props: props, lines: lines };
-  }
-
-  /** Round button at the top right: scanning while the Bill of Materials and the design's properties are read, then what they say. */
-  function updateCheck() {
-    const button = $('pub-check');
-    const count = $('pub-check-count');
-    let state = 'checking', text = 'Checking Fusion Manage...', n = 0;
-    let found = { props: [], lines: [] };
-    if (!loaded.structure && !rootFailed) {
-      state = 'idle';   // hidden until the panel has loaded; the check then runs quietly
-    } else if (rootFailed) {
-      state = 'error'; text = 'Could not check: ' + rootFailed;
-    } else if (loaded.structure && rootCompare) {
-      const own = details.changeState(rootCompare);
-      found = discrepancies();
-      n = found.props.length + found.lines.length;
-      if (own === 'unknown') { state = 'error'; text = 'Fusion Manage could not be read.'; }
-      else if (own === 'multiple') { state = 'changes'; text = 'Several Fusion Manage items match this design. Choose one in its details.'; }
-      else if (own === 'new') { state = 'changes'; text = 'Not in Fusion Manage yet: publishing creates it.'; n = 0; found = { props: [], lines: [] }; }
-      else if (n) { state = 'changes'; text = plural(found.props.length, 'attribute difference') + ' and ' + plural(found.lines.length, 'Bill of Materials line') + ' to update.'; }
-      else { state = 'ok'; text = 'The design matches Fusion Manage.'; }
-    }
-    const summary = currentSummary || {};
-    report = { state: state, text: text, props: found.props, lines: found.lines, subject: summary.item_number || 'this design' };
-    button.dataset.state = state;
-    button.title = state === 'checking' ? text : text + ' Click for details.';
-    button.setAttribute('aria-label', button.title);
-    count.hidden = !n;
-    count.textContent = n > 99 ? '99+' : String(n);
-  }
-
-  function checkClicked() {
-    if (report.state === 'checking' || report.state === 'idle') return;
-    const sections = [];
-    if (report.props.length) {
-      sections.push({
-        title: 'Attributes', columns: ['Property', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
-        rows: report.props.map(function (p) { return { cells: [p.name, p.fusion, p.fm] }; }),
-      });
-    }
-    if (report.lines.length) {
-      sections.push({
-        title: 'Bill of Materials', columns: ['Item', 'Issue', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
-        rows: report.lines.map(function (l) {
-          return { cells: [l.number, l.issue, l.fusion, l.fm], sub: l.name, onClick: l.component ? function () { details.open(l.component); } : null };
-        }),
-      });
-    }
-    ns.diffReport.open({
-      state: report.state, title: REPORT_TITLES[report.state] || 'Fusion Manage check', summary: report.text, sections: sections,
-      empty: report.state === 'ok' ? 'Attributes and Bill of Materials for ' + report.subject + ' are up to date.' : 'There is nothing to list.',
-    });
-  }
-
-  // ---- Bill of materials panel ---------------------------------------------------
-
-  /** Publish is available once the Bill of Materials is shown and every differing line has a choice. */
-  function setPublishState(pending, reason) {
-    const button = $('pub-publish');
-    button.disabled = pending > 0 || !!reason;
-    button.title = reason || (pending > 0
-      ? 'Review ' + pending + ' line' + (pending === 1 ? '' : 's') + ' first: choose keep both or remove on each Review line.'
-      : 'Publish the changes.');
-  }
-
-  /** Publish: queue the changed items and BOM lines; they go to a folder for review in the background (nothing is sent to Fusion Manage yet). */
-  function publish() {
-    const summary = currentSummary || {};
-    const root = summary;
-    const model = ns.bomModel;
-    if (model.pendingReviews(model.arrange(model.buildItems(currentRows, root))) > 0) return;
-    const plan = model.publishPlan(currentRows, root);
-    jobs.start({
-      summary: summary,
-      root_number: summary.item_number || '',
-      operations: plan.operations,
-      items: plan.components.map(function (c) {
-        return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '', fm_item: details.choiceFor(c) };
-      }),
-    });
-  }
-
-  /** Add Items needs the Fusion Manage item of the design; ``reason`` says why it is not available yet. */
-  function setAddItemsState(reason) {
-    const button = $('pub-add-items');
-    button.disabled = !!reason;
-    button.title = reason || 'Add Fusion Manage items to the end of the Bill of Materials.';
-  }
-
-  function openAddItems() {
-    const model = ns.bomModel;
-    ns.pubAddItems.open({
-      itemId: fmItemId,
-      staged: model.stagedIds(),
-      onAdd: function (picked) {
-        model.stage(picked);
-        renderBom(currentRows, false);   // draw the table again with the new lines at the end
-      },
-    });
-  }
-
-  function clearBom() {
-    setAddItemsState('Waiting for the Bill of Materials.');
-    setPublishState(0, 'Waiting for the Bill of Materials.');
-    const host = $('pub-bom');
-    host.classList.remove('pub-loading');
-    host.textContent = '';
-    return host;
-  }
-
-  /** Rows of grey bars in place of the table while it loads, with a line saying what is happening. */
-  function bomLoading() {
-    const host = clearBom();
-    const status = ui.el('p', 'muted pub-bom-status');
-    status.id = 'pub-bom-status';
-    host.appendChild(status);
-    const table = ui.el('div', 'card pub-skel-table');
-    table.setAttribute('aria-hidden', 'true');
-    for (let row = 0; row < 8; row++) {
-      const line = ui.el('div', 'pub-skel-row');
-      ['pub-skel-wide', 'pub-skel-mid', 'pub-skel-short'].forEach(function (width) { line.appendChild(ui.el('span', 'pub-skel ' + width)); });
-      table.appendChild(line);
-    }
-    host.appendChild(table);
-    bomStatus({});
-  }
-
-  let bomStatusText = '';
-
-  /** What the Bill of Materials is doing: reading it (and how far, once it takes several pages), then comparing it with Fusion Manage. */
-  function bomStatus(entry) {
-    const note = $('pub-bom-status');
-    if (!note) return;
-    const text = entry.stage === 'comparing' ? 'Comparing with Fusion Manage...'
-      : entry.progress ? 'Reading the Bill of Materials... ' + Number(entry.progress).toLocaleString() + ' lines so far'
-      : 'Reading the Bill of Materials...';
-    if (text === bomStatusText && note.textContent) return;   // the same words must not restart the "taking longer" timer
-    bomStatusText = text;
-    ui.warnWhenSlow(note, text);   // adds a note if nothing new has been said for a long while
-  }
-
-  function bomMessage(text) {
-    const card = ui.el('div', 'card');
-    card.appendChild(ui.el('p', 'muted', text));
-    clearBom().appendChild(card);
-  }
-
-  /** A failure in the middle of the panel, so the message centres in it. */
-  function bomError(message, onRetry) {
-    clearBom().classList.add('pub-loading');
-    $('pub-bom').appendChild(ui.errorState(message, onRetry));
-  }
-
-  /** The design and Fusion Manage lines in one compare table; a row click opens its details. */
-  function renderBom(rows, pick) {
-    const host = clearBom();
-    if (pick) {   // no table until the question is answered, so open the design's details, which ask it
-      bomMessage('Several Fusion Manage items match this design. Choose one in the details to compare the Bill of Materials.');
-      setAddItemsState('Choose the Fusion Manage item for this design first.');
-      setPublishState(0, 'Choose the Fusion Manage item for this design first.');
-      details.open(ns.bomModel.rootComponent(currentSummary || {}));
-      return;
-    }
-    currentRows = rows;
-    const addReason = fmItemId ? '' : 'The design is not in Fusion Manage yet, so there is no Bill of Materials to add to.';
-    if (!rows.length && !ns.bomModel.stagedIds().length) {
-      bomMessage('This item has no child components.');
-      setAddItemsState(addReason);
-      setPublishState(0);
-      return;
-    }
-    ns.bomTable.render(host, rows, currentSummary || {}, details.open, setPublishState);
-    setAddItemsState(addReason);
-  }
-
-  // ---- Loading sections ------------------------------------------------------------
+  // ---- Asking Python for sections --------------------------------------------------
 
   /** Ask Python for a section (or a component); its answer comes back to ``handleSection``. */
   function request(slot, payload) {
@@ -297,9 +84,16 @@
     bridge.send('load_publish_section', payload);
   }
 
+  /** Ask for a slot of the Bill of Materials (the lines under an assembly, the whole tree), remembering which reload it was asked in. */
+  function ask(slot, payload) {
+    askedIn[slot] = generation;
+    inflight[slot] = true;
+    request(slot, payload);
+  }
+
   function loadSection(name) {
     inflight[name] = true;
-    if (name === 'structure') bomLoading();
+    if (name === 'structure') bom.showLoading();
     const force = !!forceNext[name];
     forceNext[name] = false;
     const rootItem = name === 'properties' || name === 'structure' ? currentSummary || {} : null;
@@ -313,63 +107,68 @@
     });
   }
 
+  /** The answer to a section that is still loading: show how far it is and ask again shortly. */
+  function waitFor(name, entry) {
+    if (name === 'structure') bom.status(entry);
+    if (name === 'tree') bom.treeStatus(entry);
+    timers[name] = setTimeout(function () {
+      bridge.send('load_publish_section_status', { section: name });
+    }, POLL_INTERVAL_MS);
+  }
+
+  function answerSummary(entry) {
+    showLoading(false);
+    if (entry.denied) { showDenied(entry.denied); return; }
+    if (!entry.ok) { setThumbnail('', false); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
+    loadedKey = entry.key;
+    loaded.summary = true;
+    renderSummary(entry.data);
+    ensureSections();
+  }
+
+  /** The design's own properties, compared with Fusion Manage. */
+  function answerProperties(entry) {
+    const failure = entry.ok ? '' : entry.message || 'Unknown error';
+    if (entry.ok) details.setRoot(entry.data.compare);
+    else details.setRootError(failure);
+    check.setRoot(entry.ok ? entry.data.compare : null, failure);
+  }
+
+  /** The first level of the Bill of Materials, compared with Fusion Manage. */
+  function answerStructure(entry) {
+    if (!entry.ok) {
+      check.fail(entry.message || 'Unknown error');
+      bom.showError(entry.message, function () { check.clearFailure(); loaded.structure = false; loadSection('structure'); check.update(); });
+      return;
+    }
+    bom.showFirstLevel(entry.data);
+    check.setNew(entry.data.design_new);
+    if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
+  }
+
   function handleSection(r) {
     if (!r.ok) return;
     const entry = r.result;
     const name = entry.section;
+    if (askedIn[name] !== undefined && askedIn[name] !== generation) return;   // asked before the last reload: it is not wanted
     clearTimeout(timers[name]);
-    if (entry.pending) {
-      if (name === 'structure') bomStatus(entry);
-      timers[name] = setTimeout(function () {
-        bridge.send('load_publish_section_status', { section: name });
-      }, POLL_INTERVAL_MS);
-      return;
-    }
+    if (entry.pending) { waitFor(name, entry); return; }
     inflight[name] = false;
-    if (name.indexOf('component:') === 0) {
-      details.handleComponent(name.slice('component:'.length), entry);
-      return;
-    }
-    if (name === 'summary') {
-      showLoading(false);
-      if (entry.denied) { showDenied(entry.denied); return; }
-      if (!entry.ok) { setThumbnail('', false); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
-      loadedKey = entry.key;
-      loaded.summary = true;
-      renderSummary(entry.data);
-      ensureSections();
-      return;
-    }
-    if (name.indexOf('thumbnail:') === 0) {
-      details.handleThumbnail(name.slice('thumbnail:'.length), entry);
-      return;
-    }
+    if (name === 'tree') { bom.finishTree(entry); return; }
+    if (name.indexOf('children:') === 0) { bom.finishKids(name.slice('children:'.length), entry); return; }
+    if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
+    if (name === 'summary') { answerSummary(entry); return; }
+    if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
     loaded[name] = true;
     if (name === 'thumbnail') {   // no thumbnail (or none yet) just leaves the box empty
       const url = entry.ok ? entry.data.url : '';
       setThumbnail(url, false);
       details.setThumbnail(currentSummary ? currentSummary.component_id : '', url);   // the design's details show the same one
-      return;
+    } else if (name === 'properties') {
+      answerProperties(entry);
+    } else {
+      answerStructure(entry);
     }
-    if (name === 'properties') {
-      rootCompare = entry.ok ? entry.data.compare : null;
-      rootFailed = entry.ok ? '' : entry.message || 'Unknown error';
-      if (entry.ok) details.setRoot(entry.data.compare);
-      else details.setRootError(rootFailed);
-      updateCheck();
-      return;
-    }
-    if (!entry.ok) {
-      rootFailed = entry.message || 'Unknown error';
-      updateCheck();
-      bomError(entry.message, function () { rootFailed = ''; loaded.structure = false; loadSection('structure'); updateCheck(); });
-      return;
-    }
-    ns.bomModel.clearDecisions();   // fresh comparison: nothing is chosen or added yet
-    fmItemId = entry.data.fm_item_id || '';
-    renderBom(entry.data.rows, !!entry.data.pick);
-    updateCheck();
-    if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
 
   /** Read the open design again (all sections), skipping the cached copies when ``force``. ``now`` ignores the pause that merges triggers. */
@@ -377,16 +176,16 @@
     // Focus, sign-in and the button can all fire together; load once.
     if (!now && Date.now() - lastLoad < 2000) return;
     lastLoad = Date.now();
+    generation++;   // answers still on their way for the old contents are ignored
+    bom.reset();
+    Object.keys(timers).forEach(function (slot) { clearTimeout(timers[slot]); });
     ALL_SECTIONS.forEach(function (name) {
       loaded[name] = false;
       inflight[name] = false;
       forceNext[name] = !!force;
-      clearTimeout(timers[name]);
     });
-    clearBom();
-    rootCompare = null;
-    rootFailed = '';
-    updateCheck();
+    bom.clear();
+    check.reset();
     details.reset(force);
     loaded.summary = false;
     forceNext.summary = !!force;
@@ -397,6 +196,13 @@
   // ---- Start ---------------------------------------------------------------------
 
   function init() {
+    bom.init({ summary: function () { return currentSummary || {}; }, ask: ask, changed: check.update });
+    check.init({
+      summary: function () { return currentSummary || {}; },
+      rows: bom.rows,
+      structureLoaded: function () { return !!loaded.structure; },
+      partial: bom.partial,
+    });
     details.init({
       request: request,
       // The design's row was opened: read its own properties the first time.
@@ -405,12 +211,13 @@
       },
       // The user picked a Fusion Manage item for the design: compare its properties and BOM again with it.
       onRootChoice: function () {
+        const choice = details.choiceFor(currentSummary || {});
         inflight.properties = true;
-        bridge.send('load_publish_section', { section: 'properties', force: true, fm_item: details.choiceFor(currentSummary || {}) });
+        bridge.send('load_publish_section', { section: 'properties', force: true, fm_item: choice });
         if (loaded.structure) {
           inflight.structure = true;
-          bomLoading();   // not the old comparison while the new one loads
-          bridge.send('load_publish_section', { section: 'structure', force: true, fm_item: details.choiceFor(currentSummary || {}) });
+          bom.showLoading();   // not the old comparison while the new one loads
+          bridge.send('load_publish_section', { section: 'structure', force: true, fm_item: choice });
         }
       },
       onRootRetry: function () {
@@ -419,27 +226,27 @@
       },
     });
     jobs.init({ onFinished: function () { refresh(true, true); } });   // Fusion Manage changed: read the whole panel again, not the cached copies
-    $('pub-publish').addEventListener('click', publish);
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
-    $('pub-check').addEventListener('click', checkClicked);
-    $('pub-refresh').addEventListener('click', function () { refresh(true); });
-    $('pub-add-items').addEventListener('click', openAddItems);
-    // The palette stays open while the user switches designs. Clicking into it
-    // also fires focus, so reload only when a different design is open.
+    $('pub-refresh').addEventListener('click', function () { refresh(true, true); });   // a click is always wanted: not merged with another trigger
+    // The palette stays open while the user switches designs. Clicking into it also fires focus,
+    // so reload only when a different design is open; the same design is read again only by the refresh button.
     bridge.on('get_publish_model_key', function (r) {
-      if (!r.ok) return;
-      // Another design, or the same one shown again after ten minutes (Fusion Manage may have changed).
-      if (r.result.key !== loadedKey) refresh(false);
-      else if (Date.now() - lastLoad > STALE_MS) refresh(true);
+      if (r.ok && r.result.key !== loadedKey) refresh(false);
     });
-    window.addEventListener('focus', function () {
+    function checkDesign() {
       if (!$('view-app').hidden && !inflight.summary) bridge.send('get_publish_model_key');
-    });
-    // Opening the panel always reads Fusion Manage again, never a copy kept from an earlier opening.
-    ns.auth.onChange(function (signedIn) { if (signedIn) refresh(true); });
-    bridge.on('palette_opened', function () {
-      if (!$('view-app').hidden) refresh(true, true);
+    }
+    window.addEventListener('focus', checkDesign);
+    bridge.on('palette_opened', checkDesign);
+    // The sign-in state is drawn again each time Python reports it (a token renewed, a page shown again): read the design only when the
+    // user has just signed in, and otherwise only check that the open design is still the one shown.
+    let wasSignedIn = false;
+    ns.auth.onChange(function (signedIn) {
+      const justSignedIn = signedIn && !wasSignedIn;
+      wasSignedIn = signedIn;
+      if (justSignedIn) refresh(true);
+      else if (signedIn) checkDesign();
     });
   }
 

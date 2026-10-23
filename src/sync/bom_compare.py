@@ -18,11 +18,34 @@ from .item_compare import item_number_of
 
 NEW, CHANGED, MATCH, EXTRA = "new", "changed", "match", "extra"
 UNCOMPARED = "uncompared"   # the design is not in Fusion Manage at all: its lines are not compared, and not asked about one by one
+SKIPPED = "skipped"   # no item number: not in the Components workspace, so no item is created; neither is anything below it
 DIFFERING = (NEW, CHANGED)   # the design's lines that Fusion Manage lacks under that parent or holds with another quantity; ``extra`` lines only Fusion Manage has are not a difference
+
+NO_NUMBER = "no_number"   # why a line is skipped (the panel words it): it has no item number
+PARENT_SKIPPED = "parent"   # ... or a line above it has none, so it has nothing to join in the Fusion Manage BOM
 
 
 def _key(number: str) -> str:
     return number.strip().casefold()
+
+
+def mark_skipped(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """``rows`` (tree order) with a ``skip`` reason on each line that is not published: one without an item number, and
+    every line below it. Other lines are left as they are."""
+    out: List[Dict[str, Any]] = []
+    below = None   # level of the skipped line whose lines are being passed
+    for row in rows:
+        level = int(row["level"])
+        if below is not None and level > below:
+            out.append({**row, "skip": PARENT_SKIPPED})
+            continue
+        below = None
+        if not item_number_of(row):
+            below = level
+            out.append({**row, "skip": NO_NUMBER})
+        else:
+            out.append(row)
+    return out
 
 
 def _same_quantity(a: str, b: str) -> bool:
@@ -58,7 +81,10 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
             out.insert(index, extra(line, item_number_of(out[index])))
         out.extend(extra(line) for line in extras[len(pairs):])
 
-    for row in rows:
+    for row in mark_skipped(rows):
+        if row.get("skip"):   # not compared, and it takes no Fusion Manage line
+            out.append({**row, "status": SKIPPED})
+            continue
         level = int(row["level"])
         while len(stack) > level + 1:
             close()

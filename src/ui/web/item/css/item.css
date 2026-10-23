@@ -290,19 +290,42 @@
 
 /* No item has the number: an icon and a line of text, centred in the panel. */
 .item-empty { color: var(--muted); text-align: center; }
-.item-empty-text { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
-.item-empty-hint { margin: -8px 0 0; max-width: 320px; font-size: 12px; color: var(--muted); }
-.item-empty .btn[hidden] { display: none; }
+.item-empty-text { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.005em; color: var(--text); overflow-wrap: anywhere; }
+.item-empty .item-empty-hint { margin: -6px 0 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.item-empty .btn[hidden], .item-empty [hidden] { display: none; }
 
-.item-empty-icon {
-  width: 96px;
-  height: 96px;
+/* The item number that has no item, as a small tag under the title. */
+.item-empty .item-empty-number {
+  margin: -4px 0 0; padding: 3px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff;
+  font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text); overflow-wrap: anywhere;
+}
+
+/* The icon sits on a soft round tile; nothing here is wrong, so it stays grey (red-tinted only when access is denied). */
+svg.item-empty-icon {
+  box-sizing: content-box;
+  width: 56px;
+  height: 56px;
+  padding: 20px;
+  border-radius: 50%;
+  background: #eaedf1;
   fill: none;
-  stroke: #a9b2bb;   /* a soft grey: nothing here is wrong */
-  stroke-width: 1;
+  stroke: #8a95a3;
+  stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.item-empty-denied svg.item-empty-icon { background: #fbeeee; stroke: #c25252; }
+
+/* What Publish does: a short numbered list in a light card. */
+.item-empty-steps {
+  margin: 4px 0 0; padding: 12px 16px 12px 34px; max-width: 340px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  text-align: left; font-size: 12px; line-height: 1.5; color: var(--muted);
+}
+.item-empty-steps li + li { margin-top: 6px; }
+.item-empty-steps li::marker { font-weight: 600; color: var(--accent); }
+
+.item-empty .item-empty-action { margin-top: 6px; padding: 10px 22px; border-radius: 6px; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 
 /* The Files tab: a table in the look of the matrices, sorted by clicking a heading. */
 .item-files-wrap { overflow-x: auto; }

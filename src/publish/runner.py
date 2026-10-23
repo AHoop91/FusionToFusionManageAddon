@@ -26,6 +26,7 @@ from ..sync.item_compare import compare_with_item, item_number_of, lookup_item
 from ..sync.property_compare import FOUND, MISMATCH, NEW
 from .bom_requests import bom_requests
 from .download import download
+from .thumbnail import clear_white_background
 from .item_requests import item_request
 from .placeholders import Unresolved
 from .sender import Dispatcher
@@ -109,6 +110,11 @@ class PublishRun(JobState):
             return
         number = item_number_of(item)
         row = self._row_of[id(item)]
+        if not number:   # not in the Components workspace: the panel leaves these out, this keeps an empty number from ever being sent
+            row["status"], row["detail"] = DONE, "Skipped: no item number."
+            with self._lock:
+                self.done += 1
+            return
         self._set(current=number)
         row["status"] = RUNNING
         try:
@@ -240,7 +246,7 @@ class PublishRun(JobState):
             data = download(url)
             self.folder.record(number, "thumbnail", OK, f"{len(data)} bytes",
                                self.folder.write_bytes(os.path.join(folder, "thumbnail.png"), data))
-            return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+            return "data:image/png;base64," + base64.b64encode(clear_white_background(data)).decode("ascii")   # the saved file is the original
         except Exception as exc:
             log.warning("Thumbnail of %s failed: %s", number, exc)
             self.folder.record(number, "thumbnail", FAILED, str(exc) or type(exc).__name__)

@@ -9,6 +9,7 @@ query ($input: [BulkModelsQueryInput!]!) {
         id
         composition
         itemNumber { id }
+        name { value }
         description { value }
         partNumber { value }
       }
@@ -80,6 +81,7 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime, $d
         fromComponent { id }
         toComponent {
           id
+          hasChildren
           itemNumber { id }
           name { value }
           description { value }

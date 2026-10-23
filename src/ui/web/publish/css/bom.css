@@ -1,6 +1,8 @@
 /* ==========================================================================
-   Publish Item panel: Bill of Materials compare table. One table, ticks show where each
-   line exists. It scrolls sideways when very narrow.
+   Publish Item panel: Bill of Materials compare table. One table, ticks show where each line
+   exists. It scrolls sideways when very narrow; the header stays in view while the lines scroll.
+   Sections: item cell, table, chips and marks, row buttons and quantity, quieter lines, toolbar,
+   lines that are being read, header and columns, motion, small panel.
    ========================================================================== */
 
 /* ---- Item cell: indent, chevron, icon, sequence and label ------------------ */
@@ -25,59 +27,50 @@
 
 /* ---- The table --------------------------------------------------------------- */
 .pub-cmp-wrap { overflow-x: auto; border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px; }
+.pub-cmp { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.pub-cmp th { text-align: left; color: rgba(0, 0, 0, .87); font-weight: 600; padding: 6px; background: #e6e6e6; }
+.pub-cmp th.num { text-align: center; padding-right: 6px; }
+.pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence { text-align: center; }
+.pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid rgba(0, 0, 0, .08); vertical-align: middle; }
+.pub-cmp td.num { padding: 0 10px; text-align: center; white-space: nowrap; }
+.pub-cmp .pub-tree-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A row opens its component's details; the open one stays marked. */
 .pub-cmp-pick { cursor: pointer; }
 .pub-cmp-pick:hover > td { background: #f5f5f5; }
 .pub-cmp-pick.selected > td { background: #eaf2fb; }
 .pub-cmp-pick.selected > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+/* A differing pair is two rows: the design line, then the Fusion Manage line. */
+.pub-cmp-fmline td { border-top-style: dashed; }
+/* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
+.pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
 
-/* Filters above the table: small outlined 4px chips, filled when on, any number on at once. */
-.pub-cmp-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.pub-cmp-filter { display: inline-flex; flex: none; white-space: nowrap; align-items: center; gap: 6px; height: 24px; box-sizing: border-box; padding: 0 10px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: transparent; color: rgba(0, 0, 0, .87); cursor: pointer; transition: background-color .15s, border-color .15s; }
-.pub-cmp-filter:hover { background: rgba(0, 0, 0, .04); }
-.pub-cmp-filter.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.pub-cmp-filter.on:hover { filter: brightness(1.08); }
-.pub-cmp-filter-right { margin-left: auto; }
-.pub-cmp-filter-count { min-width: 16px; padding: 0 5px; box-sizing: border-box; border-radius: 3px; background: rgba(0, 0, 0, .08); font-size: 11px; line-height: 16px; text-align: center; }
-.pub-cmp-filter.on .pub-cmp-filter-count { background: rgba(255, 255, 255, .25); }
-
-.pub-cmp { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
-.pub-cmp th { text-align: left; color: rgba(0, 0, 0, .87); font-weight: 600; padding: 6px; background: #e6e6e6; border-bottom: 1px solid rgba(0, 0, 0, .12); }
-.pub-cmp th.num { text-align: right; padding-right: 10px; }
-.pub-cmp th.pub-cmp-center, .pub-cmp td.pub-cmp-presence { text-align: center; }
-.pub-cmp td { min-height: 32px; height: 32px; padding: 0; background: #fff; border-top: 1px solid rgba(0, 0, 0, .08); vertical-align: middle; }
-.pub-cmp td.num { padding: 0 10px; text-align: right; white-space: nowrap; }
-.pub-cmp .pub-tree-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
+/* ---- Marks and status chips ------------------------------------------------- */
 /* Fusion / Manage columns: a tick where the line exists. */
 .pub-cmp-tick { display: inline-flex; color: #2e9d4f; }
 .pub-cmp-tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .pub-cmp-none { color: #b4bcc8; }
 
 /* Status chip: a small 4px chip. */
-.pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 76px; padding: 0; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.pub-cmp-chip { display: inline-block; box-sizing: border-box; width: 76px; max-width: calc(100% - 8px); padding: 0; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
 .pub-cmp-chip-new { color: #0b6bb5; background: #dcedfb; }
 .pub-cmp-chip-added { color: #1e7a3a; background: #dff3e5; }
 .pub-cmp-chip-changed { color: #a86400; background: #fdf0d8; }
 .pub-cmp-chip-extra { color: #4f5d73; background: #e6eaf0; }
 .pub-cmp-chip-pair { color: #5b6677; background: #e3e7ee; }
 .pub-cmp-chip-removed { color: #b3262a; background: #fbe4e5; }
+.pub-cmp-chip-skipped { color: #6a737d; background: #eceff1; }
+/* A skipped chip carries a small "i": there is a tooltip to read. */
+.pub-cmp-chip-info { display: inline-flex; align-items: center; justify-content: center; gap: 4px; cursor: help; }
+.pub-cmp-chip-info svg { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pub-cmp-diff { color: #b87300; font-weight: 600; }
 .pub-cmp-qty-diff { font-weight: 600; color: #d98c00; }
 
-/* A differing pair is two rows: the design line, then the Fusion Manage line. */
-.pub-cmp-fmline td { border-top-style: dashed; }
-/* A line set to be removed: red strikethrough on the text itself (a parent's line cannot be cancelled in a child). */
-.pub-cmp-removing .pub-tree-pn, .pub-cmp-removing .pub-tree-name, .pub-cmp-removing td.num { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
-
+/* ---- Row buttons and quantity ---------------------------------------------- */
 /* End of the item: the action buttons (shown while the row is hovered or has focus; a chosen one stays visible), then the status chip. */
 .pub-cmp-end { flex: none; display: inline-flex; align-items: center; margin-left: auto; padding-right: 8px; }
 .pub-cmp-actions { flex: none; display: inline-flex; gap: 4px; padding: 0 8px; visibility: hidden; }
 .pub-cmp tr:hover .pub-cmp-actions, .pub-cmp-actions:focus-within { visibility: visible; }
 .pub-cmp-actions .pub-cmp-act.chosen { visibility: visible; }
-.pub-cmp-qty-input { box-sizing: border-box; width: 52px; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: inherit; font: inherit; text-align: right; outline: none; }
-.pub-cmp-qty-input:hover { border-color: rgba(0, 0, 0, .6); }
-.pub-cmp-qty-input:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .pub-cmp-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--muted); cursor: pointer; }
 .pub-cmp-act:hover { color: var(--accent); border-color: var(--accent); }
 .pub-cmp-act.chosen { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -88,34 +81,88 @@
 .pub-cmp-act-revert:hover { background: var(--accent); color: #fff; }
 .pub-cmp-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Hidden components and lines only Fusion Manage has are quieter. */
+.pub-cmp-qty-input { box-sizing: border-box; width: 52px; height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: inherit; font: inherit; text-align: center; outline: none; }
+.pub-cmp-qty-input:hover { border-color: rgba(0, 0, 0, .6); }
+.pub-cmp-qty-input:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pub-cmp-qty-input:disabled, .pub-cmp-qty-input:disabled:hover { background: #f1f3f4; color: rgba(0, 0, 0, .38); border-color: var(--border); cursor: not-allowed; }
+
+/* ---- Quieter lines: hidden components, lines only Fusion Manage has, skipped lines ---------- */
 .pub-cmp-hidden { flex: none; display: inline-flex; margin-left: 8px; color: var(--muted); }
 .pub-cmp-hidden svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pub-cmp-is-hidden .pub-cmp-item .pub-tree-label { color: var(--muted); font-style: italic; }
 /* A line only Fusion Manage has reads like any other; its icon and bar are the same grey, so it is plainly from Manage. */
 .pub-cmp-extra .pub-tree-icon { border-right-color: #9a9a9a; }
 .pub-cmp-extra .pub-tree-icon svg { stroke: #9a9a9a; }
+.pub-cmp-skipped .pub-tree-label { opacity: .6; }
 
-/* Small panel: the table is a compact list that scrolls sideways (Fusion and Manage scroll with the item; Qty stays fixed, and the status chip stays beside it). */
-@media (max-width: 760px) {
-  .pub-cmp td.num { padding: 0 6px; }
-  .pub-cmp-qty-input { width: 40px; }
-  .pub-cmp-chip { width: 64px; }
-  .pub-cmp-actions { gap: 2px; }
-  .pub-cmp .pub-tree-seq { margin: 0 6px 0 8px; }
-  .pub-tree-cell { height: 100%; min-width: 0; }
-  .pub-tree-icon { width: 24px; border-left: 0; border-right-width: 2px; }
-  .pub-tree-label { flex: 1; min-width: 0; margin-left: 8px; padding: 0; }
-}
+/* ---- Toolbar: the Filters drop-down at the left, collapse all / expand all at the right ------ */
+.pub-cmp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.pub-cmp-filter-count { min-width: 16px; padding: 0 5px; box-sizing: border-box; border-radius: 3px; background: rgba(0, 0, 0, .08); font-size: 11px; line-height: 16px; text-align: center; transition: background-color .18s ease; }
+
+.pub-cmp-menu { position: relative; }
+.pub-cmp-menu-btn { display: inline-flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 8px 0 12px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: #fff; color: rgba(0, 0, 0, .87); cursor: pointer; transition: border-color .15s, background-color .15s; }
+.pub-cmp-menu-btn:hover { border-color: rgba(0, 0, 0, .6); }
+.pub-cmp-menu-btn.on { border-color: var(--accent); color: var(--accent); }
+.pub-cmp-menu-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-cmp-menu-btn .pub-cmp-filter-count { background: var(--accent); color: #fff; }
+.pub-cmp-menu-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 10; min-width: 240px; padding: 4px 0; border-radius: 4px; background: #fff; box-shadow: 0 5px 5px -3px rgba(0, 0, 0, .2), 0 8px 10px 1px rgba(0, 0, 0, .14), 0 3px 14px 2px rgba(0, 0, 0, .12); }
+.pub-cmp-menu-note { margin: 0; padding: 8px 14px 6px; max-width: 240px; font-size: 11px; line-height: 1.4; color: #6a737d; border-bottom: 1px solid rgba(0, 0, 0, .12); }
+.pub-cmp-menu-item { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background-color .12s; }
+.pub-cmp-menu-item:hover { background: rgba(0, 0, 0, .04); }
+.pub-cmp-menu-item input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.pub-cmp-menu-text { flex: 1; }
+.pub-cmp-menu-sep { margin-top: 4px; border-top: 1px solid rgba(0, 0, 0, .12); padding-top: 10px; }
+.pub-cmp-menu-clear { display: block; width: 100%; margin-top: 4px; padding: 8px 14px; border: 0; border-top: 1px solid rgba(0, 0, 0, .12); background: transparent; font: inherit; font-size: 11px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; text-align: left; color: var(--accent); cursor: pointer; }
+.pub-cmp-menu-clear:disabled { color: rgba(0, 0, 0, .38); cursor: default; }
+
+/* Collapse all / expand all: the Item panel's Bill of Materials icons, a solid box with the sign cut out of it. */
+.pub-cmp-pair { display: inline-flex; margin-left: auto; }
+.pub-cmp-tool { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 1px solid rgba(0, 0, 0, .23); background: #fff; color: rgba(0, 0, 0, .87); cursor: pointer; transition: background-color .15s, border-color .15s; }
+.pub-cmp-tool:hover { background: #eceef0; border-color: rgba(0, 0, 0, .6); }
+.pub-cmp-tool:disabled { opacity: .45; cursor: default; }
+.pub-cmp-tool:disabled:hover { background: #fff; border-color: rgba(0, 0, 0, .23); }
+.pub-cmp-pair .pub-cmp-tool:first-child { border-radius: 4px 0 0 4px; }
+.pub-cmp-pair .pub-cmp-tool:last-child { border-radius: 0 4px 4px 0; border-left: 0; }
+.pub-cmp-tool svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.pub-cmp-tool svg path { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; }
+/* While the rest of the tree is read, Expand all turns into a spinner (Collapse all is disabled beside it). */
+.pub-cmp-tool-busy svg { opacity: 0; }
+.pub-cmp-tool-busy:disabled { opacity: 1; cursor: progress; }
+.pub-cmp-tool-busy::after { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: pub-spin .7s linear infinite; }
+
+/* ---- Lines that are being read: a spinner where the chevron was, grey rows under it, or what went wrong ------ */
+@keyframes pub-spin { to { transform: rotate(360deg); } }
+@keyframes pub-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.pub-spin { display: block; width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(0, 0, 0, .15); border-top-color: var(--accent); animation: pub-spin .7s linear infinite; }
+.pub-tree-toggle:disabled .pub-spin { margin: auto; }
+.pub-skel-tr td, .pub-cmp-fail td { padding: 0; }
+.pub-skel-line { display: flex; align-items: center; gap: 12px; height: 40px; box-sizing: border-box; padding-right: 16px; animation: pub-fade-in .2s ease both; }
+.pub-skel-icon { flex: none; width: 16px; height: 16px; border-radius: 4px; }
+.pub-cmp-fail-line { display: flex; align-items: center; gap: 12px; min-height: 40px; box-sizing: border-box; padding-right: 16px; font-size: 12px; color: var(--danger); }
+.pub-cmp-fail-text { min-width: 0; overflow-wrap: anywhere; }
+.pub-cmp-fail-retry { flex: none; height: 24px; padding: 0 10px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.pub-cmp-fail-retry:hover { background: rgba(0, 0, 0, .04); }
+
+/* ---- Header and columns ----------------------------------------------------- */
+/* The header row stays in view while the lines scroll. The wrap scrolls both ways, and the pane gives it the height under the toolbar, so
+   the header sticks to the top of the wrap; the toolbar stays above it. */
+.pub-bom:has(> .pub-cmp-view) { display: flex; flex-direction: column; overflow: hidden; }
+.pub-cmp-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pub-cmp-wrap { flex: 0 1 auto; min-height: 0; overflow: auto; }   /* as tall as its lines, until the pane is full */
+.pub-cmp th { position: sticky; top: 0; z-index: 3; border-bottom: 0; box-shadow: 0 1px 0 rgba(0, 0, 0, .12); }   /* collapsed borders scroll away, so the line is a shadow */
+/* Qty stays in view on the right while the rest of the row scrolls sideways. */
+.pub-cmp th:nth-child(4), .pub-cmp td:nth-child(4) { position: sticky; right: 0; z-index: 2; box-shadow: -6px 0 6px -6px rgba(0, 0, 0, .25); }
+.pub-cmp th:nth-child(4) { z-index: 4; box-shadow: 0 1px 0 rgba(0, 0, 0, .12), -6px 0 6px -6px rgba(0, 0, 0, .25); }   /* the corner over Qty and the header */
+/* Drag handle on the right edge of each column header. */
+.pub-cmp-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
+.pub-cmp-grip::after { content: ""; position: absolute; top: 25%; bottom: 25%; right: 3px; width: 1px; background: rgba(0, 0, 0, .18); transition: background-color .15s, top .15s, bottom .15s; }
+.pub-cmp-grip:hover::after, .pub-cmp-grip.dragging::after { top: 8%; bottom: 8%; width: 2px; right: 2px; background: var(--accent); }
 
 /* ---- Motion: colours ease between states, new lines glide in -------------------------------- */
 .pub-cmp td { transition: background-color .18s ease, color .18s ease; }
 .pub-cmp-chip { transition: background-color .2s ease, color .2s ease, transform .15s ease; }
 .pub-cmp-fresh .pub-cmp-chip { animation: pub-pop .3s .15s cubic-bezier(.2, .9, .3, 1.3) backwards; }
 .pub-cmp-row:hover .pub-cmp-chip { transform: scale(1.04); }
-.pub-cmp-filter { transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .1s ease; }
-.pub-cmp-filter:active { transform: scale(.96); }
-.pub-cmp-filter-count { transition: background-color .18s ease; }
 .pub-cmp-qty-input { transition: border-color .15s ease, box-shadow .15s ease; }
 /* Row buttons fade in with the hover (and out again, after a short delay so they can finish fading). */
 .pub-cmp-actions { transition: visibility 0s linear .15s; }
@@ -125,66 +172,29 @@
 .pub-cmp-act:hover { transform: scale(1.12); }
 /* A line just picked with Add Items slides in on a green wash that fades away. */
 .pub-cmp-fresh td { animation: pub-row-in .7s ease-out; }
-@keyframes pub-row-in { from { background-color: #c8ebd3; } to { background-color: #fff; } }
 .pub-cmp-fresh .pub-tree-cell { animation: pub-slide-in .3s ease-out; }
+@keyframes pub-row-in { from { background-color: #c8ebd3; } to { background-color: #fff; } }
 @keyframes pub-slide-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 @keyframes pub-pop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
-@media (max-width: 760px) and (hover: none) { .pub-cmp-actions { visibility: visible; } .pub-cmp-act { opacity: 1; } }   /* no hover on touch */
 @media (prefers-reduced-motion: reduce) {
-  .pub-cmp td, .pub-cmp-chip, .pub-cmp-filter, .pub-cmp-act, .pub-cmp-actions, .pub-cmp-fresh td, .pub-cmp-fresh .pub-tree-cell { transition: none; animation: none; }
+  .pub-cmp td, .pub-cmp-chip, .pub-cmp-act, .pub-cmp-actions, .pub-cmp-fresh td, .pub-cmp-fresh .pub-tree-cell { transition: none; animation: none; }
+  .pub-spin, .pub-cmp-tool-busy::after { animation-duration: 1.6s; }
+  .pub-skel-line { animation: none; }
 }
 
-/* ---- Filters drop-down (narrow panel) and a scrolling table with Qty fixed on the right ---- */
-.pub-cmp-menu { display: none; position: relative; }
-.pub-cmp-menu-btn { display: inline-flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 8px 0 12px; font: inherit; font-size: 12px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 4px; background: #fff; color: rgba(0, 0, 0, .87); cursor: pointer; transition: border-color .15s, background-color .15s; }
-.pub-cmp-menu-btn:hover { border-color: rgba(0, 0, 0, .6); }
-.pub-cmp-menu-btn.on { border-color: var(--accent); color: var(--accent); }
-.pub-cmp-menu-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.pub-cmp-menu-btn .pub-cmp-filter-count { background: var(--accent); color: #fff; }
-.pub-cmp-menu-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 10; min-width: 240px; padding: 4px 0; border-radius: 4px; background: #fff; box-shadow: 0 5px 5px -3px rgba(0, 0, 0, .2), 0 8px 10px 1px rgba(0, 0, 0, .14), 0 3px 14px 2px rgba(0, 0, 0, .12); }
-.pub-cmp-menu-item { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background-color .12s; }
-.pub-cmp-menu-item:hover { background: rgba(0, 0, 0, .04); }
-.pub-cmp-menu-item input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
-.pub-cmp-menu-text { flex: 1; }
-.pub-cmp-menu-sep { margin-top: 4px; border-top: 1px solid rgba(0, 0, 0, .12); padding-top: 10px; }
-.pub-cmp-menu-clear { display: block; width: 100%; margin-top: 4px; padding: 8px 14px; border: 0; border-top: 1px solid rgba(0, 0, 0, .12); background: transparent; font: inherit; font-size: 11px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; text-align: left; color: var(--accent); cursor: pointer; }
-.pub-cmp-menu-clear:disabled { color: rgba(0, 0, 0, .38); cursor: default; }
-
-/* Qty stays in view on the right while the rest of the row scrolls sideways. */
-.pub-cmp th:nth-child(4), .pub-cmp td:nth-child(4) { position: sticky; right: 0; z-index: 2; box-shadow: -6px 0 6px -6px rgba(0, 0, 0, .25); }
-
+/* ---- Small panel: the table is a compact list that scrolls sideways (Fusion and Manage scroll with the item; Qty stays fixed, and the
+   buttons and status chip stay beside it) ------------------------------------------------------------------------------------ */
 @media (max-width: 760px) {
-  .pub-cmp-filters .pub-cmp-filter { display: none; }
-  .pub-cmp-menu { display: block; }
   .pub-cmp { min-width: 640px; }
+  .pub-cmp td.num { padding: 0 6px; }
+  .pub-cmp-qty-input { width: 40px; }
+  .pub-cmp-chip { width: 64px; }
+  .pub-cmp-actions { gap: 2px; }
+  .pub-cmp .pub-tree-seq { margin: 0 6px 0 8px; }
+  .pub-tree-cell { height: 100%; min-width: 0; }
+  .pub-tree-icon { width: 24px; border-left: 0; border-right-width: 2px; }
+  .pub-tree-label { flex: 1; min-width: 0; margin-left: 8px; padding: 0; }
   /* Row buttons stay in view just left of Qty instead of sitting at the far end of the scrolled item. */
   .pub-cmp-end { position: sticky; right: var(--qty-w, 72px); z-index: 1; padding-left: 16px; background: linear-gradient(to right, transparent, #fff 14px); }
 }
-
-/* The pane is narrower than the window when the details are open beside it, so the filters pick their layout from the pane: the chips would
-   squeeze and overlap, so under 760px they become the Filters drop-down. */
-@container bompane (max-width: 760px) {
-  .pub-cmp-filters .pub-cmp-filter { display: none; }
-  .pub-cmp-menu { display: block; }
-}
-
-/* Drag handle on the right edge of each column header. */
-.pub-cmp th { position: relative; }
-.pub-cmp th:nth-child(4) { position: sticky; }
-.pub-cmp-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
-.pub-cmp-grip::after { content: ""; position: absolute; top: 25%; bottom: 25%; right: 3px; width: 1px; background: rgba(0, 0, 0, .18); transition: background-color .15s, top .15s, bottom .15s; }
-.pub-cmp-grip:hover::after, .pub-cmp-grip.dragging::after { top: 8%; bottom: 8%; width: 2px; right: 2px; background: var(--accent); }
-.pub-cmp-chip { max-width: calc(100% - 8px); }
-
-/* The header row stays in view while the lines scroll. The wrap scrolls both ways (it already did sideways), and the pane gives it the height
-   under the filters, so the header sticks to the top of the wrap; the filters stay above it. */
-.pub-bom:has(> .pub-cmp-view) { display: flex; flex-direction: column; overflow: hidden; }
-.pub-cmp-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.pub-cmp-wrap { flex: 0 1 auto; min-height: 0; overflow: auto; }   /* as tall as its lines, until the pane is full */
-.pub-cmp th { position: sticky; top: 0; z-index: 3; border-bottom: 0; box-shadow: 0 1px 0 rgba(0, 0, 0, .12); }   /* collapsed borders scroll away, so the line is a shadow */
-.pub-cmp th:nth-child(4) { z-index: 4; box-shadow: 0 1px 0 rgba(0, 0, 0, .12), -6px 0 6px -6px rgba(0, 0, 0, .25); }   /* the corner over Qty and the header */
-
-/* Qty is centred, in the header and in its cells (and the box that edits it). */
-.pub-cmp th.num { text-align: center; padding-right: 6px; }
-.pub-cmp td.pub-cmp-qty { text-align: center; }
-.pub-cmp-qty-input { text-align: center; }
+@media (max-width: 760px) and (hover: none) { .pub-cmp-actions { visibility: visible; } .pub-cmp-act { opacity: 1; } }   /* no hover on touch */

@@ -42,7 +42,7 @@
 /* No card: the component sits on the pane itself, with its thumbnail, a larger title and a rule under it. */
 .pub-props-head { position: relative; display: flex; align-items: flex-start; gap: 20px; padding: 4px 0 20px; border-bottom: 1px solid var(--border); }
 /* The state pill sits in the top right corner, out of the title's way. */
-.pub-props-head .pub-pill { position: absolute; top: 0; right: 0; }
+.pub-props-head .pub-state { position: absolute; top: 0; right: 0; }
 .pub-props-thumb { flex: none; width: 96px; height: 96px; border: 1px solid var(--border); border-radius: 8px; background: #fff center / contain no-repeat; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
 /* Same sweeping skeleton as the thumbnail in the top bar (the shorthand above would otherwise clear its gradient). */
 .pub-props-thumb.pub-thumb-loading { background-image: linear-gradient(90deg, #eceff1 25%, #f7f8f9 50%, #eceff1 75%); background-size: 200% 100%; background-repeat: repeat-x; animation: pub-thumb-sweep 1.3s linear infinite; }
@@ -52,12 +52,23 @@
 .pub-props-subtitle { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
 @container details (max-width: 600px) { .pub-props-thumb { width: 80px; height: 80px; } .pub-props-title { font-size: 16px; } .pub-props-subtitle { font-size: 12px; } }
 
-/* State pill: same look and colours as the chips in the BOM table (.pub-cmp-chip). */
-.pub-pill { flex: none; box-sizing: border-box; min-width: 88px; padding: 2px 8px; text-align: center; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
-.pub-pill-new { color: #0b6bb5; background: #dcedfb; }
-.pub-pill-mismatch { color: #a86400; background: #fdf0d8; }
-.pub-pill-match, .pub-pill-multiple { color: #4a4a4a; background: var(--header-bg); }
-.pub-pill-unknown { color: #b3262a; background: #fbe4e5; }
+/* State pill of the component: a status dot, what publishing would do with it and an "i" for the tooltip, tinted with its colour (the same
+   pill as the counts in the footer). */
+.pub-state {
+  --state-ink: #4f5d73; --state-bg: #f3f5f8; --state-line: #dde2ea; --state-dot: #8794a8;
+  flex: none; display: inline-flex; align-items: center; gap: 7px; height: 26px; box-sizing: border-box; padding: 0 10px 0 10px;
+  border: 1px solid var(--state-line); border-radius: 6px; background: var(--state-bg); color: var(--state-ink);
+  font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: .01em; white-space: nowrap; cursor: default;
+}
+.pub-state-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--state-dot); }
+.pub-state-info { flex: none; display: inline-flex; opacity: .65; cursor: help; transition: opacity .15s; }
+.pub-state:hover .pub-state-info { opacity: 1; }
+.pub-state-info svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-state-new { --state-ink: #0b5a96; --state-bg: #eef6fd; --state-line: #cfe3f6; --state-dot: #1f8ceb; }
+.pub-state-mismatch { --state-ink: #8a5600; --state-bg: #fff6e5; --state-line: #f3dfb3; --state-dot: #e39b13; }
+.pub-state-match { --state-ink: #1b6b34; --state-bg: #eef8f1; --state-line: #cfe9d8; --state-dot: #2e9d4f; }
+.pub-state-multiple { --state-ink: #5b3a8a; --state-bg: #f3eefa; --state-line: #ddd0f0; --state-dot: #8a5cc2; }
+.pub-state-unknown { --state-ink: #a3201f; --state-bg: #fdeeee; --state-line: #f5cfcf; --state-dot: #d93a3a; }
 
 /* Which of several Fusion Manage items is meant. */
 .pub-pick-card { display: flex; flex-direction: column; gap: 8px; padding: 24px; margin-top: 12px; }

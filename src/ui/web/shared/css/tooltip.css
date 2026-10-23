@@ -1,0 +1,12 @@
+/* Tooltips that show quickly (see shared/js/tooltip.js): a small dark box with a soft shadow, above the element or below it. */
+.mfg-tip {
+  position: fixed; z-index: 1000; max-width: 320px; box-sizing: border-box; padding: 6px 10px;
+  border-radius: 6px; background: #1f2937; color: #fff;
+  font-size: 12px; font-weight: 400; line-height: 1.4; text-align: left; overflow-wrap: anywhere;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .25);
+  opacity: 0; transform: translateY(2px); transition: opacity .12s ease, transform .12s ease;
+  pointer-events: none;
+}
+.mfg-tip[hidden] { display: none; }
+.mfg-tip.on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .mfg-tip { transition: none; } }

@@ -210,7 +210,21 @@ The Publish panel compares the design's BOM with the BOM already in Fusion Manag
 
 ### Large designs
 
-The BOM is read from the Manufacturing Data Model a page of 250 lines at a time, so a large assembly takes a few requests, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. If a design is bigger than it can read, the panel says so instead of showing a table:
+The panel reads the BOM one level at a time, so a large assembly opens quickly. At first it shows the design and the lines directly under it. Click an assembly's chevron to read the lines under it: a spinner replaces the chevron and grey rows hold the place until they arrive. If one assembly cannot be read, its rows show **Could not read this level** with a **Retry** button, and the rest of the table stays.
+
+**Expand all** reads every level that is not read yet and opens everything; **Collapse all** closes every assembly except the design itself.
+
+**Publish covers what is open.** It publishes the design and the lines of every assembly you have opened, exactly as the table shows them, and nothing under a closed assembly. The pills at the bottom left count what that is, and update as you open and close assemblies:
+
+| Pill | Counts |
+|---|---|
+| **Items** | The design and every component in view: each is checked against Fusion Manage when you publish, and created or updated where it differs. |
+| **Lines Skipped** | Lines with no item number (and what is below them): nothing is published for them. |
+| **Sub Assemblies Skipped** | Closed sub assemblies in view. What is under them is not published; open them, or use **Expand all**, to include them. |
+
+A line that needs a choice (**Review**) holds **Publish** back only while it is in view.
+
+Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a design is bigger than the add-in can read, the panel says so instead of showing a table:
 
 - More than **25,000 lines**.
 - Nested **50 levels deep or more**.
@@ -226,19 +240,22 @@ For each parent assembly, the lines of the design are matched to the Fusion Mana
 | **Changed** (quantity differs) | Same item, different quantity. | Updates the quantity in Fusion Manage. |
 | **Match** | Same item and quantity. | Nothing. No chip is shown. |
 | **Extra** (**Fusion Manage Only**) | Fusion Manage has a line the design does not. | **Keeps it** unless you choose **Remove**. |
+| **Skipped** | The component has no item number, or sits below one that has none. | Nothing: no item is created and no BOM line is added. |
 
 If an assembly inside the design does not exist in Fusion Manage yet, every child of it is **New**. If the design itself is not in Fusion Manage, its lines show no status: the panel says publishing creates the design, and does not look up every component. When you publish, each component is searched for by item number, an item that exists is used, and one that does not is created.
 
 Fusion Manage often extends the design BOM with manufacturing lines such as oil or panels. For that reason lines found only in Fusion Manage are never deleted automatically.
 
-!!! example "Screenshot placeholder: BOM table with New, Changed and Fusion Manage Only rows"
-    **Show:** The BOM table with status chips, and the filter buttons above it.
+Each line reads **Item Number - Part Name**. A component with no item number has not been uploaded to the Fusion Manage Components workspace, so it is **Skipped**: its quantity box is greyed out and cannot be edited, and the **i** on its chip explains why when you hover it. Everything below a skipped assembly is skipped too, because it has no item to join in the Fusion Manage BOM.
 
-    Save the image as `docs/images/bom-statuses.png`, then replace this box with `![BOM table with New, Changed and Fusion Manage Only rows](../images/bom-statuses.png)`.
+!!! example "Screenshot placeholder: BOM table with New, Changed, Skipped and Fusion Manage Only rows"
+    **Show:** The BOM table with status chips, including a Skipped row, and the Filters drop-down and the collapse and expand buttons above it.
+
+    Save the image as `docs/images/bom-statuses.png`, then replace this box with `![BOM table with New, Changed, Skipped and Fusion Manage Only rows](../images/bom-statuses.png)`.
 
 ### Filters
 
-Filter buttons above the table narrow it to rows of one status, such as **New** or **Fusion Manage Only**. Each filter's tooltip explains what it shows.
+The **Filters** drop-down above the table (top left) narrows it to rows of one status, such as **New**, **Skipped** or **Fusion Manage Only**; tick any number at once. Each filter shows how many lines it holds, and its tooltip explains what it shows. **Clear filters** unticks them all. Next to it, at the right, **Collapse all** and **Expand all** fold the whole tree.
 
 ### Paired rows: a replaced item
 

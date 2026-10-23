@@ -37,11 +37,16 @@
 }
 @keyframes pub-thumb-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .pub-thumb-loading { animation: none; } }
-.pub-summary-text { flex: 1; min-width: 0; }
+.pub-summary-text { flex: 1; min-width: 0; padding-right: 96px; }   /* clear of the refresh and check buttons */
 .pub-summary { position: relative; }
 
 /* Up-to-date check: a round button at the top right. A ring sweeps round it while it scans, then it settles into a state colour. */
-.pub-check { position: absolute; top: 12px; right: 16px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; cursor: pointer; color: var(--muted); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: color .2s, box-shadow .2s; }
+.pub-summary-tools { position: absolute; top: 12px; right: 16px; display: flex; align-items: center; gap: 10px; }
+/* An action icon: the same round button as the check, with the refresh arrow; it turns while the panel reads again. */
+.pub-tool { flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; cursor: pointer; color: var(--muted); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: color .2s, box-shadow .2s; }
+.pub-tool:hover { color: var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.pub-tool svg { display: block; width: 20px; height: 20px; margin: auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-check { position: relative; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; cursor: pointer; color: var(--muted); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: color .2s, box-shadow .2s; }
 .pub-check:hover { box-shadow: 0 2px 6px rgba(0,0,0,.25); }
 .pub-check svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pub-check-ring circle { stroke-dasharray: 94.2; stroke-dashoffset: 0; opacity: .25; transition: opacity .2s; }
@@ -80,9 +85,30 @@
 
 /* ---- Footer with the actions ---------------------------------------------- */
 .pub-footer {
-  flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;
+  flex: none; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 16px;
   background: var(--surface); border-top: 1px solid var(--border);
 }
+
+/* What publishing covers: a pill for each count at the left of the footer. A pill is a status dot, the count and what it counts, tinted
+   with the colour of its kind (--pill-ink text, --pill-bg fill, --pill-line outline, --pill-dot dot). */
+.pub-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-right: auto; min-width: 0; }
+.pub-pill {
+  --pill-ink: #4f5d73; --pill-bg: #f3f5f8; --pill-line: #dde2ea; --pill-dot: #8794a8;
+  display: inline-flex; align-items: center; gap: 7px; height: 26px; box-sizing: border-box; padding: 0 12px 0 10px;
+  border: 1px solid var(--pill-line); border-radius: 6px; background: var(--pill-bg); color: var(--pill-ink);
+  font: inherit; font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: .01em; white-space: nowrap; cursor: default;
+  animation: pub-fade-in .2s ease both;
+}
+.pub-pill-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pill-dot); }
+.pub-pill b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.pub-pill-label { font-weight: 500; }
+.pub-pill-info { flex: none; display: inline-flex; margin-left: 1px; opacity: .65; cursor: help; transition: opacity .15s; }
+.pub-pill:hover .pub-pill-info { opacity: 1; }
+.pub-pill-info svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pub-pill-items { --pill-ink: #0b5a96; --pill-bg: #eef6fd; --pill-line: #cfe3f6; --pill-dot: #1f8ceb; }
+.pub-pill-skipped { --pill-ink: #5d6672; --pill-bg: #f3f4f6; --pill-line: #dcdfe4; --pill-dot: #98a1ad; }
+.pub-pill-closed { --pill-ink: #8a5600; --pill-bg: #fff6e5; --pill-line: #f3dfb3; --pill-dot: #e39b13; }
+@media (prefers-reduced-motion: reduce) { .pub-pill { animation: none; } }
 
 /* ---- States ---------------------------------------------------------------- */
 .pub-error { color: var(--danger); }

@@ -5,6 +5,7 @@
   <title>Fusion Manage Item</title>
   <!-- Shared panel styles -->
   <link rel="stylesheet" href="../shared/css/base.css">
+  <link rel="stylesheet" href="../shared/css/tooltip.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
@@ -51,8 +52,15 @@
     <div id="item-empty" class="loader item-empty" hidden>
       <svg id="item-empty-icon" class="item-empty-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
       <p id="item-empty-text" class="item-empty-text"></p>
+      <p id="item-empty-number" class="item-empty-number" hidden></p>
       <p id="item-empty-hint" class="item-empty-hint"></p>
-      <button id="item-empty-publish" class="btn" type="button" hidden>Publish</button>
+      <!-- What the Publish button will do, so the user knows what comes next. Nothing is sent until they confirm in the Publish panel. -->
+      <ol id="item-empty-steps" class="item-empty-steps" hidden>
+        <li>Opens the Publish panel, where you review what will be sent</li>
+        <li>Creates the item in the Fusion Manage Items workspace with the design's properties</li>
+        <li>Adds its bill of materials, if it is an assembly</li>
+      </ol>
+      <button id="item-empty-publish" class="btn item-empty-action" type="button" hidden>Publish to Fusion Manage</button>
     </div>
 
     <!-- Header: the item's title, its life cycle line, and its actions. -->
@@ -138,6 +146,7 @@
 
   <!-- Shared shell -->
   <script src="../shared/js/dom.js"></script>
+  <script src="../shared/js/tooltip.js"></script>
   <script src="../shared/js/bridge.js"></script>
   <script src="../shared/js/shell.js"></script>
   <script src="../shared/js/toast.js"></script>

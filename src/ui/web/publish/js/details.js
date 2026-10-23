@@ -313,7 +313,12 @@
     head.appendChild(text);
     const state = changeState(compare);
     if (compare && PILLS[state]) {
-      const pill = el('span', 'pub-pill pub-pill-' + state, PILLS[state].text);
+      const pill = el('span', 'pub-state pub-state-' + state);
+      pill.appendChild(el('span', 'pub-state-dot'));
+      pill.appendChild(el('span', 'pub-state-label', PILLS[state].text));
+      const info = el('span', 'pub-state-info');   // the small "i" says there is a tooltip to read
+      info.appendChild(ui.svg(['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5']));
+      pill.appendChild(info);
       pill.title = PILLS[state].title;
       head.appendChild(pill);
     }

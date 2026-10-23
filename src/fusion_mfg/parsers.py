@@ -29,6 +29,7 @@ def parse_summary(data: Dict[str, Any]) -> Dict[str, str]:
         "composition": str(component.get("composition") or ""),
         "item_number": str((component.get("itemNumber") or {}).get("id") or ""),
         "part_number": _text(component.get("partNumber")),
+        "name": _text(component.get("name")),
         "description": _text(component.get("description")),
     }
 
@@ -71,6 +72,7 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
                 raise ValueError(f"The Bill of Materials contains a component inside itself ({child.get('id')}).")
             result.append({"level": level,
                            "id": str(child.get("id") or ""),
+                           "has_children": bool(child.get("hasChildren")),   # so an assembly shows its chevron before its lines are read
                            "item_number": str((child.get("itemNumber") or {}).get("id") or ""),
                            "sequence": row.get("sequenceNumber") or 0,
                            "name": _text(child.get("name")),

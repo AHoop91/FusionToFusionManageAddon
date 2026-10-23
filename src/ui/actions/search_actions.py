@@ -20,7 +20,7 @@ from ..message_bridge import MessageBridge
 log = get_logger("search_actions")
 
 KEPT_ANSWERS = 30   # answers kept for the panel to poll; older tokens are dropped
-NO_ITEM = "The design has no Fusion Manage item to add to."
+NO_ITEM = "The Items workspace is not set up."
 OPTIONS_PAGE = 50   # picklist options per page of a value drop-down
 BAD_SEARCH = "Fusion Manage did not accept this search. Check the filter values and try again."
 
@@ -69,8 +69,8 @@ def register_search_actions(bridge: MessageBridge, config: ConfigService, auth: 
 
     def search_items(payload: Dict[str, Any]) -> Dict[str, Any]:
         token = str(payload.get("token") or "")
-        workspace, item_id = workspace_id(), str(payload.get("item_id") or "")
-        if not workspace or not item_id:
+        workspace, item_id = workspace_id(), str(payload.get("item_id") or "")   # no item yet while the design is not in Fusion Manage
+        if not workspace:
             return answer(token, message=NO_ITEM)
         text, groups, offset = str(payload.get("text") or ""), payload.get("groups"), max(0, int(payload.get("offset") or 0))
         return start(token, lambda client: ItemSearchService(client).page(workspace, item_id, text, groups, offset))
@@ -78,8 +78,10 @@ def register_search_actions(bridge: MessageBridge, config: ConfigService, auth: 
     def search_members(payload: Dict[str, Any]) -> Dict[str, Any]:
         token = str(payload.get("token") or "")
         workspace, item_id = workspace_id(), str(payload.get("item_id") or "")
-        if not workspace or not item_id:
+        if not workspace:
             return answer(token, message=NO_ITEM)
+        if not item_id:   # the design is not in Fusion Manage: its Bill of Materials holds nothing yet
+            return answer(token, ok=True, result={"ids": [], "numbers": []})
         return start(token, lambda client: ItemSearchService(client).members(workspace, item_id))
 
     def search_fields(payload: Dict[str, Any]) -> Dict[str, Any]:

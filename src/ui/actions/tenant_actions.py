@@ -10,7 +10,7 @@ from ...core.logging_setup import get_logger
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...fusion_mfg.model_service import read_manage_item, read_section
 from ..message_bridge import MessageBridge
-from .publish_actions import _model_ref
+from .design_ref import model_ref
 
 log = get_logger("tenant_actions")
 
@@ -45,7 +45,7 @@ def register_tenant_actions(bridge: MessageBridge, config: ConfigService, auth: 
         with lock:
             if state["pending"]:
                 return dict(state)
-        model_id, time = _model_ref()
+        model_id, time = model_ref()
         if not model_id:
             return {"pending": False, "ok": False, "tenant": "", "message": "Open a design that is linked to a Fusion Manage item, then try again."}
         client = MfgGraphQlClient(config.effective_settings(), auth)

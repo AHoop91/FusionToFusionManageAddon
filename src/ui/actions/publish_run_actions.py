@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
+from ...config.workspace_models import ITEMS_KIND
 from ...core.logging_setup import get_logger, log_directory
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
@@ -22,7 +23,8 @@ from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
-from .publish_actions import ITEMS_KIND, _model_ref, publish_denial
+from .design_ref import model_ref
+from ...publish.panel_sections import publish_denial
 
 log = get_logger("publish_run")
 
@@ -115,7 +117,7 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         cfg = config.config.workspaces.get(ITEMS_KIND)
         if not cfg or not cfg.workspace_id:
             return {"error": "Set the Items workspace ID in Settings first."}
-        model_id, time = _model_ref()
+        model_id, time = model_ref()
         if not model_id:
             return {"error": "Could not find the Data Model id of the open design."}
         try:   # the panel is blocked without these permissions; this covers a page that was open when they changed

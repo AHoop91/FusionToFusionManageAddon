@@ -35,7 +35,7 @@
   const ICON_DENIED = '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>';
 
   /** Say, in the middle of the panel and in place of the item, ``text`` with a ``hint`` under it. */
-  function showEmpty(icon, text, hint, canPublish) {
+  function showEmpty(icon, text, hint, canPublish, number) {
     setLoading(false);
     offerPublish = !!canPublish;
     $('item-empty-publish').hidden = true;   // shown once Python says the open document is a design, not a drawing
@@ -44,6 +44,11 @@
     $('item-empty-icon').innerHTML = icon;   // static markup
     $('item-empty-text').textContent = text;
     $('item-empty-hint').textContent = hint;
+    $('item-empty-hint').hidden = !hint;
+    $('item-empty-number').textContent = number || '';
+    $('item-empty-number').hidden = !number;   // the item number that has no item yet
+    $('item-empty-steps').hidden = !offerPublish;   // what Publish will do: only the "not published" state has it
+    $('item-empty').classList.toggle('item-empty-denied', icon === ICON_DENIED);
     $('item-empty').hidden = false;
   }
 
@@ -497,7 +502,7 @@
     shownSeq = entry.seq;
     if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
     if (entry.missing) {
-      showEmpty(ICON_MISSING, 'This item has not been uploaded to the Fusion Manage Items workspace.', 'No item exists for ' + entry.missing + '. Would you like to publish it?', true);
+      showEmpty(ICON_MISSING, 'No Item Exists In Fusion Manage Yet', 'Fusion Manage has no item in the Items workspace for this design.', true, entry.missing);
       return;
     }
     if (!entry.seq) { message('Select a component and choose Open Fusion Manage Item.'); return; }

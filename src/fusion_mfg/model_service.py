@@ -19,9 +19,10 @@ SECTIONS = {
     "properties": (PROPERTIES_QUERY, parse_properties),
 }
 STRUCTURE = "structure"    # the whole BOM tree
+LEVEL = "level"            # the lines directly under one component (the design when no id is given), not what is below them
 COMPONENT = "component"    # the properties of one component, by id
 THUMBNAIL = "thumbnail"    # the design's thumbnail url, on its own, so a slow one never holds up the rest
-SECTION_NAMES = (*SECTIONS, STRUCTURE, COMPONENT, THUMBNAIL)
+SECTION_NAMES = (*SECTIONS, STRUCTURE, LEVEL, COMPONENT, THUMBNAIL)
 MAX_PAGES = 100   # at 250 relations a page: 25,000 relations; more is an error rather than a BOM cut short
 
 log = get_logger("model_service")
@@ -42,6 +43,8 @@ def read_section(client: MfgGraphQlClient, section: str, model_id: str, time: st
     """
     if section == STRUCTURE:
         return _read_structure(client, summary or {}, time, progress)
+    if section == LEVEL:
+        return _read_structure(client, summary or {}, time, progress, root_id=component_id or "", depth=1)
     if section == COMPONENT:
         return _read_component(client, summary or {}, component_id, time, physical)
     if section == THUMBNAIL:
@@ -89,10 +92,13 @@ def _read_component(client: MfgGraphQlClient, summary: Dict[str, Any], component
     return parse_component(client.query(COMPONENT_PROPERTIES_QUERY, variables, label="properties"))
 
 
-def _read_structure(client: MfgGraphQlClient, summary: Dict[str, Any], time: str, progress: Callable[[int], None] = None) -> Any:
-    root_id = summary.get("component_id", "")
+def _read_structure(client: MfgGraphQlClient, summary: Dict[str, Any], time: str, progress: Callable[[int], None] = None,
+                    root_id: str = "", depth: int = STRUCTURE_DEPTH) -> Any:
+    """The lines below ``root_id`` (the design when empty) down to ``depth`` levels, as ``parse_structure`` rows. ``depth`` 1 is one
+    level: only the lines directly under it, whatever the answer holds below them."""
+    root_id = root_id or summary.get("component_id", "")
     variables = _component_variables(summary, root_id, time)
-    variables.update(depth=STRUCTURE_DEPTH, limit=STRUCTURE_PAGE_SIZE, cursor=None)
+    variables.update(depth=depth, limit=STRUCTURE_PAGE_SIZE, cursor=None)
     relations = []
     for page in range(1, MAX_PAGES + 1):
         node = (client.query(STRUCTURE_QUERY, variables, label=f"structure page {page}").get("component") or {}).get("bomRelations") or {}
@@ -106,7 +112,9 @@ def _read_structure(client: MfgGraphQlClient, summary: Dict[str, Any], time: str
         raise MfgApiError(f"The Bill of Materials has more than {MAX_PAGES * STRUCTURE_PAGE_SIZE} components, more than can be read.")
     rows = parse_structure(relations, root_id)
     deepest = max((int(r["level"]) for r in rows), default=-1) + 1   # levels below the root
-    log.debug("Read the structure: %d relation(s) in %d page(s), %d level(s) deep", len(relations), page, deepest)
+    log.debug("Read the structure of %s to depth %d: %d relation(s) in %d page(s), %d level(s) deep", root_id, depth, len(relations), page, deepest)
+    if depth == 1:   # one level was asked for: keep the direct lines, whatever else the answer carried
+        return [r for r in rows if int(r["level"]) == 0]
     if deepest >= STRUCTURE_DEPTH:   # the read stopped at its depth: there may be more below
         raise MfgApiError(f"The Bill of Materials is nested {STRUCTURE_DEPTH} levels deep or more, more than can be read.")
     return rows

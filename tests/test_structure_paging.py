@@ -70,5 +70,32 @@ class StructureDepthTests(unittest.TestCase):
             model_service.read_section(Pages([loop]), "structure", "m", "", SUMMARY)
 
 
+class LevelTests(unittest.TestCase):
+    """One level is the lines directly under one component: the design's, or an assembly's that was opened."""
+
+    def test_a_level_asks_for_one_level_under_the_component_it_is_given(self):
+        asked = []
+
+        class Client:
+            def query(self, _text, variables, label=""):
+                asked.append(variables)
+                return {"component": {"bomRelations": {"results": [{"fromComponent": {"id": "asm"}, "toComponent": {"id": "c1", "hasChildren": True}}],
+                                                       "pagination": {"cursor": None}}}}
+
+        rows = model_service.read_section(Client(), "level", "m", "", SUMMARY, component_id="asm")
+        self.assertEqual((asked[0]["componentId"], asked[0]["depth"]), ("asm", 1))
+        self.assertEqual([(r["id"], r["level"], r["has_children"]) for r in rows], [("c1", 0, True)])
+
+    def test_a_level_without_an_id_is_the_designs(self):
+        client = Pages([[relation(1)]])
+        rows = model_service.read_section(client, "level", "m", "", SUMMARY)
+        self.assertEqual([r["id"] for r in rows], ["c1"])
+
+    def test_lines_deeper_than_the_level_are_dropped_whatever_the_answer_holds(self):
+        deeper = [relation(1), {"fromComponent": {"id": "c1"}, "toComponent": {"id": "c2"}}]
+        rows = model_service.read_section(Pages([deeper]), "level", "m", "", SUMMARY)
+        self.assertEqual([r["id"] for r in rows], ["c1"])
+
+
 if __name__ == "__main__":
     unittest.main()

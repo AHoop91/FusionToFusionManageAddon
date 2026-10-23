@@ -17,6 +17,12 @@ class ParseSearchTests(unittest.TestCase):
         self.assertEqual(item["linkable"]["item"]["link"], "/api/v3/workspaces/57/items/15719")
         self.assertIn("{{tenant}}.57.14669.5.15719", item["linkable"]["urn"])
 
+    def test_a_design_not_in_fusion_manage_has_no_linkable_row_yet(self):
+        data = {"totalCount": 1, "items": [{"__self__": "/api/v3/workspaces/57/items/15719", "descriptor": "WG1-6073 - HEX NUT"}]}
+        item = parse_search(data, "57", "")["items"][0]
+        self.assertEqual(item["id"], "15719")
+        self.assertIsNone(item["linkable"])   # the publish writes the row, with the new item's id, when it adds the line
+
     def test_a_revision_is_the_letter_alone_however_it_is_sent(self):
         for sent in ("W", "REV:W", "[REV:W]"):
             data = {"items": [{"__self__": "/api/v3/workspaces/57/items/1", "descriptor": "A - B", "version": sent}]}
