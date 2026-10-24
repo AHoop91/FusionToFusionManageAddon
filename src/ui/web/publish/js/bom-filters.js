@@ -16,7 +16,7 @@
     { id: 'review',  label: 'Review',      title: 'Item number differs from Fusion Manage and no action is chosen yet' },
     { id: 'new',     label: 'New',         title: 'Not in Fusion Manage yet, with the Fusion Manage line each is paired with' },
     { id: 'added',   label: 'Added',       title: 'Picked with Add Existing Items: publishing adds them to the Fusion Manage BOM' },
-    { id: 'changed', label: 'Updates',     title: 'Quantity differs from Fusion Manage' },
+    { id: 'changed', label: 'Update',     title: 'Quantity differs from Fusion Manage' },
     { id: 'extra',   label: 'Fusion Manage Only', title: 'Only in Fusion Manage' },
     { id: 'skipped', label: 'Skipped',     title: 'No item number, a number shared with another component, or below such a line: publishing creates no item for them' },
     { id: 'hidden',  label: 'Show Hidden Components', title: 'Hidden in the Fusion component tree', separate: true },

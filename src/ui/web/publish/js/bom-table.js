@@ -245,7 +245,7 @@
       if (item.component && (item.root || item.component.id !== '')) {
         tr.classList.add('pub-cmp-pick');
         tr.addEventListener('click', function (event) {
-          if (event.target.closest('button')) return;   // chevrons and action buttons do their own thing
+          if (event.target.closest('button, input')) return;   // chevrons, action buttons and the quantity box do their own thing
           selectedId = selectionKey(item.component);
           paintSelection();
           onSelect(item.component);

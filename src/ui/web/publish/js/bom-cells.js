@@ -18,7 +18,7 @@
   const STATUS = {
     match:   { label: 'Match',    text: 'Same line and quantity in Fusion Manage' },
     new:     { tone: 'new',     label: 'New',     text: 'Not in Fusion Manage yet: publishing adds it' },
-    changed: { tone: 'changed', label: 'Updates', text: 'Quantity differs from Fusion Manage' },
+    changed: { tone: 'changed', label: 'Update',  text: 'Quantity differs from Fusion Manage' },
     added:   { tone: 'new',     label: 'New',     text: 'Publishing adds this line to the Fusion Manage BOM' },
     kept:    { tone: 'extra',   label: 'Keep',    text: 'Publishing keeps this Fusion Manage line, renumbered at the end of the BOM' },
     linked:  { tone: 'added',   label: 'Added',   text: 'Picked with Add Existing Items: publishing adds this Fusion Manage item to the end of the Fusion Manage BOM' },
@@ -110,14 +110,20 @@
       : who + ' Has No Assigned Item Number In Fusion Manage';
   }
 
+  /** The Update chip: its tooltip says what the quantity is in Fusion Manage now and what publishing makes it. */
+  function changedChip(item) {
+    return Object.assign({}, STATUS.changed, { text: 'Quantity will be updated\nCurrent in Fusion Manage: ' + item.fm.quantity + '\nAfter publishing: ' + model.quantityOf(item) });
+  }
+
   /** The chip a line shows, or null when there is nothing to say. */
   function chipOf(item, fmRow) {
     const status = model.statusOf(item);
     if (status === 'match') return null;   // nothing to do
     if (status === 'mismatch') return pairChip(item, fmRow);
+    if (status === 'changed') return changedChip(item);
     if (status !== 'extra') return STATUS[status];
     if (decisions[item.key] === 'remove') return { tone: 'removed', label: 'Remove', text: 'Publishing will remove ' + item.fm.pn + ' from Fusion Manage' };
-    return model.quantityDiffers(item) ? STATUS.changed : null;   // the ticks already say it is only in Fusion Manage
+    return model.quantityDiffers(item) ? changedChip(item) : null;   // the ticks already say it is only in Fusion Manage
   }
 
   /** Status chip, or null when there is nothing to say. A differing pair has two rows: the design line (``fmRow`` false) and the Fusion Manage line. */

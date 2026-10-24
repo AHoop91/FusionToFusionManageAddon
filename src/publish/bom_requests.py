@@ -36,6 +36,16 @@ def _add_body(workspace_id: str, op: Dict[str, Any]) -> Dict[str, Any]:
     return body
 
 
+def _line_body(workspace_id: str, parent: str, op: Dict[str, Any], url: str, **fields: Any) -> Dict[str, Any]:
+    """Body that changes a line, shaped as Fusion Manage's own BOM tab sends it: the line (``__self__``), its item and the changed fields.
+    A body of the changed field alone was answered with a 500."""
+    item = f"{{{{item:{op['number']}}}}}"
+    return {"__self__": url, "item": {"link": f"{WORKSPACES}/{workspace_id}/items/{item}",
+                                      "urn": f"urn:adsk.plm:tenant.workspace.item:{{{{tenant}}}}.{workspace_id}.{item}",
+                                      "title": str(op["number"]), "deleted": False, "version": f"{{{{version:{op['number']}}}}}"},
+            **fields, "children": [], "fields": []}
+
+
 def bom_requests(workspace_id: str, operations: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """Requests per parent item number from the BOM operations the panel resolved.
 
@@ -52,12 +62,14 @@ def bom_requests(workspace_id: str, operations: List[Dict[str, Any]]) -> Dict[st
         if kind == "add":
             request = {"method": "POST", "url": base, "body": _add_body(workspace_id, op)}
         elif kind == "update":
-            request = {"method": "PATCH", "url": f"{base}/{_edge(parent, op)}", "body": {"quantity": op.get("quantity", "")}}
+            url = f"{base}/{_edge(parent, op)}"
+            request = {"method": "PATCH", "url": url, "body": _line_body(workspace_id, parent, op, url, quantity=str(op.get("quantity", "")))}
         elif kind == "remove":
             request = {"method": "DELETE", "url": f"{base}/{_edge(parent, op)}", "body": None}
         elif kind == "renumber":
-            request = {"method": "PATCH", "url": f"{base}/{_edge(parent, op, 'from_sequence')}",
-                       "body": {"itemNumber": op.get("sequence", "")}}
+            url = f"{base}/{_edge(parent, op, 'from_sequence')}"
+            request = {"method": "PATCH", "url": url, "body": _line_body(workspace_id, parent, op, url, itemNumber=_line_number(op.get("sequence", "")),
+                                                                         **({"quantity": str(op["quantity"])} if "quantity" in op else {}))}
         else:
             continue
         out.setdefault(parent, []).append(request)

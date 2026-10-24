@@ -132,6 +132,20 @@ class BomRequestTests(unittest.TestCase):
         self.assertEqual(body["urn"], "urn:adsk.plm:tenant.workspace.item.view.linkable-item:{{tenant}}.57.{{item:A}}.5.{{item:C}}")
         self.assertEqual(list(body), ["__self__", "urn", "item", "itemNumber", "quantity", "children", "fields"])
 
+    def test_a_changed_line_is_sent_as_the_bom_tab_sends_it(self):
+        request = bom_requests("242", [{"op": "update", "parent": "A", "number": "B", "quantity": 2, "sequence": "1", "edge": "5284"}])["A"][0]
+        url = "/api/v3/workspaces/242/items/{{item:A}}/bom-items/5284"
+        self.assertEqual((request["method"], request["url"]), ("PATCH", url))
+        body = request["body"]
+        self.assertEqual((body["__self__"], body["quantity"], body["children"], body["fields"]), (url, "2", [], []))
+        self.assertEqual(body["item"]["link"], "/api/v3/workspaces/242/items/{{item:B}}")
+        self.assertEqual(body["item"]["version"], "{{version:B}}")
+
+    def test_a_renumbered_line_carries_its_new_number(self):
+        body = bom_requests("242", [{"op": "renumber", "parent": "A", "number": "B", "sequence": "3", "from_sequence": "1", "edge": "9"}])["A"][0]["body"]
+        self.assertEqual(body["itemNumber"], 3)
+        self.assertNotIn("quantity", body)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -125,7 +125,8 @@
 
   function isFinished(job) { return FINISHED.indexOf(job.phase) >= 0; }
 
-  function failedRows(job) { return (job.rows || []).filter(function (r) { return r.status === 'error'; }).length; }
+  /** The failed rows of a job; with `limit`, only among its first `limit` rows (the items: a Bill of Materials row comes after them). */
+  function failedRows(job, limit) { return (job.rows || []).slice(0, limit || undefined).filter(function (r) { return r.status === 'error'; }).length; }
 
   /** The time on a clock: "0:07", "12:05", "1:02:30". */
   function clock(seconds) {
@@ -148,10 +149,9 @@
    */
   function tally(job) {
     const total = job.total || 0;
-    const items = (job.rows || []).slice(0, total || undefined);
-    const failed = items.filter(function (row) { return row.status === 'error'; }).length;
+    const failed = failedRows(job, total);
     const skipped = Math.min((job.counts || {}).skipped || 0, Math.max(0, job.done - failed));
-    return { successful: Math.max(0, job.done - failed - skipped), failed: failed, skipped: skipped, pending: Math.max(0, total - job.done) };
+    return { successful: Math.max(0, job.done - failed - skipped), failed: failedRows(job), skipped: skipped, pending: Math.max(0, total - job.done) };
   }
 
   /** What a running job says it is doing: items are prepared several at a time, so no single one is "the" item being processed. */
@@ -174,10 +174,12 @@
     }
     if (job.phase === 'error') return { title: 'Publish failed', status: job.message || 'The publish could not be completed.', count: '', percent: 100, tone: 'error' };
     if (job.phase === 'cancelled') return { title: 'Publish cancelled', status: job.name + ' was not published.', count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
-    const failed = failedRows(job);
-    if (failed) {
-      return { title: 'Completed with errors', status: failed + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.',
-               count: count, percent: 100, tone: 'error' };
+    if (failedRows(job)) {
+      const items = failedRows(job, total);
+      const parts = [];
+      if (items) parts.push(items + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed.');
+      if (failedRows(job) > items) parts.push('The Bill of Materials was not updated.');
+      return { title: 'Completed with errors', status: parts.join(' ') + ' See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' };
     }
     return { title: 'Publish complete', percent: 100, tone: 'ok', count: count,
              status: job.sends ? job.name + ' was published to Fusion Manage.' : job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.' };

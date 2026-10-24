@@ -78,9 +78,11 @@ test('items left out on purpose are counted as skipped, not as successful', () =
   assert.deepStrictEqual(Object.assign({}, view), { successful: 2, failed: 0, skipped: 2, pending: 0 });
 });
 
-test('a Bill of Materials row after the items is not counted as an item', () => {
+test('a failed Bill of Materials row is a failure, not an item', () => {
   const rows = items('done', 'done', 'error');   // the last is the Bill of Materials row of a run of two items
-  assert.deepStrictEqual(Object.assign({}, tally(job({ total: 2, done: 2, rows: rows }))), { successful: 2, failed: 0, skipped: 0, pending: 0 });
+  const finished = job({ phase: 'done', total: 2, done: 2, rows: rows, finished_at: 110 });
+  assert.deepStrictEqual(Object.assign({}, tally(finished)), { successful: 2, failed: 1, skipped: 0, pending: 0 });
+  assert.strictEqual(describe(finished).status, 'The Bill of Materials was not updated. See the Job Queue for the reasons.');
 });
 
 test('a cancelled run leaves the items it did not reach pending', () => {
