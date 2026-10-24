@@ -15,8 +15,10 @@ from ...core.logging_setup import get_logger, log_directory
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
+from ...publish.reports import publish_report, send_report
 from ...publish.runner import PublishRun
 from ...publish.states import DONE, ERROR, FINISHED
+from ...publish.watched import Watched
 from ...publish.sender import FolderError, SendRun, load_plan
 from ...publish.writer import PublishFolder
 from ..file_dialogs import FileDialogs
@@ -28,84 +30,34 @@ from ...publish.panel_sections import publish_denial
 
 log = get_logger("publish_run")
 
-MAX_LISTED = 5   # failed items named in the message box; the Job Queue lists them all
-
-
 def publish_root() -> str:
     """Where publish runs keep their files: ``publishes`` next to the logs in the user profile."""
     return os.path.join(os.path.dirname(log_directory()), "publishes")
-
-
-def _requests(run: PublishRun, method: str) -> int:
-    """How many items the run wrote a request of this kind for (POST creates an item, PATCH updates one)."""
-    artifact = "sent to Fusion Manage" if run.sends else "item request"
-    return sum(1 for entry in list(run.folder.entries)
-               if entry["artifact"] == artifact and entry["status"] == "ok" and entry["detail"].startswith(method + " "))
-
-
-def _report(run: PublishRun) -> str:
-    """The text of the message box for a run that ended: how many items it processed, created and updated, and what failed."""
-    failed = [row for row in run.rows if row["status"] == "error"]
-    if run.phase == ERROR:
-        return "\n".join([f"Publish of {run.name} could not be completed.", "", f"Reason: {run.message}"])
-    lines = [f"Publish of {run.name} completed successfully." if not failed
-             else f"Publish of {run.name} completed with errors: {len(failed)} step(s) failed.", ""]
-    for row in failed[:MAX_LISTED]:
-        lines.append(f"  - {row['item']}: {(row['detail'] or 'Failed.')[:160]}")
-    if len(failed) > MAX_LISTED:
-        lines.append(f"  - and {len(failed) - MAX_LISTED} more")
-    if failed:
-        lines.append("")
-    if run.sends:
-        lines += [f"Total Items Processed: {run.done}",
-                  f"Total Items Created: {_requests(run, 'POST')}",
-                  f"Total Items Updated: {_requests(run, 'PATCH')}", "",
-                  f"The files are in {run.folder.path}"]
-        if failed:
-            lines += ["Open the Job Queue for the reason of each failure. Use Retry on the job to send the failed requests again: what was accepted is skipped."]
-        return "\n".join(lines)
-    lines += [f"Total Items Processed: {run.done}",
-              f"Total Items Created: {_requests(run, 'POST')}",
-              f"Total Items Updated: {_requests(run, 'PATCH')}", "",
-              "The requests were written for review. Nothing has been sent to Fusion Manage yet."]
-    if failed:
-        lines.append("Open the Job Queue for the full reason of each failure.")
-    return "\n".join(lines)
-
-
-def _send_report(run: Any) -> str:
-    """The text of the message box for a send that ended."""
-    failed = [row for row in run.rows if row["status"] == "error"]
-    if run.phase == ERROR:
-        return f"Sending {run.name} could not be completed.\n\nReason: {run.message}"
-    if not failed:
-        return f"{run.name} was sent to Fusion Manage.\n\nSteps completed: {run.done} of {run.total}"
-    lines = [f"Sending {run.name} finished with errors: {len(failed)} of {run.total} step(s) failed.", ""]
-    lines += [f"  - {row['item']}: {(row['detail'] or 'Failed.')[:160]}" for row in failed[:MAX_LISTED]]
-    if len(failed) > MAX_LISTED:
-        lines.append(f"  - and {len(failed) - MAX_LISTED} more")
-    lines += ["", "Use Retry on the job to send them again: what Fusion Manage accepted is skipped."]
-    return "\n".join(lines)
 
 
 def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
                                  dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
     """Register the publish actions; the queue lives as long as the add-in."""
 
+    watched = Watched()   # the runs the Publish panel's progress dialog is following
+
     def announce(run: Any) -> None:
-        """A run that ends gets a message box, a warning when it failed or had failed items (the panels may be closed)."""
+        """A run that ends gets a message box, a warning when it failed or had failed items (the panels may be closed).
+        One a progress dialog is following gets none: the dialog already shows how it ended."""
+        if watched.following(run.id):
+            return
         if run.kind == "send":
             failed = [row for row in run.rows if row["status"] == "error"]
             if run.phase == ERROR or failed:
-                alerts.alert(_send_report(run), "Send to Fusion Manage failed")
+                alerts.alert(send_report(run), "Send to Fusion Manage failed")
             elif run.phase == DONE:
-                alerts.done(_send_report(run), "Sent to Fusion Manage")
+                alerts.done(send_report(run), "Sent to Fusion Manage")
         elif run.phase == ERROR:
-            alerts.alert(_report(run), "Publish failed")
+            alerts.alert(publish_report(run), "Publish failed")
         elif run.phase == DONE and any(row["status"] == "error" for row in run.rows):
-            alerts.alert(_report(run), "Publish completed with errors")
+            alerts.alert(publish_report(run), "Publish completed with errors")
         elif run.phase == DONE:
-            alerts.done(_report(run), "Publish complete")
+            alerts.done(publish_report(run), "Publish complete")
 
     # The Job Queue button on the ribbon shows whether runs are working or have failed.
     queue = JobQueue(lambda: badge.update(queue.state()), announce)
@@ -131,6 +83,7 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         folder = PublishFolder(publish_root(), job["root_number"])   # the files stay as a record of what was sent
         settings = config.effective_settings()
         run = PublishRun(folder, job, cfg, MfgGraphQlClient(settings, auth), FmClient(settings, auth), model_id, time, send=True)
+        watched.touch(run.id)   # the panel opens its progress dialog on this run
         queue.add(run)
         log.info("Publish queued into %s: %d item(s), %d BOM operation(s)", folder.path, len(job["items"]), len(job["operations"]))
         return {"queued": run.id, **jobs()}
@@ -150,7 +103,8 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         log.info("Retry queued for %s", run.path)
         return jobs()
 
-    def list_publish_jobs(_payload: Dict[str, Any]) -> Dict[str, Any]:
+    def list_publish_jobs(payload: Dict[str, Any]) -> Dict[str, Any]:
+        watched.touch(str((payload or {}).get("watching") or ""))   # the progress dialog names the run it follows
         return jobs()
 
     def cancel_publish(payload: Dict[str, Any]) -> Dict[str, Any]:

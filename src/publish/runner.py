@@ -41,6 +41,8 @@ log = get_logger("publish")
 WORKERS = 5   # items prepared at once
 SENT = "sent to Fusion Manage"   # the artifact of an item that was sent
 
+SKIPPED_COUNT = "skipped"   # the job's ``counts`` key for the items left out on purpose
+
 
 class PublishRun(JobState):
     """State and steps of one run. ``snapshot`` is what the panel polls."""
@@ -53,7 +55,6 @@ class PublishRun(JobState):
         super().__init__(str(job.get("root_number") or "design"), folder.path)
         self.folder, self.job, self.cfg = folder, job, cfg
         self.sends = send   # send each item as it is written, then the Bill of Materials
-        self.stage = "items"   # items -> bom (only when ``sends``)
         self._dispatcher = Dispatcher(folder.path, fm, cfg.workspace_id) if send else None
         self._client, self._fm, self._model_id, self._time = client, fm, model_id, time
         self.total = len(job["items"])
@@ -69,6 +70,7 @@ class PublishRun(JobState):
         self._picklists = PicklistResolver(self._fm, cfg.workspace_id)   # options of the picklist fields, read once per run
         self._shared = shared_numbers(job["items"], job["summary"])   # item number -> the components that carry it: none of them is published
         self._ahead: Optional[ReadAhead] = None   # the reads the items share, while the run is on them
+        self._skipped = 0   # items left out on purpose, so the progress dialog does not count them as published
 
     # ---- Worker thread ----------------------------------------------------------
 
@@ -84,7 +86,7 @@ class PublishRun(JobState):
                            self._physical, lambda: self.cancelled) as self._ahead, ThreadPoolExecutor(max_workers=WORKERS) as pool:
                 list(pool.map(self._prepare, self.job["items"]))
             if not self.cancelled:
-                self._bom()
+                self._write_boms()
             log.info("Prepared %d item(s) in %.1fs", len(self.job["items"]), time.monotonic() - started)
             if self.sends and not self.cancelled:
                 self._send_boms()   # only now: every item has been created or updated
@@ -94,6 +96,16 @@ class PublishRun(JobState):
             return
         self._finish(CANCELLED if self.cancelled else DONE, "Cancelled." if self.cancelled else "")
 
+    def _counts(self) -> Dict[str, int]:
+        return {SKIPPED_COUNT: self._skipped}
+
+    def _leave_out(self, row: Dict[str, Any], detail: str) -> None:
+        """An item that is done without anything being done for it."""
+        row["status"], row["detail"] = DONE, detail
+        with self._lock:
+            self._skipped += 1
+            self.done += 1
+
     def _send_boms(self) -> None:
         """Send the Bill of Materials of each parent, one after the other; a failure stops that parent only."""
         self._set(stage="bom")
@@ -101,7 +113,6 @@ class PublishRun(JobState):
             if self.cancelled:
                 break
             row = self._bom_row_of[parent]
-            self._set(current=parent)
             row["status"] = RUNNING
             try:
                 row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled)
@@ -116,44 +127,40 @@ class PublishRun(JobState):
             return
         number = item_number_of(item)
         row = self._row_of[id(item)]
-        if not number:   # not in the Components workspace: the panel leaves these out, this keeps an empty number from ever being sent
-            row["status"], row["detail"] = DONE, "Skipped: no item number."
-            with self._lock:
-                self.done += 1
-            return
-        if number.lower() in self._shared:   # the panel leaves these out; a job that has them anyway must not write one item from several components
+        # The panel leaves out what has no item number or shares one; this keeps a job that has them anyway from sending an empty
+        # number, or from writing one item from several components.
+        if not number:
+            return self._leave_out(row, "Skipped: no item number.")
+        if number.lower() in self._shared:
             reason = shared_reason(number, self._shared[number.lower()])
             self.folder.record(number, "item", SKIPPED, reason)
-            row["status"], row["detail"] = DONE, reason
-            with self._lock:
-                self.done += 1
-            return
-        self._set(current=number)
+            return self._leave_out(row, reason)
         row["status"] = RUNNING
+        unresolved = False
         try:
-            self._item(item, number)
+            unresolved = self._item(item, number)
         except Exception as exc:
             log.exception("Publishing %s failed", number)
             self.folder.record(number, "item", FAILED, str(exc) or type(exc).__name__)
-        entries = [e for e in list(self.folder.entries) if e["item"] == number]
+        entries = self.folder.entries_of(number)
         row["detail"] = "; ".join(f"{e['artifact']}: {e['detail']}" for e in entries)
         with self._lock:
             row["status"] = ERROR if any(e["status"] == FAILED for e in entries) else DONE
             self.done += 1
+            self._skipped += unresolved
 
-    def _item(self, item: Dict[str, Any], number: str) -> None:
+    def _item(self, item: Dict[str, Any], number: str) -> bool:
+        """Prepare, and with ``sends`` send, one item. True when Fusion Manage could not say which item it is, so nothing was done for it."""
         folder = self.folder.item_dir(number)
-        summary = self.job["summary"]
         began = time.monotonic()
+        summary = self.job["summary"]
         component_id = component_id_of(item, summary)
         component = summary if item.get("root") else {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
         # Fusion Manage is asked for the item while the Data Model request this item shares is on its way.
         with ThreadPoolExecutor(max_workers=1) as background:
-            lookup = background.submit(lookup_item, component, self.cfg, self._fm, str(item.get("fm_item") or ""), self._ahead.found(number))
+            pending = background.submit(lookup_item, component, self.cfg, self._fm, str(item.get("fm_item") or ""), self._ahead.found(number))
             read = self._ahead.read(component_id)
-            lookup = lookup.result()
-        read_time = time.monotonic() - began
-
+            lookup = pending.result()
         result = compare_with_item(read["properties"], component, self.cfg, lookup, self._picklists.fit_number,
                                    with_values=True, convert_unit=self._picklists.convert_unit)
         link = self._component(number, result["fm"], read["link"])
@@ -163,15 +170,14 @@ class PublishRun(JobState):
         request_file = self._write_request(number, folder, request, reason)
         state = self.folder.items[number] = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""),
                                              "request": request_file}
-        sent = time.monotonic()
         if self._dispatcher:
             self._dispatcher.learn(number, state["id"])
             if request is not None:
                 self._send_item(number, request)
-
         log.debug("Item %s: Fusion Manage is %s (id %s); request: %s", number, state["state"] or "unknown", state["id"] or "none",
                   reason if request is None else request["method"] + " " + request["url"])
-        log.info("Prepared %s in %.1fs (reads %.1fs, send %.1fs)", number, time.monotonic() - began, read_time, time.monotonic() - sent)
+        log.info("Prepared %s in %.1fs", number, time.monotonic() - began)
+        return request is None and state["state"] != FOUND
 
     def _request(self, number: str, folder: str, component_id: str, thumbnail_url: str, result: Dict[str, Any],
                  rows: List[Dict[str, Any]], link: Optional[Tuple[str, str]]) -> Tuple[Optional[Dict[str, Any]], str]:
@@ -233,7 +239,7 @@ class PublishRun(JobState):
         if not field_id or fm_info.get("state") not in (FOUND, NEW):
             return None
         link = manage_link(linked["urn"], linked["url"])
-        log.info("Data Model link of %s: urn %r, url %r -> %s", number, linked["urn"], linked["url"], link or "none")
+        log.debug("Data Model link of %s: urn %r, url %r -> %s", number, linked["urn"], linked["url"], link or "none")
         reason = ""
         if not link:   # not linked in the Data Model: look for it in the component picklist
             try:
@@ -279,13 +285,12 @@ class PublishRun(JobState):
             self.folder.record(number, "thumbnail", FAILED, str(exc) or type(exc).__name__)
             return ""
 
-    def _bom(self) -> None:
-        requests = self._bom_requests
-        for parent, items in requests.items():
+    def _write_boms(self) -> None:
+        for parent, lines in self._bom_requests.items():
             relative = os.path.join("bom", safe_name(parent) + ".bom.request.json")
-            self.folder.record(parent, "bom requests", OK, f"{len(items)} request(s)",
-                               self.folder.write_json(relative, {"parent": parent, "requests": items}))
-        if not requests:
+            self.folder.record(parent, "bom requests", OK, f"{len(lines)} request(s)",
+                               self.folder.write_json(relative, {"parent": parent, "requests": lines}))
+        if not self._bom_requests:
             self.folder.record(self.job.get("root_number", ""), "bom requests", SKIPPED, "No Bill of Materials changes.")
 
     # ---- Any thread -------------------------------------------------------------

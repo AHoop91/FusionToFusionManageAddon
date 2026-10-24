@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
 from ..core.logging_setup import get_logger
-from ..core.timing import Stopwatch
 from ..fm.client import FmApiError, FmClient
 from ..fm.items import ItemService, display_values
 from ..fm.picklists import PicklistResolver
@@ -49,14 +48,11 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, cho
     values = None
     try:
         service = ItemService(fm)
-        watch = Stopwatch()
         hits = found if found is not None else service.search(cfg.workspace_id, number)
-        search_seconds = watch.lap()
         picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
         if picked:
             values = picked.get("values") or service.read(cfg.workspace_id, picked["id"])
         hits = [{k: v for k, v in h.items() if k != "values"} for h in hits]   # what is passed on is the list, not the values
-        log.debug("Looked up %s in Fusion Manage: search %.2fs (%d hits), read %.2fs", number, search_seconds, len(hits), watch.lap())
     except (FmApiError, AuthError) as exc:
         log.warning("Fusion Manage lookup failed: %s", exc)
         info.update(state=UNKNOWN, message=f"Could not read Fusion Manage: {exc}")

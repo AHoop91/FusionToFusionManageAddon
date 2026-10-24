@@ -66,6 +66,11 @@ class PublishFolder:
             self.entries.append(entry)
         return entry
 
+    def entries_of(self, item: str) -> List[Dict[str, Any]]:
+        """The entries recorded for one item (or Bill of Materials parent)."""
+        with self._lock:
+            return [entry for entry in self.entries if entry["item"] == item]
+
     def counts(self) -> Dict[str, int]:
         """How many entries have each status."""
         with self._lock:

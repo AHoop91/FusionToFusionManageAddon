@@ -28,6 +28,7 @@ class JobQueue:
 
     def add(self, run: JobState) -> None:
         with self._lock:
+            self._runs = [r for r in self._runs if not self._clean(r)]   # the runs that ended clean were kept for the panel that queued them
             self._runs.append(run)
             if self._worker is None:
                 self._worker = threading.Thread(target=self._loop, name="MfgToFm_PublishQueue", daemon=True)
@@ -93,7 +94,6 @@ class JobQueue:
             except Exception:   # work reports its own failures; this only keeps the queue alive
                 log.exception("Publish run %s crashed", run.id)
             self._finished(run)
-            self._drop_if_clean(run)
             self._changed()
 
     def _finished(self, run: JobState) -> None:
@@ -110,9 +110,9 @@ class JobQueue:
             except Exception:   # a failed notification must not stop the queue
                 log.exception("Reporting the state of the queue failed")
 
-    def _drop_if_clean(self, run: JobState) -> None:
-        """A run that finished with every item done has nothing left to show; failed or cancelled ones stay until cleared."""
-        if run.phase == DONE and not any(row["status"] != "done" for row in run.rows):
-            with self._lock:
-                if run in self._runs:
-                    self._runs.remove(run)
+    @staticmethod
+    def _clean(run: JobState) -> bool:
+        """A run that finished with every item done has nothing left to show once the panel has seen how it ended; failed or cancelled ones stay until cleared.
+
+        It is forgotten when the next run is added, not when it ends: the panel that queued it is still reading its last state."""
+        return run.phase == DONE and not any(row["status"] != "done" for row in run.rows)

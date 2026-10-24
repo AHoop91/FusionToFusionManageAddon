@@ -269,20 +269,19 @@ class SendRun(JobState):
             for job in self.plan["items"]:
                 if self.cancelled:
                     break
-                self._step(rows, job["number"], lambda job=job: self._dispatcher.send_item(job["number"], job["request"]))
+                self._step(rows, lambda job=job: self._dispatcher.send_item(job["number"], job["request"]))
             for job in self.plan["boms"]:   # every item is sent before the first Bill of Materials
                 if self.cancelled:
                     break
-                self._step(rows, job["parent"], lambda job=job: self._dispatcher.send_bom(job["parent"], job["requests"], lambda: self.cancelled))
+                self._step(rows, lambda job=job: self._dispatcher.send_bom(job["parent"], job["requests"], lambda: self.cancelled))
         except Exception as exc:
             log.exception("Send run failed")
             self._finish(ERROR, str(exc) or type(exc).__name__)
             return
         self._finish(CANCELLED if self.cancelled else DONE, "Cancelled." if self.cancelled else "")
 
-    def _step(self, rows: Any, name: str, action: Callable[[], str]) -> None:
+    def _step(self, rows: Any, action: Callable[[], str]) -> None:
         row = next(rows)
-        self._set(current=name)
         row["status"] = RUNNING
         try:
             row["detail"] = action()

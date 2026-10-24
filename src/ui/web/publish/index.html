@@ -115,7 +115,13 @@
       <div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
         <div id="progress-fill" class="progress-fill"></div>
       </div>
-      <p id="progress-count" class="muted progress-count"></p>
+      <p class="muted progress-count"><span id="progress-count"></span><span id="progress-elapsed"></span></p>
+      <div id="progress-tally" class="progress-tally" role="group" aria-label="Items by result" hidden>
+        <div class="progress-stat progress-stat-ok"><b id="tally-ok">0</b><span>Successful</span></div>
+        <div class="progress-stat progress-stat-failed"><b id="tally-failed">0</b><span>Failed</span></div>
+        <div class="progress-stat progress-stat-skipped" id="tally-skipped-box" hidden><b id="tally-skipped">0</b><span>Skipped</span></div>
+        <div class="progress-stat progress-stat-pending"><b id="tally-pending">0</b><span>Pending</span></div>
+      </div>
       <p id="progress-note" class="muted progress-note"></p>
       <div id="progress-confirm" class="progress-confirm" role="alertdialog" aria-labelledby="progress-confirm-text" hidden>
         <p id="progress-confirm-text">Cancel this publish? Items already processed are kept in the folder; the rest will not be published.</p>

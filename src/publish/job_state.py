@@ -22,7 +22,6 @@ class JobState:
         self.phase = QUEUED   # queued -> running -> done | error | cancelled
         self.cancelled = False
         self.message = ""
-        self.current = ""
         self.done = 0
         self.total = 0
         self.rows: List[Dict[str, Any]] = []   # one per step, for the Jobs window: queued -> running -> done | error | cancelled
@@ -60,7 +59,7 @@ class JobState:
             for row in self.rows:
                 if row["status"] == QUEUED:
                     row["status"], row["detail"] = CANCELLED, "Cancelled." if self.cancelled else self.unreached
-        self._set(phase=phase, message=message, current="", finished_at=time_now())
+        self._set(phase=phase, message=message, finished_at=time_now())
 
     def _finish(self, phase: str, message: str) -> None:
         raise NotImplementedError
@@ -68,9 +67,10 @@ class JobState:
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             return {"id": self.id, "kind": self.kind, "name": self.name, "phase": self.phase, "message": self.message,
-                    "current": self.current, "done": self.done, "total": self.total, "queued_at": self.queued_at,
+                    "done": self.done, "total": self.total, "queued_at": self.queued_at,
                     "started_at": self.started_at, "finished_at": self.finished_at, "folder": self.path,
                     "counts": self._counts(), "sends": self.sends, "stage": self.stage, "rows": [dict(r) for r in self.rows]}
 
     def _counts(self) -> Dict[str, int]:
+        """What the job's steps came to, by outcome (read with the lock held, so it must not take it)."""
         return {}

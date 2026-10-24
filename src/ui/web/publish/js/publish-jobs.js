@@ -118,7 +118,7 @@
 
   function schedule() {
     clearTimeout(timer);
-    timer = setTimeout(function () { bridge.send('list_publish_jobs'); }, POLL_MS);
+    timer = setTimeout(function () { bridge.send('list_publish_jobs', { watching: watched }); }, POLL_MS);   // naming the job the dialog follows: Fusion shows no message box for it
   }
 
   // ---- Progress dialog (Publish panel) -----------------------------------------
@@ -127,30 +127,73 @@
 
   function failedRows(job) { return (job.rows || []).filter(function (r) { return r.status === 'error'; }).length; }
 
+  /** The time on a clock: "0:07", "12:05", "1:02:30". */
+  function clock(seconds) {
+    const whole = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(whole / 3600);
+    const m = Math.floor(whole % 3600 / 60);
+    const sec = String(whole % 60).padStart(2, '0');
+    return h ? h + ':' + String(m).padStart(2, '0') + ':' + sec : m + ':' + sec;
+  }
+
+  /** "Elapsed 0:07": the time since the job started, counting up while it runs and fixed once it ends ("" while it waits). */
+  function elapsedText(job) {
+    if (!job || !job.started_at) return '';
+    return 'Elapsed ' + clock((job.finished_at || Date.now() / 1000) - job.started_at);
+  }
+
+  /**
+   * The items of a job by result: ``successful`` (published), ``failed``, ``skipped`` (left out on purpose)
+   * and ``pending`` (not finished: waiting or being worked on). A Bill of Materials row is a step after the items, not one of them.
+   */
+  function tally(job) {
+    const total = job.total || 0;
+    const items = (job.rows || []).slice(0, total || undefined);
+    const failed = items.filter(function (row) { return row.status === 'error'; }).length;
+    const skipped = Math.min((job.counts || {}).skipped || 0, Math.max(0, job.done - failed));
+    return { successful: Math.max(0, job.done - failed - skipped), failed: failed, skipped: skipped, pending: Math.max(0, total - job.done) };
+  }
+
+  /** What a running job says it is doing: items are prepared several at a time, so no single one is "the" item being processed. */
+  function runningStatus(job) {
+    if (job.stage === 'bom') return 'Updating the Bill of Materials.';
+    if (!job.done && !(job.rows || []).some(function (row) { return row.status === 'running'; })) return 'Reading the design and checking Fusion Manage.';
+    return job.sends ? 'Checking and updating items in Fusion Manage.' : 'Checking items and preparing their requests.';
+  }
+
   /** What the dialog says for a job: title, status line, count line, bar (percent or null while waiting) and tone. */
   function describe(job) {
     const total = job.total || 0;
-    const count = total ? job.done + ' of ' + total + ' Items Processed' : '';
+    const count = total ? job.done + ' of ' + total + ' items' : '';
     if (job.phase === 'queued') {
       return { title: 'Added to the publishing queue', status: job.place > 1 ? 'Waiting, number ' + job.place + ' in the queue.' : 'Waiting to start.', count: count, percent: null, tone: '' };
     }
-    if (job.phase === 'running' && job.stage === 'bom') {   // every item is done; the Bill of Materials goes last
-      return { title: 'Publishing ' + job.name, status: job.current ? 'Adding the Bill of Materials of ' + job.current + '.' : 'Adding the Bill of Materials.', count: count, percent: 100, tone: '' };
-    }
-    if (job.phase === 'running') {
-      return { title: 'Publishing ' + job.name, status: job.current ? 'Processing ' + job.current + '.' : 'Starting.', count: count, percent: total ? Math.round(job.done * 100 / total) : null, tone: '' };
+    if (job.phase === 'running') {   // at the Bill of Materials every item is done: it goes last
+      return { title: 'Publishing ' + job.name, status: runningStatus(job), count: count,
+               percent: job.stage === 'bom' ? 100 : total ? Math.round(job.done * 100 / total) : null, tone: '' };
     }
     if (job.phase === 'error') return { title: 'Publish failed', status: job.message || 'The publish could not be completed.', count: '', percent: 100, tone: 'error' };
     if (job.phase === 'cancelled') return { title: 'Publish cancelled', status: job.name + ' was not published.', count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
     const failed = failedRows(job);
-    if (job.sends) {
-      return failed
-        ? { title: 'Completed with errors', status: failed + ' step' + (failed === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' }
-        : { title: 'Published to Fusion Manage', status: job.name + ' was published to Fusion Manage.', count: count, percent: 100, tone: 'ok' };
+    if (failed) {
+      return { title: 'Completed with errors', status: failed + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.',
+               count: count, percent: 100, tone: 'error' };
     }
-    return failed
-      ? { title: 'Completed with errors', status: failed + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed. See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' }
-      : { title: 'Publish complete', status: job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.', count: count, percent: 100, tone: 'ok' };
+    return { title: 'Publish complete', percent: 100, tone: 'ok', count: count,
+             status: job.sends ? job.name + ' was published to Fusion Manage.' : job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.' };
+  }
+
+  /** The tally under the bar: items by result, hidden when there is no job to count. Skipped shows only when something was left out. */
+  function showTally(job) {
+    const box = $('progress-tally');
+    box.hidden = !job || !job.total;
+    if (box.hidden) return;
+    const counts = tally(job);
+    [['ok', counts.successful], ['failed', counts.failed], ['skipped', counts.skipped], ['pending', counts.pending]].forEach(function (stat) {
+      $('tally-' + stat[0]).textContent = stat[1].toLocaleString();
+      $('tally-' + stat[0]).parentNode.classList.toggle('progress-stat-on', stat[1] > 0);
+    });
+    $('tally-skipped-box').hidden = !counts.skipped;
   }
 
   function showProgress(view, job) {
@@ -162,6 +205,8 @@
     $('progress-title').textContent = view.title;
     $('progress-status').textContent = view.status;
     $('progress-count').textContent = view.count || '';
+    $('progress-elapsed').textContent = elapsedText(job);
+    showTally(job);
     bar.classList.toggle('indeterminate', view.percent === null);
     if (view.percent === null) bar.removeAttribute('aria-valuenow'); else bar.setAttribute('aria-valuenow', String(view.percent));
     $('progress-fill').style.width = view.percent === null ? '' : view.percent + '%';
@@ -274,5 +319,5 @@
     }
   }
 
-  ns.pubJobs = { init: init, start: start };
+  ns.pubJobs = { init: init, start: start, describe: describe, tally: tally, elapsedText: elapsedText };
 })(window.MfgUi);
