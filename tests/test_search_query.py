@@ -63,5 +63,10 @@ class PathTests(unittest.TestCase):
                                "&revision=1&sort=createdOn+asc")
 
 
+    def test_the_revision_is_asked_for_and_defaults_to_the_latest(self):
+        self.assertIn("&revision=3&", search_path("57", "bag", None, 0, 50, 3))
+        self.assertIn("&revision=1&", search_path("57", "bag", None, 0, 50, 9))
+
+
 if __name__ == "__main__":
     unittest.main()

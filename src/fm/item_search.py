@@ -78,9 +78,9 @@ class ItemSearchService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
-    def page(self, workspace_id: str, parent_id: str, text: str, groups: Any, offset: int) -> Dict[str, Any]:
-        """One page of the items matching ``text`` and the filter ``groups``, from ``offset``, oldest first."""
-        data = self._client.get_json(search_path(workspace_id, text, groups, offset, PAGE_SIZE))
+    def page(self, workspace_id: str, parent_id: str, text: str, groups: Any, offset: int, revision: int = 1) -> Dict[str, Any]:
+        """One page of the items matching ``text`` and the filter ``groups``, from ``offset``, oldest first; ``revision`` is as in ``search_path``."""
+        data = self._client.get_json(search_path(workspace_id, text, groups, offset, PAGE_SIZE, revision))
         return parse_search(data, workspace_id, parent_id)
 
     def members(self, workspace_id: str, item_id: str) -> Dict[str, List[str]]:

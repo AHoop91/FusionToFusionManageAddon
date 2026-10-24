@@ -73,7 +73,8 @@ def register_search_actions(bridge: MessageBridge, config: ConfigService, auth: 
         if not workspace:
             return answer(token, message=NO_ITEM)
         text, groups, offset = str(payload.get("text") or ""), payload.get("groups"), max(0, int(payload.get("offset") or 0))
-        return start(token, lambda client: ItemSearchService(client).page(workspace, item_id, text, groups, offset))
+        revision = int(payload.get("revision") or 1)
+        return start(token, lambda client: ItemSearchService(client).page(workspace, item_id, text, groups, offset, revision))
 
     def search_members(payload: Dict[str, Any]) -> Dict[str, Any]:
         token = str(payload.get("token") or "")

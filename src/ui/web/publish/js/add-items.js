@@ -29,6 +29,9 @@
 
   // State of the open dialog. ``generation`` changes whenever the search restarts, which makes every reply for the
   // old search stale; requests for the property list and picklists belong to the dialog, not to one search.
+  // The versions the search can list, by the search's ``revision`` filter.
+  const VERSIONS = [{ revision: '3', label: 'Working version' }, { revision: '1', label: 'Latest version' }];   // the first is searched until another is picked
+
   let dialog = null;            // { overlay, list, ... } while open
   let generation = 0;
   let options = null;           // { itemId, staged: Set of ids already staged, onAdd(items) }
@@ -94,7 +97,7 @@
     failed = '';
     paintStatus();
     const mine = generation;
-    request('search_items', { item_id: options.itemId, text: query.text, groups: query.groups, offset: offset }, function (entry) {
+    request('search_items', { item_id: options.itemId, text: query.text, groups: query.groups, revision: query.revision, offset: offset }, function (entry) {
       if (!dialog || mine !== generation) return;
       loading = false;
       if (!entry.ok) {
@@ -306,7 +309,7 @@
     byId = new Map();
     total = 0;
     offset = 0;
-    query = { text: dialog.search.value.trim(), groups: payloadGroups() };
+    query = { text: dialog.search.value.trim(), groups: payloadGroups(), revision: dialog.version.value };
     dialog.list.scrollTop = 0;
     paintTotal();
     paintSelection();
@@ -384,6 +387,53 @@
 
   function onOutside(event) {
     if (openMenu && !openMenu.menu.contains(event.target) && !openMenu.button.contains(event.target)) closeMenu();
+  }
+
+  /**
+   * The choice of which versions to search: a button showing the choice and a small floating list of ``VERSIONS``.
+   * ``value`` is the chosen revision; ``changed()`` is called when another is picked.
+   */
+  function versionPicker(changed) {
+    let value = VERSIONS[0].revision;
+    const button = el('button', 'pub-add-version');
+    button.type = 'button';
+    button.title = 'Which versions of an item to search';
+    button.setAttribute('aria-label', 'Version');
+    button.setAttribute('aria-haspopup', 'listbox');
+    button.setAttribute('aria-expanded', 'false');
+    const text = el('span', 'pub-add-version-text', VERSIONS[0].label);
+    button.appendChild(text);
+    button.appendChild(ns.pubUi.svg(['M6 9l6 6 6-6'], 14));
+
+    button.addEventListener('click', function () {
+      if (openMenu && openMenu.button === button) { closeMenu(); return; }
+      closeMenu();
+      const menu = el('div', 'pub-add-menu pub-add-version-menu');
+      menu.setAttribute('role', 'listbox');
+      VERSIONS.forEach(function (choice) {
+        const option = el('button', 'pub-add-menu-option', choice.label);
+        option.type = 'button';
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', String(choice.revision === value));
+        option.addEventListener('click', function () {
+          const different = choice.revision !== value;
+          value = choice.revision;
+          text.textContent = choice.label;
+          closeMenu();
+          if (different) changed();
+        });
+        menu.appendChild(option);
+      });
+      const at = button.getBoundingClientRect();
+      menu.style.left = at.left + 'px';
+      menu.style.top = at.bottom + 4 + 'px';
+      menu.style.minWidth = at.width + 'px';
+      document.body.appendChild(menu);
+      button.setAttribute('aria-expanded', 'true');
+      openMenu = { menu: menu, button: button, onClose: function () {} };
+      document.addEventListener('mousedown', onOutside, true);
+    });
+    return { button: button, get value() { return value; } };
   }
 
   /**
@@ -736,9 +786,11 @@
     search.type = 'search';
     search.placeholder = 'Search item descriptor...';
     search.setAttribute('aria-label', 'Search item descriptor');
+    const version = versionPicker(function () { restart(); });
     const searchButton = el('button', 'btn', 'Search');
     searchButton.type = 'button';
     top.appendChild(search);
+    top.appendChild(version.button);
     top.appendChild(searchButton);
     body.appendChild(top);
 
@@ -816,7 +868,7 @@
     overlay.addEventListener('mousedown', function (event) { if (event.target === overlay) close(); });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(overlay);
-    return { overlay: overlay, list: list, status: status, total: totalLine, add: add, clear: clear, count: count, only: onlyBox, search: search, filters: filters, filterNote: filterNote };
+    return { overlay: overlay, list: list, status: status, total: totalLine, add: add, clear: clear, count: count, only: onlyBox, search: search, version: version, filters: filters, filterNote: filterNote };
   }
 
   /**

@@ -43,6 +43,16 @@
   background: #fff; color: inherit; font: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
 }
 .pub-add-filter { flex: 1; min-width: 0; }
+.pub-add-version {
+  box-sizing: border-box; height: 28px; min-width: 150px; padding: 0 10px 0 12px; border: 1px solid #cfd4d9; border-radius: 6px; background: #fff;
+  color: #1f2328; font: inherit; font-weight: 500; cursor: pointer; outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.pub-add-version { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.pub-add-version svg { flex: none; color: #596068; }
+.pub-add-version-menu { padding: 4px; }
+.pub-add-version-menu .pub-add-menu-option { padding: 7px 12px; }
+.pub-add-version:hover { border-color: #8b939b; }
+.pub-add-version:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
 .pub-add-filter:hover, .pub-add-input:hover, .pub-add-combo:hover { border-color: #8b939b; }
 .pub-add-filter:focus, .pub-add-input:focus, .pub-add-combo:focus-visible, .pub-add-combo[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
 
