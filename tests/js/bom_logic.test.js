@@ -122,3 +122,29 @@ test('what is in view: the design, and the lines of every open assembly', () => 
   const visible = scope.visibleRows(rows, 'R', only('R', 'A'));
   assert.strictEqual(scope.closedAssemblies(visible, only('R', 'A')), 2, 'X and B are closed');
 });
+
+test('components that share an item number are all skipped, with what is below them, and are not published', () => {
+  tree.setTop([row('A', 'PN-S', { has_children: true }), row('B', 'PN-S'), row('C', 'PN-C', { status: 'new' })]);
+  tree.setKids('A', [row('X', 'PN-X', { status: 'new' })]);
+  const items = model.buildItems(tree.rows(), root);
+  assert.deepStrictEqual(plain(items.slice(1).map((i) => i.status + ':' + (i.skip || ''))), ['skipped:shared', 'skipped:parent', 'skipped:shared', 'new:']);
+  assert.deepStrictEqual(plain(items[1].sharedWith), ['PN-S - B name'], 'each says which components it shares the number with');
+  assert.strictEqual(items[1].lineId, 'A', 'an assembly keeps its id, so its lines can be read');
+  const result = plan.publishPlan(tree.rows(), root);
+  assert.deepStrictEqual(plain(result.components.map((c) => c.id)), ['R', 'C']);
+  assert.deepStrictEqual(plain(result.operations.map((o) => o.op + ':' + o.parent + '>' + o.number)), ['add:TOP>PN-C']);
+});
+
+test('one component on several lines does not share its number with itself, and the case of a number does not matter', () => {
+  tree.setTop([row('A', 'PN-A', { status: 'new' }), row('A', 'PN-A', { status: 'new', sequence: 2 })]);
+  assert.deepStrictEqual(plain(model.buildItems(tree.rows(), root).slice(1).map((i) => i.status)), ['new', 'new']);
+  tree.setTop([row('A', 'pn-a', { status: 'new' }), row('B', ' PN-A ', { status: 'new' })]);
+  assert.deepStrictEqual(plain(model.buildItems(tree.rows(), root).slice(1).map((i) => i.skip)), ['shared', 'shared']);
+});
+
+test('a line that shares the number of the design is skipped, and the design is not', () => {
+  tree.setTop([row('A', 'TOP', { status: 'new' }), row('B', 'PN-B', { status: 'new' })]);
+  const items = model.buildItems(tree.rows(), root);
+  assert.deepStrictEqual(plain(items.map((i) => i.status)), ['root', 'skipped', 'new']);
+  assert.deepStrictEqual(plain(plan.publishPlan(tree.rows(), root).components.map((c) => c.id)), ['R', 'B']);
+});

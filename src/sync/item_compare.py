@@ -27,8 +27,12 @@ def item_number_of(summary: Dict[str, Any]) -> str:
     return str(summary.get("item_number") or "").strip()
 
 
-def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, chosen: str = "") -> ItemLookup:
+def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, chosen: str = "",
+                found: Optional[List[Dict[str, Any]]] = None) -> ItemLookup:
     """Find the component's item in Fusion Manage. Runs on a worker thread.
+
+    ``found`` is what an earlier search already found for the number (hits, each with the item's ``values`` when the search gave them):
+    it saves the search, and the read of an item whose values came with it.
 
     The item is searched by item number in the Items workspace. When several items match, ``chosen`` (an item id the
     user picked) selects one; until then the state is ``multiple`` and ``candidates`` lists them. It needs only the
@@ -46,11 +50,12 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, cho
     try:
         service = ItemService(fm)
         watch = Stopwatch()
-        hits = service.search(cfg.workspace_id, number)
+        hits = found if found is not None else service.search(cfg.workspace_id, number)
         search_seconds = watch.lap()
         picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
         if picked:
-            values = service.read(cfg.workspace_id, picked["id"])
+            values = picked.get("values") or service.read(cfg.workspace_id, picked["id"])
+        hits = [{k: v for k, v in h.items() if k != "values"} for h in hits]   # what is passed on is the list, not the values
         log.debug("Looked up %s in Fusion Manage: search %.2fs (%d hits), read %.2fs", number, search_seconds, len(hits), watch.lap())
     except (FmApiError, AuthError) as exc:
         log.warning("Fusion Manage lookup failed: %s", exc)

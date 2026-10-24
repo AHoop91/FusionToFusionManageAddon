@@ -97,6 +97,26 @@ class KnownLookupTests(unittest.TestCase):
         self.assertEqual(lookup.info["item_id"], "77")
         self.assertEqual(lookup.values, {"read": "77"})
 
+    def test_hits_found_earlier_save_the_search_and_the_read(self):
+        found = [{"id": "8", "descriptor": "PN-1 - Bracket", "values": {"NUMBER": "PN-1"}}]
+        with service(error=FmApiError("must not search")):
+            lookup = lookup_item(ITEM, CFG, None, found=found)
+        self.assertEqual(lookup.info["state"], FOUND)
+        self.assertEqual(lookup.info["item_id"], "8")
+        self.assertEqual(lookup.values, {"NUMBER": "PN-1"})
+
+    def test_a_hit_found_earlier_without_its_fields_is_read(self):
+        with service():
+            lookup = lookup_item(ITEM, CFG, None, found=[{"id": "8", "descriptor": "PN-1", "values": {}}])
+        self.assertEqual(lookup.values, {"read": "8"})
+
+    def test_the_values_of_found_hits_are_not_passed_on_as_candidates(self):
+        found = [{"id": "8", "descriptor": "PN-1 - A", "values": {"X": "1"}}, {"id": "9", "descriptor": "PN-1 - B", "values": {"X": "2"}}]
+        with service():
+            lookup = lookup_item(ITEM, CFG, None, found=found)
+        self.assertEqual(lookup.info["state"], MULTIPLE)
+        self.assertEqual(lookup.info["candidates"], [{"id": "8", "descriptor": "PN-1 - A"}, {"id": "9", "descriptor": "PN-1 - B"}])
+
     def test_a_failure_of_fusion_manage_is_unknown(self):
         class Failing:
             def __init__(self, _fm):

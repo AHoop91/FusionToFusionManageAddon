@@ -37,6 +37,9 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 }
 """ % _PHYSICAL
 
+# The physical properties as the fields of a component, to add to a query (see ``queries.publish_query``).
+PHYSICAL_FIELDS = "primaryModel { %s }" % _PHYSICAL
+
 READY = "COMPLETED"
 
 

@@ -128,6 +128,45 @@
              title: [r.item_number || r.part_number, r.name || r.description].filter(Boolean).join(' - ') };
   }
 
+  /** Leave a line out of publishing, as one with no item number is. ``why`` is 'shared' (``sharedWith`` names the others) or 'parent' (a line above it is skipped). */
+  function skipLine(item, why, sharedWith) {
+    item.status = 'skipped';
+    item.skip = why;
+    item.sharedWith = sharedWith || [];
+    item.componentName = item.componentName || (item.component && item.component.name) || '';
+    delete item.component;   // a skipped line has no details to open
+  }
+
+  function itemNumberOf(item) {
+    return item.component ? String(item.component.item_number || '').trim().toLowerCase() : '';
+  }
+
+  /**
+   * Components of the design that carry one item number would all write to one Fusion Manage item, so every such line is skipped, with
+   * what is below it. The design itself is never skipped: the lines that share its number are.
+   */
+  function markShared(items) {
+    const holders = {};   // item number, lower case -> { component id -> title }
+    items.forEach(function (item, at) {
+      const number = itemNumberOf(item);
+      if (number) (holders[number] = holders[number] || {})[item.component.id || 'line' + at] = item.component.title || number;
+    });
+    let below = -1;   // level of the skipped line whose lines are being passed, -1 when none
+    items.forEach(function (item, at) {
+      if (below >= 0 && item.level > below) {
+        if (item.status !== 'skipped') skipLine(item, 'parent');
+        return;
+      }
+      below = -1;
+      const number = itemNumberOf(item);
+      const group = number ? holders[number] : {};
+      if (item.root || Object.keys(group).length < 2) return;
+      const own = item.component.id || 'line' + at;
+      skipLine(item, 'shared', Object.keys(group).filter(function (id) { return id !== own; }).map(function (id) { return group[id]; }));
+      below = item.level;
+    });
+  }
+
   /**
    * Lines to draw: the open design first, then each compared row. A Fusion Manage line that
    * sits beside a design line with another item number is folded into that design line.
@@ -179,6 +218,7 @@
       pathAt[item.level] = item.design.pn;
       items.push(item);
     });
+    markShared(items);
     const seqAt = [];   // sequence of the latest line on each level, so a line's quantity edit has a key of its own
     items.forEach(function (item) {
       if (item.root) return;

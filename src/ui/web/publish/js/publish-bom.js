@@ -248,9 +248,11 @@
     box.textContent = '';
     if (!cover) return;
     const plan = ns.bomPlan.publishPlan(cover.visible, cover.summary);
-    const skipped = cover.items.filter(function (item) { return item.status === 'skipped'; }).length;
+    const skipped = cover.items.filter(function (item) { return item.status === 'skipped' && item.skip !== 'shared'; }).length;
+    const shared = cover.items.filter(function (item) { return item.skip === 'shared'; }).length;
     box.appendChild(pill('items', plan.components.length, ' Items', 'Items checked against Fusion Manage when you publish, and created or updated where they differ: the design and every component in view.'));
-    if (skipped) box.appendChild(pill('skipped', skipped, ' Lines Skipped', 'No item number: nothing is published for these lines, or for what is below them.'));
+    if (skipped) box.appendChild(pill('skipped', skipped, ' Lines Skipped', 'No item number, or below a skipped line: nothing is published for these lines, or for what is below them.'));
+    if (shared) box.appendChild(pill('skipped', shared, ' Shared Item Numbers', 'Components that carry the same item number would write to one Fusion Manage item, so none of them is published, nor what is below them. Give each its own item number in Fusion.'));
     if (cover.closed) box.appendChild(pill('closed', cover.closed, ' Sub Assemblies Skipped', 'Closed sub assemblies: what is under them is not published. Open them, or use Expand all, to include them.'));
   }
 

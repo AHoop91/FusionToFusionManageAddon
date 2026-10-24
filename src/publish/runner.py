@@ -2,7 +2,7 @@
 
 A run is a job in the ``JobQueue``. ``work`` runs on the queue's worker thread and does everything
 that needs the network (Data Model and Fusion Manage reads, thumbnail downloads) and writes the
-JSON; the items are prepared several at a time, and each is sent as soon as its request is written.
+JSON; the items are prepared several at a time (their shared reads are in ``read_ahead``), and each is sent as soon as its request is written.
 Once every item is done, the Bill of Materials of each parent is sent (``sender``). Nothing here
 touches the Fusion API, so a run never blocks Fusion and does not need the design to stay open.
 """
@@ -21,17 +21,19 @@ from ..fm.components import ComponentService, manage_link
 from ..fm.picklists import PicklistResolver
 from ..fm.sections import SectionService
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
-from ..fusion_mfg.model_service import read_manage_item, read_section, read_thumbnail_url
+from ..fusion_mfg.model_service import read_thumbnail_url
 from ..sync.item_compare import compare_with_item, item_number_of, lookup_item
 from ..sync.property_compare import FOUND, MISMATCH, NEW
 from .bom_requests import bom_requests
 from .download import download
-from .thumbnail import clear_white_background
 from .item_requests import item_request
-from .placeholders import Unresolved
-from .sender import Dispatcher
 from .job_state import JobState
+from .placeholders import Unresolved
+from .read_ahead import ReadAhead, component_id_of
+from .sender import Dispatcher
+from .shared_numbers import shared_numbers, shared_reason
 from .states import CANCELLED, DONE, ERROR, RUNNING
+from .thumbnail import clear_white_background
 from .writer import FAILED, OK, SKIPPED, PublishFolder, safe_name
 
 log = get_logger("publish")
@@ -65,6 +67,8 @@ class PublishRun(JobState):
         self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
         self._physical = cfg.maps_physical()   # read them only when something maps them
         self._picklists = PicklistResolver(self._fm, cfg.workspace_id)   # options of the picklist fields, read once per run
+        self._shared = shared_numbers(job["items"], job["summary"])   # item number -> the components that carry it: none of them is published
+        self._ahead: Optional[ReadAhead] = None   # the reads the items share, while the run is on them
 
     # ---- Worker thread ----------------------------------------------------------
 
@@ -75,7 +79,9 @@ class PublishRun(JobState):
         try:
             if self.cfg.workspace_id:
                 self._field_sections = SectionService(self._fm).field_sections(self.cfg.workspace_id)
-            with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            publishable = [i for i in self.job["items"] if item_number_of(i).lower() not in self._shared]
+            with ReadAhead(publishable, self.job["summary"], self._client, self._fm, self.cfg.workspace_id, self._time,
+                           self._physical, lambda: self.cancelled) as self._ahead, ThreadPoolExecutor(max_workers=WORKERS) as pool:
                 list(pool.map(self._prepare, self.job["items"]))
             if not self.cancelled:
                 self._bom()
@@ -115,6 +121,13 @@ class PublishRun(JobState):
             with self._lock:
                 self.done += 1
             return
+        if number.lower() in self._shared:   # the panel leaves these out; a job that has them anyway must not write one item from several components
+            reason = shared_reason(number, self._shared[number.lower()])
+            self.folder.record(number, "item", SKIPPED, reason)
+            row["status"], row["detail"] = DONE, reason
+            with self._lock:
+                self.done += 1
+            return
         self._set(current=number)
         row["status"] = RUNNING
         try:
@@ -131,50 +144,64 @@ class PublishRun(JobState):
     def _item(self, item: Dict[str, Any], number: str) -> None:
         folder = self.folder.item_dir(number)
         summary = self.job["summary"]
-        root = bool(item.get("root"))
         began = time.monotonic()
-        if root:
-            properties = read_section(self._client, "properties", self._model_id, self._time, summary, physical=self._physical)
-            component = summary
-        else:
-            properties = read_section(self._client, "component", self._model_id, self._time, summary, item["id"], self._physical)["properties"]
-            component = {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
+        component_id = component_id_of(item, summary)
+        component = summary if item.get("root") else {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
+        # Fusion Manage is asked for the item while the Data Model request this item shares is on its way.
+        with ThreadPoolExecutor(max_workers=1) as background:
+            lookup = background.submit(lookup_item, component, self.cfg, self._fm, str(item.get("fm_item") or ""), self._ahead.found(number))
+            read = self._ahead.read(component_id)
+            lookup = lookup.result()
         read_time = time.monotonic() - began
 
-        component_id = str(summary.get("component_id") or "") if root else str(item["id"])
-        image = self._thumbnail(number, folder, component_id)
-        files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
-
-        result = compare_with_item(properties, component, self.cfg,
-                                   lookup_item(component, self.cfg, self._fm, str(item.get("fm_item") or "")),
-                                   self._picklists.fit_number, with_values=True, convert_unit=self._picklists.convert_unit)
-        compare_time = time.monotonic() - began - read_time
-        link = self._component(number, component_id, result["fm"])
+        result = compare_with_item(read["properties"], component, self.cfg, lookup, self._picklists.fit_number,
+                                   with_values=True, convert_unit=self._picklists.convert_unit)
+        link = self._component(number, result["fm"], read["link"])
         rows = self._option_rows(number, result["rows"])
-        request, reason = item_request(self.cfg.workspace_id, result["fm"], rows, self.cfg.static_values,
-                                       self._field_sections, files, result["values"], link)   # the values tell which static values an existing item lacks
-        blank = [f"{r['name']} (-> {r['fm_field']})" for r in rows
-                 if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
-        if blank:
-            self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank))
-        request_file = ""
-        if request is None:
-            self.folder.record(number, "item request", SKIPPED, reason)
-        else:
-            request_file = os.path.join(folder, "item.request.json")
-            self.folder.record(number, "item request", OK, request["method"] + " " + request["url"],
-                               self.folder.write_json(request_file, request))
-        self.folder.items[number] = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""),
-                                     "request": request_file}
+        self._record_blank(number, rows)
+        request, reason = self._request(number, folder, component_id, read["thumbnail_url"], result, rows, link)
+        request_file = self._write_request(number, folder, request, reason)
+        state = self.folder.items[number] = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""),
+                                             "request": request_file}
+        sent = time.monotonic()
         if self._dispatcher:
-            self._dispatcher.learn(number, self.folder.items[number]["id"])
+            self._dispatcher.learn(number, state["id"])
             if request is not None:
                 self._send_item(number, request)
 
-        log.debug("Item %s: Fusion Manage is %s (id %s); request: %s", number, self.folder.items[number]["state"] or "unknown",
-                  self.folder.items[number]["id"] or "none", reason if request is None else request["method"] + " " + request["url"])
-        log.info("Prepared %s in %.1fs (Data Model %.1fs, Fusion Manage %.1fs)", number,
-                 time.monotonic() - began, read_time, compare_time)
+        log.debug("Item %s: Fusion Manage is %s (id %s); request: %s", number, state["state"] or "unknown", state["id"] or "none",
+                  reason if request is None else request["method"] + " " + request["url"])
+        log.info("Prepared %s in %.1fs (reads %.1fs, send %.1fs)", number, time.monotonic() - began, read_time, time.monotonic() - sent)
+
+    def _request(self, number: str, folder: str, component_id: str, thumbnail_url: str, result: Dict[str, Any],
+                 rows: List[Dict[str, Any]], link: Optional[Tuple[str, str]]) -> Tuple[Optional[Dict[str, Any]], str]:
+        """``(request, reason)`` of the item (see ``item_request``). A thumbnail goes along with a request only, so one is fetched
+        only for an item that sends something."""
+        def build(files: List[Tuple[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
+            return item_request(self.cfg.workspace_id, result["fm"], rows, self.cfg.static_values, self._field_sections, files,
+                                result["values"], link)   # the values tell which static values an existing item lacks
+
+        request, reason = build([])
+        if request is None:
+            self.folder.record(number, "thumbnail", SKIPPED, "Not needed: nothing is sent for this item.")
+            return request, reason
+        image = self._thumbnail(number, folder, component_id, thumbnail_url)
+        files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
+        return build(files) if files else (request, reason)
+
+    def _record_blank(self, number: str, rows: List[Dict[str, Any]]) -> None:
+        blank = [f"{r['name']} (-> {r['fm_field']})" for r in rows if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
+        if blank:
+            self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank))
+
+    def _write_request(self, number: str, folder: str, request: Optional[Dict[str, Any]], reason: str) -> str:
+        """Write the request to the item's folder and return its path ("" when there is none, and the reason is recorded)."""
+        if request is None:
+            self.folder.record(number, "item request", SKIPPED, reason)
+            return ""
+        path = os.path.join(folder, "item.request.json")
+        self.folder.record(number, "item request", OK, request["method"] + " " + request["url"], self.folder.write_json(path, request))
+        return path
 
     def _option_rows(self, number: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """The rows with the text of each picklist field's value replaced by the link of its option.
@@ -198,24 +225,15 @@ class PublishRun(JobState):
                 self.folder.record(number, "picklist " + row["fm_field"], SKIPPED, f"'{value}' is not an option of {row['fm_field']} in Fusion Manage, so it was not sent.")
         return out
 
-    def _manage_link(self, number: str, component_id: str) -> str:
-        """The API link of the Fusion Manage item the Data Model says this component is linked to ("" if it says none)."""
-        found = read_manage_item(self._client, self.job["summary"], component_id, self._time)
-        link = manage_link(found["urn"], found["url"])
-        log.info("Data Model link of %s: urn %r, url %r -> %s", number, found["urn"], found["url"], link or "none")
-        return link
+    def _component(self, number: str, fm_info: Dict[str, Any], linked: Dict[str, str]) -> Optional[Tuple[str, str]]:
+        """``(field id, link)`` of the Components item for this part, or None (and the reason recorded) when it cannot be found.
 
-    def _component(self, number: str, component_id: str, fm_info: Dict[str, Any]) -> Optional[Tuple[str, str]]:
-        """``(field id, link)`` of the Components item for this part, or None (and the reason recorded) when it cannot be found."""
+        ``linked`` is the link the Data Model gave on the component's Item Number in Fusion (``urn`` and ``url``, empty when it is not linked)."""
         field_id = self.cfg.component_field
         if not field_id or fm_info.get("state") not in (FOUND, NEW):
             return None
-        try:
-            link = self._manage_link(number, component_id)   # the link on the component's Item Number in Fusion
-        except Exception as exc:   # a failed read is not the same as "not linked": say so, do not guess from the picklist
-            log.warning("The Data Model would not give the Fusion Manage link of %s: %s", number, exc)
-            self.folder.record(number, "component link", FAILED, f"The Data Model would not give the link: {exc}")
-            return None
+        link = manage_link(linked["urn"], linked["url"])
+        log.info("Data Model link of %s: urn %r, url %r -> %s", number, linked["urn"], linked["url"], link or "none")
         reason = ""
         if not link:   # not linked in the Data Model: look for it in the component picklist
             try:
@@ -234,19 +252,28 @@ class PublishRun(JobState):
         except (FmApiError, AuthError) as exc:
             self.folder.record(number, SENT, FAILED, str(exc))
 
-    def _thumbnail(self, number: str, folder: str, component_id: str) -> str:
-        """Save the thumbnail and return it as a ``data:image/png;base64,...`` value for an image field ("" if none).
-
-        The signed url expires soon and the run may have waited in the queue, so a fresh one is asked for now."""
+    def _download_thumbnail(self, component_id: str, url: str) -> bytes:
+        """The thumbnail at ``url``. The signed url expires soon and an item may wait for its turn, so when it will no longer serve, a fresh one is asked for."""
         try:
-            url = read_thumbnail_url(self._client, self.job["summary"], component_id, self._time)
+            return download(url)
+        except Exception as exc:
+            log.info("The thumbnail url of component %s would not serve (%s); asking for a fresh one", component_id, exc)
+            fresh = read_thumbnail_url(self._client, self.job["summary"], component_id, self._time)
+            if not fresh:
+                raise
+            return download(fresh)
+
+    def _thumbnail(self, number: str, folder: str, component_id: str, url: str) -> str:
+        """Download and save the thumbnail at ``url`` and return it as a ``data:image/png;base64,...`` value for an image field
+        ("" if none). The saved file is the original; the value has its white background cleared."""
+        try:
             if not url:
                 self.folder.record(number, "thumbnail", SKIPPED, "The Data Model has no thumbnail for this component yet.")
                 return ""
-            data = download(url)
+            data = self._download_thumbnail(component_id, url)
             self.folder.record(number, "thumbnail", OK, f"{len(data)} bytes",
                                self.folder.write_bytes(os.path.join(folder, "thumbnail.png"), data))
-            return "data:image/png;base64," + base64.b64encode(clear_white_background(data)).decode("ascii")   # the saved file is the original
+            return "data:image/png;base64," + base64.b64encode(clear_white_background(data)).decode("ascii")
         except Exception as exc:
             log.warning("Thumbnail of %s failed: %s", number, exc)
             self.folder.record(number, "thumbnail", FAILED, str(exc) or type(exc).__name__)

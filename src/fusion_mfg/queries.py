@@ -61,6 +61,24 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 }
 """
 
+# What a publish reads of a component: its properties, its thumbnail url and the Fusion Manage item it is linked to. Several
+# components go in one request, each under its own alias (``c0``, ``c1`` ...), so the Data Model is asked once for all of them.
+PUBLISH_FIELDS = """
+    allProperties(pagination: { limit: 500 }) {
+      results { name displayValue }
+    }
+    thumbnail { status signedUrl }
+    lifecycle { itemUrn itemUrl }"""
+
+
+def publish_query(count: int, extra_fields: str = "") -> str:
+    """The query for ``count`` components (variables ``id0`` ... , ``composition`` and ``time``); ``extra_fields`` are added to each."""
+    declared = "".join(f", $id{n}: ID!" for n in range(count))
+    components = "\n".join(f"  c{n}: component(componentId: $id{n}, composition: $composition, time: $time) {{{PUBLISH_FIELDS}\n    {extra_fields}\n  }}"
+                           for n in range(count))
+    return f"query ($composition: BOMCompositionEnum!, $time: DateTime{declared}) {{\n{components}\n}}\n"
+
+
 # The whole bill of materials: one flat list of relations down to STRUCTURE_DEPTH
 # levels. Each relation names its parent (fromComponent), so the parser rebuilds
 # the tree. Results are paged with a cursor.

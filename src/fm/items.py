@@ -18,6 +18,8 @@ from .client import WORKSPACES, FmClient
 log = get_logger("fm.items")
 
 SEARCH_LIMIT = 50      # most items listed for one item number
+FIND_PAGE = 100        # items one page of a search that carries the item details holds
+ITEMS_BULK = "application/vnd.autodesk.plm.items.bulk+json"   # asked of a search: each hit is the item with its fields, not only a link
 FIELD_ID = re.compile(r"/fields/([^/]+)/?$")
 _ITEM_ID = re.compile(r"/items/(\d+)")
 
@@ -53,26 +55,36 @@ def display_values(values: Dict[str, Any]) -> Dict[str, str]:
     return {field: display_text(value) for field, value in values.items()}
 
 
+def _rows(data: Any) -> List[Dict[str, Any]]:
+    """The items of a search-results answer."""
+    rows = data.get("items") if isinstance(data, dict) else None
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def _item_id(row: Dict[str, Any]) -> str:
+    """The id of the item a search row names ("" if none): the number after ``/items/`` in its link."""
+    for key in ("__self__", "link", "urn"):
+        match = _ITEM_ID.search(str(row.get(key, "")))
+        if match:
+            return match.group(1)
+    return ""
+
+
 def _hits(data: Any) -> List[Dict[str, str]]:
     """``{"id", "descriptor"}`` for each item of a search-results answer."""
-    rows = data.get("items") if isinstance(data, dict) else None
-    hits = []
-    for row in rows if isinstance(rows, list) else []:
-        if not isinstance(row, dict):
-            continue
-        for key in ("__self__", "link", "urn"):
-            match = _ITEM_ID.search(str(row.get(key, "")))
-            if match:
-                hits.append({"id": match.group(1), "descriptor": str(row.get("descriptor") or match.group(1))})
-                break
-    return hits
+    return [{"id": item_id, "descriptor": str(row.get("descriptor") or item_id)} for row in _rows(data) if (item_id := _item_id(row))]
+
+
+def number_of(descriptor: str) -> str:
+    """The item number of an item descriptor (``9410-306 - STEP`` is ``9410-306``), as it is compared: trimmed, in lower case."""
+    return descriptor.split(" - ", 1)[0].strip().lower()
 
 
 def pick_hit(hits: List[Dict[str, str]], number: str) -> Dict[str, str]:
     """The hit whose descriptor starts with exactly ``number`` (``9410-306 - STEP``), else the first; ``hits`` must not be empty."""
     wanted = number.strip().lower()
     for hit in hits:
-        if hit["descriptor"].split(" - ", 1)[0].strip().lower() == wanted:
+        if number_of(hit["descriptor"]) == wanted:
             return hit
     return hits[0]
 
@@ -97,3 +109,33 @@ class ItemService:
     def read(self, workspace_id: str, item_id: str) -> Dict[str, Any]:
         """The item's fields as ``{field id: value}``, picklists as Fusion Manage holds them (``display_values`` gives the text)."""
         return collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}"))
+
+    def find_many(self, workspace_id: str, numbers: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        """The items of the workspace whose item number is one of ``numbers``, in one search that returns the item details too.
+
+        By item number (trimmed, lower case), each with its hits as ``{"id", "descriptor", "values"}`` (``values`` as ``read`` gives them,
+        empty when the answer carried no fields). A number the answer holds no hit for is left out: that is not "no such item", since
+        this search may differ from the one by number alone, so the caller asks for it again on its own. Raises ``FmApiError`` when it fails."""
+        numbers = [n for n in numbers if n.strip()]
+        wanted = {n.strip().lower() for n in numbers}
+        if not wanted:
+            return {}
+        terms = " OR ".join(f'itemDescriptor="{n}"' for n in numbers)
+        query = quote_plus(f"({terms}) AND (workspaceId={workspace_id})", safe="()")
+        found: Dict[str, List[Dict[str, Any]]] = {}
+        offset = 0
+        while True:
+            data = self._client.get_json(
+                f"/api/v3/search-results?limit={FIND_PAGE}&offset={offset}&page={offset // FIND_PAGE + 1}&query={query}&revision=1",
+                accept=ITEMS_BULK)
+            rows = _rows(data)
+            for row in rows:
+                descriptor = str(row.get("descriptor") or row.get("itemDescriptor") or row.get("title") or "")
+                item_id = _item_id(row)
+                if item_id and number_of(descriptor) in wanted:
+                    found.setdefault(number_of(descriptor), []).append({"id": item_id, "descriptor": descriptor, "values": collect_values(row)})
+            offset += FIND_PAGE
+            if not rows or offset >= int(data.get("totalCount") or 0):
+                break
+        log.info("Searched %d item number(s) in workspace %s: %d found", len(wanted), workspace_id, len(found))
+        return found

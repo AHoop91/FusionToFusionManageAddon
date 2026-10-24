@@ -4,14 +4,14 @@ Sections are read separately and on demand, so the panel can show the summary
 first and fetch the rest only when it is needed.
 """
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Union
 
 from ..core.logging_setup import get_logger
 from .graphql_client import MfgApiError, MfgGraphQlClient
-from .physical import COMPONENT_WITH_PHYSICAL_QUERY, parse_physical
+from .physical import COMPONENT_WITH_PHYSICAL_QUERY, PHYSICAL_FIELDS, parse_physical
 from .parsers import parse_component, parse_properties, parse_structure, parse_summary
 from .queries import (COMPONENT_PROPERTIES_QUERY, MANAGE_QUERY, PROPERTIES_QUERY, STRUCTURE_DEPTH,
-                      STRUCTURE_PAGE_SIZE, STRUCTURE_QUERY, SUMMARY_QUERY, THUMBNAIL_QUERY)
+                      STRUCTURE_PAGE_SIZE, STRUCTURE_QUERY, SUMMARY_QUERY, THUMBNAIL_QUERY, publish_query)
 
 # Sections read with ``bulkModels`` from the open model.
 SECTIONS = {
@@ -24,6 +24,11 @@ COMPONENT = "component"    # the properties of one component, by id
 THUMBNAIL = "thumbnail"    # the design's thumbnail url, on its own, so a slow one never holds up the rest
 SECTION_NAMES = (*SECTIONS, STRUCTURE, LEVEL, COMPONENT, THUMBNAIL)
 MAX_PAGES = 100   # at 250 relations a page: 25,000 relations; more is an error rather than a BOM cut short
+
+# Components to a publish request. A request may cost 1000 points, and the physical properties cost the most; a request that is too
+# dear is refused and read again in halves (``read_publish_components``), so a size that is too big costs time, not a failure.
+PUBLISH_BATCH = 4
+PUBLISH_BATCH_PHYSICAL = 2
 
 log = get_logger("model_service")
 
@@ -80,16 +85,63 @@ def read_thumbnail_url(client: MfgGraphQlClient, summary: Dict[str, Any], compon
 
 def read_manage_item(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> Dict[str, str]:
     """``{"urn", "url"}`` of the Fusion Manage item a component is linked to (empty values when it is not linked)."""
-    node = (client.query(MANAGE_QUERY, _component_variables(summary, component_id, time), label="manage link").get("component") or {}).get("lifecycle") or {}
-    return {"urn": str(node.get("itemUrn") or ""), "url": str(node.get("itemUrl") or "")}
+    return _manage_item(client.query(MANAGE_QUERY, _component_variables(summary, component_id, time), label="manage link").get("component") or {})
+
+
+def publish_batch_size(physical: bool) -> int:
+    """How many components one publish request holds."""
+    return PUBLISH_BATCH_PHYSICAL if physical else PUBLISH_BATCH
+
+
+def read_publish_components(client: MfgGraphQlClient, summary: Dict[str, Any], component_ids: List[str], time: str = "",
+                            physical: bool = False) -> Dict[str, Union[Dict[str, Any], Exception]]:
+    """What a publish reads of each component, in one request: by component id, ``properties`` (with the physical ones when ``physical``),
+    the ``thumbnail_url`` (empty when it has none yet; it expires soon, so use it at once) and the Fusion Manage ``link`` of the item it is
+    linked to (``{"urn", "url"}``, empty values when it is not linked), or the error that kept it from being read.
+
+    When the Data Model refuses the request for a reason other than being busy, the components are read again in halves until the one it
+    refuses is alone, so a single bad component fails only itself. A busy answer (already retried) fails all of them."""
+    composition = summary.get("composition", "")
+    if not composition or not component_ids or not all(component_ids):
+        raise ValueError("The summary has no component id yet.")
+    variables: Dict[str, Any] = {"composition": composition, **{f"id{n}": cid for n, cid in enumerate(component_ids)}}
+    if time:
+        variables["time"] = time
+    try:
+        data = client.query(publish_query(len(component_ids), PHYSICAL_FIELDS if physical else ""), variables,
+                            label=f"publish x{len(component_ids)}" + (" + physical" if physical else ""))
+    except MfgApiError as exc:
+        if exc.transient:
+            return {cid: exc for cid in component_ids}
+        if len(component_ids) == 1:
+            return {component_ids[0]: exc}
+        log.info("The Data Model refused %d components together (%s); reading them in halves", len(component_ids), exc)
+        half = len(component_ids) // 2
+        return {**read_publish_components(client, summary, component_ids[:half], time, physical),
+                **read_publish_components(client, summary, component_ids[half:], time, physical)}
+    return {cid: _publish_read(data.get(f"c{n}") or {}, physical) for n, cid in enumerate(component_ids)}
+
+
+def _properties_of(data: Dict[str, Any], physical: bool) -> List[Dict[str, str]]:
+    """The properties of the component in a query answer, with its physical ones (``physical``), by name."""
+    properties = parse_component(data)["properties"]
+    return _sorted(properties + parse_physical(data)) if physical else properties
+
+
+def _publish_read(node: Dict[str, Any], physical: bool) -> Dict[str, Any]:
+    return {"properties": _properties_of({"component": node}, physical),
+            "thumbnail_url": str((node.get("thumbnail") or {}).get("signedUrl") or ""), "link": _manage_item(node)}
+
+
+def _manage_item(node: Dict[str, Any]) -> Dict[str, str]:
+    lifecycle = node.get("lifecycle") or {}
+    return {"urn": str(lifecycle.get("itemUrn") or ""), "url": str(lifecycle.get("itemUrl") or "")}
 
 
 def _read_component(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str, physical: bool = False) -> Any:
-    variables = _component_variables(summary, component_id, time)
-    if physical:
-        data = client.query(COMPONENT_WITH_PHYSICAL_QUERY, variables, label="properties + physical")
-        return {"properties": _sorted(parse_component(data)["properties"] + parse_physical(data))}
-    return parse_component(client.query(COMPONENT_PROPERTIES_QUERY, variables, label="properties"))
+    query, label = (COMPONENT_WITH_PHYSICAL_QUERY, "properties + physical") if physical else (COMPONENT_PROPERTIES_QUERY, "properties")
+    data = client.query(query, _component_variables(summary, component_id, time), label=label)
+    return {"properties": _properties_of(data, physical)}
 
 
 def _read_structure(client: MfgGraphQlClient, summary: Dict[str, Any], time: str, progress: Callable[[int], None] = None,

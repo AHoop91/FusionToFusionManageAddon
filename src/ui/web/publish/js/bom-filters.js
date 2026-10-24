@@ -18,7 +18,7 @@
     { id: 'added',   label: 'Added',       title: 'Picked with Add Existing Items: publishing adds them to the Fusion Manage BOM' },
     { id: 'changed', label: 'Updates',     title: 'Quantity differs from Fusion Manage' },
     { id: 'extra',   label: 'Fusion Manage Only', title: 'Only in Fusion Manage' },
-    { id: 'skipped', label: 'Skipped',     title: 'No item number (or below a line with none): publishing creates no item for them' },
+    { id: 'skipped', label: 'Skipped',     title: 'No item number, a number shared with another component, or below such a line: publishing creates no item for them' },
     { id: 'hidden',  label: 'Show Hidden Components', title: 'Hidden in the Fusion component tree', separate: true },
   ];
   const on = {};   // filter id -> true while on

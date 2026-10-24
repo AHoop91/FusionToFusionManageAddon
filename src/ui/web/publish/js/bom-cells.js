@@ -103,7 +103,10 @@
   /** Tooltip of the Skipped chip and of the greyed quantity box: the line's own name, and why it is left out. */
   function skippedText(item) {
     const who = item.componentName || item.design.pn || 'This line';
-    return item.skip === 'parent' ? who + ' Is Skipped: A Line Above It Has No Assigned Item Number In Fusion Manage'
+    if (item.skip === 'shared') {
+      return who + ' Shares Item Number ' + item.design.pn + ' With ' + item.sharedWith.join(', ') + ': Not Published Until Each Component Has Its Own Item Number';
+    }
+    return item.skip === 'parent' ? who + ' Is Skipped: A Line Above It Is Skipped'
       : who + ' Has No Assigned Item Number In Fusion Manage';
   }
 
