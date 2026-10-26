@@ -9,7 +9,7 @@ from src.config.config_envelope import FORMAT_ID, FORMAT_VERSION, MAX_CONFIG_BYT
 from src.config.config_service import ConfigService
 from src.config.config_transfer import config_file_bytes, config_from_hub_file
 from src.config.models import MODE_LOCAL, AppConfig, ConnectionSettings
-from src.fusion_mfg.hub_files import HubFiles, HubFilesError
+from src.fusion_mfg.hub_files import API, HubFiles, HubFilesError
 
 HUB_A, HUB_B = "a.hub-a", "a.hub-b"
 
@@ -141,7 +141,7 @@ class BrowseTests(unittest.TestCase):
             def _open(self, url, authorised=True, headers=None):
                 if "page2" in url:
                     return json.dumps({"data": [entry("items", "i2", "two.json")]}).encode()
-                return json.dumps({"data": [entry("items", "i1", "one.json")], "links": {"next": {"href": "https://x/page2"}}}).encode()
+                return json.dumps({"data": [entry("items", "i1", "one.json")], "links": {"next": {"href": API + "/page2"}}}).encode()
         found = Paged({}).contents("p", "f")
         self.assertEqual([f["name"] for f in found.files], ["one.json", "two.json"])
 

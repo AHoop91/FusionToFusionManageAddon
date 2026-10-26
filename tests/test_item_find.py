@@ -3,7 +3,7 @@
 import unittest
 from urllib.parse import parse_qs, urlparse
 
-from src.fm.items import ITEMS_BULK, ItemService
+from src.fm.items import FIND_PAGE, ITEMS_BULK, ItemService
 
 
 def row(item_id, descriptor, **fields):
@@ -45,12 +45,12 @@ class FindManyTests(unittest.TestCase):
         self.assertEqual([h["id"] for h in ItemService(client).find_many("242", ["PN-1"])["pn-1"]], ["1", "2"])
 
     def test_the_next_page_is_read_while_there_is_more(self):
-        first = [row(n, f"PN-{n} - x") for n in range(100)]
-        client = FakeClient({"totalCount": 101, "items": first}, {"totalCount": 101, "items": [row(100, "PN-100 - x")]})
-        found = ItemService(client).find_many("242", [f"PN-{n}" for n in range(101)])
+        first = [row(n, f"PN-{n} - x") for n in range(FIND_PAGE)]
+        client = FakeClient({"totalCount": FIND_PAGE + 1, "items": first}, {"totalCount": FIND_PAGE + 1, "items": [row(FIND_PAGE, f"PN-{FIND_PAGE} - x")]})
+        found = ItemService(client).find_many("242", [f"PN-{n}" for n in range(FIND_PAGE + 1)])
         self.assertEqual(len(client.asked), 2)
-        self.assertIn("offset=100", client.asked[1][0])
-        self.assertEqual(len(found), 101)
+        self.assertIn(f"offset={FIND_PAGE}", client.asked[1][0])
+        self.assertEqual(len(found), FIND_PAGE + 1)
 
     def test_an_answer_without_details_still_gives_the_ids(self):
         client = FakeClient({"totalCount": 1, "items": [{"__self__": "/api/v3/workspaces/242/items/7", "descriptor": "PN-1"}]})
