@@ -19,9 +19,27 @@
     { id: 'changed', label: 'Update',     title: 'Quantity differs from Fusion Manage' },
     { id: 'extra',   label: 'Fusion Manage Only', title: 'Only in Fusion Manage' },
     { id: 'skipped', label: 'Skipped',     title: 'No item number, a number shared with another component, or below such a line: publishing creates no item for them' },
+    { id: 'duplicate', label: 'Duplicates', title: 'Several Fusion Manage items carry this item number (found when publishing): renumber or remove the extras in Fusion Manage' },
     { id: 'hidden',  label: 'Show Hidden Components', title: 'Hidden in the Fusion component tree', separate: true },
   ];
   const on = {};   // filter id -> true while on
+  let duplicates = {};   // item number (trimmed, lower case) -> true, for the numbers the check of a publish found on several Fusion Manage items
+
+  /** The filters a line belongs to: those of the model, and Duplicates for a line whose item number several Fusion Manage items carry. */
+  function groupsOf(item) {
+    const groups = model.groupsOf(item);
+    return item.design && duplicates[String(item.design.pn || '').trim().toLowerCase()] ? groups.concat('duplicate') : groups;
+  }
+
+  /** Set the item numbers found on several Fusion Manage items. True when they are not the ones set before (the table is to be drawn again). */
+  function setDuplicates(numbers) {
+    const next = {};
+    numbers.forEach(function (number) { next[number] = true; });
+    const changed = Object.keys(next).sort().join('|') !== Object.keys(duplicates).sort().join('|');
+    duplicates = next;
+    if (!numbers.length) delete on.duplicate;   // nothing left for the filter to show
+    return changed;
+  }
 
   /** Is a filter on that narrows the lines (Show Hidden Components does not)? */
   function narrowing() {
@@ -31,7 +49,7 @@
   /** The number of lines each filter holds. */
   function countsOf(items) {
     const counts = {};
-    items.forEach(function (item) { model.groupsOf(item).forEach(function (g) { counts[g] = (counts[g] || 0) + 1; }); });
+    items.forEach(function (item) { groupsOf(item).forEach(function (g) { counts[g] = (counts[g] || 0) + 1; }); });
     return counts;
   }
 
@@ -122,7 +140,7 @@
     const show = items.map(function (item) {
       if (item.root) return true;
       if (item.hidden && !on.hidden) return false;
-      return !narrow || model.groupsOf(item).some(function (g) { return g !== 'hidden' && on[g]; });
+      return !narrow || groupsOf(item).some(function (g) { return g !== 'hidden' && on[g]; });
     });
     let need = Infinity;   // level a row must be below to be the ancestor of a shown row further down
     for (let i = items.length - 1; i >= 0; i--) {
@@ -132,5 +150,5 @@
     return show;
   }
 
-  ns.bomFilters = { menu: menu, visible: visible, narrowing: narrowing };
+  ns.bomFilters = { menu: menu, visible: visible, narrowing: narrowing, setDuplicates: setDuplicates };
 })(window.MfgUi);

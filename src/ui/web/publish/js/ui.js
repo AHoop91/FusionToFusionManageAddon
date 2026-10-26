@@ -87,8 +87,20 @@
     return card;
   }
 
+  /** Disable ``button`` and show ``label`` on it while something is under way. Returns the function that gives it back its own label (the caller sets
+   *  whether it is enabled). */
+  function busy(button, label) {
+    const was = button.textContent;
+    button.disabled = true;
+    button.textContent = label;
+    return function release() {
+      button.disabled = false;
+      button.textContent = was;
+    };
+  }
+
   ns.pubUi = {
-    el: el, svg: svg, treeIcon: treeIcon, chevron: chevron, setChevron: setChevron,
+    busy: busy, el: el, svg: svg, treeIcon: treeIcon, chevron: chevron, setChevron: setChevron,
     loaderNode: loaderNode, warnWhenSlow: warnWhenSlow, errorState: errorState,
   };
 })(window.MfgUi);

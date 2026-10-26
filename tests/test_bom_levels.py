@@ -18,9 +18,9 @@ class DesignNotInFusionManageTests(unittest.TestCase):
         cfg = mock.Mock(workspace_id="242")
         fm = mock.Mock()
         with mock.patch.object(bom_levels, "read_and_compare_bom") as compare:
-            data = bom_levels.compare_design_bom([row("A"), row("B", 1)], {"item_number": "TOP"}, cfg, fm, "", [])
+            data = bom_levels.compare_design_bom([row("A"), row("B", 1)], {"item_number": "TOP"}, cfg, fm, [])
         self.assertEqual([r["status"] for r in data["rows"]], [UNCOMPARED, UNCOMPARED])
-        self.assertFalse(data["pick"])
+        self.assertFalse(data["shared"])
         self.assertTrue(data["design_new"])   # the panel says "not in Fusion Manage yet" without waiting for the properties check
         compare.assert_not_called()
         self.assertEqual(fm.method_calls, [])
@@ -28,18 +28,20 @@ class DesignNotInFusionManageTests(unittest.TestCase):
     def test_a_design_that_is_found_is_not_marked_new(self):
         cfg = mock.Mock(workspace_id="242")
         with mock.patch.object(bom_levels, "read_and_compare_bom", return_value=[]):
-            data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), "", [{"id": "1"}])
+            data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), [{"id": "1"}])
         self.assertNotIn("design_new", data)
 
-    def test_several_matches_and_none_chosen_wait_for_the_choice(self):
+    def test_several_matches_are_not_compared_with_any(self):
         cfg = mock.Mock(workspace_id="242")
-        data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), "", [{"id": "1"}, {"id": "2"}])
-        self.assertTrue(data["pick"])
+        with mock.patch.object(bom_levels, "read_and_compare_bom") as compare:
+            data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), [{"id": "1"}, {"id": "2"}])
+        self.assertTrue(data["shared"])
+        compare.assert_not_called()
 
-    def test_the_chosen_match_is_the_one_compared_with(self):
+    def test_the_one_match_is_the_one_compared_with(self):
         cfg = mock.Mock(workspace_id="242")
         with mock.patch.object(bom_levels, "read_and_compare_bom", return_value=[]) as compare:
-            data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), "2", [{"id": "1"}, {"id": "2"}])
+            data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), [{"id": "2"}])
         self.assertEqual(data["fm_item_id"], "2")
         self.assertEqual(compare.call_args[0][3:], ("242", "2"))
 

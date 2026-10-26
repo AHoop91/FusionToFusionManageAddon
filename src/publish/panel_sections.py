@@ -69,7 +69,6 @@ class _Load:
     model_id: str
     time: str
     component: Dict[str, str]
-    chosen: str
 
 
 class PublishSections:
@@ -113,7 +112,7 @@ class PublishSections:
             self._tokens[slot] = token
             self._slots[slot] = entry(slot, pending=True, key=key)
             snapshot = dict(self._slots[slot])
-        load = _Load(slot, name, key, client, fm, cfg, model_id, time, component, str(payload.get("fm_item") or ""))
+        load = _Load(slot, name, key, client, fm, cfg, model_id, time, component)
         threading.Thread(target=self._run, args=(load,), daemon=True).start()
         return snapshot
 
@@ -177,7 +176,7 @@ class PublishSections:
             return result["properties"] if load.name == "component" else result
 
         if load.name in ("properties", "component"):
-            properties, compared = read_and_compare(read, load.component if load.name == "component" else summary, load.cfg, load.fm, load.chosen)
+            properties, compared = read_and_compare(read, load.component if load.name == "component" else summary, load.cfg, load.fm)
             return {"compare": compared, **({"count": len(properties)} if load.name == "properties" else {})}
         if load.name == CHILDREN:
             c = load.component
@@ -188,7 +187,7 @@ class PublishSections:
                 rows = read()
                 self._note(load, stage="comparing")
                 hits = searching.result()
-            return compare_design_bom(rows, summary, load.cfg, load.fm, load.chosen, hits)
+            return compare_design_bom(rows, summary, load.cfg, load.fm, hits)
         data = read()
         if load.name == "summary" and not item_number_of(data):   # no item number: never published, so nothing here applies
             raise PublishDenied("This design has no item number, so it has not been published to Fusion Manage.")

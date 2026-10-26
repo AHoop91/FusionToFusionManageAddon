@@ -26,16 +26,15 @@ def item_number_of(summary: Dict[str, Any]) -> str:
     return str(summary.get("item_number") or "").strip()
 
 
-def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, chosen: str = "",
-                found: Optional[List[Dict[str, Any]]] = None) -> ItemLookup:
+def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, found: Optional[List[Dict[str, Any]]] = None) -> ItemLookup:
     """Find the component's item in Fusion Manage. Runs on a worker thread.
 
     ``found`` is what an earlier search already found for the number (hits, each with the item's ``values`` when the search gave them):
     it saves the search, and the read of an item whose values came with it.
 
-    The item is searched by item number in the Items workspace. When several items match, ``chosen`` (an item id the
-    user picked) selects one; until then the state is ``multiple`` and ``candidates`` lists them. It needs only the
-    component's numbers, so it can run while the component's properties are still being read.
+    The item is searched by item number in the Items workspace. When several items match, none is used: the state is ``multiple`` and
+    ``candidates`` lists them, for the number to be fixed in Fusion Manage. It needs only the component's numbers, so it can run while
+    the component's properties are still being read.
     """
     number = item_number_of(summary)
     info: Dict[str, Any] = {"state": "unchecked", "message": "", "item_id": "", "item_number": number, "candidates": []}
@@ -49,7 +48,7 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, cho
     try:
         service = ItemService(fm)
         hits = found if found is not None else service.search(cfg.workspace_id, number)
-        picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
+        picked = hits[0] if len(hits) == 1 else None
         if picked:
             values = picked.get("values") or service.read(cfg.workspace_id, picked["id"])
         hits = [{k: v for k, v in h.items() if k != "values"} for h in hits]   # what is passed on is the list, not the values
@@ -64,7 +63,7 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, cho
         if picked:
             info.update(state=FOUND, item_id=picked["id"])
         else:
-            info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items match {number}. Choose one.")
+            info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items carry the item number {number}. Renumber or remove the extra items in Fusion Manage.")
     return ItemLookup(info, values)
 
 
@@ -79,7 +78,7 @@ def known_lookup(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, it
         return ItemLookup(info, None)
 
 
-def read_and_compare(read: Callable[[], List[Dict[str, str]]], subject: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, chosen: str = "",
+def read_and_compare(read: Callable[[], List[Dict[str, str]]], subject: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient,
                      known_id: str = "") -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
     """``(properties, comparison)``: read the properties with ``read`` while Fusion Manage is asked for the item of ``subject``, then compare
     them (``compare_with_item``, with the digits and units of the mapped fields). ``known_id`` is the id of the item when the caller has it, which
@@ -87,7 +86,7 @@ def read_and_compare(read: Callable[[], List[Dict[str, str]]], subject: Dict[str
     up-to-date check both use it."""
     with ThreadPoolExecutor(max_workers=1) as pool:
         pending = pool.submit(read)
-        lookup = known_lookup(subject, cfg, fm, known_id) if known_id else lookup_item(subject, cfg, fm, chosen)   # Fusion Manage is asked while the Data Model is read
+        lookup = known_lookup(subject, cfg, fm, known_id) if known_id else lookup_item(subject, cfg, fm)   # Fusion Manage is asked while the Data Model is read
     properties = pending.result()
     resolver = PicklistResolver(fm, cfg.workspace_id) if cfg and cfg.workspace_id else None
     return properties, compare_with_item(properties, subject, cfg, lookup, resolver.fit_number if resolver else None,

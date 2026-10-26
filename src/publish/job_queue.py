@@ -64,7 +64,7 @@ class JobQueue:
             runs = list(self._runs)
         if any(r.phase in (QUEUED, RUNNING) for r in runs):
             return "running"
-        failed = any(r.phase == ERROR or any(row["status"] == "error" for row in r.rows) for r in runs)
+        failed = any(r.phase == ERROR or any(row["status"] == "error" for row in r.rows) for r in runs if not r.unlisted)
         return "error" if failed else "idle"
 
     def snapshots(self) -> List[Dict[str, Any]]:
@@ -112,7 +112,7 @@ class JobQueue:
 
     @staticmethod
     def _clean(run: JobState) -> bool:
-        """A run that finished with every item done has nothing left to show once the panel has seen how it ended; failed or cancelled ones stay until cleared.
+        """A run that finished with every item done, or that stopped before writing anything, has nothing left to show once the panel has seen how it ended; failed or cancelled ones stay until cleared.
 
         It is forgotten when the next run is added, not when it ends: the panel that queued it is still reading its last state."""
-        return run.phase == DONE and not any(row["status"] != "done" for row in run.rows)
+        return run.unlisted or (run.phase == DONE and not any(row["status"] != "done" for row in run.rows))

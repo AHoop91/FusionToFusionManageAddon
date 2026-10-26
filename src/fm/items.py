@@ -9,7 +9,8 @@ the reader does not depend on how a workspace groups its fields into sections.
 """
 
 import re
-from typing import Any, Dict, List, Optional
+import threading
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus
 
 from ..core.logging_setup import get_logger
@@ -18,7 +19,7 @@ from .client import WORKSPACES, FmClient
 log = get_logger("fm.items")
 
 SEARCH_LIMIT = 50      # most items listed for one item number
-FIND_PAGE = 100        # items one page of a search that carries the item details holds
+FIND_PAGE = 50         # items one page of a search that carries the item details holds
 ITEMS_BULK = "application/vnd.autodesk.plm.items.bulk+json"   # asked of a search: each hit is the item with its fields, not only a link
 FIELD_ID = re.compile(r"/fields/([^/]+)/?$")
 _ITEM_ID = re.compile(r"/items/(\d+)")
@@ -87,6 +88,53 @@ def pick_hit(hits: List[Dict[str, str]], number: str) -> Dict[str, str]:
         if number_of(hit["descriptor"]) == wanted:
             return hit
     return hits[0]
+
+
+def resolve_hits(hits: List[Dict[str, str]], number: str, chosen: str = "") -> Tuple[Optional[Dict[str, str]], List[Dict[str, str]]]:
+    """``(hit, competing)`` for the ``hits`` of a search for ``number``: the item to use, or None when the user has to choose.
+
+    ``competing`` are the items that share the number: those whose descriptor starts with exactly ``number``, else every hit. Exactly one
+    of them is used as it is. Several are a choice for the user: ``chosen`` (an item id picked earlier) settles it when it is one of them,
+    else the hit is None. ``competing`` is empty when there are no hits.
+    """
+    wanted = number.strip().lower()
+    exact = [hit for hit in hits if number_of(hit["descriptor"]) == wanted]
+    competing = exact or list(hits)
+    picked = next((hit for hit in competing if hit["id"] == chosen), None) if chosen else None
+    if picked is None and len(competing) == 1:
+        picked = competing[0]
+    return picked, competing
+
+
+class ItemChoices:
+    """The item the user picked where several items share an item number, by workspace and number, for as long as the add-in runs.
+
+    One store is shared by the Item panel and by the uploads that start from it, so they cannot disagree. Any thread may use it."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._chosen: Dict[Tuple[str, str], str] = {}
+
+    @staticmethod
+    def _key(workspace_id: str, number: str) -> Tuple[str, str]:
+        return workspace_id, number.strip().lower()
+
+    def set(self, workspace_id: str, number: str, item_id: str) -> None:
+        """Remember ``item_id`` for the number; an empty id forgets the choice."""
+        with self._lock:
+            if item_id:
+                self._chosen[self._key(workspace_id, number)] = item_id
+            else:
+                self._chosen.pop(self._key(workspace_id, number), None)
+
+    def resolve(self, workspace_id: str, number: str, hits: List[Dict[str, str]]) -> Tuple[Optional[Dict[str, str]], List[Dict[str, str]]]:
+        """``resolve_hits`` with the choice made for the number. A choice that is none of the hits any more is forgotten."""
+        with self._lock:
+            chosen = self._chosen.get(self._key(workspace_id, number), "")
+            if chosen and not any(hit["id"] == chosen for hit in hits):
+                self._chosen.pop(self._key(workspace_id, number), None)
+                chosen = ""
+        return resolve_hits(hits, number, chosen)
 
 
 class ItemService:

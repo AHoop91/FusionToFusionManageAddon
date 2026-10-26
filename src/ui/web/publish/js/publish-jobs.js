@@ -18,6 +18,7 @@
 
   let jobs = [];
   let onFinished = null;   // called with a watched job once it has ended
+  let onChecks = null;     // called with what the validation of the watched job found for each item number (see ``checks``)
   let notified = '';       // id of the job onFinished was last called for
   let unseen = '';         // id of a running job whose dialog was closed: still followed, to call onFinished when it ends
   let timer = null;
@@ -26,7 +27,7 @@
 
   function listOpen() { return !!$('pub-jobs-list'); }   // only the Jobs window has the list
 
-  // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a red cross (failed or cancelled; a finished row is not listed).
+  // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a red cross (failed), a grey cross (cancelled; a finished row is not listed).
   const ICONS = {
     queued:    { title: 'Queued', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
     running:   { title: 'Running', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
@@ -57,7 +58,7 @@
   /** The buttons of a job: Cancel while it is active, Retry once it failed (it sends the failed requests again; what was accepted is skipped). */
   function jobActions(job) {
     const cell = ui.el('td', 'pub-job-actions');
-    if (FINISHED.indexOf(job.phase) < 0) {
+    if (!isFinished(job)) {
       const cancel = ui.el('button', 'pub-outline-button', 'Cancel');
       cancel.type = 'button';
       cancel.addEventListener('click', function () { bridge.send('cancel_publish', { id: job.id }); });
@@ -107,13 +108,14 @@
     table.appendChild(head);
     let shown = 0;
     jobs.slice().reverse().forEach(function (job) {   // newest first
+      if (stoppedInValidation(job)) return;
       const rows = visibleRows(job);
-      if (!rows.length && FINISHED.indexOf(job.phase) >= 0) return;   // everything in it is done
+      if (!rows.length && isFinished(job)) return;   // everything in it is done
       itemRows(table, job, rows.length ? rows : [{ item: job.name, description: '', status: job.phase }]);
       shown += 1;
     });
     if (shown) box.appendChild(table);
-    $('pub-jobs-clear').disabled = !jobs.some(function (j) { return FINISHED.indexOf(j.phase) >= 0; });
+    $('pub-jobs-clear').disabled = !jobs.some(function (job) { return isFinished(job) && !stoppedInValidation(job); });
   }
 
   function schedule() {
@@ -124,6 +126,9 @@
   // ---- Progress dialog (Publish panel) -----------------------------------------
 
   function isFinished(job) { return FINISHED.indexOf(job.phase) >= 0; }
+
+  /** A run that stopped in its validation wrote nothing, so it is not a job of the queue: the Jobs window and the dialog's note leave it out. */
+  function stoppedInValidation(job) { return job.phase === 'error' && job.stage === 'validating'; }
 
   /** The failed rows of a job; with `limit`, only among its first `limit` rows (the items: a Bill of Materials row comes after them). */
   function failedRows(job, limit) { return (job.rows || []).slice(0, limit || undefined).filter(function (r) { return r.status === 'error'; }).length; }
@@ -156,23 +161,43 @@
 
   /** What a running job says it is doing: items are prepared several at a time, so no single one is "the" item being processed. */
   function runningStatus(job) {
+    if (job.stage === 'validating') return 'Looking up every item number in Fusion Manage before anything is written.';
     if (job.stage === 'bom') return 'Updating the Bill of Materials.';
     if (!job.done && !(job.rows || []).some(function (row) { return row.status === 'running'; })) return 'Reading the design and checking Fusion Manage.';
     return job.sends ? 'Checking and updating items in Fusion Manage.' : 'Checking items and preparing their requests.';
   }
 
-  /** What the dialog says for a job: title, status line, count line, bar (percent or null while waiting) and tone. */
+  /**
+   * The validation step: the look-up of every item number, which comes first and ends before anything is written. Its bar is ``percent`` (null
+   * while the numbers are not counted yet), with the ``count`` line and the ``tone`` ('ok' once it passed, 'error' where the run failed in it).
+   */
+  function validation(job) {
+    const found = job.validation || { done: 0, total: 0 };
+    const looking = job.stage === 'validating';
+    const words = found.total + ' item number' + (found.total === 1 ? '' : 's');
+    if (!looking) return { percent: 100, count: found.total ? words + ' checked' : '', tone: 'ok' };
+    if (job.phase === 'queued') return { percent: 0, count: '', tone: '' };
+    const percent = found.total ? Math.round(found.done * 100 / found.total) : null;
+    const failed = job.phase === 'error';
+    return { percent: failed && percent === null ? 0 : percent, count: found.total ? found.done + ' of ' + words : '', tone: failed ? 'error' : '' };
+  }
+
+  /** What the dialog says for a job: title, status line, count line, the publishing bar (percent or null while waiting) and tone. */
   function describe(job) {
     const total = job.total || 0;
     const count = total ? job.done + ' of ' + total + ' items' : '';
     if (job.phase === 'queued') {
       return { title: 'Added to the publishing queue', status: job.place > 1 ? 'Waiting, number ' + job.place + ' in the queue.' : 'Waiting to start.', count: count, percent: null, tone: '' };
     }
+    const validating = job.stage === 'validating';
     if (job.phase === 'running') {   // at the Bill of Materials every item is done: it goes last
-      return { title: 'Publishing ' + job.name, status: runningStatus(job), count: count,
-               percent: job.stage === 'bom' ? 100 : total ? Math.round(job.done * 100 / total) : null, tone: '' };
+      return { title: 'Publishing ' + job.name, status: runningStatus(job), count: validating ? 'Waiting for validation' : count,
+               percent: validating ? 0 : job.stage === 'bom' ? 100 : total ? Math.round(job.done * 100 / total) : null, tone: '' };
     }
-    if (job.phase === 'error') return { title: 'Publish failed', status: job.message || 'The publish could not be completed.', count: '', percent: 100, tone: 'error' };
+    if (job.phase === 'error') {   // a failure in the validation leaves nothing published: its own bar is the red one
+      return { title: validating ? 'Validation failed' : 'Publish failed', status: job.message || 'The publish could not be completed.', count: validating ? 'Not started' : '',
+               percent: validating ? 0 : 100, tone: validating ? '' : 'error' };
+    }
     if (job.phase === 'cancelled') return { title: 'Publish cancelled', status: job.name + ' was not published.', count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
     if (failedRows(job)) {
       const items = failedRows(job, total);
@@ -185,10 +210,10 @@
              status: job.sends ? job.name + ' was published to Fusion Manage.' : job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.' };
   }
 
-  /** The tally under the bar: items by result, hidden when there is no job to count. Skipped shows only when something was left out. */
+  /** The tally under the bar: items by result, hidden when there is no job to count. It belongs to the publishing, so it is hidden through the validation. Skipped shows only when something was left out. */
   function showTally(job) {
     const box = $('progress-tally');
-    box.hidden = !job || !job.total;
+    box.hidden = !job || !job.total || job.stage === 'validating';
     if (box.hidden) return;
     const counts = tally(job);
     [['ok', counts.successful], ['failed', counts.failed], ['skipped', counts.skipped], ['pending', counts.pending]].forEach(function (stat) {
@@ -198,23 +223,41 @@
     $('tally-skipped-box').hidden = !counts.skipped;
   }
 
+  /** Draw one of the two bars (``step``: 'validate' or 'publish'): ``percent`` is null while it is not measured, ``tone`` colours it. */
+  function showBar(step, percent, tone) {
+    const bar = $(step === 'validate' ? 'validate-bar' : 'progress-bar');
+    const box = $(step + '-step');
+    box.classList.remove('progress-ok', 'progress-error');
+    if (tone) box.classList.add('progress-' + tone);
+    box.classList.toggle('progress-active', !tone && (percent === null || (percent > 0 && percent < 100)));
+    box.classList.toggle('progress-idle', !tone && percent === 0);
+    bar.classList.toggle('indeterminate', percent === null);
+    if (percent === null) bar.removeAttribute('aria-valuenow'); else bar.setAttribute('aria-valuenow', String(percent));
+    $(step === 'validate' ? 'validate-fill' : 'progress-fill').style.width = percent === null ? '' : percent + '%';
+  }
+
+  /** The round icon beside the title: a spinner while the job is waiting or running, then a tick or a cross. */
+  function badgeOf(view, job) {
+    if (!job || !isFinished(job)) return 'busy';
+    return view.tone === 'ok' ? 'ok' : 'error';
+  }
+
   function showProgress(view, job) {
     const box = $('progress');
-    const bar = $('progress-bar');
     const active = !!job && !isFinished(job);
-    box.firstElementChild.classList.remove('progress-ok', 'progress-error');
-    if (view.tone) box.firstElementChild.classList.add('progress-' + view.tone);
     $('progress-title').textContent = view.title;
     $('progress-status').textContent = view.status;
     $('progress-count').textContent = view.count || '';
     $('progress-elapsed').textContent = elapsedText(job);
+    $('progress-badge').className = 'pub-badge pub-badge-' + badgeOf(view, job);
     showTally(job);
-    bar.classList.toggle('indeterminate', view.percent === null);
-    if (view.percent === null) bar.removeAttribute('aria-valuenow'); else bar.setAttribute('aria-valuenow', String(view.percent));
-    $('progress-fill').style.width = view.percent === null ? '' : view.percent + '%';
+    showBar('publish', view.percent, view.tone);
+    const check = job ? validation(job) : { percent: 0, count: '', tone: '' };
+    $('validate-count').textContent = check.count;
+    showBar('validate', check.percent, check.tone);
     $('progress-note').textContent = active
       ? 'You can close this window. Publishing continues in the background and you can follow it in Job Queue on the Fusion Manage tab.'
-      : (job ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
+      : (job && !stoppedInValidation(job) ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
     if (!active) confirming = false;
     $('progress-confirm').hidden = !confirming;
     $('progress-actions').hidden = confirming;
@@ -234,16 +277,36 @@
     if (unseen) schedule();
   }
 
+  /**
+   * What the validation found for each item number of the job, for the rows of the BOM: ``checking`` until the search has answered for it,
+   * then ``ok`` or, when several Fusion Manage items carry it, ``review``. Keyed by the number, trimmed and in lower case.
+   */
+  function checks(job) {
+    const counts = (job.validation || {}).counts || {};
+    const looking = job.stage === 'validating' && !isFinished(job);
+    const states = {};
+    (job.rows || []).forEach(function (row) {
+      const key = String(row.item || '').trim().toLowerCase();
+      if (key && counts[row.item] !== undefined) states[key] = counts[row.item] > 1 ? 'review' : 'ok';
+      else if (key && looking) states[key] = 'checking';
+    });
+    return states;
+  }
+
+  /** Tell the panel the job has ended, once per job, so it can read what the run changed. */
+  function finish(job) {
+    if (notified === job.id) return;
+    notified = job.id;
+    if (onFinished && !stoppedInValidation(job)) onFinished(job);
+  }
+
   /** Tell the panel that the job closed from the dialog has ended; true while it has not. */
   function settleUnseen() {
     if (!unseen) return false;
     const job = jobs.filter(function (j) { return j.id === unseen; })[0];
     if (job && !isFinished(job)) return true;
     unseen = '';
-    if (job && notified !== job.id) {
-      notified = job.id;
-      if (onFinished) onFinished(job);
-    }
+    if (job) finish(job);
     return false;
   }
 
@@ -264,11 +327,9 @@
     const job = watchedJob();
     if (!job) { closeProgress(); return false; }
     showProgress(describe(job), job);
+    if (onChecks) onChecks(checks(job));
     if (!isFinished(job)) return true;
-    if (notified !== job.id) {   // once per job, so the panel can read what the run changed
-      notified = job.id;
-      if (onFinished) onFinished(job);
-    }
+    finish(job);
     return false;
   }
 
@@ -281,8 +342,13 @@
     if (list || following || waiting) schedule();
   }
 
+  let release = null;   // gives the Publish button back while Python checks the permissions and queues the run (it says it is starting meanwhile)
+
   function handleStart(r) {
     const s = r.ok ? r.result : { error: r.error || 'Could not publish.' };
+    if (s.checking) return;   // the answer comes later, pushed as start_publish_result
+    if (release) release();
+    release = null;
     if (s.error) {
       watched = '';
       showProgress({ title: 'Could not publish', status: s.error, count: '', percent: 100, tone: 'error' }, null);
@@ -296,12 +362,15 @@
 
   /** Queue a publish of ``payload`` (summary, items, operations); Python asks for the folder first. */
   function start(payload) {
+    release = ui.busy($('pub-publish'), 'Starting...');
     bridge.send('start_publish', payload);
   }
 
   function init(options) {
     onFinished = options && options.onFinished;
+    onChecks = options && options.onChecks;
     ACTIONS.forEach(function (name) { bridge.on(name, name === 'start_publish' ? handleStart : handle); });
+    if ($('pub-publish')) bridge.on('start_publish_result', handleStart);   // only the Publish panel asks, and is told
     if ($('progress')) {
       $('progress-close').addEventListener('click', closeProgress);
       $('progress-cancel').addEventListener('click', function () { askCancel(true); });
@@ -321,5 +390,5 @@
     }
   }
 
-  ns.pubJobs = { init: init, start: start, describe: describe, tally: tally, elapsedText: elapsedText };
+  ns.pubJobs = { init: init, start: start, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText };
 })(window.MfgUi);

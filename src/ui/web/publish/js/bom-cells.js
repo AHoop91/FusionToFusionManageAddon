@@ -86,6 +86,11 @@
 
   // ---- Status chip ---------------------------------------------------------------
 
+  /** The chip of a Fusion Manage line the user chose to remove. */
+  function removedChip(item) {
+    return { tone: 'removed', label: 'Remove', text: 'Publishing will remove ' + item.fm.pn + ' from Fusion Manage' };
+  }
+
   /** Chip for a differing pair: the design line (``fmRow`` false) is added; the Fusion Manage line shows the user's choice. */
   function pairChip(item, fmRow) {
     const choice = decisions[item.key];
@@ -96,7 +101,7 @@
       return { tone: 'new', label: 'New', text: text };
     }
     if (!choice) return { tone: 'pair', label: 'Review', text: PAIR_ASK };
-    if (choice === 'remove') return { tone: 'removed', label: 'Remove', text: 'Publishing will remove ' + item.fm.pn + ' from Fusion Manage' };
+    if (choice === 'remove') return removedChip(item);
     return { tone: 'extra', label: 'Keep', text: 'Publishing keeps ' + item.fm.pn + ' in Fusion Manage' };
   }
 
@@ -122,7 +127,7 @@
     if (status === 'mismatch') return pairChip(item, fmRow);
     if (status === 'changed') return changedChip(item);
     if (status !== 'extra') return STATUS[status];
-    if (decisions[item.key] === 'remove') return { tone: 'removed', label: 'Remove', text: 'Publishing will remove ' + item.fm.pn + ' from Fusion Manage' };
+    if (decisions[item.key] === 'remove') return removedChip(item);
     return model.quantityDiffers(item) ? changedChip(item) : null;   // the ticks already say it is only in Fusion Manage
   }
 
@@ -142,7 +147,7 @@
 
   // ---- Buttons -------------------------------------------------------------------
 
-  /** A round icon button of a row. ``extra`` is added to the class (``chosen`` for a choice that is on). */
+  /** A round icon button of a row: its class is ``pub-cmp-act-<kind>``, plus ``chosen`` for a choice that is on. */
   function actionButton(kind, title, icon, onClick, chosen) {
     const b = el('button', 'pub-cmp-act pub-cmp-act-' + kind + (chosen ? ' chosen' : ''));
     b.type = 'button';
@@ -194,7 +199,7 @@
   /** Add a revert button, beside the line's other buttons, while the user's quantity is over the line's own. */
   function withRevert(box, item, redraw) {
     if (!model.canEditQuantity(item) || !model.quantityEdited(item)) return box;
-    const revert = actionButton('revert', 'Revert the quantity to ' + (item.status === 'extra' ? item.fm.quantity : item.design.quantity), ICON_UNDO, function () {
+    const revert = actionButton('revert', 'Revert the quantity to ' + model.baseQuantity(item), ICON_UNDO, function () {
       model.revertQuantity(item);
       redraw();
     });
@@ -253,7 +258,7 @@
       if (!staged) redraw();   // the status and filters follow the new quantity
     });
     td.appendChild(input);
-    if (model.statusOf(item) === 'changed' || model.quantityDiffers(item)) td.classList.add('pub-cmp-qty-diff');   // will update Fusion Manage
+    if (model.quantityDiffers(item)) td.classList.add('pub-cmp-qty-diff');   // will update Fusion Manage
     return td;
   }
 

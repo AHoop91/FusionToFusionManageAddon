@@ -35,7 +35,7 @@ function openPanel() {
   ns.pubAddItems = { open() {} };
   ns.diffReport = { open() {}, COLUMN_VALUE: 'v', COLUMN_FM: 'f' };
   ns.pubDetails = {
-    init() {}, open() {}, choiceFor: () => '', setRoot() {}, setRootError() {}, handleComponent() {}, handleThumbnail() {},
+    init() {}, open() {}, setRoot() {}, setRootError() {}, handleComponent() {}, handleThumbnail() {},
     setThumbnail() {}, reset() {}, changeState: () => panel.own,
   };
   const scripts = pageScripts();
@@ -61,7 +61,7 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   const reload = () => $('pub-refresh').click();   // the refresh button: reads everything again at once
   const openDesign = (rows) => {
     reply('summary', { data: SUMMARY });
-    reply('structure', { data: { rows: rows, pick: false, fm_item_id: '9' } });
+    reply('structure', { data: { rows: rows, shared: false, fm_item_id: '9' } });
   };
   const firstLevel = () => [row('A', 'PN-A', { has_children: true }), row('P', 'PN-P', { status: 'new' })];
   const wholeTree = [
@@ -77,7 +77,7 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   assert.ok(lastSent('structure') && lastSent('thumbnail'), 'the structure and thumbnail follow the summary');
   assert.ok($('pub-publish').disabled, 'publish waits for the Bill of Materials');
   reply('structure', { data: { rows: [row('A', 'PN-A', { has_children: true }), row('B', 'PN-B', { status: 'new' }),
-    row('S', '', { status: 'skipped', skip: 'no_number', has_children: true })], pick: false, fm_item_id: '9' } });
+    row('S', '', { status: 'skipped', skip: 'no_number', has_children: true })], shared: false, fm_item_id: '9' } });
   assert.ok(lastSent('properties'), 'the design\'s own properties are read quietly after the Bill of Materials');
   assert.strictEqual(rowsText().length, 4, 'the design and its first level');
   assert.ok(!$('pub-publish').disabled);
@@ -134,7 +134,7 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   assert.match($('pub-bom').querySelector('.pub-cmp-tool-busy').title, /1,200|1200/, 'how far it is goes in the tooltip of the spinning button');
   assert.ok($('pub-bom').querySelector('.pub-cmp-tool-collapse').disabled, 'Collapse all waits');
   assert.ok(!$('pub-bom').querySelector('.pub-cmp-busy'), 'no message under the toolbar');
-  reply('tree', { data: { rows: wholeTree, pick: false, fm_item_id: '9' } });
+  reply('tree', { data: { rows: wholeTree, shared: false, fm_item_id: '9' } });
   assert.strictEqual(rowsText().length, 5, 'every level shows');
   assert.ok(!$('pub-publish').disabled);
 
@@ -205,7 +205,7 @@ test('the up-to-date check button says what the design and its lines come to', {
     const reply = (slot, entry) => panel.handlers.load_publish_section({ ok: true, result: Object.assign({
       section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, stage: '' }, entry) });
     reply('summary', { data: SUMMARY });
-    reply('structure', { data: { rows: rows, pick: false, fm_item_id: '9' } });
+    reply('structure', { data: { rows: rows, shared: false, fm_item_id: '9' } });
     reply('properties', { data: { compare: compare, count: 1 } });
     const button = doc.getElementById('pub-check');
     return { panel: panel, reply: reply, state: () => button.dataset.state, count: () => (doc.getElementById('pub-check-count').hidden ? '' : doc.getElementById('pub-check-count').textContent),

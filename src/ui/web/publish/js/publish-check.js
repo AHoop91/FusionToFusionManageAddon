@@ -68,7 +68,7 @@
     if (own === 'new') return Object.assign({ state: 'idle', text: 'Not in Fusion Manage yet: publishing creates it.' }, none);
     const found = { props: attributeDifferences(), lines: lineDifferences() };
     if (own === 'unknown') return Object.assign({ state: 'error', text: 'Fusion Manage could not be read.' }, found);
-    if (own === 'multiple') return Object.assign({ state: 'changes', text: 'Several Fusion Manage items match this design. Choose one in its details.' }, found);
+    if (own === 'multiple') return Object.assign({ state: 'changes', text: 'Several Fusion Manage items carry this design\'s item number. Fix it in Fusion Manage.' }, found);
     if (found.props.length + found.lines.length) {
       return Object.assign({ state: 'changes', text: plural(found.props.length, 'attribute difference') + ' and ' + plural(found.lines.length, 'Bill of Materials line') + ' to update.' }, found);
     }

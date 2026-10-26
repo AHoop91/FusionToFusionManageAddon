@@ -28,7 +28,7 @@ class Fixture:
             mock.patch.object(panel_sections, "publish_denial", return_value=denied),
             mock.patch.object(panel_sections, "read_section", side_effect=self.read),
             mock.patch.object(panel_sections, "search_design", return_value=[]),
-            mock.patch.object(panel_sections, "compare_design_bom", side_effect=lambda rows, *_: {"rows": rows, "pick": False}),
+            mock.patch.object(panel_sections, "compare_design_bom", side_effect=lambda rows, *_: {"rows": rows, "shared": False}),
             mock.patch.object(panel_sections, "compare_level", side_effect=lambda rows, *_: {"rows": rows}),
         ]
         for p in self.patches:

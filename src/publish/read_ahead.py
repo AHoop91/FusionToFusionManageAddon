@@ -3,15 +3,15 @@
 Asking the Data Model and Fusion Manage about each item on its own costs two or three requests per item. Here the items' components
 go to the Data Model several to a request, and their item numbers go to Fusion Manage several to a search that returns the item
 details too. The requests start as the run starts and each item takes its answer when it gets to it; an item whose answer did not
-come (a search that found nothing, or failed) falls back to asking for itself.
+come (a search that found nothing) falls back to asking for itself. A search that fails raises, for the run to stop.
 """
 
+import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
-from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
-from ..fm.client import FmApiError, FmClient
+from ..fm.client import FmClient
 from ..fm.items import ItemService
 from ..fusion_mfg.graphql_client import MfgGraphQlClient
 from ..fusion_mfg.model_service import publish_batch_size, read_publish_components
@@ -43,6 +43,10 @@ class ReadAhead:
         self._reads: Dict[str, "Future[Dict[str, Any]]"] = {}   # component id -> the request that reads it, shared with the components beside it
         self._searches: Dict[str, "Future[Dict[str, List[Dict[str, Any]]]]"] = {}   # item number -> the search that looks for it, shared likewise
         self._pools: List[ThreadPoolExecutor] = []
+        self._count_lock = threading.Lock()
+        self.to_search = 0   # item numbers the shared search looks for, for a progress bar
+        self.searched = 0    # of those, how many have been looked for
+        self._hits: Dict[str, int] = {}   # item number -> how many Fusion Manage items carry it, for the numbers looked for so far
 
     def __enter__(self) -> "ReadAhead":
         numbered = [item for item in self._items if item_number_of(item)]
@@ -50,12 +54,14 @@ class ReadAhead:
         self._start(self._reads, ids, publish_batch_size(self._physical), DATA_MODEL_REQUESTS, self._read_chunk)
         if self._workspace_id:
             numbers = sorted({item_number_of(item) for item in numbered})
+            self.to_search = len(numbers)
             self._start(self._searches, numbers, SEARCH_NUMBERS, SEARCHES, self._search_chunk)
         return self
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(self, failed: Any, *_: Any) -> None:
+        """Wait for the reads to finish; when the run is stopping, drop those not started instead, so it does not wait for reads it will not use."""
         for pool in self._pools:
-            pool.shutdown(wait=True)
+            pool.shutdown(wait=not failed, cancel_futures=bool(failed))
 
     def _start(self, futures: Dict[str, Future], keys: List[str], size: int, workers: int, read: Callable[[List[str]], Any]) -> None:
         pool = ThreadPoolExecutor(max_workers=workers)
@@ -68,14 +74,19 @@ class ReadAhead:
         return {} if self._cancelled() else read_publish_components(self._client, self._summary, ids, self._time, self._physical)
 
     def _search_chunk(self, numbers: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-        """The hits of each number the search found; empty when it failed, so every item then looks for itself."""
+        """The hits of each number the search found. A failed search raises: the run needs every number looked for before it writes."""
         if self._cancelled():
             return {}
-        try:
-            return ItemService(self._fm).find_many(self._workspace_id, numbers)
-        except (FmApiError, AuthError) as exc:
-            log.warning("The Fusion Manage search for %d item(s) failed (%s); each is looked for on its own", len(numbers), exc)
-            return {}
+        found = ItemService(self._fm).find_many(self._workspace_id, numbers)
+        with self._count_lock:
+            self.searched += len(numbers)
+            self._hits.update({number: len(found.get(number.strip().lower()) or []) for number in numbers})
+        return found
+
+    def hits(self) -> Dict[str, int]:
+        """How many items carry each item number the search has answered for."""
+        with self._count_lock:
+            return dict(self._hits)
 
     def read(self, component_id: str) -> Dict[str, Any]:
         """What the Data Model gave for the component (see ``read_publish_components``); raises what kept it from being read."""

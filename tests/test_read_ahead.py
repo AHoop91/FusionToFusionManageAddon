@@ -66,7 +66,34 @@ class ReadAheadTests(unittest.TestCase):
                 self.assertIsNone(shared.found("PN-9"))
                 self.assertIsNone(shared.found("PN-404"))   # never searched: the item looks for itself
 
-    def test_a_failed_search_leaves_every_item_to_look_for_itself(self):
+    def test_the_progress_of_the_search_counts_the_numbers_looked_for(self):
+        class Items:
+            def __init__(self, _fm):
+                pass
+
+            def find_many(self, _workspace, _numbers):
+                return {}
+
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+            with ahead([item(f"PN-{n}", f"c{n}") for n in range(12)]) as shared:
+                shared.found("PN-0")   # waits for the search of its numbers
+                shared.found("PN-11")
+            self.assertEqual((shared.searched, shared.to_search), (12, 12))
+
+    def test_the_hits_of_each_number_are_counted_as_the_search_answers(self):
+        class Items:
+            def __init__(self, _fm):
+                pass
+
+            def find_many(self, _workspace, numbers):
+                return {"pn-1": [{"id": "a"}, {"id": "b"}], "pn-2": [{"id": "c"}]}
+
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+            with ahead([item("PN-1", "c1"), item("PN-2", "c2"), item("PN-3", "c3")]) as shared:
+                shared.found("PN-1")
+            self.assertEqual(shared.hits(), {"PN-1": 2, "PN-2": 1, "PN-3": 0})
+
+    def test_a_failed_search_raises_for_the_run_to_stop(self):
         class Items:
             def __init__(self, _fm):
                 pass
@@ -76,7 +103,8 @@ class ReadAheadTests(unittest.TestCase):
 
         with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
             with ahead([item("PN-1", "c1")]) as shared:
-                self.assertIsNone(shared.found("PN-1"))
+                with self.assertRaises(FmApiError):
+                    shared.found("PN-1")
 
     def test_nothing_is_asked_once_the_run_is_cancelled(self):
         asked = []

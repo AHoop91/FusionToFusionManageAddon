@@ -48,11 +48,6 @@ class _IncomingHandler(adsk.core.HTMLEventHandler):
         # a "response" action. It is an acknowledgement, not a request.
         if html_args.action == "response":
             return
-        if html_args.action == "palette_close":   # a page's own Close button: the palette it is in is hidden, not disposed
-            palette = self._palette_getter()
-            if palette:
-                palette.isVisible = False
-            return
         response = self._bridge.dispatch(html_args.action, html_args.data)
         palette = self._palette_getter()
         if palette:
@@ -69,7 +64,7 @@ class PaletteHost:
 
     def __init__(self, ui: adsk.core.UserInterface, bridge: MessageBridge,
                  palette_id: str, title: str, page: str, docked: bool = True,
-                 width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT, close_button: bool = True) -> None:
+                 width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT, fresh: bool = False) -> None:
         self._ui = ui
         self._bridge = bridge
         self._palette_id = palette_id
@@ -77,7 +72,7 @@ class PaletteHost:
         self._page = page
         self._docked = docked   # False: a floating window the user can place anywhere
         self._size = (width, height)
-        self._close_button = close_button   # False: the page has its own way to close, so Fusion adds no bar with a Close button under it
+        self._fresh = fresh   # True: closing the palette unloads its page, so it opens again as new (nothing of what it showed is kept)
         self._handler = None  # Kept referenced or Fusion garbage-collects it.
         self._palette = None
         try:
@@ -93,6 +88,8 @@ class PaletteHost:
         afterwards, as the API documents, so it opens in place. A new one has to be created showing (a palette created hidden loads its
         page without drawing it), so it is moved at once instead. Only the Fusion API is used, so this behaves the same on Windows and Mac.
         """
+        if self._fresh and not self.visible:
+            self.dispose()   # a closed palette is only hidden: unload what it left, but never one that is open
         is_new = self._ui.palettes.itemById(self._palette_id) is None
         if self._docked:
             palette = self._get_or_create(visible=True)
@@ -114,7 +111,7 @@ class PaletteHost:
             url = os.path.join(os.path.dirname(__file__), "web", self._page, "index.html")
             palette = self._ui.palettes.add(
                 self._palette_id, self._title, url.replace("\\", "/"),
-                visible, self._close_button, True, self._size[0], self._size[1], True,
+                visible, True, True, self._size[0], self._size[1], True,
             )
             if self._docked:
                 # Limit docking to the left/right edges so the panel always spans

@@ -71,12 +71,6 @@ class LookupTests(unittest.TestCase):
         self.assertEqual([c["id"] for c in lookup.info["candidates"]], ["7", "8"])
         self.assertIsNone(lookup.values)
 
-    def test_a_choice_among_several_is_found_and_read(self):
-        with service(hits=[{"id": "7"}, {"id": "8"}]):
-            lookup = lookup_item(ITEM, CFG, None, chosen="8")
-        self.assertEqual((lookup.info["state"], lookup.info["item_id"]), (FOUND, "8"))
-        self.assertEqual(lookup.values, {"read": "8"})
-
     def test_a_failure_of_fusion_manage_is_unknown(self):
         with service(error=FmApiError("down")):
             lookup = lookup_item(ITEM, CFG, None)

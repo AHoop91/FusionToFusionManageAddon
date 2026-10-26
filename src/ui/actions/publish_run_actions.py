@@ -6,6 +6,7 @@ to show the runs. ``retry_publish`` sends the folder of a failed run again: what
 """
 
 import os
+import threading
 from typing import Any, Dict
 
 from ...auth.auth_service import AuthService
@@ -15,20 +16,21 @@ from ...core.logging_setup import get_logger, log_directory
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
+from ...publish.panel_sections import publish_denial
 from ...publish.reports import publish_report, send_report
 from ...publish.runner import PublishRun
+from ...publish.sender import FolderError, SendRun, load_plan
 from ...publish.states import DONE, ERROR, FINISHED
 from ...publish.watched import Watched
-from ...publish.sender import FolderError, SendRun, load_plan
 from ...publish.writer import PublishFolder
 from ..file_dialogs import FileDialogs
-from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
+from ..message_bridge import MessageBridge
 from .design_ref import model_ref
-from ...publish.panel_sections import publish_denial
 
 log = get_logger("publish_run")
+
 
 def publish_root() -> str:
     """Where publish runs keep their files: ``publishes`` next to the logs in the user profile."""
@@ -72,6 +74,20 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         model_id, time = model_ref()
         if not model_id:
             return {"error": "Could not find the Data Model id of the open design."}
+        # The permission check asks Fusion Manage, which can take seconds: not on Fusion's thread, or Fusion freezes. The answer is pushed.
+        threading.Thread(target=lambda: begin(payload, cfg, model_id, time), daemon=True).start()
+        return {"checking": True}
+
+    def begin(payload: Dict[str, Any], cfg: Any, model_id: str, time: str) -> None:
+        """Check the permissions, then queue the publish (a worker thread), and tell the panel how it went: ``error`` or ``queued``."""
+        try:
+            answer = check_and_queue(payload, cfg, model_id, time)
+        except Exception as exc:  # noqa: BLE001 - the panel is waiting for an answer
+            log.exception("Could not start the publish")
+            answer = {"error": str(exc) or type(exc).__name__}
+        bridge.push("start_publish_result", answer)
+
+    def check_and_queue(payload: Dict[str, Any], cfg: Any, model_id: str, time: str) -> Dict[str, Any]:
         try:   # the panel is blocked without these permissions; this covers a page that was open when they changed
             denied = publish_denial(FmClient(config.effective_settings(), auth), cfg)
         except FmApiError as exc:

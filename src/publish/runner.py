@@ -44,10 +44,19 @@ SENT = "sent to Fusion Manage"   # the artifact of an item that was sent
 SKIPPED_COUNT = "skipped"   # the job's ``counts`` key for the items left out on purpose
 
 
+class SharedItemNumbers(Exception):
+    """Item numbers that several Fusion Manage items carry: the run cannot tell which item each means, and must not guess."""
+
+    def __init__(self, counts: Dict[str, int]) -> None:
+        self.counts = counts   # item number -> how many Fusion Manage items carry it
+        super().__init__("Nothing was published. Renumber or remove the extra items in Fusion Manage, then publish again.")
+
+
 class PublishRun(JobState):
     """State and steps of one run. ``snapshot`` is what the panel polls."""
 
     kind = "publish"
+    stage = "validating"   # then "items", then "bom": the run looks up every item number before it writes anything
     unreached = "Not published: the run failed."
 
     def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: MfgGraphQlClient,
@@ -72,6 +81,11 @@ class PublishRun(JobState):
         self._ahead: Optional[ReadAhead] = None   # the reads the items share, while the run is on them
         self._skipped = 0   # items left out on purpose, so the progress dialog does not count them as published
 
+    @property
+    def unlisted(self) -> bool:
+        """A run that failed in its validation wrote nothing: there is nothing in the Job Queue to look at, retry or clear."""
+        return self.phase == ERROR and self.stage == "validating"
+
     # ---- Worker thread ----------------------------------------------------------
 
     def work(self) -> None:
@@ -84,17 +98,37 @@ class PublishRun(JobState):
             publishable = [i for i in self.job["items"] if item_number_of(i).lower() not in self._shared]
             with ReadAhead(publishable, self.job["summary"], self._client, self._fm, self.cfg.workspace_id, self._time,
                            self._physical, lambda: self.cancelled) as self._ahead, ThreadPoolExecutor(max_workers=WORKERS) as pool:
+                self._require_unique_numbers(publishable)   # before the first item is written
+                self._set(stage="items")
                 list(pool.map(self._prepare, self.job["items"]))
             if not self.cancelled:
                 self._write_boms()
             log.info("Prepared %d item(s) in %.1fs", len(self.job["items"]), time.monotonic() - started)
             if self.sends and not self.cancelled:
                 self._send_boms()   # only now: every item has been created or updated
+        except SharedItemNumbers as exc:
+            log.warning("Publish stopped before writing: %s", ", ".join(sorted(exc.counts)))
+            self._finish(ERROR, str(exc))
+            return
         except Exception as exc:
             log.exception("Publish run failed")
             self._finish(ERROR, str(exc) or type(exc).__name__)
             return
         self._finish(CANCELLED if self.cancelled else DONE, "Cancelled." if self.cancelled else "")
+
+    def _require_unique_numbers(self, items: List[Dict[str, Any]]) -> None:
+        """Fail the whole run, with nothing written, when an item number is carried by several Fusion Manage items. A search that fails fails the run too:
+        without it the numbers cannot be known to be unique."""
+        counts = {number: len(self._ahead.found(number) or []) for number in {item_number_of(i) for i in items}}
+        shared = {number: count for number, count in counts.items() if count > 1}
+        if shared:
+            raise SharedItemNumbers(shared)
+
+    def snapshot(self) -> Dict[str, Any]:
+        """The job's state, with the validation: how far the look-up of the item numbers has come, and how many items carry each number found."""
+        ahead = self._ahead
+        return {**super().snapshot(), "validation": {"done": ahead.searched if ahead else 0, "total": ahead.to_search if ahead else 0,
+                                                     "counts": ahead.hits() if ahead else {}}}
 
     def _counts(self) -> Dict[str, int]:
         return {SKIPPED_COUNT: self._skipped}
@@ -158,7 +192,7 @@ class PublishRun(JobState):
         component = summary if item.get("root") else {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
         # Fusion Manage is asked for the item while the Data Model request this item shares is on its way.
         with ThreadPoolExecutor(max_workers=1) as background:
-            pending = background.submit(lookup_item, component, self.cfg, self._fm, str(item.get("fm_item") or ""), self._ahead.found(number))
+            pending = background.submit(lookup_item, component, self.cfg, self._fm, self._ahead.found(number))
             read = self._ahead.read(component_id)
             lookup = pending.result()
         result = compare_with_item(read["properties"], component, self.cfg, lookup, self._picklists.fit_number,

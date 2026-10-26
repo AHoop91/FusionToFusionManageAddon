@@ -115,12 +115,12 @@
   };
 
   /** The design and Fusion Manage lines in one compare table; a row click opens its details. ``keepFolds`` leaves the assemblies open or closed as they are. */
-  function show(lines, pick, keepFolds) {
+  function show(lines, shared, keepFolds) {
     const area = clear();
-    if (pick) {   // no table until the question is answered, so open the design's details, which ask it
-      showMessage('Several Fusion Manage items match this design. Choose one in the details to compare the Bill of Materials.');
-      setAddItemsState('Choose the Fusion Manage item for this design first.');
-      setPublishState(0, 'Choose the Fusion Manage item for this design first.');
+    if (shared) {   // no table until the number is fixed in Fusion Manage, so open the design's details, which say so
+      showMessage('Several Fusion Manage items carry this design\'s item number. Renumber or remove the extra items in Fusion Manage, then refresh. The Bill of Materials is not compared until then.');
+      setAddItemsState('Several Fusion Manage items carry this design\'s item number: fix it in Fusion Manage first.');
+      setPublishState(0, 'Several Fusion Manage items carry this design\'s item number: fix it in Fusion Manage first.');
       details.open(model.rootComponent(host.summary()));
       return;
     }
@@ -148,7 +148,7 @@
     fmItemId = data.fm_item_id || '';
     designNew = !!data.design_new;
     tree.setTop(data.rows);   // the rest is read as it is opened
-    show(tree.rows(), !!data.pick);
+    show(tree.rows(), !!data.shared);
   }
 
   // ---- Reading more of the tree --------------------------------------------------
@@ -188,7 +188,7 @@
     treeLoading = true;
     treeProgress = '';
     draw(true);
-    host.ask('tree', { section: 'tree', force: true, fm_item: details.choiceFor(host.summary()) });
+    host.ask('tree', { section: 'tree', force: true });
   }
 
   /** How far the whole tree is read; the tooltip of the spinning Expand all button says so. */
@@ -218,6 +218,7 @@
     [kidsLoading, kidsFailed].forEach(function (map) { Object.keys(map).forEach(function (id) { delete map[id]; }); });
     treeLoading = false;
     shown = false;
+    ns.bomTable.markChecks({});   // the rings were of the last publish
   }
 
   // ---- What publishing covers ----------------------------------------------------
@@ -285,7 +286,7 @@
       root_number: cover.summary.item_number || '',
       operations: plan.operations,
       items: plan.components.map(function (c) {
-        return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '', fm_item: details.choiceFor(c) };
+        return { id: c.id, root: !!c.root, item_number: c.item_number, part_number: c.part_number, description: c.description, name: c.name || '' };
       }),
     });
   }

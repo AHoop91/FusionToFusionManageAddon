@@ -96,8 +96,7 @@
     if (name === 'structure') bom.showLoading();
     const force = !!forceNext[name];
     forceNext[name] = false;
-    const rootItem = name === 'properties' || name === 'structure' ? currentSummary || {} : null;
-    request(name, { section: name, force: force, fm_item: rootItem ? details.choiceFor(rootItem) : '' });
+    request(name, { section: name, force: force });
   }
 
   /** Load each section the first time it is needed for the open design. */
@@ -209,23 +208,12 @@
       onRootLoad: function () {
         if (loaded.summary && !loaded.properties && !inflight.properties) loadSection('properties');
       },
-      // The user picked a Fusion Manage item for the design: compare its properties and BOM again with it.
-      onRootChoice: function () {
-        const choice = details.choiceFor(currentSummary || {});
-        inflight.properties = true;
-        bridge.send('load_publish_section', { section: 'properties', force: true, fm_item: choice });
-        if (loaded.structure) {
-          inflight.structure = true;
-          bom.showLoading();   // not the old comparison while the new one loads
-          bridge.send('load_publish_section', { section: 'structure', force: true, fm_item: choice });
-        }
-      },
       onRootRetry: function () {
         loaded.properties = false;
         loadSection('properties');
       },
     });
-    jobs.init({ onFinished: function () { refresh(true, true); } });   // Fusion Manage changed: read the whole panel again, not the cached copies
+    jobs.init({ onFinished: function () { refresh(true, true); }, onChecks: ns.bomTable.markChecks });   // Fusion Manage changed: read the whole panel again, not the cached copies
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
     $('pub-refresh').addEventListener('click', function () { refresh(true, true); });   // a click is always wanted: not merged with another trigger

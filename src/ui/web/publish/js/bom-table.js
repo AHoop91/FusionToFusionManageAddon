@@ -237,6 +237,7 @@
       const fresh = item.stagedId !== undefined && !seenBefore.has(item.stagedId);   // picked since the last draw
       const tr = el('tr', 'pub-cmp-row pub-cmp-' + model.statusOf(item) + (item.hidden ? ' pub-cmp-is-hidden' : '') + (fresh ? ' pub-cmp-fresh' : ''));
       const fmOnly = cells.fromFm(item);
+      if (!fmOnly && item.design && item.design.pn) tr.dataset.number = item.design.pn;   // the item-number check marks the row of its item (markChecks)
       if (item.status === 'extra' && decisions[item.key] === 'remove') tr.classList.add('pub-cmp-removing');
       tr.appendChild(cells.itemCell(fmOnly ? item.fm : item.design, item, isAssembly(i), toggle, cells.rowActions(item, redraw), cells.statusChip(item, false)));
       tr.appendChild(cells.presenceCell(!fmOnly, 'the design'));
@@ -317,15 +318,71 @@
     current = { items: items, trs: trs, redraw: redraw };
     paintSelection();
     apply();
+    paintMarks(view);
     // A table drawn afresh starts at the top; a redraw keeps its place (set once the folds have settled the height).
     if (keepFolds) { wrap.scrollTop = scrolled.top; wrap.scrollLeft = scrolled.left; } else scrolled = { top: 0, left: 0 };
     if (onReview) onReview(model.pendingReviews(items));
+  }
+
+  // ---- The check of the item numbers when publishing: each row shows what was found for its item number
+  let marks = {};   // item number (trimmed, lower case) -> checking, ok or review
+  const MARK_TITLES = {
+    checking: 'Checking Fusion Manage for items with this number',
+    ok: 'One Fusion Manage item has this number, or none',
+    review: 'Several Fusion Manage items have this number. Renumber or remove the extra items in Fusion Manage, then refresh.',
+  };
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /** The ring of a row: a grey track with a spinning arc while its number is checked, filled green with a tick when fine, a red X when several items carry the number. */
+  function ring(state) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('aria-hidden', 'true');
+    function add(tag, attrs) {
+      const node = document.createElementNS(SVG_NS, tag);
+      Object.keys(attrs).forEach(function (name) { node.setAttribute(name, attrs[name]); });
+      svg.appendChild(node);
+    }
+    add('circle', { class: 'pub-ring-track', cx: 10, cy: 10, r: 8 });
+    if (state === 'checking') add('circle', { class: 'pub-ring-arc', cx: 10, cy: 10, r: 8 });
+    else if (state === 'ok') add('path', { class: 'pub-ring-glyph', d: 'M6 10.5l2.8 2.8L14 7.5' });
+    else if (state === 'review') add('path', { class: 'pub-ring-glyph', d: 'M7 7l6 6M13 7l-6 6' });
+    return svg;
+  }
+
+  function paintMarks(root) {
+    if (!root) return;
+    const any = Object.keys(marks).some(function (key) { return MARK_TITLES[marks[key]]; });
+    root.classList.toggle('pub-has-ring', any);   // room for the rings at the start of each row
+    root.querySelectorAll('tr[data-number]').forEach(function (tr) {
+      const cell = tr.querySelector('.pub-tree-cell');
+      if (!cell) return;
+      const old = cell.querySelector('.pub-ring');
+      const state = marks[tr.dataset.number.trim().toLowerCase()];
+      if (old && old.dataset.state === state) return;   // already drawn
+      if (old) old.remove();
+      if (!MARK_TITLES[state]) return;
+      const mark = el('span', 'pub-ring pub-ring-' + state);
+      mark.dataset.state = state;
+      mark.title = MARK_TITLES[state];
+      mark.setAttribute('aria-label', MARK_TITLES[state]);
+      mark.appendChild(ring(state));
+      cell.insertBefore(mark, cell.firstChild);   // the first thing in the row, before the chevron
+    });
   }
 
   columns.onLayoutChange(function () { if (current && current.redraw) current.redraw(); });
 
   ns.bomTable = {
     render: render, select: select,
+    /** Show on each row what the check against Fusion Manage found (``states``: item number, lower case -> checking, ok or review); the ones with several items are the Duplicates filter. */
+    markChecks: function (states) {
+      marks = states || {};
+      paintMarks(document.querySelector('.pub-cmp-view'));
+      const several = Object.keys(marks).filter(function (number) { return marks[number] === 'review'; });
+      if (filters.setDuplicates(several) && current) current.redraw();   // the Duplicates filter and its count follow
+    },
     /** The next table drawn opens every assembly (the rest of the tree has just been read for Expand all). */
     openAllOnNextDraw: function () { openAllNext = true; },
     /** Is the assembly with this component id open? */

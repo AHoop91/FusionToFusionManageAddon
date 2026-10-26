@@ -89,13 +89,15 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
         while len(stack) > level + 1:
             close()
         frame = stack[-1]
-        # Each design line takes the first unused Fusion Manage line with its item number, so repeats pair one to one.
+        # Each design line takes an unused Fusion Manage line with its item number, so repeats pair one to one. Where two lines carry the number
+        # (two items share it), the one named like the design line is taken, else the first.
         line = None
-        for i, candidate in enumerate(fm_lines.get(_key(frame["number"])) or []):
-            if i not in frame["used"] and _key(candidate["number"]) == _key(item_number_of(row)):
-                frame["used"].add(i)
-                line = candidate
-                break
+        free = [(i, c) for i, c in enumerate(fm_lines.get(_key(frame["number"])) or [])
+                if i not in frame["used"] and _key(c["number"]) == _key(item_number_of(row))]
+        if free:
+            name = str(row.get("name") or row.get("description") or "").strip().lower()
+            index, line = next(((i, c) for i, c in free if name and str(c.get("name", "")).strip().lower() == name), free[0])
+            frame["used"].add(index)
         if line is None:
             status = NEW
         elif _same_quantity(str(row.get("quantity", "")), line["quantity"]):

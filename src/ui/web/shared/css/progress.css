@@ -9,6 +9,9 @@
 .progress-ok .progress-fill { background: var(--ok); }
 .progress-error .progress-fill { background: var(--danger); }
 .progress-count { margin: 6px 0 0; min-height: 16px; font-size: 12px; }
+.progress-step + .progress-step { margin-top: 12px; }
+.progress-step-head { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 5px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.progress-step-name { font-weight: 600; }
 .progress-note { margin: 12px 0 0; font-size: 12px; line-height: 1.45; }
 .progress-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .progress-confirm { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--danger); border-radius: 6px; font-size: 12px; line-height: 1.45; }

@@ -29,7 +29,7 @@ from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
 from ..fm.client import FmClient
 from ..fm.components import ComponentService, link_ids
-from ..fm.items import ItemService, pick_hit
+from ..fm.items import ItemChoices, ItemService
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.writer import safe_name
@@ -66,7 +66,7 @@ class AttachmentUpload:
 
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, window: PaletteHost,
                  config: ConfigService, auth: AuthService, reload: Callable[[], None],
-                 announce: Optional[Callable[[Dict[str, Any]], None]] = None) -> None:
+                 announce: Optional[Callable[[Dict[str, Any]], None]] = None, choices: Optional[ItemChoices] = None) -> None:
         self._ui = ui
         self._tasks = tasks
         self._host = host   # the Item panel: it shows the green tick, and the progress of an upload started in it
@@ -74,6 +74,7 @@ class AttachmentUpload:
         self._config = config
         self._auth = auth
         self._reload = reload   # read the item shown again (its tab counts change)
+        self._choices = choices or ItemChoices()   # which item is meant where several share a number: the Item panel's choice
         self._announce = announce   # told ``status()`` each time it changes, from any thread: the pages are pushed it, and also ask now and then
         self._lock = threading.Lock()
         self._components = TtlCache(60)   # (workspace id, item id) of a component's working version by item number, found ahead of an export
@@ -143,7 +144,10 @@ class AttachmentUpload:
         hits = ItemService(FmClient(self._config.effective_settings(), self._auth, cancel)).search(workspace_id, number)
         if not hits:
             raise LookupError(f"No item exists for {number}.")
-        return workspace_id, pick_hit(hits, number)["id"]
+        picked, competing = self._choices.resolve(workspace_id, number, hits)
+        if picked is None:   # the choice is made in the Item panel, which lists the items; a file is not attached to one of them by guesswork
+            raise LookupError(f"{len(competing)} Fusion Manage items match {number}. Open the item in the Item panel and choose one first.")
+        return workspace_id, picked["id"]
 
     def _find_component(self, number: str, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
         """``(workspace id, item id)`` of the working version of the component numbered ``number`` in the Components workspace. A worker thread."""

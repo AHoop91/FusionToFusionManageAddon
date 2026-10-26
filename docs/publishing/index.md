@@ -58,7 +58,7 @@ The pill at the top right of the Details Panel shows what publishing will do for
 | **New** | No item exists in Fusion Manage yet; publishing creates it. See [Item Creation](#item-creation). |
 | **Update** | The Fusion Manage value differs; publishing changes it. See [Item Update](#item-update). |
 | **Up to date** | The values already match. |
-| **Choose item** | Several Fusion Manage items have this number; pick the right one. |
+| **Shared number** | Several Fusion Manage items have this number. Fix it in Fusion Manage: publishing fails until then. |
 | **Error** | Fusion Manage could not be read for this item. |
 
 Properties with no mapping are listed as not published. Mapped properties are listed first so you see what will change.
@@ -71,7 +71,7 @@ Properties with no mapping are listed as not published. Mapped properties are li
 2. Optionally use **Add Existing Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](#add-existing-items)).
 3. Click **Publish**. The button is enabled once the BOM has loaded.
 
-A progress dialog appears. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
+A progress dialog appears with two bars, one after the other. **Validation** looks up every item number in Fusion Manage and shows how many it has checked. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). Once validation is complete and green, **Publishing** fills as the items are created or updated, then the Bill of Materials. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
 
 The dialog shows a progress bar with the count of items done and the time elapsed, and a tally of **Successful**, **Failed** and **Pending** items.
 
@@ -159,7 +159,7 @@ The add-in searches the Items workspace for the component's item number.
 |---|---|
 | One item found | The item is compared with the design and updated where needed |
 | No item found | The item is created. See [Item Creation](#item-creation) |
-| Several items found | The status is **Choose item**. Pick the right one in the Details Panel before you publish |
+| Several items found | The status is **Shared number**. The run fails before it writes anything: fix the number in Fusion Manage (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)) |
 
 ### What an update sends
 
@@ -185,18 +185,17 @@ An update never changes:
 !!! tip "Engineering changes"
     When a design changes after it was published, publish again. Items that still match are skipped, items that differ are updated, and what Manufacturing added in Fusion Manage is preserved.
 
-### Choosing between several matches
+### Item numbers that several items carry
 
-The add-in asks Fusion Manage for items whose descriptor matches the component's item number, and does not narrow the answer down itself. It uses the item when exactly one comes back. When more than one comes back it does not guess. This happens when:
+The add-in asks Fusion Manage for items whose descriptor matches the component's item number, and uses the item when exactly one comes back. When more than one comes back it does not guess, and nothing can be published until the number belongs to one item. This happens when two items in the workspace carry the same item number. Fusion Manage does not stop that, for example when items were created by hand or imported. The fix is in Fusion Manage: renumber or remove the extra items, then refresh the panel.
 
-- **Two items in the workspace carry the same item number.** Fusion Manage does not stop that, for example when items were created by hand or imported.
-- **The search also returns items whose descriptor merely resembles the number.** The descriptor holds the number followed by other text (for example `PN-1001 - Housing`), and Fusion Manage may return other descriptors for the same search.
+- **In the panel.** Open the component's details. The status is **Shared number**, and the Details Panel lists the Fusion Manage items that carry the number. A design whose own number is shared is not compared: the Bill of Materials says so, and **Publish** and **Add Existing Items** stay disabled.
+- **When you publish.** Before anything is written, the run looks up every item number in Fusion Manage. If any number is carried by several items, the whole run fails and nothing is published. The progress dialog shows the Validation bar failed and Publishing not started. While the numbers are looked up, each row of the Bill of Materials shows a spinner, then a green tick, or a red cross when several items carry its number. The crosses stay after the failure, and the panel does not refresh, so you can find the items to fix. The run does not appear in the Job Queue. Nothing is partly published, so after you have fixed Fusion Manage you publish again.
+- **If the look-up fails.** If Fusion Manage cannot be searched, the run fails the same way, because the numbers cannot be known to be unique.
 
-In that case the status is **Choose item**, with a message such as *3 Fusion Manage items match PN-1001. Choose one.* You can pick the item in the Details Panel. If you have not, clicking **Publish** stops before anything is sent and asks **Which item do you mean?**, with the items listed under each shared number. Choose one for each and click **Publish** again to carry on. **Cancel** sends nothing. The choice is used for that run and the Details Panel remembers it while the panel stays open.
+The [Item Panel](../item-panel/index.md#when-several-items-share-the-number) asks which item you mean, and remembers the item you pick. The right-click STEP upload, the drawing upload and the Export window use the Item panel's choice; when several items match and none was chosen they stop with a message and attach nothing.
 
-The [Item Panel](../item-panel/index.md#when-several-items-share-the-number) asks in the same way, and remembers the item you pick. The Publish panel's choice is its own: picking an item in one does not pick it in the other. The right-click STEP upload, the drawing upload and the Export window use the Item panel's choice; when several items match and none was chosen they stop with a message and attach nothing.
-
-A BOM line of an assembly that matches several items is left without a status for the same reason. Fix it by removing the duplicate in Fusion Manage, or choose the item in the Details Panel.
+A BOM line of an assembly that matches several items is left without a status for the same reason. Fix it by removing the duplicate in Fusion Manage.
 
 ### Permission needed
 
@@ -252,6 +251,10 @@ Fusion Manage often extends the design BOM with manufacturing lines such as oil 
 
 Each line reads **Item Number - Part Name**. A component with no item number is **Skipped**: no item can be created for it. Its quantity box is greyed out and cannot be edited, and the **i** on its chip explains why when you hover it. Everything below a skipped assembly is skipped too, because it has no item to join in the Fusion Manage BOM.
 
+### Items that share an item number
+
+Lines are matched by item number, and two Fusion Manage items can carry the same number (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). When a design line could match either, the Fusion Manage line with the same name is taken, and the other is shown as a **Fusion Manage Only** line. If no name matches, the first line with that number is taken.
+
 ### Shared item numbers
 
 If two different components carry the same item number, they would both write to the one Fusion Manage item, each overwriting the other. The add-in does not publish either. Both lines are **Skipped**, with the names of the others in the tooltip, and so is everything below them. The same component appearing on several lines is not a clash. Give each component its own item number in Fusion, save, and refresh.
@@ -263,7 +266,7 @@ If two different components carry the same item number, they would both write to
 
 ### Filters
 
-The **Filters** drop-down above the table (top left) narrows it to rows of one status (**Review**, **New**, **Added**, **Update**, **Fusion Manage Only** or **Skipped**); tick any number at once. **Show Hidden Components** is separate: it adds the components that are hidden in the Fusion component tree, marked with a crossed eye. Each filter shows how many lines it holds, and its tooltip explains what it shows. **Clear filters** unticks them all. Next to it, at the right, **Collapse all** and **Expand all** fold the whole tree.
+The **Filters** drop-down above the table (top left) narrows it to rows of one status (**Review**, **New**, **Added**, **Update**, **Fusion Manage Only**, **Skipped** or **Duplicates**); tick any number at once. **Duplicates** holds the lines whose item number several Fusion Manage items carry, once a publish has found them, so you can go straight to the items to fix. **Show Hidden Components** is separate: it adds the components that are hidden in the Fusion component tree, marked with a crossed eye. Each filter shows how many lines it holds, and its tooltip explains what it shows. **Clear filters** unticks them all. Next to it, at the right, **Collapse all** and **Expand all** fold the whole tree.
 
 ### Paired rows: a replaced item
 

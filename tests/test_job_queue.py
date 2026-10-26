@@ -9,11 +9,12 @@ from src.publish.states import DONE, ERROR
 
 
 class Run(JobState):
-    """A run that finishes at once, with its one row ``done`` or ``error``."""
+    """A run that finishes at once, with its one row ``done`` or ``error``; ``unlisted`` is a run that stopped before writing anything."""
 
-    def __init__(self, name, outcome=DONE):
+    def __init__(self, name, outcome=DONE, unlisted=False):
         super().__init__(name, "folder")
         self.outcome = outcome
+        self.stopped_early = unlisted
         self.ended = threading.Event()
         self.rows = [self.row(name, "")]
 
@@ -21,6 +22,10 @@ class Run(JobState):
         self._start()
         self.rows[0]["status"] = "done" if self.outcome == DONE else "error"
         self._finish(self.outcome, "")
+
+    @property
+    def unlisted(self):
+        return self.stopped_early
 
     def _finish(self, phase, message):
         self._end(phase, message)
@@ -59,6 +64,14 @@ class JobQueueTests(unittest.TestCase):
         self.assertEqual(names(queue), ["A", "B"])
         queue.clear_finished()
         self.assertEqual(names(queue), [])
+
+    def test_a_run_that_stopped_before_writing_does_not_turn_the_queue_to_error_and_is_forgotten_at_the_next_run(self):
+        queue = JobQueue()
+        self.finish(queue, Run("A", ERROR, unlisted=True))
+        self.assertEqual(queue.state(), "idle")
+        self.assertEqual(names(queue), ["A"])   # the panel that queued it still reads how it ended
+        self.finish(queue, Run("B"))
+        self.assertEqual(names(queue), ["B"])
 
 
 if __name__ == "__main__":

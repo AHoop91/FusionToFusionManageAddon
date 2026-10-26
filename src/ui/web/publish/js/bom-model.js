@@ -286,7 +286,7 @@
   }
 
   ns.bomModel = {
-    decisions: decisions, clearDecisions: clearDecisions, canEditQuantity: canEditQuantity, quantityOf: quantityOf, setQuantity: setQuantity,
+    decisions: decisions, clearDecisions: clearDecisions, canEditQuantity: canEditQuantity, baseQuantity: baseQuantity, quantityOf: quantityOf, setQuantity: setQuantity,
     quantityDiffers: quantityDiffers, quantityEdited: quantityEdited, revertQuantity: revertQuantity, statusOf: statusOf, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent,
     buildItems: buildItems, arrange: arrange, groupsOf: groupsOf, pendingReviews: pendingReviews,
   };

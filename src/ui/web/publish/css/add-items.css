@@ -23,7 +23,6 @@
 /* Once dragged or resized the dialog is pinned at a place and size of its own, and the list takes the height. */
 .pub-add-dialog { position: relative; }
 .pub-add-dialog.sized { position: absolute; max-width: none; max-height: none; }
-.pub-add-dialog.sized .pub-add-body { flex: 1 1 auto; }
 .pub-add-dialog.sized .pub-add-panes { flex: 1 1 0; }
 .pub-add-dialog.sized .pub-add-main { height: auto; }
 .pub-add-dialog.sized .pub-add-list { min-height: 90px; }
@@ -46,8 +45,8 @@
 .pub-add-version {
   box-sizing: border-box; height: 28px; min-width: 150px; padding: 0 10px 0 12px; border: 1px solid #cfd4d9; border-radius: 6px; background: #fff;
   color: #1f2328; font: inherit; font-weight: 500; cursor: pointer; outline: none; transition: border-color .15s, box-shadow .15s;
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap;
 }
-.pub-add-version { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
 .pub-add-version svg { flex: none; color: #596068; }
 .pub-add-version-menu { padding: 4px; }
 .pub-add-version-menu .pub-add-menu-option { padding: 7px 12px; }

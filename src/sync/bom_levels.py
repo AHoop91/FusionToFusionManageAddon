@@ -10,9 +10,9 @@ from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
+from ..config.workspace_models import WorkspaceConfig
 from ..fm.client import FmClient
 from ..fm.items import ItemService
-from ..config.workspace_models import WorkspaceConfig
 from .bom_compare import PARENT_SKIPPED, SKIPPED, UNCOMPARED, compare_bom, mark_skipped, read_and_compare_bom
 from .item_compare import item_number_of
 
@@ -39,33 +39,33 @@ def search_design(fm: FmClient, cfg: WorkspaceConfig, summary: Dict[str, Any]) -
 
 
 def compare_design_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: WorkspaceConfig,
-                       fm: FmClient, chosen: str, hits: List[Dict[str, Any]]) -> Dict[str, Any]:
+                       fm: FmClient, hits: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Mark each BOM row read under the design against the Fusion Manage BOM of the open design.
 
     ``hits`` are the Fusion Manage items found for the design's number (``search_design``).
     One BOM call, deep enough for what was read, covers every assembly in it. Rows stay unchecked
-    (no status) when the design is not compared. When the design matches several items and none is
-    chosen, ``pick`` is set and the panel waits for the choice.
+    (no status) when the design is not compared. When several items carry the design's number,
+    ``shared`` is set: nothing is compared until the number is fixed in Fusion Manage.
     ``fm_item_id`` is the Fusion Manage item compared with, empty when there is none (the Add Items picker needs it).
     """
     number = item_number_of(summary)
     log.info("Design structure of %s: %s", number or "(no number)", "; ".join(
         f"{'  ' * int(r['level'])}{r['item_number'] or '(no item number)'} x{r['quantity']}" for r in rows) or "no components")
     if not cfg or not cfg.workspace_id or not number:
-        return {"rows": _skipped_only(rows), "pick": False}
+        return {"rows": _skipped_only(rows), "shared": False}
     if not hits:
         # The design is not in Fusion Manage, so there is nothing to compare with. Each line is left unmarked, not asked about one by one (a
         # large design would be many requests): publishing looks each item up by its number then, and uses the one that is there.
-        return {"rows": _uncompared(rows), "pick": False, "design_new": True}   # ``design_new``: the panel can say so at once, with no check to wait for
-    picked = next((h for h in hits if h["id"] == chosen), None) or (hits[0] if len(hits) == 1 else None)
-    if not picked:
-        return {"rows": rows, "pick": True}
+        return {"rows": _uncompared(rows), "shared": False, "design_new": True}   # ``design_new``: the panel can say so at once, with no check to wait for
+    if len(hits) > 1:
+        return {"rows": rows, "shared": True}
+    picked = hits[0]
     # A Fusion Manage or sign-in failure is not caught: the section fails and the panel offers Retry,
     # rather than caching a table that looks compared but is not.
     watch = Stopwatch()
     compared = read_and_compare_bom(rows, number, fm, cfg.workspace_id, picked["id"])
     log.debug("Read and compared the BOM of %s in %.2fs, %d rows", number, watch.lap(), len(rows))
-    return {"rows": compared, "pick": False, "fm_item_id": picked["id"]}
+    return {"rows": compared, "shared": False, "fm_item_id": picked["id"]}
 
 
 def compare_level(rows: List[Dict[str, Any]], parent_number: str, parent_skipped: bool, compared: bool, cfg: WorkspaceConfig,

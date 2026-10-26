@@ -30,7 +30,6 @@
         <p id="conn-summary" class="muted">Loading...</p>
         <div class="row">
           <button id="signin-btn" class="btn">Sign in</button>
-          <button class="btn btn-secondary" type="button" data-close>Close</button>
         </div>
         <p id="conn-error" class="error" hidden></p>
       </div>
@@ -101,7 +100,6 @@
       <footer class="pub-footer">
         <!-- What publishing covers (what is in view), filled in by publish-bom.js. -->
         <div id="pub-pills" class="pub-pills" role="status" aria-label="What publishing covers"></div>
-        <button class="btn btn-secondary" type="button" data-close>Close</button>
         <button id="pub-publish" class="btn" disabled title="Waiting for the Bill of Materials.">Publish</button>
       </footer>
     </div>
@@ -109,13 +107,28 @@
 
   <!-- Progress of the publish just queued, filled in by publish-jobs.js. It can be closed; the run continues. -->
   <div id="progress" class="progress-backdrop" hidden>
-    <div class="progress" role="dialog" aria-modal="true" aria-labelledby="progress-title" aria-describedby="progress-status">
-      <h2 id="progress-title" class="progress-title"></h2>
-      <p id="progress-status" class="progress-status"></p>
-      <div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
-        <div id="progress-fill" class="progress-fill"></div>
+    <div class="progress pub-modal" role="dialog" aria-modal="true" aria-labelledby="progress-title" aria-describedby="progress-status">
+      <div class="pub-modal-head">
+        <span id="progress-badge" class="pub-badge" aria-hidden="true"></span>
+        <div class="pub-modal-text">
+          <h2 id="progress-title" class="progress-title"></h2>
+          <p id="progress-status" class="progress-status"></p>
+        </div>
       </div>
-      <p class="muted progress-count"><span id="progress-count"></span><span id="progress-elapsed"></span></p>
+      <!-- Two steps, one after the other: every item number is looked up in Fusion Manage first, then the items are published. -->
+      <div id="validate-step" class="progress-step">
+        <p class="progress-step-head"><span class="progress-step-name">Validation</span><span id="validate-count" class="muted"></span></p>
+        <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validation" aria-valuemin="0" aria-valuemax="100">
+          <div id="validate-fill" class="progress-fill"></div>
+        </div>
+      </div>
+      <div id="publish-step" class="progress-step">
+        <p class="progress-step-head"><span class="progress-step-name">Publishing</span><span id="progress-count" class="muted"></span></p>
+        <div id="progress-bar" class="progress-bar" role="progressbar" aria-label="Publishing" aria-valuemin="0" aria-valuemax="100">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </div>
+      <p class="muted progress-count"><span id="progress-elapsed"></span></p>
       <div id="progress-tally" class="progress-tally" role="group" aria-label="Items by result" hidden>
         <div class="progress-stat progress-stat-ok"><b id="tally-ok">0</b><span>Successful</span></div>
         <div class="progress-stat progress-stat-failed"><b id="tally-failed">0</b><span>Failed</span></div>

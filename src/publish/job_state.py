@@ -31,6 +31,11 @@ class JobState:
     def row(item: str, description: str, root: bool = False) -> Dict[str, Any]:
         return {"item": item, "description": description, "root": root, "status": QUEUED, "detail": ""}
 
+    @property
+    def unlisted(self) -> bool:
+        """Is the job not one of the queue's, to be shown and counted there? It is still read by the panel that queued it."""
+        return False
+
     def _start(self) -> bool:
         """Move to running; False if the job was cancelled while it waited."""
         with self._lock:

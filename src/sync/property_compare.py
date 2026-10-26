@@ -9,9 +9,9 @@ current value, and a status telling the user what publishing would do:
 * ``unmapped``: no field mapping uses this property; it is not published.
 * ``unknown``: mapped, but the Fusion Manage item could not be read.
 * ``unchecked``: mapped, but Fusion Manage has not been looked up (``fm_state`` ``unchecked``).
-* ``multiple``: mapped, but several Fusion Manage items match and none is chosen yet.
+* ``multiple``: mapped, but several Fusion Manage items carry the item number, so none is used.
 
-``fm_state`` is ``found``, ``new`` (no item yet), ``multiple`` (several items, none chosen), ``unknown`` (lookup failed) or ``unchecked``.
+``fm_state`` is ``found``, ``new`` (no item yet), ``multiple`` (several items carry the number), ``unknown`` (lookup failed) or ``unchecked``.
 """
 
 from typing import Any, Callable, Dict, List, Optional, Tuple

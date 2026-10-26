@@ -1,7 +1,7 @@
 import unittest
 
 from src.fm.client import UPLOAD_CHUNK_BYTES, _chunks
-from src.fm.items import pick_hit
+from src.fm.items import ItemChoices, pick_hit, resolve_hits
 from src.fm.tabs import COUNTED, parse_counts
 
 TABS = {"tabs": [
@@ -31,6 +31,63 @@ class PickHitTests(unittest.TestCase):
 
     def test_the_first_hit_is_used_when_none_matches_exactly(self):
         self.assertEqual(pick_hit(self.HITS, "PN-9")["id"], "1")
+
+
+class ResolveHitsTests(unittest.TestCase):
+    TWINS = [{"id": "1", "descriptor": "PN-001276 - End Cap Pulley Side"}, {"id": "2", "descriptor": "PN-001276 - End Cap Pulley Side"}]
+
+    def test_one_hit_is_used_without_asking(self):
+        picked, competing = resolve_hits([self.TWINS[0]], "PN-001276")
+        self.assertEqual(picked["id"], "1")
+        self.assertEqual(len(competing), 1)
+
+    def test_several_exact_hits_need_a_choice(self):
+        picked, competing = resolve_hits(self.TWINS, "PN-001276")
+        self.assertIsNone(picked)
+        self.assertEqual([hit["id"] for hit in competing], ["1", "2"])
+
+    def test_one_exact_hit_among_look_alikes_is_used(self):
+        hits = [{"id": "1", "descriptor": "PN-0012761 - Other"}, {"id": "2", "descriptor": "PN-001276 - End Cap"}]
+        picked, competing = resolve_hits(hits, "pn-001276")
+        self.assertEqual(picked["id"], "2")
+        self.assertEqual(len(competing), 1)
+
+    def test_several_look_alikes_and_no_exact_hit_need_a_choice(self):
+        hits = [{"id": "1", "descriptor": "PN-0012761 - A"}, {"id": "2", "descriptor": "PN-0012762 - B"}]
+        picked, competing = resolve_hits(hits, "PN-001276")
+        self.assertIsNone(picked)
+        self.assertEqual(len(competing), 2)
+
+    def test_a_chosen_item_settles_it(self):
+        picked, competing = resolve_hits(self.TWINS, "PN-001276", "2")
+        self.assertEqual(picked["id"], "2")
+        self.assertEqual(len(competing), 2)
+
+    def test_no_hits_is_nothing_to_choose(self):
+        self.assertEqual(resolve_hits([], "PN-1"), (None, []))
+
+
+class ItemChoicesTests(unittest.TestCase):
+    TWINS = ResolveHitsTests.TWINS
+
+    def test_a_choice_is_kept_by_workspace_and_number_ignoring_case(self):
+        choices = ItemChoices()
+        choices.set("242", "PN-001276", "2")
+        self.assertEqual(choices.resolve("242", " pn-001276 ", self.TWINS)[0]["id"], "2")
+        self.assertIsNone(choices.resolve("999", "PN-001276", self.TWINS)[0])
+
+    def test_a_choice_that_is_no_longer_a_hit_is_forgotten(self):
+        choices = ItemChoices()
+        choices.set("242", "PN-001276", "7")
+        self.assertIsNone(choices.resolve("242", "PN-001276", self.TWINS)[0])
+        choices.set("242", "PN-001276", "")
+        self.assertIsNone(choices.resolve("242", "PN-001276", self.TWINS)[0])
+
+    def test_an_empty_id_clears_the_choice(self):
+        choices = ItemChoices()
+        choices.set("242", "PN-001276", "1")
+        choices.set("242", "PN-001276", "")
+        self.assertIsNone(choices.resolve("242", "PN-001276", self.TWINS)[0])
 
 
 class ChunkTests(unittest.TestCase):

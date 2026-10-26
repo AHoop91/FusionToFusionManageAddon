@@ -32,6 +32,7 @@
 
   // The icons of the two empty states. Static markup.
   const ICON_MISSING = '<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M13 3l6 6v2M13 3v4a2 2 0 0 0 2 2h4"/><circle cx="16" cy="16.5" r="3.5"/><path d="M18.6 19.1 21 21.5"/>';
+  const ICON_SEVERAL = '<path d="M8 7h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>';
   const ICON_DENIED = '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>';
 
   /** Say, in the middle of the panel and in place of the item, ``text`` with a ``hint`` under it. */
@@ -47,9 +48,44 @@
     $('item-empty-hint').hidden = !hint;
     $('item-empty-number').textContent = number || '';
     $('item-empty-number').hidden = !number;   // the item number that has no item yet
+    $('item-empty-picker').hidden = true;   // only the "several items" state has it: see showChoices
     $('item-empty-steps').hidden = !offerPublish;   // what Publish will do: only the "not published" state has it
     $('item-empty').classList.toggle('item-empty-denied', icon === ICON_DENIED);
     $('item-empty').hidden = false;
+  }
+
+  const CHOICES_COMPACT = 4;   // more items than this are listed one line each
+  const CHOICES_FILTER = 8;   // more items than this get a box to narrow them by typing
+
+  /** Several items share the item number: list them, one button each, and send the one picked. */
+  function showChoices(entry) {
+    showEmpty(ICON_SEVERAL, 'Several Items Share This Number', 'Choose the item to open. Your choice is kept until Fusion closes.', false, entry.choose_number);
+    const box = $('item-empty-picker');
+    const list = $('item-empty-choices');
+    const filter = $('item-empty-filter');
+    const note = $('item-empty-capped');
+    const many = entry.choose.length > CHOICES_COMPACT;   // one line each, so a long list is quick to scan
+    list.replaceChildren();
+    list.classList.toggle('item-choices-compact', many);
+    const rows = entry.choose.map(function (candidate) {
+      const row = el('li');
+      const button = el('button', 'item-choice', '');
+      button.type = 'button';
+      button.appendChild(el('span', 'item-choice-name', candidate.descriptor));
+      button.appendChild(el('span', 'item-choice-id', (many ? 'ID ' : 'Item ID ') + candidate.id));
+      button.addEventListener('click', function () { bridge.send('choose_item', { item_id: candidate.id }); });
+      row.appendChild(button);
+      list.appendChild(row);
+      return { row: row, text: (candidate.descriptor + ' ' + candidate.id).toLowerCase() };
+    });
+    filter.hidden = entry.choose.length <= CHOICES_FILTER;   // a long list can be narrowed by typing
+    filter.value = '';
+    filter.oninput = function () {
+      const words = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
+      rows.forEach(function (r) { r.row.hidden = !words.every(function (w) { return r.text.indexOf(w) >= 0; }); });
+    };
+    note.hidden = !entry.choose_capped;   // the search returns no more than this many: the one meant may not be among them
+    box.hidden = false;
   }
 
   const LAZY_TABS = ['files', 'bom', 'whereused', 'workflows', 'changelog'];
@@ -279,6 +315,7 @@
     });
     itemUrl = view.url || '';
     $('item-open').hidden = !itemUrl;
+    $('item-switch').hidden = !(view.others && view.others.length > 1);   // several items share the number: the user may pick another
   }
 
   // What the open document uploads, shared with the Files tab's toolbar: ``actions`` as Python's ``upload_context`` gives them, whether one
@@ -501,6 +538,7 @@
     quietRead = false;
     shownSeq = entry.seq;
     if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
+    if (entry.choose && entry.choose.length) { showChoices(entry); return; }
     if (entry.missing) {
       showEmpty(ICON_MISSING, 'No Item Exists In Fusion Manage Yet', 'Fusion Manage has no item in the Items workspace for this design.', true, entry.missing);
       return;
@@ -548,6 +586,7 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
     $('item-check-label').addEventListener('click', openDiff);
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
+    $('item-switch').addEventListener('click', function () { bridge.send('choose_item', { item_id: '' }); });   // forget the choice: the list is shown again
     $('item-open').addEventListener('click', function () { if (itemUrl) bridge.send('open_url', { url: itemUrl }); });
     $('item-empty-publish').addEventListener('click', function () { bridge.send('open_publish'); });
     bridge.on('open_publish', function (r) {

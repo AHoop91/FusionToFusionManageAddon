@@ -142,7 +142,7 @@ flowchart LR
         K["<b>Skipped</b><br/>Nothing is published"]
         N["<b>New</b><br/>A publish creates the item"]
         U["<b>Found</b><br/>Updated if it differs"]
-        X["<b>Choose item</b><br/>You pick the right one"]
+        X["<b>Shared number</b><br/>Fix it in Fusion Manage"]
     end
 
     C --> H

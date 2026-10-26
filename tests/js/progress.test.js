@@ -12,6 +12,7 @@ window.MfgUi = {};
 run(window, 'js/publish-jobs.js');
 const describe = window.MfgUi.pubJobs.describe;
 const tally = window.MfgUi.pubJobs.tally;
+const validation = window.MfgUi.pubJobs.validation;
 const elapsedText = window.MfgUi.pubJobs.elapsedText;
 
 const job = (extra) => Object.assign({
@@ -100,4 +101,37 @@ test('the elapsed time counts up on a clock while the job runs and stops when it
 test('a job that has not started has no elapsed time', () => {
   assert.strictEqual(elapsedText(job({ phase: 'queued', started_at: 0 })), '');
   assert.strictEqual(elapsedText(null), '');
+});
+
+test('while the item numbers are looked up the validation bar fills and publishing waits', () => {
+  const looking = job({ stage: 'validating', validation: { done: 10, total: 40 } });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(validation(looking))), { percent: 25, count: '10 of 40 item numbers', tone: '' });
+  const view = describe(looking);
+  assert.match(view.status, /Looking up every item number/);
+  assert.strictEqual(view.percent, 0, 'nothing is published until the numbers are checked');
+});
+
+test('once the items are being published the validation bar is full and green', () => {
+  const check = validation(job({ stage: 'items', validation: { done: 40, total: 40 } }));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(check)), { percent: 100, count: '40 item numbers checked', tone: 'ok' });
+});
+
+test('a run that fails in the validation shows it there and leaves publishing empty', () => {
+  const failed = job({ phase: 'error', stage: 'validating', message: 'PN-1 is shared', validation: { done: 40, total: 40 } });
+  assert.strictEqual(validation(failed).tone, 'error');
+  const view = describe(failed);
+  assert.strictEqual(view.percent, 0);
+  assert.strictEqual(view.tone, '');
+  assert.strictEqual(view.status, 'PN-1 is shared');
+});
+
+test('a run that fails after the validation passed keeps the validation green', () => {
+  const failed = job({ phase: 'error', stage: 'items', validation: { done: 3, total: 3 } });
+  assert.strictEqual(validation(failed).tone, 'ok');
+  assert.strictEqual(describe(failed).tone, 'error');
+});
+
+test('with nothing to look up the validation is indeterminate until it ends', () => {
+  assert.strictEqual(validation(job({ stage: 'validating', validation: { done: 0, total: 0 } })).percent, null);
+  assert.strictEqual(validation(job({ stage: 'items', validation: { done: 0, total: 0 } })).percent, 100);
 });

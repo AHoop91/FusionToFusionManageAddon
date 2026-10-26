@@ -140,6 +140,37 @@
 .progress-stat-failed.progress-stat-on b { color: var(--danger); }
 .progress-stat-pending.progress-stat-on b { color: var(--text); }
 
+/* ---- Progress dialog: header badge, the two steps, the numbers that stopped the validation ----- */
+.pub-modal { max-width: 440px; padding: 24px; border: 0; border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, .28); }
+.pub-modal-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+.pub-modal-text { min-width: 0; flex: 1; }
+.pub-modal .progress-title { margin: 2px 0 4px; font-size: 17px; line-height: 1.3; }
+.pub-modal .progress-status { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+.pub-badge { flex: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); color: var(--muted); font-size: 18px; font-weight: 700; }
+.pub-badge-busy { border: 3px solid rgba(0, 0, 0, .08); border-top-color: var(--accent); background: transparent; animation: pub-spin .9s linear infinite; }
+.pub-badge-ok { background: rgba(45, 164, 78, .14); color: var(--ok); }
+.pub-badge-ok::before { content: "\2713"; }
+.pub-badge-error { background: rgba(207, 34, 46, .12); color: var(--danger); }
+.pub-badge-error::before { content: "\2715"; }
+
+.pub-modal .progress-step + .progress-step { margin-top: 14px; }
+.pub-modal .progress-step-head { margin-bottom: 6px; font-size: 13px; }
+.pub-modal .progress-step-name { display: inline-flex; align-items: center; gap: 8px; }
+.pub-modal .progress-step-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.pub-modal .progress-active .progress-step-name::before { background: var(--accent); }
+.pub-modal .progress-ok .progress-step-name::before { background: var(--ok); }
+.pub-modal .progress-error .progress-step-name::before { background: var(--danger); }
+.pub-modal .progress-idle .progress-step-name { color: var(--muted); }
+.pub-modal .progress-bar { height: 8px; border-radius: 4px; }
+.pub-modal .progress-fill { border-radius: 4px; }
+.pub-modal .progress-tally { margin-top: 18px; border-radius: 8px; }
+.pub-modal .progress-count { margin-top: 12px; }
+.pub-modal .progress-note { margin-top: 14px; }
+.pub-modal .progress-actions { margin-top: 20px; }
+
+@media (prefers-reduced-motion: reduce) { .pub-badge-busy { animation-duration: 3s; } }
+
 /* ---- Publish jobs: each job with progress and result (the Jobs window) ----------------- */
 .pub-jobs-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .pub-jobs-title { margin: 0; font-size: 15px; font-weight: 600; }

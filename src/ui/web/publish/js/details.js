@@ -6,7 +6,6 @@
  *
  * ``init`` takes: ``request(slot, payload)`` to ask Python for a component,
  * ``onRootLoad()`` when the design's row is opened (read its properties unless that is done or under way),
- * ``onRootChoice(itemId)`` when the user picks a Fusion Manage item for the design, and
  * ``onRootRetry()`` to read the design's properties again.
  */
 (function (ns) {
@@ -22,7 +21,7 @@
     mismatch:  'Differs: publishing will update Fusion Manage',
     new:       'No Fusion Manage item yet: publishing will create it',
     unknown:   'Fusion Manage value could not be read',
-    multiple:  'Several Fusion Manage items match: choose one',
+    multiple:  'Several Fusion Manage items carry this item number: fix it in Fusion Manage',
     unchecked: 'Mapped: Fusion Manage is not checked yet',
   };
 
@@ -31,7 +30,7 @@
     new:      { text: 'New', title: STATUS.new },
     mismatch: { text: 'Update', title: 'Publishing will update the Fusion Manage item' },
     match:    { text: 'Up to date', title: STATUS.match },
-    multiple: { text: 'Choose item', title: STATUS.multiple },
+    multiple: { text: 'Shared number', title: STATUS.multiple },
     unknown:  { text: 'Error', title: 'Fusion Manage could not be read' },
   };
 
@@ -44,34 +43,20 @@
   const compares = {};          // component id -> comparison
   const errors = {};            // component id -> message
   const loading = {};           // component id -> true while being read
-  const choices = {};           // item number -> Fusion Manage item id the user picked
-  const changing = {};          // item number -> true while the user re-picks an already chosen item
   const collapsed = {};         // sub header -> true while collapsed; kept across components
   const DEFAULT_WIDTHS = [24, 34, 34, 8];   // Property, Fusion, Fusion Manage, status: Fusion and Fusion Manage share the room equally
   const MIN_COLUMN_PCT = 12;
   const colWidths = DEFAULT_WIDTHS.slice();   // as dragged
   const thumbs = {};            // component id -> thumbnail url ('' none, null while being read)
 
-  function choiceKey(item) { return item.item_number || ''; }
-
-  /** The Fusion Manage item the user picked for this component ('' when none). */
-  function choiceFor(item) { return choices[choiceKey(item)] || ''; }
-
   function compareOf(item) { return item.root ? rootCompare : compares[item.id]; }
 
   /** Why a component's details could not be read: the design's own properties fail separately from the rest. */
   function errorOf(item) { return (item.root && rootError) || errors[item.id] || ''; }
 
-  /** The Fusion Manage item chosen among several that share the item number, if any. */
-  function pickedCandidate(compare) {
-    const fm = compare && compare.fm;
-    return fm && fm.candidates ? fm.candidates.filter(function (c) { return c.id === fm.item_id; })[0] : undefined;
-  }
-
-  /** True when the component must show the "which Fusion Manage item" question instead of its properties. */
-  function needsPick(compare, item) {
-    const fm = compare && compare.fm;
-    return !!(fm && fm.candidates && fm.candidates.length && (fm.state === 'multiple' || changing[choiceKey(item)]));
+  /** True when several Fusion Manage items carry the component's item number: it cannot be published until that is fixed in Fusion Manage. */
+  function isShared(compare) {
+    return !!(compare && compare.fm && compare.fm.state === 'multiple');
   }
 
   /** One state for a component: does publishing change anything in Fusion Manage? */
@@ -90,7 +75,7 @@
     loading[item.id] = true;
     errors[item.id] = '';
     hooks.request('component:' + item.id, {
-      section: 'component', id: item.id, force: skipCache || force, fm_item: choiceFor(item),
+      section: 'component', id: item.id, force: skipCache || force,
       item_number: item.item_number, part_number: item.part_number, description: item.description,
     });
   }
@@ -136,21 +121,6 @@
       errors[selected.id] = '';
       loading[selected.id] = false;
       load(selected);
-    }
-    paint();
-  }
-
-  /** Remember the picked Fusion Manage item and compare again with it. */
-  function choose(item, itemId) {
-    choices[choiceKey(item)] = itemId;
-    delete changing[choiceKey(item)];
-    if (item.root) {
-      rootCompare = null;
-      hooks.onRootChoice(itemId);
-    } else {
-      delete compares[item.id];
-      loading[item.id] = false;
-      load(item, true);
     }
     paint();
   }
@@ -241,7 +211,7 @@
       card.appendChild(el('p', 'muted', 'This item has no properties.'));
       return card;
     }
-    if (!pickedCandidate(compare) && compare.fm.message) {
+    if (compare.fm.message) {
       card.appendChild(el('p', compare.fm.state === 'unknown' ? 'pub-error' : 'muted', compare.fm.message));
     }
     const mapped = compare.rows.filter(function (r) { return r.status !== 'unmapped'; });
@@ -250,24 +220,16 @@
     return card;
   }
 
-  /** Several Fusion Manage items share the item number: list their descriptors and ask which one. */
-  function pickerCard(fm, item) {
+  /** Several Fusion Manage items carry the item number: list them, and say the number has to be fixed in Fusion Manage. */
+  function sharedCard(fm) {
     const card = el('div', 'card pub-pick-card');
-    card.appendChild(el('h4', 'pub-pick-title', 'Which Fusion Manage item?'));
-    card.appendChild(el('p', 'muted', fm.candidates.length + ' items match ' + fm.item_number + '. Choose the one to publish to.'));
+    card.appendChild(el('h4', 'pub-pick-title', 'Item number shared'));
+    card.appendChild(el('p', 'muted', fm.candidates.length + ' Fusion Manage items carry ' + fm.item_number + '. Renumber or remove the extra items in Fusion Manage, then refresh this panel. Nothing can be published until each item number belongs to one item.'));
     fm.candidates.forEach(function (c) {
-      const button = el('button', 'pub-fm-choice' + (c.id === fm.item_id ? ' active' : ''), c.descriptor);
-      button.type = 'button';
-      button.title = c.descriptor;
-      button.addEventListener('click', function () { choose(item, c.id); });
-      card.appendChild(button);
+      const line = el('div', 'pub-fm-choice', c.descriptor);
+      line.title = c.descriptor;
+      card.appendChild(line);
     });
-    if (fm.state !== 'multiple') {
-      const cancel = el('button', 'pub-outline-button pub-retry', 'Cancel');
-      cancel.type = 'button';
-      cancel.addEventListener('click', function () { delete changing[choiceKey(item)]; paint(); });
-      card.appendChild(cancel);
-    }
     return card;
   }
 
@@ -311,6 +273,7 @@
     text.appendChild(el('h3', 'pub-props-title', number || selected.title));
     if (number && name) text.appendChild(el('p', 'pub-props-subtitle', name));
     head.appendChild(text);
+    const side = el('div', 'pub-props-side');   // the state pill, in the top right corner
     const state = changeState(compare);
     if (compare && PILLS[state]) {
       const pill = el('span', 'pub-state pub-state-' + state);
@@ -320,15 +283,9 @@
       info.appendChild(ui.svg(['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5']));
       pill.appendChild(info);
       pill.title = PILLS[state].title;
-      head.appendChild(pill);
+      side.appendChild(pill);
     }
-    if (pickedCandidate(compare)) {
-      const change = el('button', 'pub-fm-change', 'Change');
-      change.type = 'button';
-      change.title = 'Choose a different Fusion Manage item';
-      change.addEventListener('click', function () { changing[choiceKey(selected)] = true; paint(); });
-      head.appendChild(change);
-    }
+    if (side.childNodes.length) head.appendChild(side);
     return head;
   }
 
@@ -337,15 +294,8 @@
     pane.textContent = '';
     const compare = compareOf(selected);
     pane.appendChild(headCard(compare));
-    const picked = pickedCandidate(compare);
-    if (picked && !needsPick(compare, selected)) {
-      const note = el('div', 'pub-dup-note');
-      note.appendChild(el('strong', '', compare.fm.candidates.length + ' Fusion Manage items share ' + compare.fm.item_number));
-      note.appendChild(el('span', '', 'Publishing to: ' + picked.descriptor));
-      pane.appendChild(note);
-    }
-    if (needsPick(compare, selected)) {   // only the question, nothing else
-      pane.appendChild(pickerCard(compare.fm, selected));
+    if (isShared(compare)) {   // only the explanation, nothing else
+      pane.appendChild(sharedCard(compare.fm));
       return;
     }
     let content;
@@ -408,17 +358,17 @@
 
   /** Drag the pane's left edge to change its width; arrow keys nudge it, double-click restores the default. */
   function initResize() {
-    const pane0 = $('pub-detail');
+    const box = $('pub-detail');
     const handle = $('pub-detail-resize');
     function setWidth(w) {
-      const max = Math.max(MIN_WIDTH, pane0.parentElement.getBoundingClientRect().width - MIN_BOM_WIDTH);
-      pane0.style.flexBasis = Math.min(max, Math.max(MIN_WIDTH, w)) + 'px';
+      const max = Math.max(MIN_WIDTH, box.parentElement.getBoundingClientRect().width - MIN_BOM_WIDTH);
+      box.style.flexBasis = Math.min(max, Math.max(MIN_WIDTH, w)) + 'px';
     }
     let startX = 0;
     let startWidth = 0;
     handle.addEventListener('pointerdown', function (e) {
       startX = e.clientX;
-      startWidth = pane0.getBoundingClientRect().width;
+      startWidth = box.getBoundingClientRect().width;
       handle.setPointerCapture(e.pointerId);
       handle.classList.add('dragging');
     });
@@ -426,12 +376,12 @@
       if (handle.hasPointerCapture(e.pointerId)) setWidth(startWidth + startX - e.clientX);
     });
     handle.addEventListener('pointerup', function () { handle.classList.remove('dragging'); });
-    handle.addEventListener('dblclick', function () { pane0.style.flexBasis = ''; });
+    handle.addEventListener('dblclick', function () { box.style.flexBasis = ''; });
     handle.addEventListener('keydown', function (e) {
       const step = e.key === 'ArrowLeft' ? 20 : e.key === 'ArrowRight' ? -20 : 0;
       if (!step) return;
       e.preventDefault();
-      setWidth(pane0.getBoundingClientRect().width + step);
+      setWidth(box.getBoundingClientRect().width + step);
     });
   }
 
@@ -446,6 +396,6 @@
 
   ns.pubDetails = {
     init: init, open: open, reset: reset, setRoot: setRoot, setRootError: setRootError,
-    changeState: changeState, handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail, choiceFor: choiceFor,
+    changeState: changeState, handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail,
   };
 })(window.MfgUi);

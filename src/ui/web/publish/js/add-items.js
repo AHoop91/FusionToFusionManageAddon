@@ -11,13 +11,15 @@
  *     (polled here), and a reply that no longer matches the search on screen is dropped;
  *   - a page is appended once, as a fragment, rows are never rebuilt, and one click listener serves every row;
  *   - rows skip layout and paint while off screen (``content-visibility`` in add-items.css).
- * Items the Bill of Materials already holds, or that are staged in the panel, are shown ticked, greyed and locked.
+ * Items the Bill of Materials already holds, or that are staged in the panel, are left out of the list; a switch shows them ticked,
+ * greyed and locked.
  */
 (function (ns) {
   'use strict';
 
   const bridge = ns.bridge;
-  const el = ns.pubUi.el;
+  const ui = ns.pubUi;
+  const el = ui.el;
 
   const POLL_MS = 200;          // wait between checks for an answer
   const PREFETCH_PX = 600;      // load the next page when this close to the end of the list
@@ -26,11 +28,13 @@
   const MENU_ROWS = 100;        // most choices a local drop-down draws at once; typing narrows it
   const MENU_PREFETCH_PX = 60;  // load the next batch of a long drop-down when this close to its end
   const MENU_SEARCH_MS = 250;   // typing pause before a long drop-down is searched
+  const CARET = ['M6 9l6 6 6-6'];
+
+  // The versions the search can list, by the search's ``revision`` filter.
+  const VERSIONS = [{ revision: '3', label: 'Working version' }, { revision: '1', label: 'Latest version' }];   // the first is searched until another is picked
 
   // State of the open dialog. ``generation`` changes whenever the search restarts, which makes every reply for the
   // old search stale; requests for the property list and picklists belong to the dialog, not to one search.
-  // The versions the search can list, by the search's ``revision`` filter.
-  const VERSIONS = [{ revision: '3', label: 'Working version' }, { revision: '1', label: 'Latest version' }];   // the first is searched until another is picked
 
   let dialog = null;            // { overlay, list, ... } while open
   let generation = 0;
@@ -220,7 +224,7 @@
     status.hidden = false;
     if (failed) {
       status.classList.add('pub-add-status-card');
-      status.appendChild(ns.pubUi.svg(['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
+      status.appendChild(ui.svg(['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
       status.appendChild(el('h4', 'pub-error-title', 'Could not load items'));
       status.appendChild(el('p', 'muted', failed));
       const retry = el('button', 'pub-outline-button pub-retry', 'Retry');
@@ -229,7 +233,7 @@
       status.appendChild(retry);
     } else if (loading && !items.length) {
       status.classList.add('pub-add-status-card');
-      status.appendChild(ns.pubUi.loaderNode());
+      status.appendChild(ui.loaderNode());
     } else if (loading) {   // later pages: small bouncing balls beside the caption
       status.classList.add('pub-add-status-busy');
       const balls = el('div', 'balls');
@@ -357,7 +361,7 @@
     button.type = 'button';
     button.title = label;
     button.setAttribute('aria-label', label);
-    button.appendChild(ns.pubUi.svg(['M6 6l12 12', 'M18 6L6 18'], size));
+    button.appendChild(ui.svg(['M6 6l12 12', 'M18 6L6 18'], size));
     button.addEventListener('click', onClick);
     return button;
   }
@@ -374,11 +378,26 @@
   }
 
   // One drop-down list is open at a time; it hangs off the document so the filter pane cannot clip it.
-  let openMenu = null;   // { menu, button }
+  let openMenu = null;   // { menu, button, onClose }
+
+  /** A click on a drop-down's button: closes its list when open (false), else closes any other list and says to open this one (true). */
+  function toggleMenu(button) {
+    const wasOpen = !!openMenu && openMenu.button === button;
+    closeMenu();
+    return !wasOpen;
+  }
+
+  /** Hang ``menu`` (already placed) off the document as the open list of ``button``; ``onClose`` (optional) runs when it closes. */
+  function showMenu(button, menu, onClose) {
+    document.body.appendChild(menu);
+    button.setAttribute('aria-expanded', 'true');
+    openMenu = { menu: menu, button: button, onClose: onClose };
+    document.addEventListener('mousedown', onOutside, true);
+  }
 
   function closeMenu() {
     if (!openMenu) return;
-    openMenu.onClose();
+    if (openMenu.onClose) openMenu.onClose();
     openMenu.menu.remove();
     openMenu.button.setAttribute('aria-expanded', 'false');
     document.removeEventListener('mousedown', onOutside, true);
@@ -403,11 +422,10 @@
     button.setAttribute('aria-expanded', 'false');
     const text = el('span', 'pub-add-version-text', VERSIONS[0].label);
     button.appendChild(text);
-    button.appendChild(ns.pubUi.svg(['M6 9l6 6 6-6'], 14));
+    button.appendChild(ui.svg(CARET, 14));
 
     button.addEventListener('click', function () {
-      if (openMenu && openMenu.button === button) { closeMenu(); return; }
-      closeMenu();
+      if (!toggleMenu(button)) return;
       const menu = el('div', 'pub-add-menu pub-add-version-menu');
       menu.setAttribute('role', 'listbox');
       VERSIONS.forEach(function (choice) {
@@ -428,10 +446,7 @@
       menu.style.left = at.left + 'px';
       menu.style.top = at.bottom + 4 + 'px';
       menu.style.minWidth = at.width + 'px';
-      document.body.appendChild(menu);
-      button.setAttribute('aria-expanded', 'true');
-      openMenu = { menu: menu, button: button, onClose: function () {} };
-      document.addEventListener('mousedown', onOutside, true);
+      showMenu(button, menu);
     });
     return { button: button, get value() { return value; } };
   }
@@ -453,7 +468,7 @@
     button.setAttribute('aria-label', label);
     const text = el('span', 'pub-add-combo-text');
     button.appendChild(text);
-    button.appendChild(ns.pubUi.svg(['M6 9l6 6 6-6'], 14));
+    button.appendChild(ui.svg(CARET, 14));
     wrap.appendChild(button);
     // A round X on the field itself, shown while a value is chosen.
     wrap.appendChild(iconButton('pub-add-combo-clear', 'Clear ' + label.toLowerCase(), 10, function () { set(''); }));
@@ -475,19 +490,18 @@
     }
 
     button.addEventListener('click', function () {
-      if (openMenu && openMenu.button === button) { closeMenu(); return; }
-      closeMenu();
+      if (!toggleMenu(button)) return;
       const menu = el('div', 'pub-add-menu');
       const search = el('input', 'pub-add-menu-search');
       search.type = 'search';
       search.placeholder = 'Search...';
       search.setAttribute('aria-label', 'Search the list');
       const count = el('div', 'pub-add-menu-count');
-      const options = el('div', 'pub-add-menu-list');
-      options.setAttribute('role', 'listbox');
+      const choices = el('div', 'pub-add-menu-list');
+      choices.setAttribute('role', 'listbox');
       menu.appendChild(search);
       menu.appendChild(count);
-      menu.appendChild(options);
+      menu.appendChild(choices);
 
       // What the list holds: for a long list the batches read so far, for a short one every entry.
       let entries = remote ? [] : source;
@@ -524,22 +538,22 @@
         }
         count.appendChild(line);
         if (busy) count.appendChild(spinner());
-        options.textContent = '';
+        choices.textContent = '';
         shown.forEach(function (entry) {
           const option = el('button', 'pub-add-menu-option', entry.label);
           option.type = 'button';
           option.setAttribute('role', 'option');
           option.setAttribute('aria-selected', String(entry.value === value));
           option.addEventListener('click', function () { set(entry.value); });
-          options.appendChild(option);
+          choices.appendChild(option);
         });
         if (busy) {
           const row = el('div', 'pub-add-menu-loading');
           row.appendChild(spinner());
           row.appendChild(el('span', '', shown.length ? 'Loading more...' : 'Loading values...'));
-          options.appendChild(row);
+          choices.appendChild(row);
         } else if (!shown.length) {
-          options.appendChild(el('div', 'pub-add-menu-none', failedRead ? 'Try again in a moment' : (remote && !search.value.trim() ? 'Nothing to choose from' : 'No match')));
+          choices.appendChild(el('div', 'pub-add-menu-none', failedRead ? 'Try again in a moment' : (remote && !search.value.trim() ? 'Nothing to choose from' : 'No match')));
         }
       }
 
@@ -558,7 +572,7 @@
           nextOffset += page.raw;
           total = page.raw ? page.total : entries.length;   // an empty batch is the end, whatever the total said
           paint();
-          if (options.scrollHeight <= options.clientHeight + MENU_PREFETCH_PX) more();   // not enough rows to scroll yet
+          if (choices.scrollHeight <= choices.clientHeight + MENU_PREFETCH_PX) more();   // not enough rows to scroll yet
         });
       }
 
@@ -570,12 +584,12 @@
         nextOffset = 0;
         busy = false;
         failedRead = false;
-        options.scrollTop = 0;
+        choices.scrollTop = 0;
         more();
       }
 
-      options.addEventListener('scroll', function () {
-        if (options.scrollHeight - options.scrollTop - options.clientHeight < MENU_PREFETCH_PX) more();
+      choices.addEventListener('scroll', function () {
+        if (choices.scrollHeight - choices.scrollTop - choices.clientHeight < MENU_PREFETCH_PX) more();
       }, { passive: true });
       search.addEventListener('input', function () {
         if (!remote) { paint(); return; }
@@ -586,21 +600,18 @@
         if (event.key === 'Escape') { event.stopPropagation(); closeMenu(); button.focus(); }
         else if (event.key === 'Enter') {
           event.preventDefault();
-          const first = options.querySelector('.pub-add-menu-option');
+          const first = choices.querySelector('.pub-add-menu-option');
           if (first) first.click();
         }
       });
 
-      document.body.appendChild(menu);
       const r = button.getBoundingClientRect();
       const below = window.innerHeight - r.bottom;
       menu.style.left = r.left + 'px';
       menu.style.width = r.width + 'px';
       if (below < 220 && r.top > below) { menu.style.bottom = (window.innerHeight - r.top + 2) + 'px'; }
       else { menu.style.top = (r.bottom + 2) + 'px'; }
-      button.setAttribute('aria-expanded', 'true');
-      openMenu = { menu: menu, button: button, onClose: function () { clearTimeout(searchTimer); } };
-      document.addEventListener('mousedown', onOutside, true);
+      showMenu(button, menu, function () { clearTimeout(searchTimer); });
       search.focus();
       if (remote) restartList(); else paint();
     });

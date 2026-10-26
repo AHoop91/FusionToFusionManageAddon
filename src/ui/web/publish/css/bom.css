@@ -130,6 +130,17 @@
 .pub-cmp-tool-busy:disabled { opacity: 1; cursor: progress; }
 .pub-cmp-tool-busy::after { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: pub-spin .7s linear infinite; }
 
+/* The check of the item numbers when publishing: what was found for a row's item number, as a ring beside it. */
+.pub-tree-cell { position: relative; }
+.pub-has-ring .pub-tree-cell { padding-left: calc(var(--indent, 0px) + 28px); }   /* room at the start of the row for the ring */
+.pub-ring { position: absolute; left: 6px; top: 50%; width: 18px; height: 18px; margin-top: -9px; }
+.pub-ring svg { display: block; width: 18px; height: 18px; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.pub-ring-track { stroke: var(--border); stroke-width: 2; }
+.pub-ring-arc { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 14 50; transform-origin: 10px 10px; animation: pub-spin .8s linear infinite; }
+.pub-ring-glyph { stroke: #fff; stroke-width: 1.8; }
+.pub-ring-ok .pub-ring-track { fill: var(--ok); stroke: var(--ok); }
+.pub-ring-review .pub-ring-track { fill: var(--danger); stroke: var(--danger); }
+
 /* ---- Lines that are being read: a spinner where the chevron was, grey rows under it, or what went wrong ------ */
 @keyframes pub-spin { to { transform: rotate(360deg); } }
 @keyframes pub-fade-in { from { opacity: 0; } to { opacity: 1; } }

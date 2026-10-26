@@ -32,7 +32,7 @@ from ..fm.associated_workflows import AssociatedWorkflowService
 from ..fm.change_log import ChangeLogService
 from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
-from ..fm.items import ItemService, pick_hit
+from ..fm.items import SEARCH_LIMIT, ItemChoices, ItemService
 from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.tabs import TabService
 from ..fm.ttl_cache import TtlCache
@@ -67,6 +67,15 @@ class ItemNotFound(Exception):
         self.number = number
 
 
+class SeveralItems(Exception):
+    """Several items share this item number and the user has not said which one is meant. ``candidates`` are ``{"id", "descriptor"}``."""
+
+    def __init__(self, number: str, candidates: List[Dict[str, str]]) -> None:
+        super().__init__(f"{len(candidates)} Fusion Manage items match {number}. Choose one.")
+        self.number = number
+        self.candidates = candidates
+
+
 class NoAccess(Exception):
     """The user may not view the Items workspace."""
 
@@ -75,8 +84,9 @@ class NoAccess(Exception):
 
 
 def _answer(**changes: Any) -> Dict[str, Any]:
-    """An answer of the page's poll: nothing found yet, with ``changes`` (``missing`` is an item number with no item, ``denied`` a message)."""
-    return {"pending": False, "ok": False, "message": "", "view": None, "missing": "", "denied": "", **changes}
+    """An answer of the page's poll: nothing found yet, with ``changes`` (``missing`` is an item number with no item, ``denied`` a message,
+    ``choose`` the items to pick from when several share the item number ``choose_number``)."""
+    return {"pending": False, "ok": False, "message": "", "view": None, "missing": "", "denied": "", "choose": [], "choose_number": "", "choose_capped": False, **changes}
 
 
 def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
@@ -160,8 +170,9 @@ class ItemPanel:
                  config: ConfigService, auth: AuthService, progress: PaletteHost, show_publish: Callable[[], None]) -> None:
         self._ui = ui
         self._show_publish = show_publish
+        self._choices = ItemChoices()   # the item picked where several share a number; the uploads use it too, so they agree with the panel
         self._uploads = AttachmentUpload(ui, tasks, host, progress, config, auth, self._reload,
-                                         lambda status: bridge.push("upload_status", status))   # the pages are told how far it has got
+                                         lambda status: bridge.push("upload_status", status), self._choices)   # the pages are told how far it has got
         self._tasks = tasks
         self._host = host
         self._config = config
@@ -184,6 +195,7 @@ class ItemPanel:
         bridge.register("files_freshness", self._files_freshness)
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
+        bridge.register("choose_item", self._choose_item)
         bridge.register("add_step_file", self._add_step_file)
         bridge.register("where_used_load", self._where_used_load)
         bridge.register("where_used_result", self._lookup_result)
@@ -400,6 +412,16 @@ class ItemPanel:
         if not number and not quiet:
             self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
         return bool(number)
+
+    def _choose_item(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Remember which of the items that share the number is meant (``item_id``; empty to be asked again), and read the item. UI thread."""
+        cfg = self._config.config.workspaces.get(ITEMS_KIND)
+        if not (self._number and cfg and cfg.workspace_id):
+            raise ValueError("No item is shown.")
+        self._choices.set(cfg.workspace_id, self._number, str(payload.get("item_id") or ""))
+        self._start()
+        self._host.send("item_changed")
+        return {"chosen": True}
 
     def _refresh(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """Read the item shown again (the page's Refresh button)."""
@@ -635,6 +657,9 @@ class ItemPanel:
         except ItemNotFound as exc:   # not an error: the panel says there is no such item
             log.info("No Fusion Manage item for %s", exc.number)
             state = _answer(message=str(exc), missing=exc.number)
+        except SeveralItems as exc:   # not an error either: the panel lists the items, and the user picks one
+            log.info("%d Fusion Manage items for %s: the user is asked which", len(exc.candidates), exc.number)
+            state = _answer(message=str(exc), choose=exc.candidates, choose_number=exc.number, choose_capped=len(exc.candidates) >= SEARCH_LIMIT)
         except NoAccess as exc:   # not an error either: the panel says so, in place of the item
             log.info("No permission to view the items workspace")
             state = _answer(message=str(exc), denied=str(exc))
@@ -670,9 +695,14 @@ class ItemPanel:
                 raise ValueError(f"Fusion Manage search failed: {exc}") from exc
         if not hits:
             raise ItemNotFound(number)
-        if len(hits) > 1:
-            log.warning("Item number %s matches %d items; showing the first", number, len(hits))
-        return ItemViewService(client).read(cfg.workspace_id, pick_hit(hits, number)["id"], held)
+        picked, competing = self._choices.resolve(cfg.workspace_id, number, hits)
+        if len(competing) > 1:
+            log.info("Item number %s matches %d items: %s", number, len(competing), "; ".join(f"{h['id']} ({h['descriptor']})" for h in competing))
+        if picked is None:
+            raise SeveralItems(number, competing)
+        view = ItemViewService(client).read(cfg.workspace_id, picked["id"], held)
+        view["others"] = competing if len(competing) > 1 else []   # the page offers to choose again
+        return view
 
 
 def _selects_root(entities: Any) -> bool:

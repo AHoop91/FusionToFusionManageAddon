@@ -294,6 +294,23 @@
 .item-empty .item-empty-hint { margin: -6px 0 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .item-empty .btn[hidden], .item-empty [hidden] { display: none; }
 
+/* Several items share the number: a list of buttons, each with the item's descriptor and id. */
+.item-empty-picker { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 360px; margin-top: 4px; }
+.item-empty-filter { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 13px; }
+.item-empty-capped { margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.item-empty-choices { list-style: none; margin: 0; padding: 0; width: 100%; max-height: 45vh; overflow-y: auto; }
+.item-empty-choices li + li { margin-top: 8px; }
+.item-choice {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; box-sizing: border-box; padding: 10px 14px; text-align: left; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); font: inherit;
+}
+.item-choice:hover, .item-choice:focus-visible { border-color: var(--accent); outline: none; }
+.item-choices-compact li + li { margin-top: 4px; }
+.item-choices-compact .item-choice { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 12px; }
+.item-choices-compact .item-choice-id { flex: none; }
+.item-choice-name { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.item-choice-id { font-size: 11px; color: var(--muted); }
+
 /* The item number that has no item, as a small tag under the title. */
 .item-empty .item-empty-number {
   margin: -4px 0 0; padding: 3px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff;

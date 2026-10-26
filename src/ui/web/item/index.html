@@ -54,6 +54,12 @@
       <p id="item-empty-text" class="item-empty-text"></p>
       <p id="item-empty-number" class="item-empty-number" hidden></p>
       <p id="item-empty-hint" class="item-empty-hint"></p>
+      <!-- Several items share the number: one button each, filled in by item.js. -->
+      <div id="item-empty-picker" class="item-empty-picker" hidden>
+        <input id="item-empty-filter" class="item-empty-filter" type="search" placeholder="Filter by name or ID" aria-label="Filter the items" hidden>
+        <ul id="item-empty-choices" class="item-empty-choices"></ul>
+        <p id="item-empty-capped" class="item-empty-capped" hidden>Only the first items found are listed. If yours is not here, give the items different numbers in Fusion Manage.</p>
+      </div>
       <!-- What the Publish button will do, so the user knows what comes next. Nothing is sent until they confirm in the Publish panel. -->
       <ol id="item-empty-steps" class="item-empty-steps" hidden>
         <li>Opens the Publish panel, where you review what will be sent</li>
@@ -72,6 +78,10 @@
       <div class="item-actions">
         <button id="item-open" class="item-icon-btn" type="button" hidden title="Open in browser" aria-label="Open this item in Fusion Manage in your browser">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+        </button>
+        <!-- Shown when several items share this item number: shows the list again, to choose another. -->
+        <button id="item-switch" class="item-icon-btn" type="button" hidden title="Several items share this number: choose another" aria-label="Several items share this item number. Choose another">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/></svg>
         </button>
         <button id="item-refresh" class="item-icon-btn" type="button" title="Refresh" aria-label="Read the item again from Fusion Manage">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg>
