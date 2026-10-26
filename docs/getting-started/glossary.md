@@ -19,10 +19,10 @@ Plain-English meanings of the terms used in this documentation. Terms are in alp
 | **Fusion Manage** | Autodesk's cloud product lifecycle management (PLM) system. It holds the manufactured **items**. |
 | **Hub** | Your organisation's workspace in Autodesk. Settings are kept per hub. |
 | **Item** | A record in Fusion Manage for a manufactured part, with its own BOM, files and release workflow. |
-| **Item number** | The unique number that identifies an item. It comes from the component's **part number** in Fusion. |
+| **Item number** | The number Fusion Manage finds an item by. It is the component's **Item Number** in the Manufacturing Data Model, and it is what the add-in matches on. A component with no item number cannot be published. |
 | **Job** | One publish. The Job Queue lists jobs that are waiting, running and finished. |
 | **Manufacturing Data Model (MDM)** | The description of your design that Fusion saves in the cloud: components, properties, BOM structure and thumbnails. The add-in reads it and never changes it. |
-| **Part number** | A component's number in Fusion. It becomes the item number in Fusion Manage. A component with no part number cannot be published. |
+| **Part number** | What Fusion calls a component. The add-in uses it only to find the component you selected in the open design, then reads that component's item number from the Manufacturing Data Model. Fusion Manage is not searched by it. |
 | **Publish** | Create or update items and BOMs in Fusion Manage from a design. Only the differences are sent. |
 | **Representation** | A file that describes an item, such as a STEP file or a drawing PDF. You upload these yourself. They are never sent by a publish. |
 | **Tenant** | Your company's Fusion Manage site. It is the part before `.autodeskplm360.net` in your Fusion Manage address. |

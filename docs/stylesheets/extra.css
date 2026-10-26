@@ -29,6 +29,48 @@
   height: auto;
 }
 
+/* Text and a screenshot side by side. They wrap onto separate lines (text first) when the page column is too narrow for both, which
+   depends on the room the content has, not on the window: the side menus take a lot of it. */
+.md-typeset .side-by-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin: 1em 0;
+}
+
+.md-typeset .side-by-side > :first-child {
+  flex: 1 1 30rem;
+  min-width: 0;
+}
+
+.md-typeset .side-by-side > :last-child {
+  flex: 0 1 24rem;
+  min-width: 0;
+}
+
+/* Both columns start at the same line: no top margin on the first thing in either (the image sits in a paragraph, which has one). */
+.md-typeset .side-by-side > * > :first-child {
+  margin-top: 0;
+}
+
+.md-typeset .side-by-side > * > :last-child {
+  margin-bottom: 0;
+}
+
+.md-typeset .side-by-side img {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+/* A table in the text column: the number column stays narrow, the text wraps at word breaks. */
+.md-typeset .side-by-side table:not([class]) th:first-child,
+.md-typeset .side-by-side table:not([class]) td:first-child {
+  width: 2.5rem;
+  text-align: center;
+}
+
 /* Wider left menu so long titles fit on one line. */
 @media screen and (min-width: 76.25em) {
   .md-sidebar--primary {
@@ -296,10 +338,17 @@
   --nav-bg: currentcolor;
   --nav-w: 1rem;
   --nav-m: 0.5rem;
-  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>');
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 3C7.58 3 4 4.79 4 7s3.58 4 8 4 8-1.79 8-4-3.58-4-8-4M4 9v3c0 2.21 3.58 4 8 4s8-1.79 8-4V9c0 2.21-3.58 4-8 4S4 11.21 4 9m0 5v3c0 2.21 3.58 4 8 4s8-1.79 8-4v-3c0 2.21-3.58 4-8 4s-8-1.79-8-4z"/></svg>');
 }
 
 .md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(5) > .md-nav > .md-nav__list > .md-nav__item:nth-child(2) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(5) > .md-nav > .md-nav__list > .md-nav__item:nth-child(3) > a.md-nav__link {
   --nav-bg: currentcolor;
   --nav-w: 1rem;
   --nav-m: 0.5rem;
@@ -753,16 +802,31 @@ body.sidebar-resizing .md-sidebar__scrollwrap {
   border-left-width: 3px;
 }
 
+/* One indent step per heading level. The page title (h1) is the first list, so h2 is the second, and so on down to h6: a level with no
+   rule of its own would sit at the indent of the one above it. */
 .md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__link {
-  padding-left: 1.4rem;
+  padding-left: 1.3rem;
 }
 
 .md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__list .md-nav__link {
-  padding-left: 2.2rem;
+  padding-left: 2rem;
 }
 
 .md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__link {
-  padding-left: 3rem;
+  padding-left: 2.7rem;
+}
+
+.md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__link {
+  padding-left: 3.4rem;
+}
+
+.md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__link {
+  padding-left: 4.1rem;
+}
+
+/* A heading that wraps onto a second line keeps its text aligned, and a long word breaks instead of running out of the panel. */
+.md-sidebar--secondary .md-nav__link {
+  overflow-wrap: anywhere;
 }
 
 /* Top bar: burger | current page. The logo and site name move into the menu. */
@@ -887,4 +951,16 @@ html[data-fm-font="large"] {
   font-size: 0.55rem;
   font-weight: 700;
   line-height: 1;
+}
+
+/* Jumping to a heading from the contents list: land it just under the top bar, so the heading counts as reached and the list marks it, not
+   the one above. A page that ends in a short section gets room below it, so even the last headings can be scrolled up to the top. */
+.md-typeset :is(h1, h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: 2.5rem;
+}
+
+.md-content__inner::after {
+  content: "";
+  display: block;
+  height: 40vh;
 }

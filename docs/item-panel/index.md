@@ -19,7 +19,7 @@ The **Item Panel** shows an item's Fusion Manage record inside Fusion, next to t
 - Select a component and choose **Manage ▸ Item Management ▸ Open Fusion Manage Item**, or right-click the component and choose **Open Fusion Manage Item**.
 - With nothing selected, the panel shows the item of the open design (or, in a drawing, of the design the drawing shows).
 
-The add-in looks the item up in the Items workspace by the component's part number. The panel is drawn by the add-in from the item's own sections and fields, so it needs no separate web sign-in.
+The add-in finds the component you selected by its part number in the open design, reads that component's item number from the Manufacturing Data Model, and looks the item up in the Items workspace by that item number. The panel is drawn by the add-in from the item's own sections and fields, so it needs no separate web sign-in.
 
 **The panel follows your selection.** While it is open, selecting another component shows that component's item.
 

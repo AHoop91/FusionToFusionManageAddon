@@ -1,0 +1,102 @@
+---
+title: Manufacturing Data Model
+---
+
+# Manufacturing Data Model
+
+**What you'll do here:** nothing to set. This page explains where the add-in gets its data, and what has to be true of your design before you publish.
+
+The Manufacturing Data Model is the source of everything the add-in publishes. This page explains what it is, what the add-in reads from it, and what has to be true of your design for the data to be there. How that data is matched to Fusion Manage fields is set in [Configuration](../configuration/index.md#item-workspace).
+
+## What it is
+
+When you save a design in Fusion, Autodesk stores a structured description of it in the cloud: its components, their properties, the BOM structure that relates them, and their thumbnails. That cloud description is the Manufacturing Data Model. It is exposed through an Autodesk Platform Services (APS) API.
+
+The add-in uses it as a **read-only** source. It never writes to it.
+
+```mermaid
+flowchart TB
+    F["<b>Fusion</b><br/>Design and drawing"] -->|"Save"| M["<b>Manufacturing Data Model</b><br/>Components, properties,<br/>BOM structure, thumbnails"]
+    M -->|"Read only"| A["<b>Fusion Manage add-in</b>"]
+
+    classDef source fill:transparent,stroke:#94a3b8,stroke-width:2px
+    classDef addin fill:transparent,stroke:#1d4f91,stroke-width:4px
+    class F,M source
+    class A addin
+```
+
+### Why the add-in reads from the cloud
+
+Reading the cloud description, rather than asking the open Fusion document, has practical benefits:
+
+- A publish runs in the background. It does not freeze Fusion, and **the design does not need to stay open** while it runs.
+- Properties of every component, at every level of the assembly, are available without opening each one.
+- The same signed-in session reads the Data Model and writes to Fusion Manage, so there is no second login. The `data:read` scope covers it.
+
+!!! note "The add-in reads what has been saved"
+    Because the source is the saved cloud version of the design, changes you have not saved are not seen. A design that Fusion has not finished processing may also be incomplete. Save, and let the design finish processing, before you publish or compare.
+
+## What the add-in reads
+
+| Data | What it is | Used for |
+|---|---|---|
+| **Component summary** | The top-level component's item number, part number, description and name | Identifying the item, and the title of the Publish panel |
+| **Properties** | Every property of a component: base properties that ship with the Data Model and custom properties your organisation has defined | The values you map to Fusion Manage fields |
+| **Physical properties** | Mass, volume, area, density and the bounding box (length, width, height), worked out from the geometry | Mapped fields, when you choose to map them |
+| **BOM structure** | Every component below the top level, with quantities and sequence numbers, at any depth up to 50 levels | The Bill of Materials comparison and publish |
+| **Thumbnail** | An image of each component | The item's image field, when mapped |
+| **Fusion Manage link** | The Fusion Manage item a component is already linked to, if its Item Number carries that hyperlink in Fusion | Component linking when publishing |
+
+### Item number and part number
+
+The Data Model holds two numbers for a component, and the add-in uses them for different things.
+
+| | Used for |
+|---|---|
+| **Item number** | **Matching.** It is the key to everything: it is how the add-in decides whether an item already exists in Fusion Manage, and it is the number the item is created with. A component with no item number cannot be published. |
+| **Part number** | **Finding the component in Fusion.** When you select a component, Fusion gives the add-in its part number. The add-in uses that to find the component in the open design, then reads that component's item number from the Data Model. Fusion Manage is never searched by it. |
+
+Map **Item Number** to the Fusion Manage field that holds it: see [The item number](../configuration/index.md#the-item-number). See also [End-to-End Workflow](../getting-started/workflow.md).
+
+### Properties
+
+Properties are read for each component, up to 500 per component.
+
+!!! example "Screenshot placeholder: Component properties in Fusion"
+    **Show:** A component's properties in Fusion with the custom Type property set.
+
+    Save the image as `docs/images/component-properties.png`, then replace this box with `![Component properties in Fusion](../images/component-properties.png)`.
+
+- **Base properties** ship with the Data Model, for example name, description, part number and material.
+- **Custom properties** come from property collections that an administrator has linked to your hub. The properties offered when you map fields are the ones defined for your hub and applicable to components. Hidden and archived properties are not offered.
+
+To change what is published, change the property on the component in Fusion, save, and publish again. The Data Model is where the value lives, and the add-in only carries it.
+
+### Physical properties
+
+Physical properties are not stored like ordinary properties. The Data Model calculates them from the geometry, and they are only available once that calculation has completed. The add-in reads them only if a mapping uses them, because they cost an extra request.
+
+- A component whose physical properties are not ready yet simply has none to publish. The rest of its properties still publish.
+- The Data Model gives lengths, areas and volumes in centimetres and mass in kilograms. Each value is converted to the unit the Fusion Manage field is set to (see [Physical properties and units](../configuration/index.md#physical-properties-and-units)). If the field states no unit, the value is sent as the Data Model gave it.
+- Values are sent as plain numbers, without units, since a Fusion Manage number field refuses units.
+
+### Thumbnails
+
+A thumbnail is an image that Fusion generates for each component. The address the Data Model gives for it is short-lived, so the add-in asks for a fresh one at the moment it publishes the item. A component whose thumbnail has not been generated yet is published without an image, and the run records that.
+
+## Which design is read
+
+The add-in reads the **design that is open in Fusion**, in the Autodesk hub you are working in. For a drawing it follows the drawing's reference to the design it shows. Each component's data is read from the saved version of that design.
+
+## Before you publish
+
+- [ ] The design is saved to the cloud.
+- [ ] Fusion has finished processing it.
+- [ ] Every component that should become an item has an item number.
+- [ ] The properties you plan to map are filled in on the components.
+- [ ] If you map physical properties, they have finished calculating.
+
+
+## Next step
+
+Tell the add-in which Fusion Manage workspace to write to and which property fills which field: [Configuration](../configuration/index.md#item-workspace).

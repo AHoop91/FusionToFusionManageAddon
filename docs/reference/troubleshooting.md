@@ -41,7 +41,7 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 
     Save the image as `docs/images/greyed-button.png`, then replace this box with `![Greyed-out button with its tooltip](../images/greyed-button.png)`.
 
-- Messages such as *The Items workspace ID is not set.* mean the Items workspace settings are incomplete. Fix them on the **Item Workspace** tab ([Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)).
+- Messages such as *The Items workspace ID is not set.* mean no Items workspace has been chosen yet, or its settings are incomplete. Choose the workspace and fix the mappings on the **Item Workspace** tab ([Item Workspace](../configuration/index.md#item-workspace)).
 - For the drawing PDF, *The drawing has no references yet.*, *… none of the designs is loaded yet.* and *The top-level component of … has no part number.* mean the drawing is not ready. Wait for it to finish loading, or give the top-level component a part number. The add-in rechecks every couple of seconds.
 
 ## Publishing
@@ -50,11 +50,11 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 |---|---|
 | **Insufficient permissions to publish to the Items workspace. Missing: …** | Your Fusion Manage user lacks the named permissions. Ask your administrator. Publishing needs View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM. |
 | **Could not check your permissions in Fusion Manage: …** | The permissions request failed for a reason other than being refused: check the active hub, your network and sign-in. |
-| **Set the Items workspace ID in Settings first.** | Configure the Items workspace. |
+| **Set the Items workspace ID in Settings first.** | No Items workspace is chosen yet. Choose it from the **Workspace** drop-down on the **Item Workspace** tab. |
 | **Could not find the Data Model id of the open design.** | The design is not saved to the cloud, or its Data Model reference is not available yet. Save the design and try again. |
 | **n items match … Choose one.** (status **Choose item**) | More than one Fusion Manage item has this item number. Pick the right one in the Details Panel. |
 | **No value in the Data Model, not sent: …** | A mapped property is empty in the Data Model, so the field is left alone. Fill the property in Fusion if you want it published. |
-| **'…' is not an option of … in Fusion Manage, so it was not sent.** | The target field is a picklist and the value matches none of its options. Add the option in Fusion Manage or correct the value. For `Type`, make sure both picklists have the same values (see [Default fields](../configuration/index.md#the-type-field-and-its-picklist)). The rest of the item is still sent. |
+| **'…' is not an option of … in Fusion Manage, so it was not sent.** | The target field is a picklist and the value matches none of its options. Add the option in Fusion Manage or correct the value. Make sure both picklists have the same values (see [Picklists](../configuration/index.md#picklists)). The rest of the item is still sent. |
 | A row is missing after **Add default fields** | The workspace has no field with that field ID, and defaults for missing fields are skipped without a warning. Add the field in Fusion Manage with the exact ID (see [Default fields](../configuration/index.md#default-fields)), validate the workspace, and load the defaults again. |
 | **No thumbnail** (*The Data Model has no thumbnail for this component yet.*) | The thumbnail has not been generated yet. Open the design and let Fusion finish processing, then publish again. |
 | A "component link" step failed | No component was found for the item. Check the component-linking field and that the component exists in the picklist. The item itself is still published. |
@@ -100,7 +100,7 @@ For support, you can turn on verbose logging by setting the environment variable
 
 - **One workspace.** Only the **Items** workspace is supported. BOMs are those of items; other workspaces are not yet handled.
 - **Shared Configuration** reads a file from a path, not a web address. The path must be reachable from each machine (on a Mac, a mounted share).
-- **Matching is by item number only**, taken from the component's part number. Components with no part number cannot be published or opened.
+- **Matching is by item number only**, taken from the component's Item Number. Components with no item number cannot be published or opened.
 - **A drawing is not published.** Publishing starts from a design. A drawing can only have its PDF attached to the item of its design's top-level component.
 - **STEP uploads one component at a time**, and the selection decides which. Large assemblies can take a while to find and export.
 - **Releasing is done in Fusion Manage.** The Item panel is read-only apart from file uploads.

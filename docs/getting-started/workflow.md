@@ -30,7 +30,7 @@ The add-in keeps the two apart and joins them only when someone chooses to.
 
 **Manufacturing** takes a released design and creates an item from it. The item is Manufacturing's signal that *we are ready to build this now*. Manufacturing can then extend the item's bill of materials (BOM) with what production needs, such as packaging, fasteners and consumables, and release it through its own workflow.
 
-The add-in is the bridge. A part number in Fusion becomes the item number in Fusion Manage. If an item with that number exists it is updated. Otherwise it is created.
+The add-in is the bridge. A component's item number in Fusion is the item number in Fusion Manage. If an item with that number exists it is updated. Otherwise it is created.
 
 ### The benefits
 
@@ -93,7 +93,7 @@ flowchart LR
 ## Before you start
 
 - The add-in is installed and you are signed in ([Installation and Authentication](installation.md)).
-- The Items workspace is configured ([Configuration](../configuration/index.md#workspace-and-field-mapping)).
+- The Items workspace is configured ([Configuration](../configuration/index.md#item-workspace)).
 - Whoever publishes holds the [Fusion Manage permissions](installation.md#permissions-in-fusion-manage).
 
 ---
@@ -107,7 +107,7 @@ Engineers model the component, make the drawing and release both as they always 
 Before the next stage, check that:
 
 - The design and drawing are saved and released.
-- Every component that should become an item has a **part number**, including the top-level one.
+- Every component that should become an item has an **item number**, including the top-level one.
 
 **Outcome:** a released design that is ready to publish.
 
@@ -124,9 +124,8 @@ This is the step that crosses from engineering to manufacturing.
 
 | Sent to the item | Not sent |
 |---|---|
-| The properties you have mapped, and the thumbnail | Fields you have not mapped |
+| The properties you have mapped, and the thumbnail | Fields you have not mapped, and the item's lifecycle and workflow, which Fusion Manage owns |
 | The design's BOM structure and quantities | STEP files and drawing PDFs (you upload these in stage 3) |
-| | The item's lifecycle and workflow, which Fusion Manage owns |
 
 !!! tip "Keep the two lifecycles apart"
     You can map Fusion's **Revision** or **Lifecycle state**. If you do, map them to informational fields, such as a text field for the engineering revision. Do not map them to the field that drives the item's own lifecycle.

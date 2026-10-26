@@ -74,5 +74,6 @@ nav:
       - Item Panel: item-panel/index.md
       - Job Queue: job-queue/index.md
   - Additional Information:
+      - Manufacturing Data Model: reference/manufacturing-data-model.md
       - Troubleshooting and Limitations: reference/troubleshooting.md
       - Glossary: getting-started/glossary.md

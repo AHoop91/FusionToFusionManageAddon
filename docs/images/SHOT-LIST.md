@@ -4,19 +4,7 @@ Capture each image, save it under `docs/images/` with the file name shown, then 
 
 | Page | File name | Show |
 |---|---|---|
-| docs/getting-started/installation.md | scripts-and-addins.png | The Add-Ins tab with Fusion Manage Item Management selected, and the Run and Run on Startup options. |
-| docs/getting-started/installation.md | aps-create-application.png | The Create application dialog with Desktop, Mobile, Single-Page App chosen, and the callback URL field. |
-| docs/getting-started/installation.md | aps-client-id.png | The application details page showing the Client ID. Hide or blur anything you do not want shown. |
-| docs/getting-started/installation.md | preferences-connection.png | Client ID, Callback port and Scopes filled in, with the callback URL shown. |
-| docs/getting-started/installation.md | signin-card.png | The Sign in card, and the Logging in spinner with the Cancel button. |
-| docs/configuration/index.md | component-properties.png | A component's properties in Fusion with the custom Type property set. |
-| docs/configuration/index.md | workspaces-tab.png | The Items card with the chosen workspace with its validation tick, and the mapping sections. |
-| docs/configuration/index.md | load-defaults-dialog.png | The Add default fields button and the Load default fields? confirmation. |
-| docs/configuration/index.md | mapped-fields-defaults.png | The nine default mappings in the Mapped fields list. |
-| docs/configuration/index.md | hub-type-property.png | Hub Custom Properties, Edit property for Type, with Single select picklist and its values. |
-| docs/configuration/index.md | fm-type-field.png | The Type field in the Items workspace, field ID TYPE, with its picklist options. |
-| docs/configuration/index.md | static-values.png | A default value row, with a Fusion Manage item field and its value. |
-| docs/configuration/index.md | component-linking.png | The Choose the linking field picker. |
+| docs/reference/manufacturing-data-model.md | component-properties.png | A component's properties in Fusion, with some custom properties filled in. |
 | docs/publishing/index.md | publish-panel.png | The Publish panel: thumbnail, summary, the BOM table and the Details Panel beside it. |
 | docs/publishing/index.md | details-panel.png | Property rows with their Fusion Manage field, current value and status chips. |
 | docs/publishing/index.md | publish-progress.png | The progress dialog with the bar, the count, and the Cancel publish and Close buttons. |

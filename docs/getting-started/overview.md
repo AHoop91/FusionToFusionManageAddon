@@ -32,44 +32,65 @@ The result is a single, traceable path from a released design to an item the ent
 
 ## How it works
 
-The add-in reads a design's components, properties, thumbnails and part numbers from the Manufacturing Data Model and compares them with what already exists in Fusion Manage. It shows you the differences before anything changes, then sends **only what needs to be created or updated**. Nothing is overwritten blindly, and you stay in control of every publish.
+The add-in reads a design's components, BOM structure, properties, thumbnails and part numbers from the Manufacturing Data Model and compares them with what already exists in Fusion Manage. It shows you the differences before anything changes, then sends **only what needs to be created or updated**. Nothing is overwritten blindly, and you stay in control of every publish.
 
 ## How it fits together
 
 The add-in takes what the design says in the Manufacturing Data Model, compares it with Fusion Manage, and sends only the difference.
 
-```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 60, "rankSpacing": 90, "padding": 20}}}%%
-flowchart LR
-    DESIGN("<b>Fusion</b><br/><span style='font-size:0.85em'>Design and drawing</span>")
-    MDM("<b>Manufacturing<br/>Data Model</b><br/><span style='font-size:0.85em'>Properties, thumbnails,<br/>part numbers</span>")
-    ADDIN("<b>Fusion Manage add-in</b><br/><span style='font-size:0.85em'>Preview, compare, publish</span>")
-    FM("<b>Fusion Manage</b><br/><span style='font-size:0.85em'>Items, BOMs, attachments</span>")
-
-    DESIGN -->|"1 &nbsp;Saved to cloud"| MDM
-    MDM -->|"2 &nbsp;Properties read"| ADDIN
-    DESIGN -.->|"3 &nbsp;STEP and PDF exported"| ADDIN
-    ADDIN <-->|"4 &nbsp;Compare, create, update"| FM
-
-    classDef source fill:#94a3b81f,stroke:#94a3b8,stroke-width:1.5px,rx:10,ry:10
-    classDef addin fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px,rx:10,ry:10
-    classDef target fill:#0596691f,stroke:#059669,stroke-width:1.5px,rx:10,ry:10
-    class DESIGN,MDM source
-    class ADDIN addin
-    class FM target
-    linkStyle default stroke:#64748b,stroke-width:1.5px
-```
+<div class="fm-diagram" style="max-width:1120px;margin:0 auto">
+<svg viewBox="0 0 1000 402" role="img" aria-label="How it fits together: Fusion saves the design to the Manufacturing Data Model in Autodesk Platform Services. The add-in reads it, can also export STEP and PDF files from Fusion once the item has been published, and compares and updates items in Fusion Manage." style="width:100%;height:auto;color:var(--md-default-fg-color);font-family:inherit;font-size:13px">
+<defs>
+<marker id="fm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+</defs>
+<rect x="340" y="14" width="320" height="150" rx="6" fill="#7c3aed" fill-opacity="0.06" stroke="#7c3aed" stroke-opacity="0.5"/>
+<text x="356" y="38" font-weight="700" font-size="14" fill="#7c3aed">AUTODESK PLATFORM SERVICES</text>
+<path d="M380 62 v72 a120 11 0 0 0 240 0 v-72 z" fill="#7c3aed" fill-opacity="0.2" stroke="#7c3aed" stroke-width="2"/>
+<ellipse cx="500" cy="62" rx="120" ry="11" fill="#7c3aed" fill-opacity="0.2" stroke="#7c3aed" stroke-width="2"/>
+<g text-anchor="middle" fill="currentColor"><text x="500" y="92" font-weight="700">Manufacturing Data Model</text><text x="500" y="110">BOM, properties, thumbnails,</text><text x="500" y="126">part numbers</text></g>
+<rect x="20" y="240" width="230" height="150" rx="6" fill="#2563eb" fill-opacity="0.06" stroke="#2563eb" stroke-opacity="0.5"/>
+<text x="36" y="264" font-weight="700" font-size="14" fill="#2563eb">FUSION</text>
+<rect x="45" y="290" width="180" height="80" rx="8" fill="#3b82c4" fill-opacity="0.2" stroke="#3b82c4" stroke-width="2"/>
+<g text-anchor="middle" fill="currentColor"><text x="135" y="318" font-weight="700">Design and drawing</text><text x="135" y="336">Components and</text><text x="135" y="352">part numbers</text></g>
+<rect x="385" y="240" width="230" height="150" rx="6" fill="#ea580c" fill-opacity="0.06" stroke="#ea580c" stroke-opacity="0.5"/>
+<text x="401" y="264" font-weight="700" font-size="14" fill="#ea580c">ADD-IN</text>
+<path d="M430 290 H570 L590 330 L570 370 H430 L410 330 z" fill="#f97316" fill-opacity="0.2" stroke="#ea580c" stroke-width="3" stroke-linejoin="round"/>
+<g text-anchor="middle" fill="currentColor"><text x="500" y="318" font-weight="700">Fusion Manage add-in</text><text x="500" y="336">Preview, compare,</text><text x="500" y="352">publish</text></g>
+<rect x="750" y="240" width="230" height="150" rx="6" fill="#059669" fill-opacity="0.06" stroke="#059669" stroke-opacity="0.5"/>
+<text x="766" y="264" font-weight="700" font-size="14" fill="#059669">FUSION MANAGE</text>
+<rect x="775" y="290" width="180" height="80" rx="8" fill="#059669" fill-opacity="0.2" stroke="#059669" stroke-width="2"/>
+<g text-anchor="middle" fill="currentColor"><text x="865" y="318" font-weight="700">Items</text><text x="865" y="336">BOMs and</text><text x="865" y="352">attachments</text></g>
+<g fill="none" stroke="currentColor" stroke-opacity="0.75" stroke-width="1.5">
+<path d="M135 290 V100 H378" marker-end="url(#fm-arrow)"/>
+<path d="M500 146 V288" marker-end="url(#fm-arrow)"/>
+<path d="M225 330 H407" stroke-dasharray="2 4" marker-end="url(#fm-arrow)"/>
+<path d="M592 330 H773" marker-start="url(#fm-arrow)" marker-end="url(#fm-arrow)"/>
+</g>
+<g>
+<circle cx="250" cy="100" r="11" fill="currentColor"/><circle cx="500" cy="205" r="11" fill="currentColor"/><circle cx="317" cy="330" r="11" fill="currentColor"/><circle cx="682" cy="330" r="11" fill="currentColor"/>
+</g>
+<g fill="var(--md-default-bg-color)" font-weight="700" font-size="12" text-anchor="middle">
+<text x="250" y="104.5">1</text><text x="500" y="209.5">2</text><text x="317" y="334.5">3</text><text x="682" y="334.5">4</text>
+</g>
+<g fill="currentColor" fill-opacity="0.8" font-size="12" text-anchor="middle">
+<text x="250" y="124">Saved to cloud</text>
+<text x="518" y="209" text-anchor="start">Properties read</text>
+<text x="317" y="354">STEP and PDF, only</text><text x="317" y="369">once the item is</text><text x="317" y="384">published</text>
+<text x="682" y="354">Compare, create,</text><text x="682" y="369">and update</text>
+</g>
+</svg>
+</div>
 
 | Step | What happens |
 |---|---|
-| **1** | Engineering saves the design. Fusion stores its components and properties in the Manufacturing Data Model. |
-| **2** | The add-in reads each component's properties, thumbnail and part number from the Manufacturing Data Model. |
-| **3** | When you attach a technical representation, the add-in has Fusion export a STEP file or a drawing PDF. |
+| **1** | Engineering saves the design. Fusion stores its components, BOM and properties in the Manufacturing Data Model. |
+| **2** | The add-in reads the BOM and each component's properties, thumbnail and part number from the Manufacturing Data Model. |
+| **3** | **Only after the item has been published.** When you attach a technical representation, the add-in has Fusion export a STEP file or a drawing PDF and attaches it to the item. |
 | **4** | The add-in reads the matching items and BOMs in Fusion Manage, shows you the differences, and on your command creates or updates items, BOM lines and attachments. |
 
 One sign-in covers both the Data Model and Fusion Manage. It is explained step by step in [Installation and Authentication](installation.md#how-sign-in-works).
 
-Items are matched by **item number**, which the add-in takes from the component's part number. If an item with that number already exists in Fusion Manage it is updated; otherwise it is created.
+Items are matched by **item number**, which the add-in reads from the component's Item Number in the Manufacturing Data Model. If an item with that number already exists in Fusion Manage it is updated; otherwise it is created.
 
 ## The user interface
 
@@ -83,9 +104,9 @@ The add-in adds an **Export** panel and an **Item Management** panel to the **Ma
 | Item Management ▸ Administration | Job Queue | See publishes that are waiting, running and finished |
 | Item Management ▸ Administration | Preferences | Sign in, set the connection and the workspace mapping |
 
-Most buttons stay greyed out until the Items workspace is configured (see [Workspace and Field Mapping](../configuration/index.md#workspace-and-field-mapping)). The tooltip of a greyed-out button says why.
+Most buttons stay greyed out until the Items workspace is configured (see [Item Workspace](../configuration/index.md#item-workspace)). The tooltip of a greyed-out button says why.
 
-![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png)
+![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png){ width="1834" height="168" }
 
 ### Using the right-click menu
 
