@@ -50,42 +50,43 @@ The add-in is the bridge. A part number in Fusion becomes the item number in Fus
 Read the diagram left to right. Engineering releases a design in Fusion. The add-in publishes it to Fusion Manage. Manufacturing completes, reviews and releases the item.
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 60, "padding": 16}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 50, "rankSpacing": 70, "padding": 20, "wrappingWidth": 220}}}%%
 flowchart LR
-    subgraph ENG["<b>ENGINEERING</b> &nbsp;·&nbsp; Fusion"]
-        E1("<b>1. Release</b><br/>Design and drawing")
+    subgraph ENG["<b style='font-size:1.2em;color:#2563eb'>ENGINEERING</b>"]
+        E1@{ shape: stadium, label: "<b>1 · Release</b><br/>Design and drawing" }
     end
 
-    subgraph ADD["<b>ADD-IN</b> &nbsp;·&nbsp; Fusion"]
-        A1("<b>2. Publish</b><br/>Create or update<br/>the item and BOM")
+    subgraph ADD["<b style='font-size:1.2em;color:#ea580c'>ADD-IN</b>"]
+        A1@{ shape: hex, label: "<b>2 · Publish</b><br/>Create or update<br/>the item and BOM" }
     end
 
-    subgraph MFG["<b>MANUFACTURING</b> &nbsp;·&nbsp; Fusion Manage"]
-        M1("<b>3. Complete</b><br/>Extend the BOM,<br/>attach files")
-        M2("<b>4. Review</b><br/>Check against<br/>the design")
-        M3("<b>5. Release</b><br/>Ready to build")
+    subgraph MFG["<b style='font-size:1.2em;color:#059669'>MANUFACTURING</b>"]
+        M1@{ shape: rounded, label: "<b>3 · Extend</b><br/>Extend the BOM,<br/>attach files" }
+        M2@{ shape: rounded, label: "<b>4 · Review</b><br/>Check against<br/>the design" }
+        M3@{ shape: stadium, label: "<b>5 · Release</b><br/>Ready to build" }
     end
 
-    E1 ==> A1 ==> M1 --> M2 --> M3
-    E1 -.->|"Design changes:<br/>publish again"| A1
+    E1 ==> A1
+    A1 ==> M1
+    M1 --> M2 --> M3
 
-    classDef eng fill:#3b82c426,stroke:#3b82c4,stroke-width:1.5px
-    classDef add fill:#1d4f9126,stroke:#1d4f91,stroke-width:3px
-    classDef mfg fill:#0596691f,stroke:#059669,stroke-width:1.5px
+    classDef eng fill:#3b82c433,stroke:#3b82c4,stroke-width:2px
+    classDef add fill:#f9731633,stroke:#ea580c,stroke-width:3px
+    classDef mfg fill:#05966933,stroke:#059669,stroke-width:2px
     class E1 eng
     class A1 add
     class M1,M2,M3 mfg
-    style ENG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
-    style ADD fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
-    style MFG fill:transparent,stroke:#94a3b8,stroke-dasharray:4 4
-    linkStyle default stroke:#64748b,stroke-width:1.5px
+    style ENG fill:#3b82c40d,stroke:#3b82c480,stroke-width:1px
+    style ADD fill:#f973160d,stroke:#ea580c80,stroke-width:1px
+    style MFG fill:#0596690d,stroke:#05966980,stroke-width:1px
+    linkStyle default stroke:#64748b,stroke-width:2px
 ```
 
 | Stage | Who | Where |
 |---|---|---|
 | [1. Engineering releases the design](#1-engineering-releases-the-design) | Engineering | Fusion |
 | [2. Publish the item](#2-publish-the-item) | Design or Manufacturing Engineer | Fusion, with the add-in |
-| [3. Complete the manufacturing item](#3-complete-the-manufacturing-item) | Manufacturing | Fusion and Fusion Manage |
+| [3. Extend the manufacturing item](#3-extend-the-manufacturing-item) | Manufacturing | Fusion and Fusion Manage |
 | [4. Review](#4-review) | Engineering, Quality, Manufacturing | Fusion or Fusion Manage |
 | [5. Manufacturing releases the item](#5-manufacturing-releases-the-item) | Release approvers | Fusion Manage |
 
@@ -134,7 +135,7 @@ Full steps are in [Publishing](../publishing/index.md).
 
 **Outcome:** each component is an item in Fusion Manage, with its properties, thumbnail and BOM.
 
-## 3. Complete the manufacturing item
+## 3. Extend the manufacturing item
 
 **Who:** Manufacturing. **Where:** Fusion and Fusion Manage.
 
