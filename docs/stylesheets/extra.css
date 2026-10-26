@@ -169,3 +169,722 @@
 .md-typeset code {
   border-radius: 2px;
 }
+
+/* Header: search first, light/dark toggle far right */
+.md-header__inner > .md-search,
+.md-header__inner > label[for="__search"] {
+  order: 1;
+}
+
+.md-header__inner > .md-header__option {
+  order: 2;
+}
+
+.md-header__inner > .md-header__source {
+  order: 1;
+}
+
+/* Left menu: wider, bordered, with icons. */
+@media screen and (min-width: 60em) {
+  .md-sidebar--primary,
+  .md-sidebar--primary .md-sidebar__scrollwrap {
+    width: min(max(var(--nav-min, 0px), var(--nav-width, 17.5rem)), 50vw);
+  }
+
+  .md-sidebar--primary .md-sidebar__scrollwrap {
+    border-right: 1px solid var(--md-default-fg-color--lightest);
+    padding-right: 0;
+  }
+}
+
+.md-nav--primary .md-nav__link:not(.md-nav__container):not([for="__toc"]) {
+  display: flex;
+  align-items: center;
+  padding: 0.3rem 0.4rem 0.3rem 0.5rem;
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  margin-top: 0;
+}
+
+.md-nav--primary .md-nav__link:not(.md-nav__container):not([for="__toc"]):hover {
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+.md-nav--primary .md-nav__link--active:not(.md-nav__container):not([for="__toc"]) {
+  font-weight: 600;
+  border-left-color: var(--md-accent-fg-color);
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section {
+  margin: 0.4rem 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link:not(.md-nav__container),
+.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__container > a.md-nav__link {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-nav--primary .md-nav__link:not(.md-nav__container):not([for="__toc"])::before {
+  content: "";
+  flex: none;
+  width: var(--nav-w, 0);
+  height: 1rem;
+  margin-right: var(--nav-m, 0);
+  background-color: var(--nav-bg, transparent);
+  -webkit-mask: var(--nav-icon, none) center / contain no-repeat;
+  mask: var(--nav-icon, none) center / contain no-repeat;
+  opacity: 0.8;
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(2) > .md-nav > .md-nav__list > .md-nav__item:nth-child(1) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(2) > .md-nav > .md-nav__list > .md-nav__item:nth-child(2) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(3) > .md-nav > .md-nav__list > .md-nav__item:nth-child(1) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2m14-9h-4V3H9v8H5l7 7 7-7z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(3) > .md-nav > .md-nav__list > .md-nav__item:nth-child(2) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3M3 5v2h10V5H3m10 16v-2h8v-2h-8v-2h-2v6h2M7 9v2H3v2h4v2h2V9H7m14 4v-2H11v2h10m-6-4h2V7h4V5h-4V3h-2v6z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(4) > .md-nav > .md-nav__list > .md-nav__item:nth-child(1) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6m-4 2h14v2H5v-2z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(4) > .md-nav > .md-nav__list > .md-nav__item:nth-child(2) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 5h14v2H7V5m0 8v-2h14v2H7M4 4.5A1.5 1.5 0 0 1 5.5 6 1.5 1.5 0 0 1 4 7.5 1.5 1.5 0 0 1 2.5 6 1.5 1.5 0 0 1 4 4.5m0 6A1.5 1.5 0 0 1 5.5 12 1.5 1.5 0 0 1 4 13.5 1.5 1.5 0 0 1 2.5 12 1.5 1.5 0 0 1 4 10.5M7 19v-2h14v2H7m-3-2.5A1.5 1.5 0 0 1 5.5 18 1.5 1.5 0 0 1 4 19.5 1.5 1.5 0 0 1 2.5 18 1.5 1.5 0 0 1 4 16.5z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(4) > .md-nav > .md-nav__list > .md-nav__item:nth-child(3) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20A8 8 0 0 0 20 12 8 8 0 0 0 12 4 8 8 0 0 0 4 12 8 8 0 0 0 12 20m0-18A10 10 0 0 1 22 12 10 10 0 0 1 12 22C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7h1.5z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(5) > .md-nav > .md-nav__list > .md-nav__item:nth-child(1) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>');
+}
+
+.md-nav--primary > .md-nav__list > .md-nav__item--section:nth-child(5) > .md-nav > .md-nav__list > .md-nav__item:nth-child(2) > a.md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>');
+}
+
+/* Section headings: Home, Start here, Set up, Use, Additional Information. */
+.md-nav--primary > .md-nav__list > .md-nav__item:nth-child(1) > .md-nav__link {
+  --nav-bg: currentcolor;
+  --nav-w: 1rem;
+  --nav-m: 0.5rem;
+  --nav-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>');
+}
+
+/* Tables: full grid borders, softer header, row hover. */
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  padding: 0.7em 1em;
+}
+
+.md-typeset table:not([class]) th {
+  border-color: #000000;
+}
+
+.md-typeset table:not([class]) tbody tr:nth-child(even) {
+  background-color: var(--md-default-fg-color--lightest);
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+/* Right-hand contents: bordered with an accent marker on the active heading. */
+.md-sidebar--secondary .md-nav__list {
+  border-left: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-sidebar--secondary .md-nav__link {
+  padding-left: 0.8rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+}
+
+.md-sidebar--secondary .md-nav__link--active {
+  border-left-color: var(--md-accent-fg-color);
+  font-weight: 600;
+}
+
+/* Sections whose heading is also a page link: keep the link and its arrow on one row. */
+.md-nav--primary .md-nav__container {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.md-nav--primary .md-nav__container > label.md-nav__link {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  gap: 0;
+}
+
+.md-nav--primary .md-nav__container > label.md-nav__link::before {
+  display: none;
+}
+
+/* Use the full menu width: drop Material's extra side padding. */
+.md-nav--primary .md-nav__item,
+.md-nav--primary .md-nav__item .md-nav__item {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* (Site name and logo now sit in the menu header, styled below.) */
+@media screen and (min-width: 60em) {
+  .md-sidebar--primary .md-sidebar__scrollwrap {
+    padding-top: 0;
+  }
+}
+
+/* Let the menu fill the widened sidebar. */
+@media screen and (min-width: 60em) {
+  .md-sidebar--primary .md-sidebar__inner,
+  .md-sidebar--primary .md-nav--primary,
+  .md-sidebar--primary .md-nav--primary > .md-nav__list {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* Material caps the menu at 11.5rem with right padding on this wrapper; remove it. */
+[dir="ltr"] .md-sidebar--primary .md-sidebar__inner {
+  padding-right: 0;
+}
+
+
+/* Menu toggle in the top bar: burger that turns into a cross while the menu is open. */
+.nav-toggle {
+  display: none;
+}
+
+@media screen and (min-width: 60em) {
+  .nav-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 2.4rem;
+    height: 2.4rem;
+    margin: 0 0.4rem 0 0.2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: none;
+    cursor: pointer;
+  }
+
+  .nav-toggle:hover {
+    background-color: #ffffff1f;
+  }
+
+  .nav-toggle span {
+    display: block;
+    width: 1.2rem;
+    height: 2px;
+    background-color: #ffffff;
+    border-radius: 1px;
+    transition: none;
+  }
+
+  html.nav-collapsed .nav-toggle span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  html.nav-collapsed .nav-toggle span:nth-child(2) {
+    opacity: 0;
+  }
+
+  html.nav-collapsed .nav-toggle span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  body.nav-ready .nav-toggle span {
+    transition: transform 0.3s ease, opacity 0.2s ease;
+  }
+
+  body.nav-ready .md-sidebar--primary {
+    transition: width 0.3s ease;
+  }
+
+  /* Collapsed: icons only. */
+  html.nav-collapsed .md-sidebar--primary,
+  html.nav-collapsed .md-sidebar--primary .md-sidebar__scrollwrap {
+    width: 3.4rem;
+  }
+
+  html.nav-collapsed .md-sidebar--primary .md-sidebar__scrollwrap {
+    padding-right: 0;
+  }
+
+  html.nav-collapsed .md-nav--primary .md-nav__link:not([for="__toc"]) {
+    justify-content: center;
+    font-size: 0;
+    padding: 0.55rem 0;
+    border-left-width: 0;
+  }
+
+  html.nav-collapsed .md-nav--primary .md-nav__link:not([for="__toc"])::before {
+    margin-right: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  html.nav-collapsed .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link,
+  html.nav-collapsed .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__container {
+    display: none;
+  }
+
+  html.nav-collapsed .md-nav--primary > .md-nav__list > .md-nav__item--section {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+  }
+
+  html.nav-collapsed .md-nav--primary .md-nav__link--active:not([for="__toc"]) {
+    box-shadow: inset 3px 0 0 var(--md-accent-fg-color);
+  }
+}
+
+/* Tighter left edge: less padding around the menu. */
+.md-sidebar--primary .md-sidebar__scrollwrap {
+  margin: 0;
+}
+
+.md-sidebar--primary {
+  padding-left: 0;
+}
+
+.md-nav--primary .md-nav__link:not(.md-nav__container):not([for="__toc"]) {
+  padding-left: 0.4rem;
+}
+
+.md-main__inner {
+  margin-left: 0;
+}
+
+/* Remove the extra space above, left and right of the menu and around the page. */
+.md-main__inner {
+  margin-top: 0.4rem;
+}
+
+.md-sidebar {
+  padding-top: 0.4rem;
+  padding-bottom: 0.2rem;
+}
+
+.md-sidebar--primary .md-nav--primary .md-nav__list {
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+}
+
+.md-sidebar--primary .md-sidebar__inner {
+  padding-left: 0;
+}
+
+.md-main .md-content > .md-content__inner {
+  margin-left: 1rem !important;
+  margin-right: 1rem !important;
+  padding-top: 0;
+}
+
+.md-content__inner::before {
+  height: 0;
+}
+
+.md-sidebar--secondary .md-sidebar__scrollwrap {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* A little space on the left of the menu, none on the right. */
+.md-sidebar--primary .md-nav--primary .md-nav__list {
+  padding-left: 0.4rem;
+  padding-right: 0;
+}
+
+.md-sidebar--primary .md-sidebar__scrollwrap {
+  scrollbar-gutter: auto;
+  padding-right: 0;
+}
+
+.md-sidebar--primary .md-nav--primary,
+.md-sidebar--primary .md-nav--primary .md-nav__item {
+  padding-right: 0;
+  margin-right: 0;
+}
+
+/* Drag handles to resize the side bars (double-click a handle to reset). */
+.sidebar-resizer {
+  display: none;
+}
+
+@media screen and (min-width: 60em) {
+  .sidebar-resizer {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    height: calc(100vh - 3rem);
+    cursor: col-resize;
+    z-index: 3;
+    touch-action: none;
+  }
+
+  .sidebar-resizer--primary {
+    right: -3px;
+  }
+
+  .sidebar-resizer--secondary {
+    left: -3px;
+  }
+
+  .sidebar-resizer:hover,
+  body.sidebar-resizing .sidebar-resizer {
+    background-color: var(--md-accent-fg-color);
+    opacity: 0.6;
+  }
+
+  body.sidebar-resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+
+  html.nav-collapsed .sidebar-resizer--primary {
+    display: none;
+  }
+
+  .md-sidebar--secondary {
+    width: 16rem;
+  }
+
+  .md-sidebar--secondary .md-sidebar__inner {
+    padding-right: 0;
+  }
+
+  .md-sidebar--primary,
+  .md-sidebar--secondary {
+    position: sticky;
+  }
+}
+
+/* No width animation while dragging a handle (keeps the collapse animation). */
+body.sidebar-resizing .md-sidebar,
+body.sidebar-resizing .md-sidebar__scrollwrap {
+  transition: none !important;
+}
+
+/* No scrollbar gutter: the selection runs right up to the border line. */
+@media screen and (min-width: 60em) {
+  .md-sidebar--primary .md-sidebar__scrollwrap {
+    scrollbar-width: none;
+  }
+
+  .md-sidebar--primary .md-sidebar__scrollwrap::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.md-nav--primary .md-nav__link:not(.md-nav__container):not([for="__toc"]) {
+  margin-right: 0;
+}
+
+/* Menu text never wraps; the sidebar width is kept at least as wide as the longest title. */
+@media screen and (min-width: 60em) {
+  .md-sidebar--primary .md-nav__link {
+    white-space: nowrap;
+  }
+}
+
+/* Table of contents (right): a clean card with a track and an accent marker on the current heading. */
+.md-sidebar--secondary .md-nav--secondary {
+  padding: 0.4rem 0.6rem 0.8rem 0.4rem;
+  border: 0;
+}
+
+.md-sidebar--secondary .md-nav--secondary > .md-nav__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  padding: 0 0 0.6rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+  box-shadow: none;
+  background: none;
+}
+
+.md-sidebar--secondary .md-nav--secondary > .md-nav__title::before {
+  content: "";
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  background-color: currentcolor;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9h14V7H3v2m0 4h14v-2H3v2m0 4h14v-2H3v2m16 0h2v-2h-2v2m0-10v2h2V7h-2m0 6h2v-2h-2v2z"/></svg>') center / contain no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9h14V7H3v2m0 4h14v-2H3v2m0 4h14v-2H3v2m16 0h2v-2h-2v2m0-10v2h2V7h-2m0 6h2v-2h-2v2z"/></svg>') center / contain no-repeat;
+}
+
+.md-sidebar--secondary .md-nav--secondary > .md-nav__list {
+  border-left: 2px solid var(--md-default-fg-color--lightest);
+  padding: 0;
+}
+
+.md-sidebar--secondary .md-nav__list .md-nav__list {
+  border-left: 0;
+}
+
+.md-sidebar--secondary .md-nav__item {
+  padding: 0;
+}
+
+.md-sidebar--secondary .md-nav__link {
+  margin: 0 0 0 -2px;
+  padding: 0.3rem 0.5rem 0.3rem 0.8rem;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--md-default-fg-color--light);
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.md-sidebar--secondary .md-nav__link:hover {
+  color: var(--md-accent-fg-color);
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+.md-sidebar--secondary .md-nav__link--active {
+  color: var(--md-accent-fg-color);
+  font-weight: 600;
+  border-left-color: var(--md-accent-fg-color);
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+/* Sub-headings: indented and a touch lighter. */
+.md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__link {
+  padding-left: 1.6rem;
+  font-size: 0.64rem;
+}
+
+/* Contents list: no second scrollbar next to the page's own (it still scrolls). */
+@media screen and (min-width: 60em) {
+  .md-sidebar--secondary .md-sidebar__scrollwrap {
+    scrollbar-width: none;
+  }
+
+  .md-sidebar--secondary .md-sidebar__scrollwrap::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Contents list laid out like the left menu: full-height rule, same title row and dividers. */
+.md-sidebar--secondary .md-sidebar__scrollwrap {
+  margin: 0;
+  border-left: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-sidebar--secondary .md-nav--secondary {
+  padding: 0;
+  border: 0;
+}
+
+.md-sidebar--secondary .md-nav--secondary > .md-nav__title {
+  margin: 0 0 0.4rem;
+  padding: 0.3rem 0.6rem 0.6rem;
+}
+
+.md-sidebar--secondary .md-nav--secondary > .md-nav__list {
+  border-left: 0;
+  padding: 0;
+}
+
+.md-sidebar--secondary .md-nav__link {
+  margin: 0;
+  padding: 0.3rem 0.4rem 0.3rem 0.6rem;
+  border-left-width: 3px;
+}
+
+.md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__link {
+  padding-left: 1.4rem;
+}
+
+.md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__list .md-nav__link {
+  padding-left: 2.2rem;
+}
+
+.md-sidebar--secondary .md-nav__list .md-nav__list .md-nav__list .md-nav__list .md-nav__link {
+  padding-left: 3rem;
+}
+
+/* Top bar: burger | current page. The logo and site name move into the menu. */
+.md-header__button.md-logo {
+  display: none;
+}
+
+.md-header__topic:first-child {
+  display: none;
+}
+
+.md-header__title .md-header__topic + .md-header__topic,
+.md-header__title--active .md-header__topic + .md-header__topic {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  z-index: auto;
+}
+
+/* Menu header: logo, small title, then a rule above Home. */
+@media screen and (min-width: 60em) {
+  .md-nav--primary > .md-nav__title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+    height: auto;
+    margin: 0;
+    padding: 0.3rem 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+    background: none;
+    box-shadow: none;
+    position: static;
+    cursor: default;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
+    white-space: normal;
+    color: var(--md-default-fg-color--light);
+  }
+
+  .md-nav--primary > .md-nav__title .md-nav__button.md-logo {
+    display: block;
+    position: static;
+    margin: 0;
+    padding: 0;
+  }
+
+  .md-nav--primary > .md-nav__title .md-nav__button.md-logo img {
+    display: block;
+    height: 3.6rem;
+    width: auto;
+  }
+
+  .md-nav--primary > .md-nav__title .md-nav__icon {
+    display: none;
+  }
+
+  .md-nav--primary > .md-nav__list {
+    padding-top: 0.4rem;
+  }
+
+  /* Collapsed: just the logo. */
+  html.nav-collapsed .md-nav--primary > .md-nav__title {
+    align-items: center;
+    padding: 0.3rem 0 0.6rem;
+    font-size: 0;
+  }
+
+  html.nav-collapsed .md-nav--primary > .md-nav__title .md-nav__button.md-logo img {
+    height: 1.8rem;
+  }
+}
+
+/* Slightly smaller type overall. Material scales the root size up on wide screens (125% to 150%); cap it. */
+html {
+  font-size: 118.75% !important;
+}
+
+html[data-fm-font="small"] {
+  font-size: 106.25% !important;
+}
+
+html[data-fm-font="large"] {
+  font-size: 131.25% !important;
+}
+
+/* Text size button in the top bar, next to the light/dark toggle. */
+.font-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  order: 2;
+  height: 2.4rem;
+  padding: 0 0.4rem;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--md-primary-bg-color);
+  cursor: pointer;
+}
+
+.font-toggle:hover {
+  background-color: #ffffff1f;
+}
+
+.font-toggle::before {
+  content: "";
+  width: 1.2rem;
+  height: 1.2rem;
+  background-color: currentcolor;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 4v3h5v12h3V7h5V4H2m19 5h-9v3h3v7h3v-7h3V9z"/></svg>') center / contain no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 4v3h5v12h3V7h5V4H2m19 5h-9v3h3v7h3v-7h3V9z"/></svg>') center / contain no-repeat;
+}
+
+.font-toggle::after {
+  content: attr(data-level);
+  align-self: flex-end;
+  margin-bottom: 0.45rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <script>
+    /* Apply the saved menu state before the page is drawn, so nothing moves on load. */
+    (function () {
+      try {
+        var root = document.documentElement;
+        if (localStorage.getItem("fm-docs-nav-collapsed") === "1") root.classList.add("nav-collapsed");
+        var font = localStorage.getItem("fm-docs-font");
+        if (font) root.setAttribute("data-fm-font", font);
+        var nav = localStorage.getItem("fm-docs-nav-width");
+        if (nav) root.style.setProperty("--nav-width", nav + "px");
+      } catch (e) {}
+    })();
+  </script>
+{% endblock %}

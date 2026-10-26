@@ -87,12 +87,23 @@ Most buttons stay greyed out until the Items workspace is configured (see [Works
 
 ![Fusion Manage ribbon tab in the Design workspace](../images/ribbon-design.png)
 
-The same actions are available from the right-click menu of a component in the browser or canvas: **Open Fusion Manage Item**, **Publish Fusion Manage Item** (top-level component only), **Export STEP File** and, in a drawing, **Export PDF**.
+### Using the right-click menu
 
-!!! example "Screenshot placeholder: Right-click menu on a component"
-    **Show:** The right-click menu of a component in the browser, showing the Fusion Manage entries.
+The same actions are available from the context (right-click) menu of a component, so you can work without leaving the model.
 
-    Save the image as `docs/images/context-menu.png`, then replace this box with `![Right-click menu on a component](../images/context-menu.png)`.
+1. In the **Browser** (or on the canvas), find the component you want to work with.
+2. **Right-click** the component to open its context menu.
+3. Choose one of the Fusion Manage entries:
+
+    | Menu entry | What it does |
+    | --- | --- |
+    | **Open Fusion Manage Item** | Opens the component's linked item in Fusion Manage. |
+    | **Publish Fusion Manage Item** | Publishes the component and its structure. Available on the top-level component only. |
+    | **Export STEP File** | Exports the component as a STEP file. |
+    | **Export PDF** | Exports the drawing as a PDF. Shown only when a drawing is open. |
+
+!!! note
+    Entries that don't apply to the selected component, or that are unavailable until the Items workspace is configured, are greyed out or hidden.
 
 ## Requirements
 
