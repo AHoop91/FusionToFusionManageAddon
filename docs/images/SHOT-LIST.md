@@ -5,12 +5,6 @@ Capture each image, save it under `docs/images/` with the file name shown, then 
 | Page | File name | Show |
 |---|---|---|
 | docs/reference/manufacturing-data-model.md | component-properties.png | A component's properties in Fusion, with some custom properties filled in. |
-| docs/publishing/index.md | publish-panel.png | The Publish panel: thumbnail, summary, the BOM table and the Details Panel beside it. |
-| docs/publishing/index.md | details-panel.png | Property rows with their Fusion Manage field, current value and status chips. |
-| docs/publishing/index.md | publish-progress.png | The progress dialog with the bar, the count, and the Cancel publish and Close buttons. |
-| docs/publishing/index.md | publish-complete.png | The Publish complete message box with Total Items Processed, Created and Updated. |
-| docs/publishing/index.md | item-new.png | A BOM row or property marked New, before publishing. |
-| docs/publishing/index.md | item-choose.png | A row showing Choose item and the candidate items to pick from. |
 | docs/publishing/index.md | bom-statuses.png | The BOM table with status chips, and the filter buttons above it. |
 | docs/publishing/index.md | bom-paired-rows.png | A New row and a Fusion Manage Only row paired, with the Keep and Remove choices. |
 | docs/publishing/index.md | add-items.png | The Add Existing Items dialog with its property filters, results and some items ticked. |

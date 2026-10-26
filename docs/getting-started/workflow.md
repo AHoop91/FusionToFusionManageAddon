@@ -118,7 +118,7 @@ Before the next stage, check that:
 This is the step that crosses from engineering to manufacturing.
 
 1. Open the released design.
-2. Choose **Manage ▸ Item Management ▸ Publish Fusion Manage Item**.
+2. Right-click the top-level component and choose **Publish Fusion Manage Item**.
 3. Check the BOM. Anything marked **New** or **Update** will change in Fusion Manage.
 4. Click **Publish**, and follow it in the **Job Queue**.
 

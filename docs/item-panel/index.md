@@ -35,6 +35,15 @@ If no item has the number, the panel says the item has not been uploaded to the 
 
     Save the image as `docs/images/item-not-found.png`, then replace this box with `![Item Panel: no item exists](../images/item-not-found.png)`.
 
+### When several items share the number
+
+If more than one item in the Items workspace has the component's item number, the panel does not guess. In place of the item it lists them, each with its descriptor and Item ID. Click the one you mean.
+
+- Your choice is remembered for that item number until Fusion closes. It also decides which item a STEP file or drawing is attached to from the panel.
+- A button that appears in the header (two arrows) shows the list again, so you can choose another.
+- If the Fusion Manage search returns look-alike descriptors (`PN-1001 - A` and `PN-10010 - B` for `PN-1001`), the one whose descriptor starts with exactly the item number is used, and you are not asked.
+- Better, give every item its own number. Two items with one number are a data problem in Fusion Manage, and publishing skips such a component until you choose.
+
 ## Header
 
 !!! example "Screenshot placeholder: Item Panel header with the Actions menu open"
@@ -47,6 +56,7 @@ If no item has the number, the panel says the item has not been uploaded to the 
 | Title and status line | The item's title, and a line with its version, lifecycle state and Type. |
 | **Up-to-date check** (at the right end of the tabs) | A small circle turns while the panel compares the item's mapped fields with the open design, the same comparison the Publish panel makes. When all is well it disappears; when something differs it becomes an amber **OUT OF DATE** pill, and a red **CHECK FAILED** pill if the check could not be made. Click the pill to open a dialog that lists what differs (each field with what the open design holds beside what Fusion Manage holds, or each component with its two quantities) and has a **Republish** button that opens the Publish panel; for a failed check it gives the reason. Hover the pill for a short summary. The mark belongs to the tab shown, and the Item and Bill of Materials tabs have a check so far: the other tabs show no mark. (The Files tab marks out-of-date files on their own rows instead; see [Files](#files).) It is checked once each time the item is read in full (opening it, **Refresh**, an upload), not when you click the Item tab again. It is not shown for a component below the top of the design. |
 | **Open in browser** | Opens the item in Fusion Manage in your web browser. |
+| **Choose another item** | Shown only when several items share the number. Lists them again so you can pick a different one. |
 | **Refresh** | Reads the item again from Fusion Manage. |
 | **Actions** (⋯) | Uploads the technical representation: **Export STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). In a design the menu also has **Republish**, which opens the Publish panel. |
 
