@@ -58,6 +58,16 @@ def signed_headers(extra: Dict[str, str]) -> Dict[str, str]:
     return kept
 
 
+def checked_path(path: str) -> str:
+    """``path`` if it stays inside the API: ids reach a path from the page, so one that climbs out of its place (``..``, an encoded
+    slash or dot, a backslash) or breaks the request line is refused here, for every request."""
+    base = path.split("?", 1)[0]
+    if (not path.startswith("/") or "#" in path or "\\" in path or any(ord(c) <= 32 or ord(c) == 127 for c in base)
+            or ".." in base.split("/") or any(code in base.lower() for code in ("%2e", "%2f", "%5c"))):
+        raise FmApiError("That address is not one Fusion Manage can be asked for.")
+    return path
+
+
 class SendResult(NamedTuple):
     """What a write returned: HTTP status, response headers and the parsed JSON (None when there was none)."""
     status: int
@@ -134,7 +144,7 @@ class FmClient:
         token = self._auth.get_access_token(self._settings)
         token_seconds = watch.lap()
         request = urllib.request.Request(
-            f"{self.base_url}{path}",
+            f"{self.base_url}{checked_path(path)}",
             headers={"Accept": accept, "Authorization": f"Bearer {token}"},
         )
         try:
@@ -166,7 +176,7 @@ class FmClient:
         """
         self.cancel.check()
         token = self._auth.get_access_token(self._settings)
-        request = urllib.request.Request(f"{self.base_url}{path}", headers={"Accept": "*/*", "Authorization": f"Bearer {token}"})
+        request = urllib.request.Request(f"{self.base_url}{checked_path(path)}", headers={"Accept": "*/*", "Authorization": f"Bearer {token}"})
         try:
             with open_url(request, timeout, self.cancel) as response:
                 return response.read(), str(response.headers.get("Content-Type") or "")
@@ -213,7 +223,7 @@ class FmClient:
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
         if payload is not None:
             headers["Content-Type"] = "application/json"
-        request = urllib.request.Request(f"{self.base_url}{path}", data=payload, headers=headers, method=method)
+        request = urllib.request.Request(f"{self.base_url}{checked_path(path)}", data=payload, headers=headers, method=method)
         if log.isEnabledFor(logging.DEBUG):
             log.debug("%s %s body: %s", method, path, _clip(payload or b""))
         began = time.monotonic()

@@ -1,7 +1,7 @@
 /**
  * The Files tab: the files attached to the item, as a table that sorts by any column.
  *
- * A file name opens the file: Python downloads it and opens it with the program the system uses for it.
+ * A file name opens the file's page in Fusion Manage, in the browser.
  * Files the open document makes (its STEP file, or its PDF, DWG and DXF) are marked Out of Date when the document was saved since.
  */
 (function (ns) {

@@ -87,6 +87,9 @@ class HubFiles:
             url = (((page.get("links") or {}).get("next") or {}).get("href")) or ""
             if not url:
                 break
+            if not url.startswith(API + "/"):   # the next page is asked for with the access token: only of the same API
+                log.warning("Hub files: ignored a next page address outside the API")
+                break
         return entries
 
     # ---- Browsing -------------------------------------------------------------

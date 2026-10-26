@@ -11,9 +11,6 @@ they run on a worker thread; the page polls ``get_item_view`` for the answer.
 """
 
 import json
-import os
-import subprocess
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -60,9 +57,6 @@ log = get_logger("item_panel")
 LINE_ID = "MfgToFm_MenuLine"   # the line above the add-in's entries in the right-click menu
 SAVED_STATE_SECONDS = 30   # how long when a document was last saved is kept for the Files tab (see ``_saved_source``)
 LOOKUPS_KEPT = 200   # answers held for the page to read before the oldest finished ones are dropped
-# Only these are opened with their program; any other attachment (a program, a script, a macro document, a shortcut, a web page) has its folder shown.
-SAFE_TO_OPEN = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".txt", ".csv", ".md",
-                ".docx", ".xlsx", ".pptx", ".step", ".stp", ".iges", ".igs", ".dxf", ".dwg", ".stl", ".3mf", ".obj", ".f3d", ".f3z")
 
 
 class ItemNotFound(Exception):
@@ -145,18 +139,6 @@ def _active_ref() -> DesignRef:
     return active_design_ref()
 
 
-def _open_file(path: str) -> None:
-    """Open a file with its default program if it is a known safe type; anything else is not run, its folder is shown instead.
-
-    Windows ignores a trailing dot or space ("a.exe." is "a.exe"), so they are left out when reading the extension."""
-    if os.path.splitext(path.rstrip(" ."))[1].lower() not in SAFE_TO_OPEN:
-        path = os.path.dirname(path)
-    if hasattr(os, "startfile"):
-        os.startfile(path)   # Windows
-    else:
-        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])
-
-
 class _SelectionHandler(adsk.core.ActiveSelectionEventHandler):
     """Tells the panel when the selection changes."""
 
@@ -202,7 +184,6 @@ class ItemPanel:
         bridge.register("files_freshness", self._files_freshness)
         bridge.register("get_item_view", self._status)
         bridge.register("refresh_item_view", self._refresh)
-        bridge.register("open_attachment", self._open_attachment)
         bridge.register("add_step_file", self._add_step_file)
         bridge.register("where_used_load", self._where_used_load)
         bridge.register("where_used_result", self._lookup_result)
@@ -426,14 +407,6 @@ class ItemPanel:
             self._start()
         return self._status({})
 
-    def _open_attachment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Download one of the item's files and open it with the program Windows (or macOS) uses for it."""
-        ids = [str(payload.get(k) or "") for k in ("workspace_id", "item_id", "attachment_id")]
-        if not all(ids):
-            raise ValueError("Which file to open was not given.")
-        threading.Thread(target=self._download, args=(*ids, str(payload.get("name") or "")), daemon=True).start()
-        return {"started": True}
-
     def _add_step_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open design as the STEP file of the item shown (the Actions menu). UI thread."""
         return self._upload_for_item(STEP_JOB, payload)
@@ -645,16 +618,6 @@ class ItemPanel:
         if self._number:
             self._start()
             self._host.send("item_changed")
-
-    def _download(self, workspace_id: str, item_id: str, attachment_id: str, name: str) -> None:
-        try:
-            client = FmClient(self._config.effective_settings(), self._auth)
-            path = AttachmentService(client).download(workspace_id, item_id, attachment_id, name)
-            self._tasks.post(lambda: _open_file(path))
-        except Exception as exc:  # shown to the user, never raised into a thread nobody watches
-            log.exception("Could not open the attachment %s", name)
-            message = f"Could not open {name}:\n{exc}"
-            self._tasks.post(lambda: self._ui.messageBox(message, ITEM_COMMAND_NAME))
 
     def _start(self) -> None:
         with self._lock:
