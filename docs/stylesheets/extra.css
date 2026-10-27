@@ -709,7 +709,8 @@ body.sidebar-resizing .md-sidebar__scrollwrap {
   text-transform: uppercase;
   color: var(--md-default-fg-color--light);
   box-shadow: none;
-  background: none;
+  /* Opaque: the title stays put while the list scrolls, and the list must not show through it. */
+  background: var(--md-default-bg-color);
 }
 
 .md-sidebar--secondary .md-nav--secondary > .md-nav__title::before {
