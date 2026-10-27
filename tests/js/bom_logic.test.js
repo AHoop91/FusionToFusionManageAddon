@@ -105,24 +105,6 @@ test('the label is the item number and the part name; a line without an item num
   assert.strictEqual(items[0].design.pn, 'TOP');
 });
 
-test('what is in view: the design, and the lines of every open assembly', () => {
-  const scope = ns.bomScope;
-  const rows = [
-    row('A', 'PN-A', { level: 0, has_children: true }), row('X', 'PN-X', { level: 1, has_children: true }), row('Y', 'PN-Y', { level: 2 }),
-    row('B', 'PN-B', { level: 0, has_children: true }), row('Z', 'PN-Z', { level: 1 }), row('C', 'PN-C', { level: 0 }),
-  ];
-  const only = (...open) => (id) => open.includes(id);
-  const seen = (isOpen) => ids(scope.visibleRows(rows, 'R', isOpen));
-  assert.deepStrictEqual(seen(only('R')), ['A:0', 'B:0', 'C:0'], 'a design with every assembly closed');
-  assert.deepStrictEqual(seen(only('R', 'A')), ['A:0', 'X:1', 'B:0', 'C:0']);
-  assert.deepStrictEqual(seen(only('R', 'A', 'X')), ['A:0', 'X:1', 'Y:2', 'B:0', 'C:0']);
-  assert.deepStrictEqual(seen(only('R', 'X')), ['A:0', 'B:0', 'C:0'], 'an open assembly under a closed one is not in view');
-  assert.deepStrictEqual(seen(only('A', 'X', 'B')), [], 'a closed design shows nothing');
-  assert.deepStrictEqual(seen(only('R', 'A', 'X', 'B')), ['A:0', 'X:1', 'Y:2', 'B:0', 'Z:1', 'C:0']);
-  const visible = scope.visibleRows(rows, 'R', only('R', 'A'));
-  assert.strictEqual(scope.closedAssemblies(visible, only('R', 'A')), 2, 'X and B are closed');
-});
-
 test('components that share an item number are all skipped, with what is below them, and are not published', () => {
   tree.setTop([row('A', 'PN-S', { has_children: true }), row('B', 'PN-S'), row('C', 'PN-C', { status: 'new' })]);
   tree.setKids('A', [row('X', 'PN-X', { status: 'new' })]);

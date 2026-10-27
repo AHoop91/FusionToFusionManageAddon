@@ -2,8 +2,8 @@
  * Publish Item panel: the Bill of Materials area, as ``ns.pubBom``.
  *
  * Shows what has been read of the Bill of Materials (the table, bom-table.js; or the loading skeleton, a message, or an error),
- * reads the lines under an assembly when it is opened and the whole tree for Expand all, and queues the publish. Publishing covers
- * what is in view (see bom-scope.js); the pills in the footer count what that is. The panel (publish.js) sends the requests and hands
+ * reads the lines under an assembly when it is opened and the whole tree for Expand all or for Publish, and queues the publish.
+ * Publishing covers the whole design; the pills in the footer count what that is. The panel (publish.js) sends the requests and hands
  * the answers back, through ``host``.
  */
 (function (ns) {
@@ -17,6 +17,7 @@
   const tree = ns.bomTree;
 
   const READING_TREE = 'Reading every level of the Bill of Materials...';
+  const READING_FOR_PUBLISH = 'Reading every level of the Bill of Materials before publishing.';
 
   let host = null;          // { summary(), ask(slot, payload), request(slot, payload), changed() }, given to ``init``
   let rows = [];            // compared rows of the Bill of Materials read so far
@@ -26,6 +27,7 @@
   const kidsFailed = {};    // component id -> why they could not be read
   let treeLoading = false;  // the rest of the tree is being read (Expand all)
   let treeProgress = '';    // how far, while it is
+  let publishAfterTree = false;   // Publish was clicked with levels unread: it goes on once the tree is read
   let shown = false;        // the table is on screen (not the skeleton, a message or an error)
   let statusText = '';      // what the loading line last said
 
@@ -197,12 +199,24 @@
       : entry.progress ? 'Reading the Bill of Materials... ' + Number(entry.progress).toLocaleString() + ' lines so far' : '';
     const button = document.querySelector('.pub-cmp-tool-busy');
     if (button) { button.title = lazy.busyText(); button.setAttribute('aria-label', button.title); }
+    if (publishAfterTree) {   // Publish is waiting on it: the dialog says how far it is
+      const comparing = entry.stage === 'comparing';
+      showReading(comparing ? 'Comparing every line with Fusion Manage.' : READING_FOR_PUBLISH, !comparing && entry.progress ? Number(entry.progress).toLocaleString() + ' lines so far' : '');
+    }
+  }
+
+  /** The progress dialog on its Reading step. Closing it before the read ends drops the publish. */
+  function showReading(status, count) {
+    jobs.reading({ status: status, count: count || '' }, function () { publishAfterTree = false; });
   }
 
   function finishTree(entry) {
     treeLoading = false;
+    const publishing = publishAfterTree;
+    publishAfterTree = false;
     if (!entry.ok) {
-      ns.toast.show('Could not read the whole Bill of Materials: ' + (entry.message || 'Unknown error'), { tone: 'error' });
+      if (publishing) jobs.stopReading();
+      ns.toast.show('Could not read the whole Bill of Materials' + (publishing ? ', so nothing was published' : '') + ': ' + (entry.message || 'Unknown error'), { tone: 'error' });
       draw(true);
       return;
     }
@@ -210,6 +224,19 @@
     ns.bomTable.openAllOnNextDraw();   // Expand all: everything opens
     draw(true);
     host.changed();
+    if (publishing) goOn();
+  }
+
+  /** The tree is read for a publish: go on with it, in the same dialog. Lines that need a choice stop it instead, and are in view for it. */
+  function goOn() {
+    const cover = covered();
+    if (model.pendingReviews(cover.items) > 0) {
+      jobs.stopReading();
+    } else {
+      const found = ns.bomPlan.publishPlan(rows, cover.summary).components.length;   // items, as the other steps count: the design and each component once
+      jobs.reading({ done: true, count: found.toLocaleString() + ' item' + (found === 1 ? '' : 's') + ' found', status: 'Starting the publish.' });
+    }
+    publish();   // says which lines wait for a choice, or queues the job
   }
 
   /** The design is read again: forget what was read of the tree. */
@@ -223,12 +250,10 @@
 
   // ---- What publishing covers ----------------------------------------------------
 
-  /** What is in view: the design and the lines of every open assembly, as lines of the table, and how many assemblies are closed. */
+  /** What publishing covers: every line read of the design, as lines of the table. Publishing reads the rest of the tree first, so folds do not matter. */
   function covered() {
     const summary = host.summary();
-    const isOpen = ns.bomTable.isOpen;
-    const visible = ns.bomScope.visibleRows(rows, summary.component_id || '', isOpen);
-    return { summary: summary, visible: visible, items: model.arrange(model.buildItems(visible, summary)), closed: ns.bomScope.closedAssemblies(visible, isOpen) };
+    return { summary: summary, items: model.arrange(model.buildItems(rows, summary)) };
   }
 
   function pill(kind, count, label, tip) {
@@ -248,16 +273,15 @@
     const box = $('pub-pills');
     box.textContent = '';
     if (!cover) return;
-    const plan = ns.bomPlan.publishPlan(cover.visible, cover.summary);
+    const plan = ns.bomPlan.publishPlan(rows, cover.summary);
     const skipped = cover.items.filter(function (item) { return item.status === 'skipped' && item.skip !== 'shared'; }).length;
     const shared = cover.items.filter(function (item) { return item.skip === 'shared'; }).length;
-    box.appendChild(pill('items', plan.components.length, ' Items', 'Items checked against Fusion Manage when you publish, and created or updated where they differ: the design and every component in view.'));
+    box.appendChild(pill('items', plan.components.length, ' Items', 'Items checked against Fusion Manage when you publish, and created or updated where they differ: the design and every component of it.'));
     if (skipped) box.appendChild(pill('skipped', skipped, ' Lines Skipped', 'No item number, or below a skipped line: nothing is published for these lines, or for what is below them.'));
     if (shared) box.appendChild(pill('skipped', shared, ' Shared Item Numbers', 'Components that carry the same item number would write to one Fusion Manage item, so none of them is published, nor what is below them. Give each its own item number in Fusion.'));
-    if (cover.closed) box.appendChild(pill('closed', cover.closed, ' Sub Assemblies Skipped', 'Closed sub assemblies: what is under them is not published. Open them, or use Expand all, to include them.'));
   }
 
-  /** What is in view changed (a draw, an assembly opened or closed): count again what publishing covers, and whether a choice still waits. */
+  /** The table was drawn again (or an assembly opened or closed): count again what publishing covers, and whether a choice still waits. */
   function refreshScope() {
     if (!shown) { renderPills(null); return; }
     const cover = covered();
@@ -269,18 +293,25 @@
   // ---- Publish -------------------------------------------------------------------
 
   /**
-   * Publish what is in view: the design and the lines of every open assembly. What is under a closed assembly is left out, so the
-   * panel publishes exactly what it shows. The requests go to a folder for review in the background (nothing is sent to Fusion Manage yet).
+   * Publish the whole design. Levels not read yet are read and compared first (the whole tree, as Expand all does); lines that then
+   * need a choice are shown and hold the publish back, and the next click goes on. The requests go to a folder for review in the
+   * background (nothing is sent to Fusion Manage yet).
    */
   function publish() {
     if (treeLoading) return;
+    if (tree.unloaded().length > 0) {
+      publishAfterTree = true;
+      showReading(READING_FOR_PUBLISH);
+      loadTree();
+      return;
+    }
     const cover = covered();
     const pending = model.pendingReviews(cover.items);
     if (pending > 0) {
       ns.toast.show(pending + ' line' + (pending === 1 ? ' needs' : 's need') + ' a choice before publishing: keep both or remove, on each Review line.', { tone: 'error' });
       return;
     }
-    const plan = ns.bomPlan.publishPlan(cover.visible, cover.summary);
+    const plan = ns.bomPlan.publishPlan(rows, cover.summary);
     jobs.start({
       summary: cover.summary,
       root_number: cover.summary.item_number || '',

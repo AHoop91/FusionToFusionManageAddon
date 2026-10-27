@@ -31,7 +31,11 @@ function openPanel() {
   ns.shell = { mountHeader() {} };
   ns.account = { init() {} };
   ns.auth = { init() {}, refresh() {}, onChange: (fn) => { panel.authChanged = fn; } };
-  ns.pubJobs = { init() {}, start: (job) => panel.started.push(job) };
+  panel.reading = [];   // what the progress dialog was told about the read that Publish waits for
+  ns.pubJobs = {
+    init() {}, start: (job) => panel.started.push(job),
+    reading: (step) => panel.reading.push(step.done ? 'done' : step.status), stopReading: () => panel.reading.push('stopped'),
+  };
   ns.pubAddItems = { open() {} };
   ns.diffReport = { open() {}, COLUMN_VALUE: 'v', COLUMN_FM: 'f' };
   ns.pubDetails = {
@@ -49,7 +53,7 @@ function openPanel() {
 
 test('the lazy Bill of Materials, from the first level to publishing', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
   const panel = openPanel();
-  const { w, sent, handlers, started } = panel;
+  const { w, sent, handlers, started, reading } = panel;
   const $ = (id) => w.document.getElementById(id);
   const reply = (slot, entry, via) => handlers[via || 'load_publish_section']({ ok: true, result: Object.assign({
     section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, stage: '' }, entry) });
@@ -138,41 +142,44 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   assert.strictEqual(rowsText().length, 5, 'every level shows');
   assert.ok(!$('pub-publish').disabled);
 
-  // Publish covers what is in view: a closed assembly is left out, and nothing more is read for it.
+  // Publish covers the whole design: with levels unread it reads the tree first, then goes on by itself.
   const pills = () => [...$('pub-pills').querySelectorAll('.pub-pill')].map((p) => p.textContent.trim().replace(/\s+/g, ' '));
   const operations = (job) => plain(job.operations.map((o) => o.op + ':' + o.parent + '>' + o.number));
   reload();
   openDesign(firstLevel());
-  assert.deepStrictEqual(plain(pills()), ['3 Items', '1 Sub Assemblies Skipped'], 'the design, A and P; A is closed');
+  assert.deepStrictEqual(plain(pills()), ['3 Items'], 'closed assemblies are not skipped: no such pill');
+  const treeReads = sentOf('tree').length;
+  click($('pub-publish'));
+  assert.strictEqual(sentOf('tree').length, treeReads + 1, 'the rest of the tree is read to publish');
+  assert.strictEqual(started.length, 0, 'nothing is queued until it is read');
+  assert.deepStrictEqual(plain(reading), ["Reading every level of the Bill of Materials before publishing."], 'the dialog opens at once, saying it is reading');
+  reply('tree', { data: { rows: [
+    row('A', 'PN-A', { has_children: true }), row('X', 'PN-X', { level: 1, status: 'new' }), row('P', 'PN-P', { status: 'new' })] } });
+  assert.strictEqual(started.length, 1);
+  assert.deepStrictEqual(plain(reading.slice(1)), ['done'], 'the dialog hands over to the job');
+  assert.deepStrictEqual(plain(started[0].items.map((i) => i.id)), ['R', 'A', 'X', 'P']);
+  assert.deepStrictEqual(operations(started[0]), ['add:PN-A>PN-X', 'add:TOP>PN-P']);
+
+  // Fully read already: nothing more is read to publish.
   const reads = sent.length;
   click($('pub-publish'));
-  assert.strictEqual(sent.length, reads, 'nothing more is read to publish');
-  assert.strictEqual(started.length, 1);
-  assert.deepStrictEqual(plain(started[0].items.map((i) => i.id)), ['R', 'A', 'P']);
-  assert.deepStrictEqual(operations(started[0]), ['add:TOP>PN-P']);
-
-  // Opened by hand, an assembly's lines are in view and go too; closed again, they do not.
-  reload();
-  openDesign([row('A', 'PN-A', { has_children: true })]);
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));
-  reply('children:A', { data: { rows: [row('X', 'PN-X', { status: 'new' })] } });
-  assert.deepStrictEqual(plain(pills()), ['3 Items'], 'X is in view: no assembly is closed');
-  click($('pub-publish'));
+  assert.strictEqual(sent.length, reads);
   assert.strictEqual(started.length, 2);
-  assert.deepStrictEqual(operations(started[1]), ['add:PN-A>PN-X']);
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));   // close it again
-  assert.deepStrictEqual(plain(pills()), ['2 Items', '1 Sub Assemblies Skipped']);
+
+  // The read failing publishes nothing.
+  reload();
+  openDesign(firstLevel());
   click($('pub-publish'));
-  assert.strictEqual(started.length, 3);
-  assert.deepStrictEqual(plain(started[2].items.map((i) => i.id)), ['R', 'A']);
-  assert.deepStrictEqual(operations(started[2]), []);
+  reply('tree', { ok: false, message: 'no' });
+  assert.strictEqual(started.length, 2);
+  assert.ok(!$('pub-publish').disabled);
 
   // Skipped lines are counted, and left out.
   reload();
   openDesign([row('S', '', { status: 'skipped', skip: 'no_number' }), row('P', 'PN-P', { status: 'new' })]);
   assert.deepStrictEqual(plain(pills()), ['2 Items', '1 Lines Skipped']);
 
-  // A line that waits for a choice blocks publishing only while it is in view.
+  // A line that waits for a choice blocks publishing, folded or not.
   reload();
   openDesign([row('A', 'PN-A', { has_children: true })]);
   click(rowOf('A name').querySelector('.pub-tree-toggle'));
@@ -180,10 +187,8 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
     row('', 'PN-OLD', { status: 'extra', pair: 'PN-N', part_number: 'PN-OLD', edge_id: 'e' }), row('N', 'PN-N', { status: 'new' })] } });
   assert.ok($('pub-bom').querySelector('.pub-cmp-act-add'), 'the line is in view');
   assert.ok($('pub-publish').disabled, 'publishing waits for the choice');
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));   // close A: the line is out of view
-  assert.ok(!$('pub-publish').disabled, 'a line out of view does not hold publishing back');
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));   // open it again: it waits again
-  assert.ok($('pub-publish').disabled);
+  click(rowOf('A name').querySelector('.pub-tree-toggle'));   // close A: the line still counts
+  assert.ok($('pub-publish').disabled, 'a line folded away still holds publishing back');
 
   // The whole tree failing leaves the table and the buttons working.
   reload();

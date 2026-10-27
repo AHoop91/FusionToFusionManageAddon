@@ -115,10 +115,16 @@
           <p id="progress-status" class="progress-status"></p>
         </div>
       </div>
-      <!-- Steps, one after the other: every item number is looked up in Fusion Manage first, then the items are published, then (when sending) the Bill of Materials. -->
+      <!-- Steps, one after the other: the levels of the Bill of Materials not read yet are read (only then), every item number is looked up in Fusion Manage, then the items and their Bill of Materials are published. -->
+      <div id="read-step" class="progress-step" hidden>
+        <p class="progress-step-head"><span class="progress-step-name">Reading</span><span id="read-count" class="muted"></span></p>
+        <div id="read-bar" class="progress-bar" role="progressbar" aria-label="Reading" aria-valuemin="0" aria-valuemax="100">
+          <div id="read-fill" class="progress-fill"></div>
+        </div>
+      </div>
       <div id="validate-step" class="progress-step">
-        <p class="progress-step-head"><span class="progress-step-name">Validation</span><span id="validate-count" class="muted"></span></p>
-        <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validation" aria-valuemin="0" aria-valuemax="100">
+        <p class="progress-step-head"><span class="progress-step-name">Validating</span><span id="validate-count" class="muted"></span></p>
+        <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validating" aria-valuemin="0" aria-valuemax="100">
           <div id="validate-fill" class="progress-fill"></div>
         </div>
       </div>
@@ -126,12 +132,6 @@
         <p class="progress-step-head"><span class="progress-step-name">Publishing</span><span id="progress-count" class="muted"></span></p>
         <div id="progress-bar" class="progress-bar" role="progressbar" aria-label="Publishing" aria-valuemin="0" aria-valuemax="100">
           <div id="progress-fill" class="progress-fill"></div>
-        </div>
-      </div>
-      <div id="bom-step" class="progress-step" hidden>
-        <p class="progress-step-head"><span class="progress-step-name">Bill of Materials</span><span id="bom-count" class="muted"></span></p>
-        <div id="bom-bar" class="progress-bar" role="progressbar" aria-label="Bill of Materials" aria-valuemin="0" aria-valuemax="100">
-          <div id="bom-fill" class="progress-fill"></div>
         </div>
       </div>
       <p class="muted progress-count"><span id="progress-elapsed"></span></p>
@@ -170,7 +170,6 @@
   <script src="js/bom-tree.js"></script>
   <script src="js/bom-model.js"></script>
   <script src="js/bom-plan.js"></script>
-  <script src="js/bom-scope.js"></script>
   <script src="js/bom-cells.js"></script>
   <script src="js/bom-filters.js"></script>
   <script src="js/bom-columns.js"></script>

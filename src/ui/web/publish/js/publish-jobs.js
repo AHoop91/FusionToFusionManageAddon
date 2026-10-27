@@ -23,6 +23,8 @@
   let unseen = '';         // id of a running job whose dialog was closed: still followed, to call onFinished when it ends
   let timer = null;
   let confirming = false;   // the dialog asks whether to cancel the publish
+  let readStep = null;      // the read of the Bill of Materials a publish starts with, as drawn in the dialog (see ``reading``); null when the publish has none
+  let onAbandon = null;     // called when the dialog is closed while that read is still going
   let watched = '';   // id of the job the progress dialog follows ("" = no dialog)
 
   function listOpen() { return !!$('pub-jobs-list'); }   // only the Jobs window has the list
@@ -298,6 +300,9 @@
 
   function isFinished(job) { return FINISHED.indexOf(job.phase) >= 0; }
 
+  /** A job that completed with nothing failed: it leaves the Job Queue, so there are no details to point to. */
+  function isClean(job) { return job.phase === 'done' && !failedRows(job); }
+
   /** A run that stopped in its validation wrote nothing, so it is not a job of the queue: the Jobs window and the dialog's note leave it out. */
   function stoppedInValidation(job) { return job.phase === 'error' && job.stage === 'validating'; }
 
@@ -363,7 +368,7 @@
     const validating = job.stage === 'validating';
     if (job.phase === 'running') {   // at the Bill of Materials every item is done: it goes last
       return { title: 'Publishing ' + job.name, status: runningStatus(job), count: validating ? 'Waiting for validation' : count,
-               percent: validating ? 0 : job.stage === 'bom' ? 100 : total ? Math.round(job.done * 100 / total) : null, tone: '' };
+               percent: validating ? 0 : publishPercent(job), tone: '' };
     }
     if (job.phase === 'error') {   // a failure in the validation leaves nothing published: its own bar is the red one
       return { title: validating ? 'Validation failed' : 'Publish failed', status: job.message || 'The publish could not be completed.', count: validating ? 'Not started' : '',
@@ -404,18 +409,17 @@
   }
 
   /**
-   * The Bill of Materials step, which comes last and only when the job sends: its requests sent so far, out of all of them. Its bar is
-   * ``percent`` (0 until it starts), with the ``count`` line and ``tone``; ``shown`` is false when the job has no Bill of Materials to send.
+   * How far the publishing has come, as one bar: the items, then (when the job sends) the requests of the Bill of Materials, which come after them.
+   * Each item and each request counts one, so the bar fills through both without a pause between.
    */
-  function bomStep(job) {
-    const sent = job.bom || { done: 0, total: 0 };
-    const shown = !!job.sends && sent.total > 0;
-    if (job.phase === 'done') return { shown: shown, percent: 100, count: sent.total + ' of ' + plural(sent.total, 'request'), tone: bomFailed(job) ? 'error' : 'ok' };
-    if (job.stage !== 'bom') return { shown: shown, percent: 0, count: '', tone: '' };
-    return { shown: shown, percent: sent.total ? Math.round(sent.done * 100 / sent.total) : 100, count: bomCount(job), tone: job.phase === 'error' ? 'error' : '' };
+  function publishPercent(job) {
+    const items = job.total || 0;
+    const requests = job.sends && job.bom ? job.bom : { done: 0, total: 0 };
+    const all = items + requests.total;
+    return all ? Math.round((Math.min(job.done, items) + requests.done) * 100 / all) : null;
   }
 
-  /** Draw one of the bars (``step``: 'validate', 'publish' or 'bom'): ``percent`` is null while it is not measured, ``tone`` colours it. */
+  /** Draw one of the bars (``step``: 'read', 'validate' or 'publish'): ``percent`` is null while it is not measured, ``tone`` colours it. */
   function showBar(step, percent, tone) {
     const bar = $(step === 'publish' ? 'progress-bar' : step + '-bar');
     const box = $(step + '-step');
@@ -434,28 +438,32 @@
     return view.tone === 'ok' ? 'ok' : 'error';
   }
 
+  /** What a step says beside its name: its percent, "0%" included; while the percent is not known (null), ``fallback`` (what it can say instead). */
+  function percentText(percent, fallback) {
+    return percent === null ? fallback || '' : percent + '%';
+  }
+
   function showProgress(view, job) {
     const box = $('progress');
     const active = !!job && !isFinished(job);
     $('progress-title').textContent = view.title;
     $('progress-status').textContent = view.status;
-    $('progress-count').textContent = view.count || '';
+    $('progress-count').textContent = percentText(view.percent, view.count);
     $('progress-elapsed').textContent = elapsedText(job);
     $('progress-badge').className = 'pub-badge pub-badge-' + badgeOf(view, job);
     showTally(job);
     showBar('publish', view.percent, view.tone);
-    const check = job ? validation(job) : { percent: 0, count: '', tone: '' };
-    $('validate-count').textContent = check.count;
-    showBar('validate', check.percent, check.tone);
-    const boms = job ? bomStep(job) : { shown: false };
-    $('bom-step').hidden = !boms.shown;
-    if (boms.shown) {
-      $('bom-count').textContent = boms.count;
-      showBar('bom', boms.percent, boms.tone);
+    $('read-step').hidden = !readStep;
+    if (readStep) {
+      $('read-count').textContent = percentText(readStep.percent, readStep.count);
+      showBar('read', readStep.percent, readStep.tone);
     }
+    const check = job ? validation(job) : { percent: 0, count: '', tone: '' };
+    $('validate-count').textContent = percentText(check.percent, check.count);
+    showBar('validate', check.percent, check.tone);
     $('progress-note').textContent = active
       ? 'You can close this window. Publishing continues in the background and you can follow it in Job Queue on the Fusion Manage tab.'
-      : (job && !stoppedInValidation(job) ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
+      : (job && !stoppedInValidation(job) && !isClean(job) ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
     if (!active) confirming = false;
     $('progress-confirm').hidden = !confirming;
     $('progress-actions').hidden = confirming;
@@ -466,6 +474,9 @@
 
   /** Close the dialog. A publish still running keeps being followed (``unseen``), so the panel is refreshed when it ends all the same. */
   function closeProgress() {
+    const abandon = readStep && !readStep.done ? onAbandon : null;   // closed while the Bill of Materials was still being read: the publish is dropped
+    endReading();
+    if (abandon) abandon();
     const job = watchedJob();
     unseen = job && !isFinished(job) ? job.id : '';
     watched = '';
@@ -549,13 +560,41 @@
     release = null;
     if (s.error) {
       watched = '';
+      endReading();
       showProgress({ title: 'Could not publish', status: s.error, count: '', percent: 100, tone: 'error' }, null);
       return;
     }
-    if (s.cancelled) return;   // the folder dialog was cancelled
+    if (s.cancelled) {   // the folder dialog was cancelled: the dialog that was waiting for the job goes
+      stopReading();
+      return;
+    }
     jobs = s.jobs || [];
     watched = s.queued;
     if (updateProgress()) schedule();
+  }
+
+  /**
+   * The first step of a publish that has levels of the Bill of Materials to read: the dialog opens at once and says how far the read is, so the
+   * wait is not a silent one. ``step`` is ``status``, ``count`` (what the step says while it has no percent: the read has no total) and ``done``
+   * (read: the job follows). ``onClose`` is called if the dialog is closed before the read ends.
+   */
+  function reading(step, onClose) {
+    readStep = { percent: step.done ? 100 : null, count: step.count || '', tone: step.done ? 'ok' : '', done: !!step.done };
+    onAbandon = onClose || null;
+    showProgress({ title: step.done ? 'Starting the publish' : 'Reading the Bill of Materials', status: step.status, count: '', percent: 0, tone: '' }, null);
+  }
+
+  /** Forget the read step: the dialog goes on without it. */
+  function endReading() {
+    readStep = null;
+    onAbandon = null;
+  }
+
+  /** The read ended without a publish (it failed, or lines need a choice): take the dialog down. */
+  function stopReading() {
+    if (!readStep) return;
+    endReading();
+    $('progress').hidden = true;
   }
 
   /** Queue a publish of ``payload`` (summary, items, operations); Python asks for the folder first. */
@@ -596,5 +635,5 @@
     }
   }
 
-  ns.pubJobs = { init: init, start: start, describe: describe, validation: validation, bomStep: bomStep, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
+  ns.pubJobs = { init: init, start: start, reading: reading, stopReading: stopReading, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
 })(window.MfgUi);

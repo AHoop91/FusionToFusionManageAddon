@@ -385,7 +385,5 @@
     },
     /** The next table drawn opens every assembly (the rest of the tree has just been read for Expand all). */
     openAllOnNextDraw: function () { openAllNext = true; },
-    /** Is the assembly with this component id open? */
-    isOpen: function (id) { return opened.has(id); },
   };
 })(window.MfgUi);

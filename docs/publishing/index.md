@@ -71,11 +71,11 @@ Properties with no mapping are listed as not published. Mapped properties are li
 2. Optionally use **Add Existing Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](#add-existing-items)).
 3. Click **Publish**. The button is enabled once the BOM has loaded. It stays disabled while a line still needs a choice (**Review**), while **Expand all** is reading the tree, and when the design's own item number is shared.
 
-A progress dialog appears with up to three bars, one after the other, each with its own count. **Validation** looks up every item number in Fusion Manage and shows how many it has checked. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). Once validation is complete and green, **Publishing** fills as the items are created or updated. Then **Bill of Materials** fills as its requests are sent, counted in requests (each add, update, removal or renumber is one), for example *12 of 40 requests*. It appears only when the run has BOM changes to send. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
+A progress dialog appears with up to three bars, one after the other, each with a percentage. **Reading** shows only when the Bill of Materials has levels that are not read yet: **Publish** reads and compares them first, counting the lines so far, and the bar turns green with the number of items found when it is done. **Validating** looks up every item number in Fusion Manage. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). Once validation is complete and green, **Publishing** fills as the items are created or updated and then as the requests of the Bill of Materials are sent (each add, update, removal or renumber counts as one). You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Closing it while **Reading** is still going drops the publish. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
 
 Under the bars the dialog shows the time elapsed and a tally of **Successful**, **Failed** and **Pending** items. A **Skipped** box is added when items were left out on purpose.
 
-![The progress dialog over the Publish panel: the Validation bar complete and the Publishing bar at 6 of 12 items, the Successful, Failed and Pending counts, and the Cancel publish and Close buttons](../images/publish-progress.png){ width="900" height="465" }
+![The progress dialog over the Publish panel: the Reading bar complete, the Validating bar at 48% and the Publishing bar at 0%, with the Cancel publish and Close buttons](../images/publish-progress.png){ width="900" height="465" }
 
 ### What a run does
 
@@ -86,7 +86,7 @@ Under the bars the dialog shows the time elapsed and a tally of **Successful**, 
 
 When the run ends, the progress dialog turns into the result. It reads **Publish complete** when every item went through, **Completed with errors** when some failed (see the [Job Queue](../job-queue/index.md) for the reasons), **Publish cancelled** after **Cancel publish**, **Validation failed** when the item numbers could not be checked or several items carry one (Publishing shows *Not started*), or **Publish failed** when the run could not finish after validation.
 
-![The Publish complete dialog: 12 of 12 items on a full green bar, 12 Successful, 0 Failed and 0 Pending, with a pointer to the Job Queue](../images/publish-complete.png){ width="900" height="465" }
+![The Publish complete dialog: the Reading, Validating and Publishing bars all at 100%, 42 Successful, 0 Failed and 0 Pending](../images/publish-complete.png){ width="900" height="465" }
 
 If you closed the dialog, Fusion shows a message box instead when the run completes or completes with errors (titled **Publish completed with errors**; nothing is shown for a cancelled run), with **Total Items Processed**, **Total Items Created** and **Total Items Updated**, and, for any failure, the item and the reason.
 
@@ -191,7 +191,7 @@ An update never changes:
 The add-in asks Fusion Manage for items whose descriptor matches the component's item number, and uses the item when exactly one comes back. When more than one comes back it does not guess, and nothing can be published until the number belongs to one item. This happens when two items in the workspace carry the same item number. Fusion Manage does not stop that, for example when items were created by hand or imported. The fix is in Fusion Manage: renumber or remove the extra items, then refresh the panel.
 
 - **In the panel.** Open the component's details. The status is **Shared number**, and the Details Panel lists the Fusion Manage items that carry the number. A design whose own number is shared is not compared: the Bill of Materials says so, and **Publish** and **Add Existing Items** stay disabled.
-- **When you publish.** Before anything is written, the run looks up every item number in Fusion Manage. If any number is carried by several items, the whole run fails and nothing is published. The progress dialog shows the Validation bar failed and Publishing not started. While the numbers are looked up, each row of the Bill of Materials shows a spinner, then a green tick, or a red cross when several items carry its number. The crosses stay after the failure, and the panel does not refresh, so you can find the items to fix. The run does not appear in the Job Queue. Nothing is partly published, so after you have fixed Fusion Manage you publish again.
+- **When you publish.** Before anything is written, the run looks up every item number in Fusion Manage. If any number is carried by several items, the whole run fails and nothing is published. The progress dialog shows the Validating bar failed and Publishing not started. While the numbers are looked up, each row of the Bill of Materials shows a spinner, then a green tick, or a red cross when several items carry its number. The crosses stay after the failure, and the panel does not refresh, so you can find the items to fix. The run does not appear in the Job Queue. Nothing is partly published, so after you have fixed Fusion Manage you publish again.
 - **If the look-up fails.** If Fusion Manage cannot be searched, the run fails the same way, because the numbers cannot be known to be unique.
 
 The [Item Panel](../item-panel/index.md#when-several-items-share-the-number) asks which item you mean, and remembers the item you pick. The right-click STEP upload, the drawing upload and the Export window use the Item panel's choice; when several items match and none was chosen they stop with a message and attach nothing.
@@ -216,16 +216,15 @@ The panel reads the BOM one level at a time, so a large assembly opens quickly. 
 
 **Expand all** reads every level that is not read yet and opens everything; **Collapse all** closes every assembly except the design itself.
 
-**Publish covers what is open.** It publishes the design and the lines of every assembly you have opened, exactly as the table shows them, and nothing under a closed assembly. The pills at the bottom left count what that is, and update as you open and close assemblies:
+**Publish covers the whole design.** If some levels are not read yet, **Publish** first reads and compares every one of them (as **Expand all** does), then goes on to validate the item numbers and publish. If that read shows lines that need a choice (**Review**), they are opened for you and the publish waits; choose, then click **Publish** again. If the read fails, nothing is published. The pills at the bottom left count what is covered:
 
 | Pill | Counts |
 |---|---|
-| **Items** | The design and every component in view: each is checked against Fusion Manage when you publish, and created or updated where it differs. |
+| **Items** | The design and every component of it: each is checked against Fusion Manage when you publish, and created or updated where it differs. |
 | **Lines Skipped** | Lines with no item number (and what is below them): nothing is published for them. |
 | **Shared Item Numbers** | Lines whose item number another component also carries (and what is below them): see [Shared item numbers](#shared-item-numbers). |
-| **Sub Assemblies Skipped** | Closed sub assemblies in view. What is under them is not published; open them, or use **Expand all**, to include them. |
 
-A line that needs a choice (**Review**) holds **Publish** back only while it is in view.
+A line that needs a choice (**Review**) holds **Publish** back, whether its assembly is open or closed.
 
 Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a read is bigger than the add-in can handle, the panel says so instead of showing a table when the first level fails, and shows a message and keeps the table when **Expand all** fails:
 
@@ -243,7 +242,7 @@ For each parent assembly, the lines of the design are matched to the Fusion Mana
 | **Update** | Same item, different quantity. | Updates the quantity in Fusion Manage. |
 | *(no chip)* | Same item and quantity. | Nothing. |
 | **Fusion Manage Only** | Fusion Manage has a line the design does not. It has no chip of its own; use the **Fusion Manage Only** filter to find it. | **Keeps it** unless you choose **Remove**. |
-| **Review** | A **New** line and a **Fusion Manage Only** line sit under the same parent and need your choice (see [Paired rows](#paired-rows-a-replaced-item)). | Holds **Publish** back while in view. |
+| **Review** | A **New** line and a **Fusion Manage Only** line sit under the same parent and need your choice (see [Paired rows](#paired-rows-a-replaced-item)). | Holds **Publish** back. |
 | **Keep** / **Remove** | Your choice on a Fusion Manage Only line or a pair. | Keeps the line, or deletes it. |
 | **Added** | You picked the item with [Add Existing Items](#add-existing-items). | Adds the line to the end of the Fusion Manage BOM. |
 | **Skipped** | The component has no item number, shares one with another component, or sits below such a line. | Nothing: no item is created and no BOM line is added. |
@@ -270,7 +269,7 @@ The **Filters** drop-down above the table (top left) narrows it to rows of one s
 
 **Duplicates** holds the lines whose item number several Fusion Manage items carry, so you can go straight to the items to fix.
 
-- **When it fills.** Only when you click **Publish**. The Validation step looks up every item number in Fusion Manage, and any number that comes back with several items is added to the filter. Opening the panel or a component's details does not fill it.
+- **When it fills.** Only when you click **Publish**. The Validating step looks up every item number in Fusion Manage, and any number that comes back with several items is added to the filter. Opening the panel or a component's details does not fill it.
 - **What you see.** The lines appear under the filter, and the same red crosses show on their rows.
 - **How long it lasts.** Until you refresh the panel, or the next publish checks the numbers again.
 - **What to do.** Renumber or remove the extra items in Fusion Manage, then publish again.

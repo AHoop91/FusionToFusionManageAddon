@@ -107,7 +107,6 @@
 .pub-pill-info svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pub-pill-items { --pill-ink: #0b5a96; --pill-bg: #eef6fd; --pill-line: #cfe3f6; --pill-dot: #1f8ceb; }
 .pub-pill-skipped { --pill-ink: #5d6672; --pill-bg: #f3f4f6; --pill-line: #dcdfe4; --pill-dot: #98a1ad; }
-.pub-pill-closed { --pill-ink: #8a5600; --pill-bg: #fff6e5; --pill-line: #f3dfb3; --pill-dot: #e39b13; }
 @media (prefers-reduced-motion: reduce) { .pub-pill { animation: none; } }
 
 /* ---- States ---------------------------------------------------------------- */
