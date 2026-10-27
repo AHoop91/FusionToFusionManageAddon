@@ -42,6 +42,12 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(rows["materialName"]["status"], MISMATCH)
         self.assertEqual(rows["materialName"]["fm_value"], "Brass")
 
+    def test_a_value_fusion_lacks_never_replaces_one_fusion_manage_holds(self):
+        properties = [{"name": "partNumber", "value": "PN-1"}, {"name": "materialName", "value": ""}]
+        rows = {r["name"]: r for r in compare_properties(properties, self.summary, self.mappings,
+                                                         {"NUMBER": "PN-1", "MATERIAL": "Steel"}, FOUND)}
+        self.assertEqual(rows["materialName"]["status"], MATCH)
+
     def test_a_number_the_field_holds_at_its_precision_is_a_match(self):
         mappings = [FieldMapping("custom:Mass", "MASS")]
         properties = [{"name": "Mass", "value": "0.104455"}]

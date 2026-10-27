@@ -98,7 +98,8 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
             status = NEW
         else:
             fit = (lambda text, field=mapping.fm_field_id: fit_number(field, text)) if fit_number else None
-            status = MATCH if _same(value, fm_value, fit) else MISMATCH
+            # A value Fusion lacks never replaces one Fusion Manage holds: only a real difference is pushed.
+            status = MATCH if not value.strip() or _same(value, fm_value, fit) else MISMATCH
         shown = fit_number(mapping.fm_field_id, value) if fit_number and value else value
         rows.append({"name": name, "value": value, "shown": shown, "fm_field": mapping.fm_field_id,
                      "fm_value": fm_value, "status": status, **extra})

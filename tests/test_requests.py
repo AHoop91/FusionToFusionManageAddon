@@ -52,6 +52,11 @@ class ItemRequestTests(unittest.TestCase):
         self.assertEqual((request["method"], request["url"]), ("PATCH", "/api/v3/workspaces/1/items/7"))
         self.assertEqual(entries(request), {"TITLE": "Axle"})
 
+    def test_an_update_never_blanks_a_field(self):
+        rows = [row("TITLE", "Axle", MISMATCH), row("MATERIAL", "", MISMATCH)]
+        request, _ = item_request("1", {"state": FOUND, "item_id": "7"}, rows, [], SECTIONS)
+        self.assertEqual(entries(request), {"TITLE": "Axle"})
+
     def test_an_update_names_the_sections_and_fields_of_the_item_itself(self):
         rows = [row("TITLE", "Axle", MISMATCH)]
         request, _ = item_request("1", {"state": FOUND, "item_id": "7"}, rows, [], SECTIONS)

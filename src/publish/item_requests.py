@@ -65,7 +65,7 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any
         fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == NEW and r["value"] != ""] + statics
         method, url = "POST", f"{WORKSPACES}/{workspace_id}/items"
     elif state == FOUND:
-        fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == MISMATCH] + [
+        fields = [(r["fm_field"], r["value"]) for r in rows if r["status"] == MISMATCH and r["value"] != ""] + [
             (field_id, value) for field_id, value in fixed if current is None or not _holds(current.get(field_id), value)]
         if not fields:
             return None, "Fusion Manage already has the same values."
