@@ -23,17 +23,11 @@ The add-in finds the component you selected by its part number in the open desig
 
 **The panel follows your selection.** While it is open, selecting another component shows that component's item.
 
-!!! example "Screenshot placeholder: Item Panel showing the Item tab"
-    **Show:** The Item Panel with the header, tabs and the Item tab's sections and fields.
+![The Item Panel on the Item tab: the title and status line, the Open in browser, Refresh and Actions buttons, the tabs, and the Basic and Technical Details sections with their fields](../images/item-panel.png){ width="700" }
 
-    Save the image as `docs/images/item-panel.png`, then replace this box with `![Item Panel showing the Item tab](../images/item-panel.png)`.
+If no item has the number, the panel says **No Item Exists In Fusion Manage Yet**, shows the item number, and lists what publishing will do: open the Publish panel to review what will be sent, create the item in the Items workspace with the design's properties, and add its bill of materials if it is an assembly. Click **Publish to Fusion Manage** to open the [Publish panel](../publishing/index.md). If you may not view the workspace, it tells you so.
 
-If no item has the number, the panel says the item has not been uploaded to the Fusion Manage Items workspace and asks whether you would like to publish it. Click **Publish** to open the [Publish panel](../publishing/index.md). If you may not view the workspace, it tells you so.
-
-!!! example "Screenshot placeholder: Item Panel: no item exists"
-    **Show:** The empty state saying No item exists for the part number.
-
-    Save the image as `docs/images/item-not-found.png`, then replace this box with `![Item Panel: no item exists](../images/item-not-found.png)`.
+![The Item Panel when no item exists: the heading No Item Exists In Fusion Manage Yet, the item number PN-001291, the three steps publishing performs, and the Publish to Fusion Manage button](../images/item-not-found.png){ width="700" }
 
 ### When several items share the number
 
@@ -46,10 +40,7 @@ If more than one item in the Items workspace has the component's item number, th
 
 ## Header
 
-!!! example "Screenshot placeholder: Item Panel header with the Actions menu open"
-    **Show:** The title, status line, Open in browser, Refresh and the Actions menu showing Export STEP File.
-
-    Save the image as `docs/images/item-actions.png`, then replace this box with `![Item Panel header with the Actions menu open](../images/item-actions.png)`.
+![The Item Panel header with the Actions menu open, showing Republish and Export STEP File, beside the Open in browser and Refresh buttons](../images/item-actions.png){ width="700" }
 
 | Control | What it does |
 |---|---|
@@ -83,10 +74,7 @@ The item's sections and fields as label and value, and matrices as grids. Sectio
 
 ### Files
 
-!!! example "Screenshot placeholder: Files tab"
-    **Show:** Attached files with their type icons, including a STEP file and a PDF.
-
-    Save the image as `docs/images/tab-files.png`, then replace this box with `![Files tab](../images/tab-files.png)`.
+![The Files tab: the Export STEP File button above a table of the attached files with their type icons, titles, versions, types, sizes and last-updated times, including a DWG, a DXF, a PDF and a STEP file](../images/tab-files.png){ width="700" }
 
 The files attached to the item, with a type icon, sortable by any column. This is where you check that a [STEP file](../publishing/index.md#step-file) or [drawing PDF](../publishing/index.md#drawing-representation) arrived. Empty state: *No files attached*.
 
@@ -96,10 +84,7 @@ A file made from the open document is marked **Out of Date** (an amber label to 
 
 ### Bill of Materials
 
-!!! example "Screenshot placeholder: Bill of Materials tab"
-    **Show:** The BOM tree with the Views selector and column chooser.
-
-    Save the image as `docs/images/tab-bom.png`, then replace this box with `![Bill of Materials tab](../images/tab-bom.png)`.
+![The Bill of Materials tab: the collapse and expand buttons, the Views selector set to Basic with the tree and list toggles and the column chooser, and the BOM tree with Revision, Lifecycle and Icon columns](../images/tab-bom.png){ width="700" }
 
 The item's lines as a tree, with the same columns as Fusion Manage's own BOM view, a **Views** selector and a column chooser. Use it to check the BOM you published. See [Bill of Materials](../publishing/index.md#bill-of-materials). Empty state: *No Bill of Materials*.
 
@@ -107,23 +92,21 @@ Each time the tab is opened, the mark at the right of the tab bar compares the o
 
 ### Where Used
 
-!!! example "Screenshot placeholder: Where Used tab"
-    **Show:** The assemblies that hold the item, with a parent expanded.
-
-    Save the image as `docs/images/tab-where-used.png`, then replace this box with `![Where Used tab](../images/tab-where-used.png)`.
+![The Where Used tab of PN-000699 - Universal Joint Bush: the one assembly that uses it, PN-000701 - Universal Joint, with its version, quantity, units and lifecycle](../images/tab-where-used.png){ width="700" }
 
 The assemblies that hold the item, as a tree. Expand a parent to read the next level up. Empty state: *Not used in any assembly*.
 
 ### Associated Workflows
 
-!!! example "Screenshot placeholder: Associated Workflows tab"
-    **Show:** Workflow items such as a change order, with their state and last step.
+![The Associated Workflows tab, named Change Processes in this workspace: one change order, LCO-000056, with its workflow status, last action, user, time and comments](../images/tab-workflows.png){ width="700" }
 
-    Save the image as `docs/images/tab-workflows.png`, then replace this box with `![Associated Workflows tab](../images/tab-workflows.png)`.
+The tab takes its name from your Fusion Manage workspace. In the example above it reads **Change Processes**, with the number of workflow items beside it.
 
 The workflow items, such as change orders, that reference the item. Each row shows the workflow item's current state and its last workflow step: when, by whom, the action taken and any comments. Empty state: *No associated workflows*.
 
 ### Change Log
+
+![The Change Log tab: entries newest first with date and time, who changed it, the action and a description, edited fields shown with the old value struck through and the new value beside it, and Showing 100 of 208 at the bottom](../images/tab-change-log.png){ width="700" }
 
 What was done to the item, newest first: when, by whom, the action, and a description. Fields a change edited are listed under the description with the old value struck through and the new value beside it. The first 100 entries are read, and more are read as you scroll towards the end (a progress bar shows while they load). Only the rows in view are drawn, so a long log stays smooth. Needs the View Change Log permission. Empty state: *No changes logged*.
 
@@ -145,15 +128,12 @@ If the review finds a problem, correct it at its source. A design problem is fix
 
 ### Release happens in Fusion Manage
 
-!!! example "Screenshot placeholder: Item in Fusion Manage with its workflow actions"
-    **Show:** The item open in Fusion Manage in the browser, showing the workflow action used to release it.
+The manufactured item is released through **a change order in Fusion Manage**, independent of the engineering release in Fusion. The add-in does not move an item through its workflow, and it does not create the change order.
 
-    Save the image as `docs/images/fm-item-workflow.png`, then replace this box with `![Item in Fusion Manage with its workflow actions](../images/fm-item-workflow.png)`.
-
-The manufactured item is released through **its own workflow in Fusion Manage**, independent of the engineering release in Fusion. The add-in does not move an item through its workflow.
-
-1. In the Item Panel, click **Open in browser** to go straight to the item.
-2. In Fusion Manage, run the workflow action your organisation uses to release the item.
-3. Back in Fusion, click **Refresh** to see the new state, or check the **Associated Workflows** tab for the workflow's progress.
+1. In the Item Panel, click **Open in browser** to go straight to the item, or open Fusion Manage yourself.
+2. In Fusion Manage, **create a Change Order**.
+3. In the change order, **Add Affected Manufacturing Items** and choose the item you published.
+4. Run the change order through its workflow. When the change order is released, the item it covers is released with it.
+5. Back in Fusion, click **Refresh** to see the item's new state, or check the **Associated Workflows** tab: the change order is listed there with its current state and last step.
 
 For how this fits into the wider process, see the [End-to-End Workflow](../getting-started/workflow.md#5-manufacturing-releases-the-item).
