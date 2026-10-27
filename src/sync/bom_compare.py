@@ -55,6 +55,36 @@ def _same_quantity(a: str, b: str) -> bool:
         return a.strip() == b.strip()
 
 
+def _position(sequence: Any) -> str:
+    """A line's BOM position as text ("" when it has none), so the design's 11 and Fusion Manage's "11" are the same."""
+    text = str(sequence or "").strip()
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    return "" if number == 0 else str(int(number)) if number == int(number) else text
+
+
+def _pair_by_position(new: List[Any], extras: List[Any]) -> List[Any]:
+    """``[(index of a new design line, index of a Fusion Manage-only line)]``: a pair is a design line and a Fusion Manage line at the same BOM
+    position under one parent, which may be a replaced item. A line at a position the other side does not use is not a replacement (a line
+    removed in Fusion Manage at 11 and oil added at 12), so it is left unpaired. Lines with no position on either side pair in order.
+    ``new`` and ``extras`` are ``(index, sequence)`` in order."""
+    pairs: List[Any] = []
+    free = list(extras)
+    unplaced: List[Any] = []
+    for index, sequence in new:
+        position = _position(sequence)
+        match = next((e for e in free if position and _position(e[1]) == position), None) if position else None
+        if match is not None:
+            free.remove(match)
+            pairs.append((index, match[0]))
+        elif not position:
+            unplaced.append(index)
+    pairs.extend(zip(unplaced, [e[0] for e in free if not _position(e[1])]))
+    return pairs
+
+
 def compare_bom(rows: List[Dict[str, Any]], root_number: str,
                 fm_bom: Dict[str, List[Dict[str, str]]]) -> List[Dict[str, Any]]:
     """``rows`` (tree order, ``level`` 0 = direct child of the root) with a ``status`` each."""
@@ -75,11 +105,13 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
                     "name": line.get("name", ""), "part_number": line["number"], "description": "",
                     "quantity": line["quantity"], "status": EXTRA, "pair": pair, "edge_id": line.get("edge_id", "")}
 
-        pairs = list(zip(frame["new"], extras))
-        for index, line in reversed(pairs):   # last first, so earlier positions stay valid
-            out[index]["pair"] = line["number"]
-            out.insert(index, extra(line, item_number_of(out[index])))
-        out.extend(extra(line) for line in extras[len(pairs):])
+        pairs = _pair_by_position([(index, out[index].get("sequence")) for index in frame["new"]],
+                                  [(n, line.get("sequence")) for n, line in enumerate(extras)])
+        for index, n in sorted(pairs, reverse=True):   # last first, so earlier positions stay valid
+            out[index]["pair"] = extras[n]["number"]
+            out.insert(index, extra(extras[n], item_number_of(out[index])))
+        paired = {n for _, n in pairs}
+        out.extend(extra(line) for n, line in enumerate(extras) if n not in paired)
 
     for row in mark_skipped(rows):
         if row.get("skip"):   # not compared, and it takes no Fusion Manage line
