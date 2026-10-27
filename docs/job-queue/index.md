@@ -23,7 +23,7 @@ The panel is a table of every job that is waiting, running, failed or cancelled,
 |---|---|
 | **Status** | A pill with an icon and the status in words, the same width for every job |
 | **Job** | The name of the job, the design it publishes |
-| **Progress** | A sentence on where it stands, for example *Checking item numbers.*, *Publishing 4 of 5 items.*, *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.* |
+| **Progress** | A sentence on where it stands, for example *Checking item numbers.*, *Publishing 4 of 5 items.*, *Updating the Bill of Materials, 12 of 40 requests.*, *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.* |
 | **Time** | How long the job has taken, counting up while it runs. A dash while it waits |
 | | **Cancel** while it is waiting or running, **Retry** once it has failed |
 

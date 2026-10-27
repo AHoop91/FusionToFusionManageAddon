@@ -14,7 +14,8 @@ import json
 import os
 import re
 import threading
-from typing import Any, Callable, Dict, List, Optional, Set
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
@@ -28,6 +29,7 @@ log = get_logger("publish_send")
 
 SEND_LOG = "send-log.json"
 DUPLICATE_LINE = "error.bom.duplicate"   # Fusion Manage's answer to adding an item the BOM already has
+BOM_REQUESTS = 5   # Bill of Materials requests in flight at once, across all parents
 _ITEM_ID = re.compile(r"/items/(\d+)")
 _TENANT = re.compile(r"item:([^.]+)\.")
 
@@ -96,13 +98,15 @@ def created_id(result: SendResult) -> str:
 class Dispatcher:
     """Sends item and Bill of Materials requests, remembering the ids of the items and what was accepted.
 
-    Safe to call from several threads: a request goes out while the lock is held, one at a time.
+    Safe to call from several threads: an item goes out while the lock is held, one at a time. Bill of Materials requests go out together,
+    the lock held only to look up ids and to log what was accepted.
     """
 
     def __init__(self, path: str, fm: FmClient, workspace_id: str, known: Optional[Dict[str, str]] = None) -> None:
         self.path, self._fm, self._workspace_id = path, fm, workspace_id
         self._search = ItemService(fm)
         self._lock = threading.RLock()
+        self._slots = threading.BoundedSemaphore(BOM_REQUESTS)   # shared by every parent being sent
         self._ids: Dict[str, str] = {}   # item number (any case) -> id; empty when the item is known to exist but not its id
         self._shown: Dict[str, str] = {}   # the number as written, for messages
         self._failed: Set[str] = set()
@@ -157,38 +161,68 @@ class Dispatcher:
 
     # ---- Bill of Materials -----------------------------------------------------------
 
-    def send_bom(self, parent: str, requests: List[Dict[str, Any]], cancelled: Callable[[], bool] = lambda: False) -> str:
-        """Send the lines of one parent's Bill of Materials, in order, stopping at the first that fails.
+    def send_bom(self, parent: str, requests: List[Dict[str, Any]], cancelled: Callable[[], bool] = lambda: False,
+                 progress: Callable[[], None] = lambda: None) -> str:
+        """Send the lines of one parent's Bill of Materials: removals and updates first, then additions.
 
-        Raises ``FmApiError``, ``AuthError`` or ``Unresolved`` naming the request that failed.
+        The requests of one step do not depend on each other, so several go out at once (at most ``BOM_REQUESTS`` across all parents);
+        the next step starts when the one before has finished, so a position is freed before another line takes it. A failure ends the
+        step it is in, and nothing after it is sent. ``progress`` is called after each request, sent or found already sent.
+
+        Raises ``FmApiError``, ``AuthError`` or ``Unresolved`` naming the first request (in order) that failed.
         """
         with self._lock:
             if parent.casefold() in self._failed:
                 raise FmApiError(f"Item {parent} was not created, so its Bill of Materials was not sent.")
+        indexed = list(enumerate(requests))
+        changes = [(i, r) for i, r in indexed if r["method"] != "POST"]   # removals and updates
+        additions = [(i, r) for i, r in indexed if r["method"] == "POST"]
         sent = 0
-        for index, request in enumerate(requests):
-            if cancelled():
-                return f"Cancelled after {sent} request(s)."
-            key = f"bom:{parent}:{index}"
-            with self._lock:
+        for batch in (changes, additions):   # the additions wait until every change is done: a line is freed before another takes its position
+            if batch:
+                sent += self._send_batch(parent, batch, len(requests), cancelled, progress)
+                if cancelled():
+                    return f"Cancelled after {sent} request(s)."
+        return f"{len(requests)} request(s) sent."
+
+    def _send_batch(self, parent: str, batch: List[Tuple[int, Dict[str, Any]]], count: int, cancelled: Callable[[], bool],
+                    progress: Callable[[], None]) -> int:
+        """Send the requests of a batch, ``BOM_REQUESTS`` at a time, and return how many were sent. The first to fail is raised once the
+        others in flight have finished; those not started by then are left unsent."""
+        failed = threading.Event()
+        with ThreadPoolExecutor(max_workers=BOM_REQUESTS) as pool:
+            sent = pool.map(lambda item: self._send_bom_request(parent, item[0], item[1], count, cancelled, failed, progress), batch)
+            return list(sent).count(True)
+
+    def _send_bom_request(self, parent: str, index: int, request: Dict[str, Any], count: int, cancelled: Callable[[], bool],
+                          failed: threading.Event, progress: Callable[[], None]) -> bool:
+        """One request of a Bill of Materials, on a pool thread: True when it was sent, False when it was skipped (sent before, cancelled, or another request has failed)."""
+        if cancelled() or failed.is_set():
+            return False
+        key = f"bom:{parent}:{index}"
+        try:
+            with self._lock:   # the ids it needs may be searched for, once, and shared
                 if key in self._sent:
                     log.debug("BOM request %d of %s was sent before, skipped", index + 1, parent)
-                    continue
-                try:
-                    final = resolve(request, self._values(request))
-                    log.debug("BOM request %d of %s: %s %s", index + 1, parent, final["method"], final["url"])
-                    try:
-                        self._fm.send_json(final["method"], final["url"], final.get("body"))
-                    except FmApiError as exc:
-                        if final["method"] != "POST" or DUPLICATE_LINE not in str(exc):
-                            raise
-                        log.info("BOM line already there, nothing to add: %s", final["url"])   # e.g. an earlier send added it
-                except (FmApiError, AuthError, Unresolved) as exc:
-                    log.warning("Sending the Bill of Materials of %s failed at request %d: %s", parent, index + 1, exc)
-                    raise type(exc)(f"Request {index + 1} of {len(requests)}: {exc}") if isinstance(exc, FmApiError) else exc
-                self._record(key, {})
-                sent += 1
-        return f"{len(requests)} request(s) sent."
+                    progress()
+                    return False
+                final = resolve(request, self._values(request))
+            log.debug("BOM request %d of %s: %s %s", index + 1, parent, final["method"], final["url"])
+            try:   # outside the lock, so the others go out at the same time
+                with self._slots:
+                    self._fm.send_json(final["method"], final["url"], final.get("body"))
+            except FmApiError as exc:
+                if final["method"] != "POST" or DUPLICATE_LINE not in str(exc):
+                    raise
+                log.info("BOM line already there, nothing to add: %s", final["url"])   # e.g. an earlier send added it
+        except (FmApiError, AuthError, Unresolved) as exc:
+            failed.set()
+            log.warning("Sending the Bill of Materials of %s failed at request %d: %s", parent, index + 1, exc)
+            raise type(exc)(f"Request {index + 1} of {count}: {exc}") if isinstance(exc, FmApiError) else exc
+        with self._lock:
+            self._record(key, {})
+        progress()
+        return True
 
     # ---- Ids -------------------------------------------------------------------------
 

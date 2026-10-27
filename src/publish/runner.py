@@ -74,6 +74,8 @@ class PublishRun(JobState):
         self._bom_row_of = {parent: self.row(parent, f"Bill of Materials, {len(lines)} request(s)")
                             for parent, lines in self._bom_requests.items()} if send else {}
         self.rows.extend(self._bom_row_of.values())
+        self._bom_total = sum(len(lines) for lines in self._bom_requests.values()) if send else 0   # requests, not parents: one parent can have many
+        self._bom_done = 0   # requests sent or found sent already, so far
         self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
         self._physical = cfg.maps_physical()   # read them only when something maps them
         self._picklists = PicklistResolver(self._fm, cfg.workspace_id)   # options of the picklist fields, read once per run
@@ -127,8 +129,11 @@ class PublishRun(JobState):
     def snapshot(self) -> Dict[str, Any]:
         """The job's state, with the validation: how far the look-up of the item numbers has come, and how many items carry each number found."""
         ahead = self._ahead
+        with self._lock:
+            sent = self._bom_done
         return {**super().snapshot(), "validation": {"done": ahead.searched if ahead else 0, "total": ahead.to_search if ahead else 0,
-                                                     "counts": ahead.hits() if ahead else {}}}
+                                                     "counts": ahead.hits() if ahead else {}},
+                "bom": {"done": sent, "total": self._bom_total}}
 
     def _counts(self) -> Dict[str, int]:
         return {SKIPPED_COUNT: self._skipped}
@@ -141,19 +146,31 @@ class PublishRun(JobState):
             self.done += 1
 
     def _send_boms(self) -> None:
-        """Send the Bill of Materials of each parent, one after the other; a failure stops that parent only."""
+        """Send the Bill of Materials of each parent, several parents at a time; a failure stops that parent only."""
         self._set(stage="bom")
-        for parent, lines in self._bom_requests.items():
-            if self.cancelled:
-                break
-            row = self._bom_row_of[parent]
-            row["status"] = RUNNING
-            try:
-                row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled)
-                row["status"] = CANCELLED if row["detail"].startswith("Cancelled") else DONE
-            except (FmApiError, AuthError, Unresolved) as exc:
-                row["status"], row["detail"] = ERROR, str(exc)
-                self.folder.record(parent, SENT, FAILED, str(exc))
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            list(pool.map(lambda parent: self._send_bom(*parent), self._bom_requests.items()))
+
+    def _send_bom(self, parent: str, lines: List[Dict[str, Any]]) -> None:
+        """One parent's Bill of Materials, on a pool thread: the others go on if it fails."""
+        if self.cancelled:
+            return
+        row = self._bom_row_of[parent]
+        row["status"] = RUNNING
+        sent = [0]
+
+        def progress() -> None:
+            sent[0] += 1
+            row["detail"] = f"{sent[0]} of {len(lines)} request(s) sent."
+            with self._lock:
+                self._bom_done += 1
+
+        try:
+            row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled, progress)
+            row["status"] = CANCELLED if row["detail"].startswith("Cancelled") else DONE
+        except (FmApiError, AuthError, Unresolved) as exc:
+            row["status"], row["detail"] = ERROR, str(exc)
+            self.folder.record(parent, SENT, FAILED, str(exc))
 
     def _prepare(self, item: Dict[str, Any]) -> None:
         """One item, on a pool thread; a failure here never stops the others."""

@@ -13,6 +13,7 @@ run(window, 'js/publish-jobs.js');
 const describe = window.MfgUi.pubJobs.describe;
 const tally = window.MfgUi.pubJobs.tally;
 const validation = window.MfgUi.pubJobs.validation;
+const bomStep = window.MfgUi.pubJobs.bomStep;
 const elapsedText = window.MfgUi.pubJobs.elapsedText;
 const line = window.MfgUi.pubJobs.line;
 const listed = window.MfgUi.pubJobs.listed;
@@ -153,4 +154,19 @@ test('a job that went through leaves the Job Queue, and a cancelled or failed on
   assert.strictEqual(listed(job({ phase: 'error', stage: 'items' })), true);
   assert.strictEqual(listed(job({ phase: 'done', rows: [{ status: 'error' }] })), true);
   assert.strictEqual(listed(job({ phase: 'error', stage: 'validating' })), false);
+});
+
+test('the Bill of Materials bar waits, fills parent by parent, then is full', () => {
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const waiting = bomStep(job({ bom: { done: 0, total: 4 } }));
+  assert.deepStrictEqual(plain(waiting), { shown: true, percent: 0, count: '', tone: '' });
+  const sending = job({ stage: 'bom', done: 12, bom: { done: 1, total: 4 } });
+  assert.deepStrictEqual(plain(bomStep(sending)), { shown: true, percent: 25, count: '1 of 4 requests', tone: '' });
+  assert.match(line(sending), /Bill of Materials, 1 of 4 requests/);
+  assert.strictEqual(bomStep(job({ phase: 'done', stage: 'bom', bom: { done: 4, total: 4 } })).percent, 100);
+});
+
+test('a job with no Bill of Materials to send shows no such bar', () => {
+  assert.strictEqual(bomStep(job({ bom: { done: 0, total: 0 } })).shown, false);
+  assert.strictEqual(bomStep(job({ sends: false, bom: { done: 0, total: 3 } })).shown, false);
 });

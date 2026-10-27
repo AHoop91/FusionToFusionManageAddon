@@ -47,6 +47,7 @@
     const total = job.total || 0;
     const counts = tally(job);
     if (job.phase === 'queued') return 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '') + '.';
+    if (job.phase === 'running' && job.stage === 'bom') return 'Updating the Bill of Materials, ' + bomCount(job) + '.';
     if (job.phase === 'running') return job.stage === 'validating' ? 'Checking item numbers.' : total ? 'Publishing ' + job.done + ' of ' + plural(total, 'item') + '.' : 'Publishing.';
     if (job.phase === 'cancelled') return 'Cancelled. ' + (counts.successful ? counts.successful + ' of ' + plural(total, 'item') + ' published.' : 'Nothing was published.');
     if (job.phase === 'error') return counts.failed ? 'Failed. ' + counts.failed + ' of ' + plural(total, 'item') + ' failed.' : 'Failed.';
@@ -373,7 +374,7 @@
       const items = failedRows(job, total);
       const parts = [];
       if (items) parts.push(items + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed.');
-      if (failedRows(job) > items) parts.push('The Bill of Materials was not updated.');
+      if (bomFailed(job)) parts.push('The Bill of Materials was not updated.');
       return { title: 'Completed with errors', status: parts.join(' ') + ' See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' };
     }
     return { title: 'Publish complete', percent: 100, tone: 'ok', count: count,
@@ -393,9 +394,30 @@
     $('tally-skipped-box').hidden = !counts.skipped;
   }
 
-  /** Draw one of the two bars (``step``: 'validate' or 'publish'): ``percent`` is null while it is not measured, ``tone`` colours it. */
+  /** Did the job's Bill of Materials fail, beyond the items? Its rows come after the items, so they are the failed rows the items do not account for. */
+  function bomFailed(job) { return failedRows(job) > failedRows(job, job.total || 0); }
+
+  /** How far the Bill of Materials has come, in requests (an add, update, removal or renumber each), as the sentence "12 of 40 requests". */
+  function bomCount(job) {
+    const sent = job.bom || { done: 0, total: 0 };
+    return sent.done + ' of ' + plural(sent.total, 'request');
+  }
+
+  /**
+   * The Bill of Materials step, which comes last and only when the job sends: its requests sent so far, out of all of them. Its bar is
+   * ``percent`` (0 until it starts), with the ``count`` line and ``tone``; ``shown`` is false when the job has no Bill of Materials to send.
+   */
+  function bomStep(job) {
+    const sent = job.bom || { done: 0, total: 0 };
+    const shown = !!job.sends && sent.total > 0;
+    if (job.phase === 'done') return { shown: shown, percent: 100, count: sent.total + ' of ' + plural(sent.total, 'request'), tone: bomFailed(job) ? 'error' : 'ok' };
+    if (job.stage !== 'bom') return { shown: shown, percent: 0, count: '', tone: '' };
+    return { shown: shown, percent: sent.total ? Math.round(sent.done * 100 / sent.total) : 100, count: bomCount(job), tone: job.phase === 'error' ? 'error' : '' };
+  }
+
+  /** Draw one of the bars (``step``: 'validate', 'publish' or 'bom'): ``percent`` is null while it is not measured, ``tone`` colours it. */
   function showBar(step, percent, tone) {
-    const bar = $(step === 'validate' ? 'validate-bar' : 'progress-bar');
+    const bar = $(step === 'publish' ? 'progress-bar' : step + '-bar');
     const box = $(step + '-step');
     box.classList.remove('progress-ok', 'progress-error');
     if (tone) box.classList.add('progress-' + tone);
@@ -403,7 +425,7 @@
     box.classList.toggle('progress-idle', !tone && percent === 0);
     bar.classList.toggle('indeterminate', percent === null);
     if (percent === null) bar.removeAttribute('aria-valuenow'); else bar.setAttribute('aria-valuenow', String(percent));
-    $(step === 'validate' ? 'validate-fill' : 'progress-fill').style.width = percent === null ? '' : percent + '%';
+    $(step === 'publish' ? 'progress-fill' : step + '-fill').style.width = percent === null ? '' : percent + '%';
   }
 
   /** The round icon beside the title: a spinner while the job is waiting or running, then a tick or a cross. */
@@ -425,6 +447,12 @@
     const check = job ? validation(job) : { percent: 0, count: '', tone: '' };
     $('validate-count').textContent = check.count;
     showBar('validate', check.percent, check.tone);
+    const boms = job ? bomStep(job) : { shown: false };
+    $('bom-step').hidden = !boms.shown;
+    if (boms.shown) {
+      $('bom-count').textContent = boms.count;
+      showBar('bom', boms.percent, boms.tone);
+    }
     $('progress-note').textContent = active
       ? 'You can close this window. Publishing continues in the background and you can follow it in Job Queue on the Fusion Manage tab.'
       : (job && !stoppedInValidation(job) ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
@@ -568,5 +596,5 @@
     }
   }
 
-  ns.pubJobs = { init: init, start: start, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
+  ns.pubJobs = { init: init, start: start, describe: describe, validation: validation, bomStep: bomStep, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
 })(window.MfgUi);

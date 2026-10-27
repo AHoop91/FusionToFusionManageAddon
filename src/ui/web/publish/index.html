@@ -115,7 +115,7 @@
           <p id="progress-status" class="progress-status"></p>
         </div>
       </div>
-      <!-- Two steps, one after the other: every item number is looked up in Fusion Manage first, then the items are published. -->
+      <!-- Steps, one after the other: every item number is looked up in Fusion Manage first, then the items are published, then (when sending) the Bill of Materials. -->
       <div id="validate-step" class="progress-step">
         <p class="progress-step-head"><span class="progress-step-name">Validation</span><span id="validate-count" class="muted"></span></p>
         <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validation" aria-valuemin="0" aria-valuemax="100">
@@ -126,6 +126,12 @@
         <p class="progress-step-head"><span class="progress-step-name">Publishing</span><span id="progress-count" class="muted"></span></p>
         <div id="progress-bar" class="progress-bar" role="progressbar" aria-label="Publishing" aria-valuemin="0" aria-valuemax="100">
           <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </div>
+      <div id="bom-step" class="progress-step" hidden>
+        <p class="progress-step-head"><span class="progress-step-name">Bill of Materials</span><span id="bom-count" class="muted"></span></p>
+        <div id="bom-bar" class="progress-bar" role="progressbar" aria-label="Bill of Materials" aria-valuemin="0" aria-valuemax="100">
+          <div id="bom-fill" class="progress-fill"></div>
         </div>
       </div>
       <p class="muted progress-count"><span id="progress-elapsed"></span></p>

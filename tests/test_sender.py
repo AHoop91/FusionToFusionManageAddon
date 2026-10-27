@@ -108,6 +108,26 @@ class SendRunTests(unittest.TestCase):
         kinds = ["bom" if p.endswith("/bom-items") else "item" for m, p, b in fm.sent]
         self.assertEqual(kinds, ["item"] * 4 + ["bom"] * 2)
 
+    def test_a_bom_frees_a_position_before_a_line_is_added_at_it(self):
+        fm = FakeFm()
+        base = "/api/v3/workspaces/57/items/{{item:A}}/bom-items"
+        adds = [bom_add("A", "B") for _ in range(8)]
+        requests = adds + [{"method": "PATCH", "url": base + "/9", "body": {"itemNumber": 12}}, {"method": "DELETE", "url": base + "/7", "body": None}]
+        run, logged = self.run_send(fm, {"A": create("A"), "B": create("B")}, {"A": requests})
+        self.assertEqual(run.phase, DONE)
+        self.assertEqual(sorted(m for m, p, b in fm.sent[2:4]), ["DELETE", "PATCH"])   # removals and updates, in either order
+        self.assertEqual([m for m, p, b in fm.sent[4:]], ["POST"] * 8)   # then every addition
+        self.assertEqual(len(logged), 2 + len(requests))
+
+    def test_a_refused_bom_request_leaves_the_later_steps_unsent(self):
+        fm = FakeFm(refuse="/bom-items/7")
+        base = "/api/v3/workspaces/57/items/{{item:A}}/bom-items"
+        run, _ = self.run_send(fm, {"A": create("A"), "B": create("B")},
+                               {"A": [bom_add("A", "B"), {"method": "DELETE", "url": base + "/7", "body": None}]})
+        self.assertEqual(run.rows[-1]["status"], "error")
+        self.assertIn("Request 2 of 2", run.rows[-1]["detail"])
+        self.assertEqual([m for m, p, b in fm.sent if p.endswith("/bom-items")], [])
+
     def test_a_failed_item_stops_its_bom_but_not_the_others(self):
         fm = FakeFm(refuse="?bad")
         run, _ = self.run_send(fm, {"A": create("A"), "B": {"method": "POST", "url": "/api/v3/workspaces/57/items?bad", "body": {}}},
