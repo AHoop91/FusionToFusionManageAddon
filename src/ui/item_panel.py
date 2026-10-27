@@ -620,13 +620,15 @@ class ItemPanel:
 
         threading.Thread(target=work, daemon=True).start()
 
-    def export(self, key: str, destination: str) -> None:
+    def export(self, key: str, destination: str, number: str = "") -> None:
         """Export the open document as the format ``key`` and attach it to the item (or the component) ``destination`` of the part
-        ``export_target`` gives. The Export window follows it (``begin_in_window``), so it is told how it went, not shown a message box.
+        ``number`` (``export_target`` gives it when none is passed: the window passes the one it shows, which may no longer be the selected one).
+        The Export window follows it (``begin_in_window``), so it is told how it went, not shown a message box.
         Raises ``ValueError`` when there is nothing to export or an upload is already under way. UI thread."""
-        number, problem = self.export_target()
         if not number:
-            raise ValueError(problem)
+            number, problem = self.export_target()
+            if not number:
+                raise ValueError(problem)
         job = export_job(key)
         if not self._uploads.begin_in_window(job):
             raise ValueError("A file is already being uploaded.")

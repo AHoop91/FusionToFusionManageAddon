@@ -187,13 +187,13 @@ class ExportDialog:
             raise ValueError("Your permissions are still being checked. Try again in a moment.")
         if reason:
             raise ValueError(reason)
-        number, problem = self._panel.export_target()
-        if problem:
-            raise ValueError(problem)
-        if str(payload.get("target") or number) != number:
-            raise ValueError(f"The selection changed to {number} since this window opened. Open it again to export that.")
-        log.info("Export %s to the %s", key, destination)
-        self._panel.export(key, destination)   # the window stays open and follows it (``upload_status``)
+        number = str(payload.get("target") or "")   # what the window shows is what is exported, whatever is selected in Fusion now
+        if not number:
+            number, problem = self._panel.export_target()
+            if problem:
+                raise ValueError(problem)
+        log.info("Export %s of %s to the %s", key, number, destination)
+        self._panel.export(key, destination, number)   # the window stays open and follows it (``upload_status``)
         return {"started": True}
 
     def _close(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
