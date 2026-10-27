@@ -36,11 +36,6 @@ title: Troubleshooting and Limitations
 
 Hover over the button: the tooltip ends with *Not available:* and the reason.
 
-!!! example "Screenshot placeholder: Greyed-out button with its tooltip"
-    **Show:** A disabled ribbon button and its tooltip ending with Not available and the reason.
-
-    Save the image as `docs/images/greyed-button.png`, then replace this box with `![Greyed-out button with its tooltip](../images/greyed-button.png)`.
-
 - Messages such as *The Items workspace ID is not set.* mean no Items workspace has been chosen yet, or its settings are incomplete. Choose the workspace and fix the mappings on the **Item Workspace** tab ([Item Workspace](../configuration/index.md#item-workspace)).
 - For the drawing PDF, *The drawing has no references yet.*, *… none of the designs is loaded yet.* and *The top-level component of … has no part number.* mean the drawing is not ready. Wait for it to finish loading, or give the top-level component a part number. The add-in rechecks every couple of seconds.
 

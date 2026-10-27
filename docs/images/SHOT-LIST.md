@@ -4,7 +4,6 @@ Capture each image, save it under `docs/images/` with the file name shown, then 
 
 | Page | File name | Show |
 |---|---|---|
-| docs/reference/manufacturing-data-model.md | component-properties.png | A component's properties in Fusion, with some custom properties filled in. |
 | docs/publishing/index.md | bom-statuses.png | The BOM table with status chips, and the filter buttons above it. |
 | docs/publishing/index.md | bom-paired-rows.png | A New row and a Fusion Manage Only row paired, with the Keep and Remove choices. |
 | docs/publishing/index.md | add-items.png | The Add Existing Items dialog with its property filters, results and some items ticked. |
@@ -24,5 +23,4 @@ Capture each image, save it under `docs/images/` with the file name shown, then 
 | docs/item-panel/index.md | fm-item-workflow.png | The item open in Fusion Manage in the browser, showing the workflow action used to release it. |
 | docs/job-queue/index.md | job-queue-panel.png | Job cards with status icons, one row per item, and the Cancel button on an active job. |
 | docs/job-queue/index.md | job-queue-button.png | The ribbon button in its idle, running and error looks. |
-| docs/reference/troubleshooting.md | greyed-button.png | A disabled ribbon button and its tooltip ending with Not available and the reason. |
 | docs/getting-started/overview.md | context-menu.png | The right-click menu of a component in the browser, showing the Fusion Manage entries. |
