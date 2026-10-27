@@ -175,34 +175,71 @@
 .pub-jobs-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .pub-jobs-title { margin: 0; font-size: 15px; font-weight: 600; }
 .pub-jobs-message { margin: 2px 0 0; font-size: 12px; }
-.pub-job-rows { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
-.pub-job-rows th { padding: 4px 6px; text-align: left; font-weight: 600; color: var(--muted); }
-.pub-job-rows td { padding: 6px; border-top: 1px solid var(--border); }
-.pub-job-rows th:nth-child(2), .pub-job-rows td:nth-child(2) { width: 64px; text-align: center; }
-.pub-job-rows th:nth-child(3), .pub-job-rows td:nth-child(3) { width: 72px; text-align: right; }
-.pub-job-rows tr.pub-job-first td { border-top: 8px solid var(--bg); }
-.pub-job-note { margin-top: 2px; font-size: 12px; font-weight: 400; }
+#pub-jobs-list.view-scroll { padding: 12px 16px; }
+.pub-job-rows { width: 100%; border: 1px solid var(--border); border-collapse: collapse; background: var(--surface); font-size: 12px; table-layout: fixed; }
+.pub-job-rows th { padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--muted); font-weight: 600; text-align: left; }
+.pub-job-rows td { padding: 9px 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+.pub-job-rows th:nth-child(1), .pub-job-rows td:nth-child(1) { width: 134px; }
+.pub-job-rows th:nth-child(2), .pub-job-rows td:nth-child(2) { width: 140px; }
+.pub-job-rows th:nth-child(4), .pub-job-rows td:nth-child(4) { width: 80px; }
+.pub-job-rows th:nth-child(5), .pub-job-rows td:nth-child(5) { width: 108px; text-align: right; }
 .pub-job-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.pub-job-status svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pub-job-line { overflow-wrap: anywhere; }
+.pub-job-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.pub-job-status-box { display: inline-flex; box-sizing: border-box; align-items: center; justify-content: center; gap: 6px; width: 106px; padding: 3px 0; border-radius: 12px; background: #eceef0; font-weight: 600; }   /* the pill: one width for every status */
+.pub-job-error .pub-job-status-box { background: #fbe9ea; }
+.pub-job-running .pub-job-status-box { background: #e3f2fb; }
+.pub-job-rows .pub-outline-button { box-sizing: border-box; width: 84px; padding: 4px 0; text-align: center; }   /* Cancel and Retry: the same width */
+.pub-job-status svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pub-job-queued, .pub-job-cancelled { color: #8a8f98; }
 .pub-job-running { color: var(--accent); }
 .pub-job-error { color: var(--danger); }
 .pub-job-click { cursor: pointer; }
 .pub-job-click:hover td { background: var(--bg); }
 .pub-job-click:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.pub-job-note { white-space: normal; }
 
-/* The details window of a job in the Job Queue. */
-.jq-detail { max-height: 100%; overflow-y: auto; }
-.jq-label { display: flex; justify-content: space-between; margin: 16px 0 6px; font-size: 12px; font-weight: 600; }
+/* The details window of a job in the Job Queue: a table of its items and, beside it, what happened to the one picked. */
+.jq-detail { width: 100%; max-width: 1240px; padding: 18px 24px; display: flex; flex-direction: column; height: min(760px, 100%); overflow: hidden; }   /* always the same size, whatever the job; only the table scrolls, the title and buttons stay in view */
+.jq-detail > * { flex: none; }
+.jq-detail .pub-modal-head { margin-bottom: 8px; }
+.jq-detail .progress-actions { margin-top: 10px; }
+.jq-detail .progress-note { margin: 8px 0 0; font-size: 12px; }
+.jq-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
+.jq-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.jq-tab { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.jq-tab[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.jq-search { width: 170px; margin-left: auto; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font: inherit; font-weight: 400; }
 .jq-elapsed { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
-.jq-items { max-height: 190px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border: 1px solid var(--border); border-radius: 6px; }
-.jq-item { display: grid; grid-template-columns: 20px 1fr; column-gap: 8px; padding: 7px 10px; font-size: 12px; border-top: 1px solid var(--border); }
-.jq-item:first-child { border-top: 0; }
+.jq-detail > .jq-body { display: grid; flex: 1 1 auto; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: minmax(0, 1fr); gap: 16px; min-height: 300px; }
+.jq-table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.jq-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.jq-table th { position: sticky; top: 0; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--muted); font-weight: 600; text-align: left; }
+.jq-table td { padding: 7px 10px; border-top: 1px solid var(--border); }
+.jq-row { cursor: pointer; }
+.jq-row:hover td { background: var(--bg); }
+.jq-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.jq-row.jq-selected td { background: var(--bg); }
+.jq-row.jq-selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.jq-icon { width: 20px; }
 .jq-icon svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.jq-name { font-weight: 600; overflow-wrap: anywhere; }
-.jq-reason { grid-column: 2; margin-top: 2px; color: var(--danger); overflow-wrap: anywhere; }
-.jq-cancelled .jq-reason, .jq-skipped .jq-reason { color: var(--muted); }
+.jq-name { font-weight: 600; white-space: nowrap; }
+.jq-text { overflow-wrap: anywhere; }
+.jq-empty { padding: 20px 10px; text-align: center; }
+.jq-info { display: flex; flex-direction: column; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.jq-info-head { margin: 0; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600; }
+.jq-facts { flex: none; width: 100%; border-collapse: collapse; font-size: 12px; }
+.jq-facts th, .jq-facts td { padding: 8px 10px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.jq-facts tr:first-child th, .jq-facts tr:first-child td { border-top: 0; }
+.jq-facts th { width: 96px; background: var(--bg); color: var(--muted); font-weight: 600; }
+.jq-facts td { line-height: 1.5; user-select: text; }
+.jq-reason { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 120px; border-top: 1px solid var(--border); }   /* directly under the facts, filling the rest of the panel */
+.jq-reason[hidden] { display: none; }
+.jq-reason-head { margin: 0; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 600; }
+.jq-reason-text { flex: 1 1 auto; margin: 0; padding: 10px; overflow-y: auto; color: var(--text); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; user-select: text; }
+.jq-facts td.jq-error { color: var(--danger); font-weight: 600; }
+.jq-facts td.jq-done { color: var(--ok); font-weight: 600; }
+.jq-facts td.jq-running { color: var(--accent); font-weight: 600; }
+.jq-info-hint { margin: 0; padding: 24px 16px; color: var(--muted); font-size: 12px; line-height: 1.5; text-align: center; }
 .jq-done .jq-icon { color: var(--ok); }
 .jq-error .jq-icon { color: var(--danger); }
 .jq-running .jq-icon { color: var(--accent); }

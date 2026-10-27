@@ -39,14 +39,35 @@
           <p id="jq-status" class="progress-status"></p>
         </div>
       </div>
-      <div id="jq-tally" class="progress-tally" role="group" aria-label="Items by result" hidden>
-        <div class="progress-stat progress-stat-ok"><b id="jq-ok">0</b><span>Successful</span></div>
-        <div class="progress-stat progress-stat-failed"><b id="jq-failed">0</b><span>Failed</span></div>
-        <div class="progress-stat progress-stat-skipped" id="jq-skipped-box" hidden><b id="jq-skipped">0</b><span>Skipped</span></div>
-        <div class="progress-stat progress-stat-pending"><b id="jq-pending">0</b><span>Pending</span></div>
+      <div class="jq-toolbar">
+        <div id="jq-filters" class="jq-tabs" role="group" aria-label="Show items"></div>
+        <input id="jq-search" class="jq-search" type="search" placeholder="Find an item" aria-label="Find an item">
+        <span id="jq-elapsed" class="jq-elapsed"></span>
       </div>
-      <p class="muted jq-label"><span>Items</span><span id="jq-elapsed" class="jq-elapsed"></span></p>
-      <ul id="jq-items" class="jq-items"></ul>
+      <div class="jq-body">
+        <div class="jq-table-wrap">
+          <table class="jq-table">
+            <thead><tr><th></th><th>Item</th><th>Description</th></tr></thead>
+            <tbody id="jq-items"></tbody>
+          </table>
+        </div>
+        <aside id="jq-info" class="jq-info" aria-live="polite">
+          <h3 class="jq-info-head">Item details</h3>
+          <table id="jq-facts" class="jq-facts">
+            <tbody>
+              <tr><th scope="row">Item</th><td id="jq-info-title"></td></tr>
+              <tr><th scope="row">Description</th><td id="jq-info-sub"></td></tr>
+              <tr><th scope="row">Status</th><td id="jq-info-status"></td></tr>
+              <tr><th scope="row">Publish</th><td id="jq-info-job"></td></tr>
+            </tbody>
+          </table>
+          <div id="jq-reason-row" class="jq-reason">
+            <h4 class="jq-reason-head">Reason</h4>
+            <p id="jq-info-reason" class="jq-reason-text"></p>
+          </div>
+          <p id="jq-info-empty" class="jq-info-hint" hidden>Select an item in the table to see what happened to it.</p>
+        </aside>
+      </div>
       <p id="jq-note" class="muted progress-note"></p>
       <div class="progress-actions">
         <button id="jq-cancel" class="btn btn-secondary" type="button" hidden>Cancel publish</button>

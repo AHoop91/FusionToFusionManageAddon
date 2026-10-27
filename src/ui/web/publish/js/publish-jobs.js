@@ -37,14 +37,6 @@
     skipped:   { title: 'Skipped', paths: ['M6 12h12'] },
   };
 
-  function statusIcon(row) {
-    const icon = ICONS[row.status] || ICONS.queued;
-    const cell = ui.el('td', 'pub-job-status pub-job-' + row.status);
-    cell.appendChild(ui.svg(icon.paths, 18));
-    cell.title = icon.title + (row.detail ? ': ' + row.detail : '');
-    return cell;
-  }
-
   /** The status a job shows in the list: its phase, except that a finished job with failed rows reads as failed. */
   function jobStatus(job) { return job.phase === 'done' && failedRows(job) ? 'error' : job.phase; }
 
@@ -72,7 +64,7 @@
 
   /** The buttons of a job: Cancel while it is active, Retry once it failed (it sends the failed requests again; what was accepted is skipped). */
   function jobActions(job) {
-    const cell = ui.el('td', 'pub-job-actions');
+    const cell = ui.el('td');
     if (!isFinished(job)) {
       const cancel = ui.el('button', 'pub-outline-button', 'Cancel');
       cancel.type = 'button';
@@ -88,21 +80,23 @@
     return cell;
   }
 
-  /** One row per job: its name and where it stands, a status icon and its buttons. Clicking it opens the details. */
+  /** One row per job: its status, name, where it stands, how long it has taken and its buttons. Clicking it opens the details. */
   function jobRow(table, job) {
     const status = jobStatus(job);
-    const tr = ui.el('tr', 'pub-job-first pub-job-click');
+    const tr = ui.el('tr', 'pub-job-click');
     tr.tabIndex = 0;
     tr.setAttribute('role', 'button');
     tr.title = 'Show the details';
-    const name = ui.el('td', 'pub-job-item', job.name);
-    name.appendChild(ui.el('div', 'muted pub-job-note', jobLine(job)));
-    tr.appendChild(name);
     const icon = ICONS[status] || ICONS.queued;
     const mark = ui.el('td', 'pub-job-status pub-job-' + status);
-    mark.appendChild(ui.svg(icon.paths, 18));
-    mark.title = icon.title;
+    const label = ui.el('span', 'pub-job-status-box');
+    label.appendChild(ui.svg(icon.paths, 16));
+    label.appendChild(ui.el('span', '', icon.title));
+    mark.appendChild(label);
     tr.appendChild(mark);
+    tr.appendChild(ui.el('td', 'pub-job-item', job.name));
+    tr.appendChild(ui.el('td', 'pub-job-line', jobLine(job)));
+    tr.appendChild(ui.el('td', 'pub-job-time', elapsedText(job).replace('Elapsed ', '') || '-'));
     tr.appendChild(jobActions(job));
     tr.addEventListener('click', function () { openDetails(job.id); });
     tr.addEventListener('keydown', function (e) {
@@ -134,7 +128,7 @@
     box.textContent = '';
     const table = ui.el('table', 'pub-job-rows');
     const head = ui.el('tr');
-    ['Job', 'Status', ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
+    ['Status', 'Job', 'Progress', 'Time', ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
     table.appendChild(head);
     let shown = 0;
     jobs.slice().reverse().forEach(function (job) {   // newest first
@@ -150,6 +144,11 @@
   // ---- Details window (Job Queue) -------------------------------------------------
 
   let detailId = '';   // id of the job whose details are open ("" = none)
+  let filter = 'all';   // which items the table lists: 'all' or one status
+  let query = '';   // text an item's number or description must contain
+  let selected = '';   // item number whose details show at the side
+  const NO_REASON = 'No reason was given.';
+  const STATUS_ORDER = ['error', 'skipped', 'cancelled', 'running', 'queued', 'done'];
 
   function detailJob() { return jobs.filter(function (j) { return j.id === detailId; })[0] || null; }
 
@@ -160,25 +159,101 @@
 
   function openDetails(id) {
     detailId = id;
+    query = '';
+    selected = '';
+    $('jq-search').value = '';
+    filter = detailJob() && failedRows(detailJob()) ? 'error' : 'all';   // a job with failures opens on them
     renderDetails();
     if (!$('jq-detail').hidden) $('jq-close').focus();
   }
 
-  /** What a job's rows say, one line each: a status icon, the item and, where there is one, why. */
-  function detailItems(job) {
-    const list = $('jq-items');
-    list.textContent = '';
-    (job.rows || []).forEach(function (row) {
-      const icon = ICONS[row.status] || ICONS.queued;
-      const li = ui.el('li', 'jq-item jq-' + (ICONS[row.status] ? row.status : 'queued'));
-      const mark = ui.el('span', 'jq-icon');
-      mark.appendChild(ui.svg(icon.paths, 16));
-      mark.title = icon.title;
-      li.appendChild(mark);
-      li.appendChild(ui.el('span', 'jq-name', row.description ? row.item + ' - ' + row.description : (row.item || '-')));
-      if ((row.status === 'error' || row.status === 'skipped') && row.detail) li.appendChild(ui.el('span', 'jq-reason', row.detail));
-      list.appendChild(li);
+  function reasonOf(row) { return row.detail || NO_REASON; }
+
+  function statusOf(row) { return ICONS[row.status] ? row.status : 'queued'; }
+
+  /** The items the filters let through. */
+  function visibleItems(job) {
+    const text = query.trim().toLowerCase();
+    return (job.rows || []).filter(function (row) {
+      if (filter !== 'all' && statusOf(row) !== filter) return false;
+      return !text || ((row.item || '') + ' ' + (row.description || '')).toLowerCase().indexOf(text) >= 0;
     });
+  }
+
+  /** The buttons above the table: All, then each status the job has, with how many items. */
+  function detailFilters(job) {
+    const box = $('jq-filters');
+    box.textContent = '';
+    const rows = job.rows || [];
+    const entries = [['all', 'All', rows.length]];
+    STATUS_ORDER.forEach(function (status) {
+      const n = rows.filter(function (row) { return statusOf(row) === status; }).length;
+      if (n) entries.push([status, ICONS[status].title, n]);
+    });
+    if (!entries.some(function (entry) { return entry[0] === filter; })) filter = 'all';
+    entries.forEach(function (entry) {
+      const button = ui.el('button', 'jq-tab', entry[1] + ' (' + entry[2] + ')');
+      button.type = 'button';
+      button.setAttribute('aria-pressed', String(entry[0] === filter));
+      button.addEventListener('click', function () { filter = entry[0]; renderDetails(); });
+      box.appendChild(button);
+    });
+  }
+
+  function selectItem(item) {
+    selected = item;
+    Array.prototype.forEach.call($('jq-items').children, function (tr) {
+      const on = tr.dataset.item === item;
+      tr.classList.toggle('jq-selected', on);
+      tr.setAttribute('aria-selected', String(on));
+    });
+    detailInfo(detailJob());
+  }
+
+  /** The table: one row per item, a status icon, its number and description. Clicking one shows it at the side. */
+  function detailTable(rows) {
+    const body = $('jq-items');
+    body.textContent = '';
+    if (!rows.length) {
+      const empty = ui.el('td', 'muted jq-empty', 'No items match.');
+      empty.colSpan = 3;
+      body.appendChild(ui.el('tr')).appendChild(empty);
+      return;
+    }
+    rows.forEach(function (row) {
+      const tr = ui.el('tr', 'jq-row jq-' + statusOf(row) + (row.item === selected ? ' jq-selected' : ''));
+      tr.dataset.item = row.item;
+      tr.tabIndex = 0;
+      tr.setAttribute('aria-selected', String(row.item === selected));
+      const mark = ui.el('td', 'jq-icon');
+      mark.appendChild(ui.svg(ICONS[statusOf(row)].paths, 16));
+      mark.title = ICONS[statusOf(row)].title;
+      tr.appendChild(mark);
+      tr.appendChild(ui.el('td', 'jq-name', row.item || '-'));
+      tr.appendChild(ui.el('td', 'jq-text', row.description || ''));
+      tr.addEventListener('click', function () { selectItem(row.item); });
+      tr.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectItem(row.item); }
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  /** The panel at the side: facts about the selected item and, under them, why it failed, was skipped or was cancelled. */
+  function detailInfo(job) {
+    const row = job && (job.rows || []).filter(function (r) { return r.item === selected; })[0];
+    $('jq-info-empty').hidden = !!row;
+    $('jq-facts').hidden = !row;
+    if (!row) return;
+    const status = statusOf(row);
+    $('jq-info-title').textContent = row.item || '-';
+    $('jq-info-sub').textContent = row.description || '-';
+    $('jq-info-status').textContent = ICONS[status].title;
+    $('jq-info-status').className = 'jq-' + status;
+    $('jq-info-job').textContent = job.name;
+    const why = status === 'cancelled' ? 'The publish was cancelled before this item was sent.' : (status === 'error' || status === 'skipped') ? reasonOf(row) : '';
+    $('jq-info-reason').textContent = why;
+    $('jq-reason-row').hidden = !why;
   }
 
   /** What the details say after the list of items: what happened to the work, and what to do next. */
@@ -198,9 +273,15 @@
     $('jq-title').textContent = view.title;
     $('jq-status').textContent = (view.status || '').replace(' See the Job Queue for the reasons.', '');
     $('jq-badge').className = 'pub-badge pub-badge-' + badgeOf(view, job);
-    drawTally('jq-tally', 'jq-', job);
     $('jq-elapsed').textContent = elapsedText(job);
-    detailItems(job);
+    const wrap = document.querySelector('.jq-table-wrap');
+    const scrolled = wrap.scrollTop;   // the table is drawn again at every poll: keep the place in it
+    detailFilters(job);
+    const rows = visibleItems(job);
+    if (!rows.some(function (row) { return row.item === selected; })) selected = rows.length ? rows[0].item : '';
+    detailTable(rows);
+    wrap.scrollTop = scrolled;
+    detailInfo(job);
     $('jq-note').textContent = detailNote(job);
     $('jq-cancel').hidden = isFinished(job);
     $('jq-retry').hidden = !canRetry(job);
@@ -299,20 +380,18 @@
              status: job.sends ? job.name + ' was published to Fusion Manage.' : job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.' };
   }
 
-  /** Fill a tally box (the `box` id, its numbers' ids starting with `prefix`): items by result, hidden when there is no job to count. In the progress dialog it belongs to the publishing, so it is hidden through the validation. Skipped shows only when something was left out. */
-  function drawTally(boxId, prefix, job) {
-    const box = $(boxId);
-    box.hidden = !job || !job.total || (boxId === 'progress-tally' && job.stage === 'validating');
+  /** The tally under the bar: items by result, hidden when there is no job to count. It belongs to the publishing, so it is hidden through the validation. Skipped shows only when something was left out. */
+  function showTally(job) {
+    const box = $('progress-tally');
+    box.hidden = !job || !job.total || job.stage === 'validating';
     if (box.hidden) return;
     const counts = tally(job);
     [['ok', counts.successful], ['failed', counts.failed], ['skipped', counts.skipped], ['pending', counts.pending]].forEach(function (stat) {
-      $(prefix + stat[0]).textContent = stat[1].toLocaleString();
-      $(prefix + stat[0]).parentNode.classList.toggle('progress-stat-on', stat[1] > 0);
+      $('tally-' + stat[0]).textContent = stat[1].toLocaleString();
+      $('tally-' + stat[0]).parentNode.classList.toggle('progress-stat-on', stat[1] > 0);
     });
-    $(prefix + 'skipped-box').hidden = !counts.skipped;
+    $('tally-skipped-box').hidden = !counts.skipped;
   }
-
-  function showTally(job) { drawTally('progress-tally', 'tally-', job); }
 
   /** Draw one of the two bars (``step``: 'validate' or 'publish'): ``percent`` is null while it is not measured, ``tone`` colours it. */
   function showBar(step, percent, tone) {
@@ -478,6 +557,7 @@
     if ($('jq-detail')) {
       $('jq-close').addEventListener('click', closeDetails);
       $('jq-cancel').addEventListener('click', function () { bridge.send('cancel_publish', { id: detailId }); });
+      $('jq-search').addEventListener('input', function () { query = $('jq-search').value; renderDetails(); });
       $('jq-retry').addEventListener('click', function () { $('jq-retry').disabled = true; bridge.send('retry_publish', { id: detailId }); });
       $('jq-detail').addEventListener('click', function (e) { if (e.target === $('jq-detail')) closeDetails(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('jq-detail').hidden) closeDetails(); });
