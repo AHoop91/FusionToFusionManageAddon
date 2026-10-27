@@ -150,30 +150,35 @@
   padding-bottom: 0.3em;
 }
 
-/* Buttons: Autodesk style, solid blue and black outline. */
-.md-typeset .md-button {
+/* Buttons: Autodesk style, solid black that turns Autodesk blue on hover. */
+.md-typeset .md-button,
+.md-typeset .md-button--primary {
   border-radius: 2px;
   font-weight: 600;
-  color: #000000;
-  border-color: #000000;
-}
-
-.md-typeset .md-button--primary {
-  background-color: #0696d7;
-  border-color: #0696d7;
-  color: #000000;
-}
-
-.md-typeset .md-button:hover,
-.md-typeset .md-button:focus {
   background-color: #000000;
   border-color: #000000;
   color: #ffffff;
 }
 
-[data-md-color-scheme="slate"] .md-typeset .md-button {
+.md-typeset .md-button:hover,
+.md-typeset .md-button:focus,
+.md-typeset .md-button--primary:hover,
+.md-typeset .md-button--primary:focus {
+  background-color: #0696d7;
+  border-color: #0696d7;
   color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button,
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary {
   border-color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button:hover,
+[data-md-color-scheme="slate"] .md-typeset .md-button:focus,
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary:hover,
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary:focus {
+  border-color: #0696d7;
 }
 
 /* Cards, tables and callouts: flat, square, light border. */
