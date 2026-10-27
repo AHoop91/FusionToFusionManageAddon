@@ -79,7 +79,13 @@ def _component_saved(occurrence: Any) -> Tuple[Optional[float], str]:
     name = occurrence.component.name
     try:
         return _file_saved(occurrence.documentReference.dataFile, name)
-    except RuntimeError:
+    except (RuntimeError, AttributeError):   # only a top-level reference has a document reference: a nested one is dated by the design its component belongs to
+        pass
+    try:
+        document = occurrence.component.parentDesign.parentDocument
+        log.info("%s is nested: dated by its design's document %s", name, document.name)
+        return _file_saved(document.dataFile, document.name)
+    except (RuntimeError, AttributeError):
         return None, f"The document of {name} could not be found (it is nested in another component)."
 
 
