@@ -148,6 +148,13 @@ def _push_to_panels(action: str, data: str) -> None:
 
 # ---- Fusion lifecycle -------------------------------------------------------
 
+def _close_settings(_payload) -> dict:
+    """Close the settings panel: a member who does not pick a Configuration File has nothing to set up."""
+    if _tasks and _palette_host:
+        _tasks.post(_palette_host.hide)
+    return {}
+
+
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
     global _bridge, _config, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
@@ -162,9 +169,10 @@ def run(context) -> None:
         _config = config
         ribbon_module.before_command = sync_hub
         sync_hub()   # the settings are those of the hub that is open now
-        register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks))
+        register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks), _tasks.post)
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
+        bridge.register("close_settings", _close_settings)
         _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, PUBLISH_TITLE, "publish", False, PUBLISH_WIDTH, PUBLISH_HEIGHT, fresh=True)
         _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, JOBS_TITLE, "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)

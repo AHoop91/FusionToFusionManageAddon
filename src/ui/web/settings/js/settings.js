@@ -28,6 +28,8 @@
     hubFile = s.hub_file || null;
     renderHubFile();
     showWizard(!s.local.client_id);
+    // First setup: the hub's Configuration File is looked for before anything is asked. Fusion is signed in, so this needs no Client ID.
+    if (!s.local.client_id && !hubFile && s.hub && !fileOffered) { fileOffered = true; offerFile(); }
     updateViews();
     if (signedInNow) checkRole(true);   // the role belongs to the active hub, which may have changed
   }
@@ -79,7 +81,6 @@
   function recheckRole() {
     if (document.hidden || !signedInNow || Date.now() - lastRoleCheck < ROLE_RECHECK_MS) return;
     lastRoleCheck = Date.now();
-    refreshedOnOpen = false;
     checkRole(true);
   }
   window.addEventListener('focus', recheckRole);
@@ -95,6 +96,7 @@
     stopRoleWait();
     roleAsked = false;
     roleState = result.state;
+    if (firstRun) firstRunRole(result.state);
     ns.account.renderRole(result.state);
     updateViews();
     if (roleDialog) {
@@ -102,51 +104,102 @@
       if (result.state === 'unknown') ns.progress.fail('Could not check your permissions', ROLE_TEXT.unknown + ' Check your connection and try again.');
       else ns.progress.done('Permissions refreshed', ROLE_TEXT[result.state]);
     }
-    // A member reads the Configuration File again each time the panel opens, so a Hub Admin's changes reach them.
-    if (result.state === 'member' && hubFile && !refreshedOnOpen) { refreshedOnOpen = true; useHubConfig({}, true); }
   }
 
   // ---- Configuration File in the Hub (members) --------------------------------
 
   const USE_WAIT_MS = 60000;   // how long Python is given to push the outcome
   let stopUseWait = function () {};
-  let hubFile = null;           // {name, read_at, ...} of the file this hub's settings were read from, or null
-  let refreshedOnOpen = false;  // the file was read again since the panel was opened
+  let hubFile = null;           // {name, project_name, modified, modified_by, version, read_at, ...} of the file this hub's settings were read from, or null
   let usingFile = false;        // a read of the file is under way
+  let fileOffered = false;      // the picker was opened by itself since the panel was opened: it is not forced open again
 
-  let readQuietly = false;      // that read is the one made when the panel opens: no dialog, only a message if it fails
-
-  /** Show, to the member, how reading the file stands: on the prompt when they have none yet, on the file bar when they do. */
-  function fileMessage(text, state) {
-    [$('member-status'), $('hub-file-msg')].forEach(function (node) {
-      node.hidden = !text;
-      node.textContent = text;
-      node.dataset.state = state || '';
-    });
+  function whenText(iso) {
+    const when = new Date(iso);
+    return iso && !isNaN(when) ? when.toLocaleString() : '';
   }
 
-  function whenRead(iso) {
-    const when = new Date(iso);
-    return isNaN(when) ? '' : 'Read ' + when.toLocaleString();
+  /** Put `children` in `node`, in place of what it held. */
+  function fill(node, children) {
+    node.textContent = '';
+    children.forEach(function (child) { node.appendChild(child); });
+  }
+
+  const FILE_ICON = ['M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z', 'M14 3v5h5'];
+  const REFRESH_ICON = ['M4 12a8 8 0 0 1 14-5.3L20 9', 'M20 4v5h-5', 'M20 12a8 8 0 0 1-14 5.3L4 15', 'M4 20v-5h5'];
+  const STATUS_ICONS = {
+    current: ['M5 13l4 4L19 7'],
+    updated: REFRESH_ICON,
+    unknown: ['M12 8v5', 'M12 17h.01', 'M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'],
+    checking: REFRESH_ICON,
+  };
+
+  /** What the Configuration tab says about whether the file is the one in the hub: `state` is current, updated, unknown or checking. */
+  function setFileStatus(state, title, sub) {
+    $('cfg-status').dataset.state = state;
+    fill($('cfg-icon'), [ns.svg(STATUS_ICONS[state], 18)]);
+    $('cfg-status-title').textContent = title;
+    $('cfg-status-sub').textContent = sub || '';
   }
 
   function renderHubFile() {
-    $('hub-file-name').textContent = hubFile ? hubFile.name : '';
-    $('hub-file-when').textContent = hubFile ? whenRead(hubFile.read_at) : '';
+    const shown = hubFile || {};
+    $('hub-file-name').textContent = shown.name || '';
+    $('hub-file-place').textContent = shown.project_name ? 'In the project ' + shown.project_name : '';
+    $('hub-file-modified').textContent = whenText(shown.modified) || '-';
+    $('hub-file-by').textContent = shown.modified_by || '-';
+    $('hub-file-version').textContent = shown.version || '-';
+    $('hub-file-read').textContent = whenText(shown.read_at) || '-';
+    fill($('cfg-file-icon'), [ns.svg(FILE_ICON, 20)]);
+    if (hubFile && $('cfg-status').dataset.state === 'current' && !$('cfg-status-sub').textContent) setFileStatus('current', 'Up to date', 'Read ' + whenText(hubFile.read_at));
   }
 
-  /** Read the Configuration File and make it this hub's settings; ``ref`` names the file, or is empty for the one already in use. */
-  function useHubConfig(ref, quietly) {
+  // ---- Keeping up with the Hub Admin's changes -----------------------------------
+
+  const CHECK_WAIT_MS = 60000;
+  let stopCheckWait = function () {};
+  let checkingFile = false;
+
+  /** Ask Python whether the file in the hub is still the one the settings came from; if not it reads it again. */
+  function checkFile() {
+    if (checkingFile || !hubFile) return;
+    checkingFile = true;
+    $('cfg-check').disabled = true;
+    setFileStatus('checking', 'Checking for updates...', '');
+    stopCheckWait();
+    stopCheckWait = bridge.expect(CHECK_WAIT_MS, function () { onFileChecked({ ok: false, error: 'The hub did not answer in time.' }); });
+    bridge.send('check_hub_file', {});
+  }
+
+  /** The outcome of a look at the file, asked for by the panel or made by Python when the add-in starts (which pushes it, panel open or not). */
+  function onFileChecked(r) {
+    const result = r.ok ? r.result : { state: 'unknown', message: r.error };
+    if (result.pending) return;
+    stopCheckWait();
+    checkingFile = false;
+    $('cfg-check').disabled = false;
+    const checked = whenText(result.checked_at);
+    if (result.state === 'updated') {
+      fillSettings(result.settings);   // the Hub Admin changed the file: these are the settings now
+      setFileStatus('updated', 'Updated to the latest version', (result.by ? result.by + ' changed it. ' : '') + 'Read ' + checked);
+    } else if (result.state === 'current') {
+      setFileStatus('current', 'Up to date', 'Checked ' + checked);
+    } else if (result.state === 'unknown') {
+      setFileStatus('unknown', 'Could not check for updates', result.message || 'Try again in a moment.');
+    } else {
+      renderHubFile();
+    }
+  }
+
+  /** Read the Configuration File ``file`` (``{project_id, item_id, name}``) and make it this hub's settings. */
+  function useHubConfig(file) {
     if (usingFile) return;
     usingFile = true;
-    readQuietly = !!quietly;
-    ['member-find', 'hub-file-update', 'hub-file-change'].forEach(function (id) { $(id).disabled = true; });
-    const name = ref.name || (hubFile && hubFile.name) || 'the file';
-    if (quietly) fileMessage('Reading the Configuration File...', '');
-    else ns.progress.show('Reading the Configuration File', 'Reading ' + name + ' from the hub. This takes a few seconds.');
+    ['member-find', 'cfg-check', 'hub-file-change'].forEach(function (id) { $(id).disabled = true; });
+    ns.progress.show('Reading the Configuration File', 'Reading ' + (file.name || 'the file') + ' from the hub. This takes a few seconds.');
     stopUseWait();
     stopUseWait = bridge.expect(USE_WAIT_MS, function () { onUseHubConfig({ ok: false, error: 'The hub did not answer in time. Try again.' }); });
-    bridge.send('use_hub_config', ref);
+    bridge.send('use_hub_config', file);
   }
 
   function onUseHubConfig(r) {
@@ -154,15 +207,16 @@
     if (result.pending) return;   // only the start: Python pushes the outcome when it is done
     stopUseWait();
     usingFile = false;
-    ['member-find', 'hub-file-update', 'hub-file-change'].forEach(function (id) { $(id).disabled = false; });
-    const failed = result.message || 'The Configuration File could not be read.';
+    ['member-find', 'cfg-check', 'hub-file-change'].forEach(function (id) { $(id).disabled = false; });
     if (!result.ok) {
-      if (readQuietly) fileMessage(failed, 'error'); else ns.progress.fail('Could not read the Configuration File', failed);
+      ns.progress.fail('Could not read the Configuration File', result.message || 'The Configuration File could not be read.');
+      if (!hubFile) { readFailed = true; showWizard(wizardNeeded); }
       return;
     }
-    fileMessage('', '');
+    readFailed = false;
     fillSettings(result.settings);   // the file is now this hub's settings
-    if (!readQuietly) ns.progress.done('Settings loaded', (result.settings.hub_file ? result.settings.hub_file.name : 'The file') + ' is now the settings of this hub. They are read-only: only a Hub Admin can change them.');
+    if (hubFile) setFileStatus('current', 'Up to date', 'Read ' + whenText(hubFile.read_at));
+    ns.progress.done('Settings loaded', (hubFile ? hubFile.name : 'The file') + ' is now the settings of this hub. They are read-only: only a Hub Admin can change them.');
   }
 
   function findFile() {
@@ -173,8 +227,13 @@
     bridge.on('use_hub_config', onUseHubConfig);
     bridge.on('use_hub_config_status', onUseHubConfig);
     $('member-find').addEventListener('click', findFile);
+    $('wiz-find').addEventListener('click', findFile);
+    $('first-find').addEventListener('click', openMemberPicker);
     $('hub-file-change').addEventListener('click', findFile);
-    $('hub-file-update').addEventListener('click', function () { useHubConfig({}); });
+    $('cfg-check').addEventListener('click', checkFile);
+    bridge.on('check_hub_file', onFileChecked);
+    bridge.on('check_hub_file_status', onFileChecked);
+    bridge.on('hub_file_checked', onFileChecked);
   }
 
   // ---- Save to the Fusion Hub (Hub Admins) ------------------------------------
@@ -217,6 +276,8 @@
   function applyMemberLock(locked) {
     ['lock-connection', 'lock-workspaces', 'lock-exports'].forEach(function (id) { $(id).disabled = locked; });
     $('save-btn').disabled = locked;
+    $('f-client-id').type = locked ? 'password' : 'text';   // a member does not set up the sign-in, so the Client ID is not shown to them
+    ns.workspaces.setViewOnly(locked);   // the Item Workspace tab shows what the file defines, and checks nothing
     document.querySelectorAll('.lock-note').forEach(function (note) {
       note.hidden = !locked;
       if (locked) note.textContent = 'These settings come from the hub\'s Configuration File. Only a Hub Admin can change them.';
@@ -291,11 +352,42 @@
   let signInAfterSave = false;
   let askShareAfterSave = false;   // an admin pressed Save: once the save has passed validation, they are asked about the hub
 
-  /** The wizard replaces the sign-in card until a Client ID is saved; the automatic sign-in waits too (it would fail without one). */
+  /**
+   * First setup, until a Client ID is saved. A Hub Admin gets the wizard; anyone else is asked to find the hub's Configuration File, and
+   * never sees the wizard. Neither shows before the role is known. The automatic sign-in waits too (it would fail without a Client ID).
+   */
+  let wizardNeeded = false;
+  let readFailed = false;   // a member's read of the file failed: only then is the request to find it shown, never behind the picker
   function showWizard(needed) {
-    $('setup-wizard').hidden = !needed;
+    wizardNeeded = needed;
+    $('setup-wizard').hidden = !(needed && roleState === 'admin');
     $('login-card').hidden = needed;
+    $('first-file').hidden = !(needed && readFailed && roleState !== 'admin');
     ns.auth.holdLogin(needed);
+  }
+
+  let firstRun = false;   // the role is awaited to decide what a first setup shows
+
+  /** First setup: nothing is shown until the user's role in the hub is known (Fusion tells it without a Client ID). */
+  function offerFile() {
+    firstRun = true;
+    showWizard(wizardNeeded);
+    checkRole(true);
+  }
+
+  /** The role is known: a Hub Admin gets the wizard, anyone else the search for the Configuration File. */
+  function firstRunRole(state) {
+    firstRun = false;
+    showWizard(wizardNeeded);
+    if (state !== 'admin') openMemberPicker();
+  }
+
+  /** The picker for a member's first setup: closing it without a file closes the panel. */
+  function openMemberPicker() {
+    readFailed = false;
+    showWizard(wizardNeeded);
+    ns.hubPicker.open(document.querySelector('[data-hub-name]').textContent, function (file) { useHubConfig(file); },
+      { onDismiss: function () { bridge.send('close_settings', {}); } });
   }
 
   function updateWizard() {
@@ -343,6 +435,7 @@
    * tabs, read-only for a member (who also sees which file they came from). When the check could not be made ('unknown') the panel is
    * left usable, so a failed check does not lock out an admin.
    */
+  let memberTabShown = false;   // the Configuration tab has been opened for this member since they became one
   function updateViews() {
     if (savedTenant) tenantStepDone = true;
     const checking = signedInNow && roleState === 'pending';
@@ -355,7 +448,13 @@
     const tabs = !(checking || prompt || tenant);
     $('settings-tabs').hidden = !tabs;
     $('settings-main').hidden = !tabs;
-    $('hub-file-bar').hidden = !(member && hubFile);
+    $('cfg-file-view').hidden = !(member && hubFile);
+    // The Configuration tab is a member's: it comes first, and is what they see when they open the panel.
+    const fileTab = document.querySelector('.tab[data-tab="config"]');
+    fileTab.hidden = !member;
+    if (!member) memberTabShown = false;
+    if (!member && fileTab.classList.contains('active')) document.querySelector('.tab[data-tab="connection"]').click();
+    if (member && !memberTabShown) { memberTabShown = true; fileTab.click(); }
     applyMemberLock(member);
   }
 
@@ -390,8 +489,8 @@
     initMemberFlow();
     ns.hubPicker.init();
     // The panel is only hidden when closed, so it is shown again with whatever hub was active before: read the active hub's settings again.
-    // Every opening validates the user's role again, and a member's Configuration File is read again.
-    bridge.on('palette_opened', function () { roleState = ''; refreshedOnOpen = false; ns.settings.load(); ns.auth.refresh(); });
+    // Every opening validates the user's role again.
+    bridge.on('palette_opened', function () { roleState = ''; fileOffered = false; ns.settings.load(); ns.auth.refresh(); });
 
     bridge.on('get_settings', function (r) {
       if (r.ok) fillSettings(r.result);

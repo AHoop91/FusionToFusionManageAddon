@@ -42,6 +42,21 @@ class MfgApiError(Exception):
         self.code = code   # the service's own code for a GraphQL error (``FHQ-403``: not allowed), when it gave one
 
 
+def data_of(payload: Any) -> Dict[str, Any]:
+    """The ``data`` object of a GraphQL answer. Raises ``MfgApiError`` for the errors it reports, or when it has no data."""
+    errors = payload.get("errors") if isinstance(payload, dict) else None
+    if errors:
+        log.error("GraphQL errors: %s", json.dumps(errors)[:1000])
+        first = errors[0] if isinstance(errors[0], dict) else {}
+        extensions = first.get("extensions") if isinstance(first.get("extensions"), dict) else {}
+        transient = extensions.get("code") in TRANSIENT_CODES or (extensions.get("http") or {}).get("status") in RETRY_HTTP
+        raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=bool(transient), code=str(extensions.get("code") or ""))
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        raise MfgApiError("Manufacturing Data Model returned no data.")
+    return data
+
+
 class MfgGraphQlClient:
     """Authenticated GraphQL access to the Manufacturing Data Model."""
 
@@ -96,14 +111,4 @@ class MfgGraphQlClient:
                               transient=exc.code in RETRY_HTTP) from exc
         except (OSError, ValueError) as exc:   # includes a timeout or a dropped connection
             raise MfgApiError(f"Manufacturing Data Model request failed: {exc}", transient=True) from exc
-        errors = payload.get("errors") if isinstance(payload, dict) else None
-        if errors:
-            log.error("GraphQL errors: %s", json.dumps(errors)[:1000])
-            first = errors[0] if isinstance(errors[0], dict) else {}
-            extensions = first.get("extensions") if isinstance(first.get("extensions"), dict) else {}
-            transient = extensions.get("code") in TRANSIENT_CODES or (extensions.get("http") or {}).get("status") in RETRY_HTTP
-            raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=bool(transient), code=str(extensions.get("code") or ""))
-        data = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(data, dict):
-            raise MfgApiError("Manufacturing Data Model returned no data.")
-        return data
+        return data_of(payload)

@@ -22,6 +22,15 @@
   <!-- ===== Signed-out view: sign-in only ================================ -->
   <div id="view-login" class="view">
     <div id="login-form" class="view-scroll" hidden>
+      <!-- A member's first setup: only the request to find the Configuration File, until it has been read. -->
+      <div id="first-file" class="card member-card" hidden>
+        <span class="member-hub" data-hub-name></span>
+        <h2>Find your Configuration File</h2>
+        <p>A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
+        <button id="first-find" class="btn" type="button">Find Configuration File</button>
+        <p class="hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
+      </div>
+
       <!-- First setup, until a Client ID is saved: replaces the sign-in card. -->
       <div id="setup-wizard" class="card wizard" hidden>
         <header class="wiz-head">
@@ -29,6 +38,7 @@
           <span class="hub-pill" data-hub-name></span>
         </header>
         <p class="muted">Sign-in needs an app of your own on the Autodesk Platform Services (APS) portal. Follow these steps once.</p>
+        <p class="hint">A Hub Admin may have saved this hub's setup already. <button id="wiz-find" class="link-btn" type="button">Find the Configuration File</button></p>
         <ol class="wiz-steps">
           <li class="wiz-step">
             <span class="wiz-num">1</span>
@@ -115,7 +125,6 @@
         <h2>Find your Configuration File</h2>
         <p>A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
         <button id="member-find" class="btn" type="button">Find Configuration File</button>
-        <p id="member-status" class="member-status" hidden></p>
         <p class="hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
       </div>
     </div>
@@ -144,30 +153,53 @@
     </div>
 
     <nav id="settings-tabs" class="tabs" data-group="settings" role="tablist">
+      <button class="tab" data-tab="config" hidden>Configuration</button>
       <button class="tab active" data-tab="connection">Connection</button>
       <button class="tab" data-tab="workspaces">Item Workspace</button>
       <button class="tab" data-tab="exports">Export</button>
     </nav>
 
     <main id="settings-main">
+      <!-- A member of the hub only: the Configuration File their settings come from, and whether it is current. -->
+      <section id="sub-config" class="tab-panel" data-group="settings">
+        <div class="tab-body cfg">
+          <div id="cfg-file-view" class="cfg-stack" hidden>
+            <div id="cfg-status" class="card cfg-status" data-state="current">
+              <span id="cfg-icon" class="cfg-icon"></span>
+              <div class="cfg-status-text">
+                <strong id="cfg-status-title">Up to date</strong>
+                <span id="cfg-status-sub" class="muted"></span>
+              </div>
+              <button id="cfg-check" class="btn btn-secondary" type="button">Check for updates</button>
+            </div>
+
+            <div class="card cfg-file">
+              <div class="cfg-file-head">
+                <span id="cfg-file-icon" class="cfg-file-icon"></span>
+                <div class="cfg-file-id">
+                  <span class="cfg-label">Configuration File</span>
+                  <strong id="hub-file-name"></strong>
+                  <span id="hub-file-place" class="muted"></span>
+                </div>
+                <button id="hub-file-change" class="btn btn-secondary" type="button">Change file</button>
+              </div>
+              <dl class="cfg-facts">
+                <div><dt>Last updated in the hub</dt><dd id="hub-file-modified"></dd></div>
+                <div><dt>Updated by</dt><dd id="hub-file-by"></dd></div>
+                <div><dt>Version</dt><dd id="hub-file-version"></dd></div>
+                <div><dt>Last read by you</dt><dd id="hub-file-read"></dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="sub-connection" class="tab-panel active" data-group="settings">
         <!-- Configuration source and connection details. The form moves to the sign-in screen while signed out. -->
         <div id="settings-slot">
           <div id="conn-settings">
+            <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
             <div class="tab-body">
-              <!-- A member of the hub: where its settings were read from. -->
-              <div id="hub-file-bar" class="hub-file-bar" hidden>
-                <div class="hub-file-info">
-                  <span class="hub-file-label">Configuration File</span>
-                  <strong id="hub-file-name"></strong>
-                  <span id="hub-file-when" class="muted"></span>
-                </div>
-                <div class="hub-file-actions">
-                  <button id="hub-file-update" class="btn btn-secondary" type="button">Update</button>
-                  <button id="hub-file-change" class="btn btn-secondary" type="button">Change file</button>
-                </div>
-                <p id="hub-file-msg" class="hub-file-msg" hidden></p>
-              </div>
               <div class="card conn-card">
                 <header class="conn-head">
                   <h2>Connection settings</h2>
@@ -181,7 +213,6 @@
                   </div>
                 </div>
                 <fieldset id="lock-connection" class="lockable">
-                  <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
                   <div class="field">
                     <label for="f-client-id">Client ID <span class="info" tabindex="0" aria-label="About Client ID">i<span class="tip" role="tooltip">The Client ID of your app on the Autodesk Platform Services (APS) portal.</span></span></label>
                     <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">

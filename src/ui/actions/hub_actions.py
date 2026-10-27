@@ -6,10 +6,9 @@ from typing import Any, Dict, Tuple
 
 import adsk.core
 
-from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger
-from ...fusion_mfg.graphql_client import MfgGraphQlClient
+from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...fusion_mfg.hub_role import HubRole, read_hub_role
 from ...fusion_mfg.properties import HUBS_QUERY, find_hub_id
 from ..message_bridge import MessageBridge
@@ -21,7 +20,7 @@ KEPT_SECONDS = 600   # a clear answer is used for this long, then asked for agai
 RETRY_AFTER_SECONDS = 15   # an answer that could not be had is reported as unknown for this long, so the panel stops asking; then it asks again
 
 
-def register_hub_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:
+def register_hub_actions(bridge: MessageBridge, config: ConfigService) -> None:
     """Register ``get_hub_role``.
 
     The role is read from the Data Model on a worker thread, which pushes the answer to the panel when it has it (the action itself answers
@@ -51,7 +50,7 @@ def register_hub_actions(bridge: MessageBridge, config: ConfigService, auth: Aut
 
     def read(key: Tuple[str, str], hub_name: str) -> None:
         try:
-            client = MfgGraphQlClient(config.effective_settings(), auth)
+            client = FusionGraphQlClient()   # Fusion's own sign-in: the role is known before any Client ID exists
             with lock:
                 known = hub_ids.get(key[0])
             if known is None:

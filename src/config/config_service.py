@@ -212,10 +212,17 @@ class ConfigService:
     def apply_hub_file(self, imported: AppConfig, ref: Dict[str, str]) -> List[str]:
         """Take the active hub's settings from a Configuration File read from the Fusion Hub (``ref`` says which file). Returns problems;
         nothing is saved if any exist. The user's own sign-in details (Client ID, callback port, scopes) are kept, since another Client ID
-        would sign them out and its callback address may not be registered; the tenant, workspaces, mappings and exports come from the file."""
+        would sign them out and its callback address may not be registered; the tenant, workspaces, mappings and exports come from the file.
+        A member who has no sign-in details of their own yet (finding the file needs none) takes the file's, Client ID with its port and scopes,
+        so that they can sign in without setting up an app."""
         if self._hub_aware and not self._hub:
             return ["No hub is active. Open a hub in Fusion first: the settings are kept for each hub."]
-        local = replace(self._stored.local, tenant=imported.local.tenant)
+        if self._stored.local.client_id.strip():
+            local = replace(self._stored.local, tenant=imported.local.tenant)
+        elif imported.local.client_id.strip():
+            local = replace(imported.local, tenant=imported.local.tenant)
+        else:
+            return ["The Configuration File has no Client ID. Ask a Hub Admin to save it to the hub again."]
         problems = local.validate(require_tenant=False) + imported.workspaces.validate() + imported.exports.validate()
         if problems:
             return problems

@@ -74,23 +74,10 @@
 .member-card p { margin: 0 0 18px; line-height: 1.5; }
 .member-card .btn { min-width: 220px; }
 .member-card .hint { margin: 18px 0 0; }
-.member-status { margin: 14px 0 0; font-size: 12px; color: var(--muted); }
-.member-status[data-state="error"] { color: #b71c1c; }
-.member-status[hidden] { display: none; }
 
-/* Where a member's settings were read from, over the (read-only) Connection tab. */
-.hub-file-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 16px; padding: 12px 14px;
-  border: 1px solid var(--border); border-radius: 6px; background: #fff; }
-.hub-file-bar[hidden] { display: none; }
-.hub-file-info { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; }
-.hub-file-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.hub-file-label { color: var(--muted); }
-.hub-file-actions { display: flex; gap: 8px; }
-.hub-file-msg { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--muted); }
-.hub-file-msg[data-state="error"] { color: #b71c1c; }
-.hub-file-msg[hidden] { display: none; }
 /* Tenant step: one field with Find beside it, the outcome as one line under it. */
-#tenant-wizard .field { margin-bottom: 20px; }.wt-msg { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+#tenant-wizard .field { margin-bottom: 20px; }
+.wt-msg { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .wt-msg[data-state="ok"] { color: #1b5e20; }
 .wt-msg[data-state="error"] { color: #b71c1c; }
 .wt-msg[hidden] { display: none; }
@@ -150,3 +137,47 @@ input.invalid, .invalid > .ws-pick-btn { border-color: var(--danger); background
 .sp-badge svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .sp-content[data-state="done"] .sp-badge { background: #e3f4e6; color: #1b7a2e; }
 .sp-content[data-state="failed"] .sp-badge { background: #fdecec; color: #b71c1c; }
+
+/* A member sees the Item Workspace and Export settings as the file defines them: readable, but plainly read-only. Nothing is faded, so
+   the text stays clear; the controls are flat and grey, with no carets, no delete buttons and no hover. */
+#lock-workspaces:disabled, #lock-exports:disabled, #lock-workspaces .ws-locked:disabled { opacity: 1; }
+#lock-workspaces input:disabled, #lock-workspaces select:disabled, #lock-workspaces textarea:disabled, #lock-workspaces .ws-pick-btn:disabled,
+#lock-exports input:disabled, #lock-exports select:disabled, #lock-exports textarea:disabled {
+  color: #5f6368; -webkit-text-fill-color: #5f6368; background: var(--bg); border-color: var(--border); cursor: default;
+}
+#lock-workspaces .ws-pick-btn:disabled::after { display: none; }
+#lock-workspaces:disabled .ws-remove, #lock-workspaces:disabled .ws-add-btn, #lock-workspaces:disabled .ws-defaults { display: none; }
+#lock-exports:disabled .ex-choice { background: var(--bg); }
+#lock-exports:disabled .ex-choice label.ex-opt { cursor: default; color: #5f6368; }
+#lock-exports:disabled .ex-opt:hover { background: none; }
+#lock-exports:disabled .ex-choice label.ex-opt:has(input:checked) { background: #dadce0; color: var(--text); }
+
+/* ---- Configuration tab (members) ------------------------------------------ */
+.cfg-stack { display: flex; flex-direction: column; gap: 12px; }
+.cfg-stack[hidden] { display: none; }
+.cfg .card { margin-bottom: 0; }
+.cfg-label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+
+.cfg-status { display: flex; align-items: center; gap: 14px; border-left: 4px solid var(--border); }
+.cfg-status[data-state="current"] { border-left-color: #2e7d32; }
+.cfg-status[data-state="updated"] { border-left-color: var(--accent); }
+.cfg-status[data-state="unknown"] { border-left-color: #ef6c00; }
+.cfg-icon svg, .cfg-file-icon svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.cfg-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); color: var(--muted); }
+.cfg-status[data-state="current"] .cfg-icon { background: #e8f5e9; color: #2e7d32; }
+.cfg-status[data-state="updated"] .cfg-icon { background: #e1f1fa; color: var(--accent); }
+.cfg-status[data-state="unknown"] .cfg-icon { background: #fff3e0; color: #ef6c00; }
+.cfg-status[data-state="checking"] .cfg-icon { animation: cfg-spin 1s linear infinite; }
+@keyframes cfg-spin { to { transform: rotate(360deg); } }
+.cfg-status-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.cfg-status-text strong { font-size: 14px; }
+.cfg-status-text span { font-size: 12px; }
+
+.cfg-file-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.cfg-file-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: var(--bg); color: var(--accent); }
+.cfg-file-id { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.cfg-file-id strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.cfg-file-id .muted { font-size: 12px; }
+.cfg-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; margin: 14px 0 0; }
+.cfg-facts dt { color: var(--muted); font-size: 11px; }
+.cfg-facts dd { margin: 2px 0 0; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }

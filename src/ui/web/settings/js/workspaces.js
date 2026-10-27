@@ -134,6 +134,7 @@
 
   /** Ask Python for the revision controlled workspaces; called when a picker opens, or at load to name saved ids. */
   function loadWorkspaces() {
+    if (viewOnly) return;
     if (workspacesState === 'loading') return;
     workspacesState = 'loading';
     stopWorkspacesWait();
@@ -259,6 +260,7 @@
 
   /** Ask Python for the hub's properties; called each time a workspace validates. */
   function loadProperties() {
+    if (viewOnly) return;
     if (propsState === 'loading') return;
     propsState = 'loading';
     stopPropsWait();
@@ -334,6 +336,7 @@
   // by the id it was validated for, so re-rendering after a save keeps it.
 
   const validated = {};   // kindId -> workspace id that passed validation
+  let viewOnly = false;   // a member only sees what the Configuration File defines: nothing is checked against Fusion Manage
 
   function cardOf(kindId) {
     return $('workspace-cards').querySelector('.ws-kind[data-kind="' + kindId + '"]');
@@ -341,6 +344,12 @@
 
   /** Lock or unlock every gated section of a card and show the status text. */
   function setValid(card, valid, message) {
+    if (viewOnly) {   // nothing is gated or checked: the sections just show what is defined (they are disabled for a member anyway)
+      card.querySelectorAll('.ws-hint').forEach(function (h) { h.hidden = true; });
+      card.querySelector('.ws-status').textContent = '';
+      card.querySelector('.ws-tick').hidden = true;
+      return;
+    }
     card.querySelectorAll('.ws-locked, .ws-lock-btn').forEach(function (f) { f.disabled = !valid; });
     card.querySelectorAll('.ws-hint').forEach(function (h) { h.hidden = valid; });
     const status = card.querySelector('.ws-status');
@@ -373,6 +382,7 @@
 
   /** Ask Python to check the workspace chosen on a card. */
   function validateKind(card, kindId) {
+    if (viewOnly) return;
     const workspaceId = card.querySelector('.ws-id').value.trim();
     if (!workspaceId) return;
     setBusy(card, true);
@@ -675,5 +685,14 @@
     return result;
   }
 
-  ns.workspaces = { init: init, render: render, read: read };
+  /** Show the workspaces as defined, without checking any of them (a member of the hub); false returns to the Hub Admin's editing. */
+  function setViewOnly(on) {
+    if (viewOnly === on) return;
+    viewOnly = on;
+    $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
+      setValid(card, !!validated[card.dataset.kind] && validated[card.dataset.kind] === card.querySelector('.ws-id').value.trim(), '');
+    });
+  }
+
+  ns.workspaces = { init: init, render: render, read: read, setViewOnly: setViewOnly };
 })(window.MfgUi);

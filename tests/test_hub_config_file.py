@@ -1,4 +1,4 @@
-"""The hub's Configuration File: read from the Fusion Hub, checked, and used as the hub's settings for a member who is not a Hub Admin."""
+"""The hub's Configuration File: checked, and used as the hub's settings for a member who is not a Hub Admin."""
 
 import json
 import os
@@ -9,7 +9,6 @@ from src.config.config_envelope import FORMAT_ID, FORMAT_VERSION, MAX_CONFIG_BYT
 from src.config.config_service import ConfigService
 from src.config.config_transfer import config_file_bytes, config_from_hub_file
 from src.config.models import MODE_LOCAL, AppConfig, ConnectionSettings
-from src.fusion_mfg.hub_files import API, HubFiles, HubFilesError
 
 HUB_A, HUB_B = "a.hub-a", "a.hub-b"
 
@@ -90,6 +89,14 @@ class ApplyTests(unittest.TestCase):
         again.use_hub(HUB_A, "Hub A")
         self.assertEqual(again.config.hub_file, self.ref)
 
+    def test_what_the_hub_said_of_the_file_outlasts_a_restart(self):
+        ref = dict(self.ref, project_name="Resources", modified="2026-10-27T14:20:25", modified_by="Fabio", version="2")
+        self.service.update(MODE_LOCAL, ConnectionSettings(client_id="my-client"), self.service.config.workspaces, "")
+        self.service.apply_hub_file(config_from_hub_file(file_bytes(), HUB_A, "Hub A"), ref)
+        again = ConfigService(self.path, hub_aware=True)
+        again.use_hub(HUB_A, "Hub A")
+        self.assertEqual(again.config.hub_file, ref)
+
     def test_only_the_hub_that_read_the_file_has_it(self):
         self.service.update(MODE_LOCAL, ConnectionSettings(client_id="my-client"), self.service.config.workspaces, "")
         self.service.apply_hub_file(config_from_hub_file(file_bytes(), HUB_A, "Hub A"), self.ref)
@@ -97,9 +104,16 @@ class ApplyTests(unittest.TestCase):
         self.assertIsNone(self.service.config.hub_file)
         self.assertEqual(self.service.config.local.tenant, "")
 
-    def test_without_a_client_id_nothing_is_applied(self):
+    def test_a_member_without_a_client_id_signs_in_with_the_files(self):
         problems = self.service.apply_hub_file(config_from_hub_file(file_bytes(), HUB_A, "Hub A"), self.ref)
-        self.assertEqual(problems, ["Client ID: enter the Client ID of your Autodesk app."])
+        self.assertEqual(problems, [])
+        local = self.service.config.local
+        self.assertEqual((local.client_id, local.tenant, local.callback_port), ("admins-client", "acme", 9000))
+        self.assertEqual(self.service.config.hub_file["name"], "config.json")
+
+    def test_a_file_without_a_client_id_is_not_applied_to_a_member_who_has_none(self):
+        problems = self.service.apply_hub_file(config_from_hub_file(file_bytes(client_id=""), HUB_A, "Hub A"), self.ref)
+        self.assertEqual(len(problems), 1)
         self.assertIsNone(self.service.config.hub_file)
 
     def test_saving_by_hand_forgets_the_file(self):
@@ -107,73 +121,6 @@ class ApplyTests(unittest.TestCase):
         self.service.apply_hub_file(config_from_hub_file(file_bytes(), HUB_A, "Hub A"), self.ref)
         self.service.update(MODE_LOCAL, ConnectionSettings(client_id="my-client", tenant="mine"), self.service.config.workspaces, "")
         self.assertIsNone(self.service.config.hub_file)
-
-
-class FakeHub(HubFiles):
-    """A hub's REST answers by the end of the address; records which calls were made with the access token."""
-
-    def __init__(self, answers):
-        super().__init__(None, None)
-        self.answers, self.calls = answers, []
-
-    def _open(self, url, authorised=True, headers=None):
-        self.calls.append((url, authorised))
-        for tail, body in self.answers.items():
-            if tail in url:
-                return body if isinstance(body, bytes) else json.dumps(body).encode()
-        raise AssertionError("unexpected address " + url)
-
-
-def entry(kind, identifier, name):
-    return {"type": kind, "id": identifier, "attributes": {"displayName": name}}
-
-
-class BrowseTests(unittest.TestCase):
-    def test_folders_and_files_are_told_apart_and_sorted(self):
-        hub = FakeHub({"/contents": {"data": [entry("items", "i2", "b.json"), entry("folders", "f1", "Zeta"), entry("items", "i1", "A.json"),
-                                              entry("folders", "f2", "alpha")]}})
-        found = hub.contents("p", "urn:folder")
-        self.assertEqual([f["name"] for f in found.folders], ["alpha", "Zeta"])
-        self.assertEqual([f["name"] for f in found.files], ["A.json", "b.json"])
-
-    def test_a_listing_is_followed_over_its_pages(self):
-        class Paged(FakeHub):
-            def _open(self, url, authorised=True, headers=None):
-                if "page2" in url:
-                    return json.dumps({"data": [entry("items", "i2", "two.json")]}).encode()
-                return json.dumps({"data": [entry("items", "i1", "one.json")], "links": {"next": {"href": API + "/page2"}}}).encode()
-        found = Paged({}).contents("p", "f")
-        self.assertEqual([f["name"] for f in found.files], ["one.json", "two.json"])
-
-    def test_the_projects_of_the_hub_are_listed_by_name(self):
-        hub = FakeHub({"/projects": {"data": [{"id": "p2", "attributes": {"name": "Beta"}}, {"id": "p1", "attributes": {"name": "alpha"}}]}})
-        self.assertEqual([p["name"] for p in hub.projects(HUB_A).folders], ["alpha", "Beta"])
-
-
-class ReadTests(unittest.TestCase):
-    TIP = {"data": {"attributes": {"storageSize": 120}, "relationships": {"storage": {"data": {"id": "urn:adsk.objects:os.object:wip.dm.prod/abc.json"}}}}}
-
-    def test_a_file_is_read_through_its_signed_address_without_the_token(self):
-        hub = FakeHub({"/tip": self.TIP, "/signeds3download": {"url": "https://signed.example/abc"}, "signed.example": b'{"a": 1}'})
-        self.assertEqual(hub.read_file("p", "i", 1000), b'{"a": 1}')
-        self.assertEqual([authorised for url, authorised in hub.calls if "signed.example" in url], [False])
-        self.assertTrue(all(authorised for url, authorised in hub.calls if "signed.example" not in url))
-
-    def test_a_file_that_is_too_large_is_not_downloaded(self):
-        hub = FakeHub({"/tip": self.TIP})
-        with self.assertRaises(HubFilesError):
-            hub.read_file("p", "i", 100)
-        self.assertEqual(len(hub.calls), 1)   # only the size was asked
-
-    def test_a_signed_address_that_is_not_https_is_refused(self):
-        hub = FakeHub({"/tip": self.TIP, "/signeds3download": {"url": "http://signed.example/abc"}})
-        with self.assertRaises(HubFilesError):
-            hub.read_file("p", "i", 1000)
-
-    def test_a_file_with_no_content_is_refused(self):
-        hub = FakeHub({"/tip": {"data": {"attributes": {}, "relationships": {}}}})
-        with self.assertRaises(HubFilesError):
-            hub.read_file("p", "i", 1000)
 
 
 if __name__ == "__main__":

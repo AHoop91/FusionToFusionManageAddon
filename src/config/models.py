@@ -18,6 +18,10 @@ MODE_COMPANY = "company"
 # data:search is needed by the Manufacturing Data Model (custom properties); user-profile:read, by the avatar (the Identity API).
 DEFAULT_SCOPES = ["data:read", "data:write", "data:search", "user-profile:read"]
 DEFAULT_CALLBACK_PORT = 8765
+# What is kept of the Configuration File a hub's settings came from: which file and when it was read, and, when the hub told, its project,
+# when and by whom it was last updated, and its version.
+HUB_FILE_KEYS = ("project_id", "item_id", "name", "read_at")
+HUB_FILE_DETAIL_KEYS = ("project_name", "modified", "modified_by", "version")
 
 
 @dataclass
@@ -107,7 +111,8 @@ class AppConfig:
         # Older files kept the workspace id under ``local.workspace_id``.
         workspaces = data.get("workspaces") or {"items_workspace_id": local.get("workspace_id", "")}
         kept = data.get("hub_file")
-        hub_file = {key: str(kept.get(key, "")) for key in ("project_id", "item_id", "name", "read_at")} \
+        details = tuple(key for key in HUB_FILE_DETAIL_KEYS if isinstance(kept, dict) and kept.get(key))   # the hub's own details, when it gave them
+        hub_file = {key: str(kept.get(key, "")) for key in HUB_FILE_KEYS + details} \
             if isinstance(kept, dict) and kept.get("item_id") else None
         return cls(
             mode=mode if mode in (MODE_LOCAL, MODE_COMPANY) else MODE_LOCAL,

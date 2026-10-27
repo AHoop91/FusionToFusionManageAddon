@@ -51,7 +51,7 @@
   const lastPlace = {};   // where a folder was last chosen, by hub, so the next save starts there
 
   function open(hubName, onPick, options) {
-    if (current) return;
+    if (current) { if (options && options.onDismiss) options.onDismiss(); return; }   // one at a time: the one open stays
     const folderMode = !!(options && options.folder);
     const crumbs = [{ label: hubName || 'Hub', project_id: '', folder_id: '' }];
     if (folderMode && lastPlace[options.hubId]) lastPlace[options.hubId].forEach(function (crumb) { crumbs.push(crumb); });
@@ -114,11 +114,13 @@
     [header, head, body, footer].forEach(function (node) { box.appendChild(node); });
     overlay.appendChild(box);
 
+    let picked = false;
     function close() {
       document.removeEventListener('keydown', onKey);
       overlay.remove();
       current = null;
       wanted += 1;   // whatever is still on its way is not wanted
+      if (!picked && options && options.onDismiss) options.onDismiss();   // closed without choosing
     }
     function onKey(e) { if (e.key === 'Escape' && !e.target.closest('.hp-newrow')) close(); }
 
@@ -263,12 +265,14 @@
         if (atHub()) return;
         lastPlace[options.hubId] = crumbs.slice(1);
         const place = { project_id: here().project_id, folder_id: here().folder_id, path: placeName() };
+        picked = true;
         close();
         onPick(place);
         return;
       }
       if (!chosen) return;
       const file = chosen;
+      picked = true;
       close();
       onPick(file);
     }

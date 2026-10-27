@@ -14,6 +14,8 @@ Each module registers one feature area on the ``MessageBridge``:
 ``register_actions`` is the only function the add-in entry point needs.
 """
 
+from typing import Callable
+
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ..file_dialogs import FileDialogs
@@ -34,14 +36,14 @@ from .workspace_actions import register_workspace_actions
 
 
 def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
-                     dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
-    """Register every palette action on ``bridge``."""
+                     dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts, post: Callable[[Callable[[], None]], None]) -> None:
+    """Register every palette action on ``bridge``; ``post`` queues work on Fusion's main thread."""
     register_settings_actions(bridge, config)
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)
     register_tenant_actions(bridge, config, auth)
-    register_hub_actions(bridge, config, auth)
-    register_hub_file_actions(bridge, config, auth)
+    register_hub_actions(bridge, config)
+    register_hub_file_actions(bridge, config, post)
     register_hub_save_actions(bridge, config)
     register_property_actions(bridge, config, auth)
     register_publish_actions(bridge, config, auth)
