@@ -1,23 +1,23 @@
-"""Palette actions for publishing: queue the run, retry a failed one, and list, cancel and open the runs.
+"""Palette actions for publishing: queue the run, retry a failed one, and list and cancel the runs.
 
 ``start_publish`` adds the run to the job queue, which writes the requests and files into a folder of
 its own and then sends them to Fusion Manage, all on its own thread; the panel polls ``list_publish_jobs``
 to show the runs. ``retry_publish`` sends the folder of a failed run again: what Fusion Manage accepted is skipped.
 """
 
-import os
 import threading
 from typing import Any, Dict
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...config.workspace_models import ITEMS_KIND
-from ...core.logging_setup import get_logger, log_directory
+from ...core.logging_setup import get_logger
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.graphql_client import MfgGraphQlClient
 from ...publish.job_queue import JobQueue
 from ...publish.panel_sections import publish_denial
 from ...publish.reports import publish_report, send_report
+from ...publish.run_files import temp_root
 from ...publish.runner import PublishRun
 from ...publish.sender import FolderError, SendRun, load_plan
 from ...publish.states import DONE, ERROR, FINISHED
@@ -30,11 +30,6 @@ from ..message_bridge import MessageBridge
 from .design_ref import model_ref
 
 log = get_logger("publish_run")
-
-
-def publish_root() -> str:
-    """Where publish runs keep their files: ``publishes`` next to the logs in the user profile."""
-    return os.path.join(os.path.dirname(log_directory()), "publishes")
 
 
 def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
@@ -62,7 +57,7 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
             alerts.done(publish_report(run), "Publish complete")
 
     # The Job Queue button on the ribbon shows whether runs are working or have failed.
-    queue = JobQueue(lambda: badge.update(queue.state()), announce)
+    queue = JobQueue(lambda: badge.update(queue.state()), announce, temp_root())
 
     def jobs() -> Dict[str, Any]:
         return {"jobs": queue.snapshots()}
@@ -96,7 +91,7 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
             return {"error": denied}
         job = {"summary": payload.get("summary") or {}, "items": list(payload.get("items") or []),
                "operations": list(payload.get("operations") or []), "root_number": str(payload.get("root_number") or "")}
-        folder = PublishFolder(publish_root(), job["root_number"])   # the files stay as a record of what was sent
+        folder = PublishFolder(temp_root(), job["root_number"])   # its files are kept until the run ends clean or is cleared
         settings = config.effective_settings()
         run = PublishRun(folder, job, cfg, MfgGraphQlClient(settings, auth), FmClient(settings, auth), model_id, time, send=True)
         watched.touch(run.id)   # the panel opens its progress dialog on this run
@@ -131,17 +126,8 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         queue.clear_finished()
         return jobs()
 
-    def open_publish_folder(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Open the folder of a run in Explorer (only a folder a run created, never a path from the panel)."""
-        run = queue.get(str(payload.get("id") or ""))
-        folder = run.snapshot()["folder"] if run else ""
-        if folder and os.path.isdir(folder):
-            os.startfile(folder)  # noqa: S606 - Windows only, a folder we created
-        return {}
-
     bridge.register("start_publish", start_publish)
     bridge.register("retry_publish", retry_publish)
     bridge.register("list_publish_jobs", list_publish_jobs)
     bridge.register("cancel_publish", cancel_publish)
     bridge.register("clear_publish_jobs", clear_publish_jobs)
-    bridge.register("open_publish_folder", open_publish_folder)

@@ -22,7 +22,7 @@ class ReportTests(unittest.TestCase):
                                     entry("sent to Fusion Manage", "PATCH 200")]))
         self.assertTrue(text.startswith("Publish of PN-1 completed successfully.\n\nTotal Items Processed: 3\n"))
         self.assertIn("Total Items Created: 1\nTotal Items Updated: 2", text)
-        self.assertTrue(text.endswith("The files are in C:/out"))
+        self.assertNotIn("The files are in", text)   # a run that went through has its files removed
 
     def test_a_run_that_only_wrote_requests_says_nothing_was_sent(self):
         text = publish_report(run(sends=False, entries=[entry("item request", "POST /x")]))
@@ -35,6 +35,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(text.count("  - PN-"), MAX_LISTED)
         self.assertIn("  - and 2 more", text)
         self.assertIn("Use Retry on the job", text)
+        self.assertIn("The files are in C:/out", text)   # a failed run keeps them, for Retry
 
     def test_a_failed_run_gives_its_reason(self):
         self.assertEqual(publish_report(run(phase="error")), "Publish of PN-1 could not be completed.\n\nReason: boom")

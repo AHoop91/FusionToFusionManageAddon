@@ -35,8 +35,8 @@ def publish_report(run: PublishRun) -> str:
              f"Total Items Created: {_requests(run, 'POST')}",
              f"Total Items Updated: {_requests(run, 'PATCH')}", ""]
     if run.sends:
-        lines.append(f"The files are in {run.folder.path}")
-        if failed:
+        if failed:   # a run that went through has its files removed: only a failed one keeps them, for Retry
+            lines.append(f"The files are in {run.folder.path}")
             lines.append("Open the Job Queue for the reason of each failure. Use Retry on the job to send the failed requests again: what was accepted is skipped.")
     else:
         lines.append("The requests were written for review. Nothing has been sent to Fusion Manage yet.")

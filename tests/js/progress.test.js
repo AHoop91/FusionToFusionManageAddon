@@ -14,6 +14,8 @@ const describe = window.MfgUi.pubJobs.describe;
 const tally = window.MfgUi.pubJobs.tally;
 const validation = window.MfgUi.pubJobs.validation;
 const elapsedText = window.MfgUi.pubJobs.elapsedText;
+const line = window.MfgUi.pubJobs.line;
+const listed = window.MfgUi.pubJobs.listed;
 
 const job = (extra) => Object.assign({
   phase: 'running', stage: 'items', name: 'PN-1', total: 12, done: 0, counts: {}, sends: true, rows: [],
@@ -134,4 +136,21 @@ test('a run that fails after the validation passed keeps the validation green', 
 test('with nothing to look up the validation is indeterminate until it ends', () => {
   assert.strictEqual(validation(job({ stage: 'validating', validation: { done: 0, total: 0 } })).percent, null);
   assert.strictEqual(validation(job({ stage: 'items', validation: { done: 0, total: 0 } })).percent, 100);
+});
+
+test('the Job Queue says in a sentence where each job stands', () => {
+  assert.strictEqual(line(job({ phase: 'queued', place: 2 })), 'Waiting, number 2 in the queue.');
+  assert.strictEqual(line(job({ done: 3 })), 'Publishing 3 of 12 items.');
+  assert.strictEqual(line(job({ stage: 'validating' })), 'Checking item numbers.');
+  assert.strictEqual(line(job({ phase: 'cancelled', total: 5, done: 0 })), 'Cancelled. Nothing was published.');
+  assert.strictEqual(line(job({ phase: 'cancelled', total: 5, done: 2 })), 'Cancelled. 2 of 5 items published.');
+  assert.strictEqual(line(job({ phase: 'error', total: 5, done: 5, rows: [{ status: 'error' }, { status: 'error' }, { status: 'done' }, { status: 'done' }, { status: 'done' }] })), 'Failed. 2 of 5 items failed.');
+});
+
+test('a job that went through leaves the Job Queue, and a cancelled or failed one stays', () => {
+  assert.strictEqual(listed(job({ phase: 'done', rows: [{ status: 'done' }] })), false);
+  assert.strictEqual(listed(job({ phase: 'cancelled' })), true);
+  assert.strictEqual(listed(job({ phase: 'error', stage: 'items' })), true);
+  assert.strictEqual(listed(job({ phase: 'done', rows: [{ status: 'error' }] })), true);
+  assert.strictEqual(listed(job({ phase: 'error', stage: 'validating' })), false);
 });

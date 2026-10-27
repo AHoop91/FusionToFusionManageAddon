@@ -8,7 +8,8 @@
   <link rel="stylesheet" href="../shared/css/tooltip.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
   <link rel="stylesheet" href="../shared/css/components.css">
-  <!-- The job cards are shared with the Publish panel -->
+  <link rel="stylesheet" href="../shared/css/progress.css">
+  <!-- The job rows and the details window are shared with the Publish panel -->
   <link rel="stylesheet" href="../publish/css/publish.css">
 </head>
 <body>
@@ -20,12 +21,39 @@
     </div>
   </header>
 
-  <!-- Every item of every publish, one row each, newest publish first. -->
+  <!-- One row per publish, newest first. Click one for its details. -->
   <div class="view">
     <div id="pub-jobs-list" class="view-scroll"></div>
     <footer class="pub-footer">
       <button id="pub-jobs-clear" class="btn btn-secondary" type="button">Clear finished</button>
     </footer>
+  </div>
+
+  <!-- The details of the publish that was clicked, filled in by publish-jobs.js. -->
+  <div id="jq-detail" class="progress-backdrop" hidden>
+    <div class="progress pub-modal jq-detail" role="dialog" aria-modal="true" aria-labelledby="jq-title" aria-describedby="jq-status">
+      <div class="pub-modal-head">
+        <span id="jq-badge" class="pub-badge" aria-hidden="true"></span>
+        <div class="pub-modal-text">
+          <h2 id="jq-title" class="progress-title"></h2>
+          <p id="jq-status" class="progress-status"></p>
+        </div>
+      </div>
+      <div id="jq-tally" class="progress-tally" role="group" aria-label="Items by result" hidden>
+        <div class="progress-stat progress-stat-ok"><b id="jq-ok">0</b><span>Successful</span></div>
+        <div class="progress-stat progress-stat-failed"><b id="jq-failed">0</b><span>Failed</span></div>
+        <div class="progress-stat progress-stat-skipped" id="jq-skipped-box" hidden><b id="jq-skipped">0</b><span>Skipped</span></div>
+        <div class="progress-stat progress-stat-pending"><b id="jq-pending">0</b><span>Pending</span></div>
+      </div>
+      <p class="muted jq-label"><span>Items</span><span id="jq-elapsed" class="jq-elapsed"></span></p>
+      <ul id="jq-items" class="jq-items"></ul>
+      <p id="jq-note" class="muted progress-note"></p>
+      <div class="progress-actions">
+        <button id="jq-cancel" class="btn btn-secondary" type="button" hidden>Cancel publish</button>
+        <button id="jq-retry" class="btn btn-secondary" type="button" hidden>Retry</button>
+        <button id="jq-close" class="btn" type="button">Close</button>
+      </div>
+    </div>
   </div>
 
   <script src="../shared/js/dom.js"></script>

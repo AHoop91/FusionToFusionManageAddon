@@ -85,9 +85,9 @@ Hover over the button: the tooltip ends with *Not available:* and the reason.
 | Configuration (`config.json`) | `%APPDATA%\MfgToFm` | `~/Library/Application Support/MfgToFm` |
 | Sign-in tokens | Encrypted file under `%LOCALAPPDATA%\MfgToFm` | Login Keychain |
 | Logs | `%LOCALAPPDATA%\MfgToFm\logs` | `~/Library/Logs/MfgToFm/logs` |
-| Publish runs (`publishes`) | `%LOCALAPPDATA%\MfgToFm\publishes` | `~/Library/Logs/MfgToFm/publishes` |
+| Publish runs and upload files (`MfgToFm`) | `%TEMP%\MfgToFm` | `$TMPDIR/MfgToFm` |
 
-Uploads write their STEP or PDF to a temporary folder (`MfgToFm_upload` under the system temp folder) and remove it when done.
+A run that goes through has its folder removed when it ends, and **Clear finished** removes the folders of failed or cancelled runs. Uploads write their STEP or PDF to a folder of their own in the same place and remove it when done. Only folders inside `MfgToFm` are ever removed.
 
 ### Verbose logging
 

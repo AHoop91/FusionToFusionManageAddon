@@ -183,11 +183,30 @@
 .pub-job-rows tr.pub-job-first td { border-top: 8px solid var(--bg); }
 .pub-job-note { margin-top: 2px; font-size: 12px; font-weight: 400; }
 .pub-job-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.pub-job-reason { overflow: hidden; text-overflow: ellipsis; margin-top: 2px; font-weight: 400; color: var(--danger); }
 .pub-job-status svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pub-job-queued, .pub-job-cancelled { color: #8a8f98; }
 .pub-job-running { color: var(--accent); }
 .pub-job-error { color: var(--danger); }
+.pub-job-click { cursor: pointer; }
+.pub-job-click:hover td { background: var(--bg); }
+.pub-job-click:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pub-job-note { white-space: normal; }
+
+/* The details window of a job in the Job Queue. */
+.jq-detail { max-height: 100%; overflow-y: auto; }
+.jq-label { display: flex; justify-content: space-between; margin: 16px 0 6px; font-size: 12px; font-weight: 600; }
+.jq-elapsed { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.jq-items { max-height: 190px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border: 1px solid var(--border); border-radius: 6px; }
+.jq-item { display: grid; grid-template-columns: 20px 1fr; column-gap: 8px; padding: 7px 10px; font-size: 12px; border-top: 1px solid var(--border); }
+.jq-item:first-child { border-top: 0; }
+.jq-icon svg { vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.jq-name { font-weight: 600; overflow-wrap: anywhere; }
+.jq-reason { grid-column: 2; margin-top: 2px; color: var(--danger); overflow-wrap: anywhere; }
+.jq-cancelled .jq-reason, .jq-skipped .jq-reason { color: var(--muted); }
+.jq-done .jq-icon { color: var(--ok); }
+.jq-error .jq-icon { color: var(--danger); }
+.jq-running .jq-icon { color: var(--accent); }
+.jq-queued .jq-icon, .jq-cancelled .jq-icon, .jq-skipped .jq-icon { color: #8a8f98; }
 
 /* No permission to publish: an icon and a line, centred */
 .pub-denied { text-align: center; }

@@ -9,8 +9,6 @@ itself, and the other starts in a small window of their own.
 
 import json
 import os
-import shutil
-import tempfile
 import threading
 import time
 import uuid
@@ -32,6 +30,7 @@ from ..fm.components import ComponentService, link_ids
 from ..fm.items import ItemChoices, ItemService
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
+from ..publish.run_files import remove_run, temp_root
 from ..publish.writer import safe_name
 from .export_freshness import compare
 from .item_numbers import Subject
@@ -40,7 +39,6 @@ from .ui_thread import UiThread
 
 log = get_logger("attachment_upload")
 
-TEMP_FOLDER = "MfgToFm_upload"   # under the temp folder, while a file waits to be attached
 Progress = Callable[[Optional[int]], None]   # told the percent done of a stage, or None while that is not known
 FIND, MAKE, SEND = 0, 1, 2   # the stages of an upload, by position in ``UploadJob.steps``
 PAGE_DRAW_SECONDS = 0.3   # a page asks how far an upload has got every quarter of a second
@@ -196,7 +194,7 @@ class AttachmentUpload:
         """Write the file and send it off to be attached. UI thread."""
         log.info("Making the %s on Fusion's thread", job.label)
         name = f"{safe_name(subject.item_number)}{job.extension}"
-        folder = os.path.join(tempfile.gettempdir(), TEMP_FOLDER, uuid.uuid4().hex)
+        folder = os.path.join(temp_root(), uuid.uuid4().hex)   # while the file waits to be read
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, name)
         try:
@@ -210,7 +208,7 @@ class AttachmentUpload:
             self._fail(f"Could not create {name}:\n{exc}")
             return
         finally:
-            shutil.rmtree(folder, ignore_errors=True)
+            remove_run(temp_root(), folder)
         self._stage(job, SEND, 0)
         threading.Thread(target=self._upload, args=(job, workspace_id, item_id, name, content, destination), daemon=True).start()
 

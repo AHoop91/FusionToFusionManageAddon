@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..core.logging_setup import get_logger
 from .job_state import JobState
+from .run_files import remove_run
 from .states import DONE, ERROR, FINISHED, QUEUED, RUNNING
 
 log = get_logger("publish_queue")
@@ -19,7 +20,8 @@ class JobQueue:
     """Publish runs in the order they were added; finished ones stay listed until cleared."""
 
     def __init__(self, on_change: Optional[Callable[[], None]] = None,
-                 on_finished: Optional[Callable[[JobState], None]] = None) -> None:
+                 on_finished: Optional[Callable[[JobState], None]] = None, files_root: Optional[str] = None) -> None:
+        self._files_root = files_root   # the only folder whose run folders may be removed (see ``run_files``); None removes nothing
         self._on_change = on_change   # called (from any thread) whenever the state of the queue may have changed
         self._on_finished = on_finished   # called on the worker thread when a run has ended
         self._runs: List[JobState] = []
@@ -54,8 +56,12 @@ class JobQueue:
             self._changed()
 
     def clear_finished(self) -> None:
+        """Forget the finished runs, and remove their files: a run that is no longer listed cannot be retried."""
         with self._lock:
+            cleared = [r for r in self._runs if r.phase in FINISHED]
             self._runs = [r for r in self._runs if r.phase not in FINISHED]
+        for run in cleared:
+            self._remove_files(run)
         self._changed()
 
     def state(self) -> str:
@@ -102,6 +108,13 @@ class JobQueue:
                 self._on_finished(run)
             except Exception:   # a failed notification must not stop the queue
                 log.exception("Reporting run %s failed", run.id)
+        if self._clean(run):   # everything was sent: no retry will want its files. A failed or cancelled run keeps them until it is cleared
+            self._remove_files(run)
+
+    def _remove_files(self, run: JobState) -> None:
+        """Remove the folder of a run, if it is a run folder inside the files root."""
+        if run.path and remove_run(self._files_root, run.path):
+            log.info("Removed the files of run %s", run.id)
 
     def _changed(self) -> None:
         if self._on_change:

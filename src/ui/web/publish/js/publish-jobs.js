@@ -27,12 +27,14 @@
 
   function listOpen() { return !!$('pub-jobs-list'); }   // only the Jobs window has the list
 
-  // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a red cross (failed), a grey cross (cancelled; a finished row is not listed).
+  // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a red cross (failed), a grey cross (cancelled), and in the details of a job a tick (done) and a dash (skipped).
   const ICONS = {
     queued:    { title: 'Queued', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
     running:   { title: 'Running', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
     error:     { title: 'Failed', paths: ['M6 6l12 12', 'M18 6L6 18'] },
     cancelled: { title: 'Cancelled', paths: ['M6 6l12 12', 'M18 6L6 18'] },
+    done:      { title: 'Done', paths: ['M5 12.5l4.5 4.5L19 7.5'] },
+    skipped:   { title: 'Skipped', paths: ['M6 12h12'] },
   };
 
   function statusIcon(row) {
@@ -43,17 +45,30 @@
     return cell;
   }
 
-  /** The items of a job that are still in the queue: waiting, running, failed or cancelled. Done ones leave it. */
-  function visibleRows(job) {
-    return (job.rows || []).filter(function (row) { return row.status !== 'done'; });
+  /** The status a job shows in the list: its phase, except that a finished job with failed rows reads as failed. */
+  function jobStatus(job) { return job.phase === 'done' && failedRows(job) ? 'error' : job.phase; }
+
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+  /** The line under a job's name in the list: where it stands, in a sentence. The details window has the rest. */
+  function jobLine(job) {
+    const total = job.total || 0;
+    const counts = tally(job);
+    if (job.phase === 'queued') return 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '') + '.';
+    if (job.phase === 'running') return job.stage === 'validating' ? 'Checking item numbers.' : total ? 'Publishing ' + job.done + ' of ' + plural(total, 'item') + '.' : 'Publishing.';
+    if (job.phase === 'cancelled') return 'Cancelled. ' + (counts.successful ? counts.successful + ' of ' + plural(total, 'item') + ' published.' : 'Nothing was published.');
+    if (job.phase === 'error') return counts.failed ? 'Failed. ' + counts.failed + ' of ' + plural(total, 'item') + ' failed.' : 'Failed.';
+    return failedRows(job) ? 'Completed with errors. ' + plural(failedRows(job), 'step') + ' failed.' : 'Complete.';
   }
 
-  /** What the whole job is doing, said once on its first row: waiting, cancelled or failed ("" while it runs or when it is done). */
-  function jobNote(job) {
-    if (job.phase === 'queued') return 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '');
-    if (job.phase === 'cancelled') return 'Cancelled';
-    return job.phase === 'error' ? 'Failed' : '';
+  /** Does the job still have something to show? One that went through leaves the list. */
+  function listed(job) {
+    if (stoppedInValidation(job)) return false;
+    return !(isFinished(job) && job.phase === 'done' && !failedRows(job));
   }
+
+  /** Can the job be sent again? It has finished with a failed request. */
+  function canRetry(job) { return isFinished(job) && (job.phase === 'error' || failedRows(job) > 0); }
 
   /** The buttons of a job: Cancel while it is active, Retry once it failed (it sends the failed requests again; what was accepted is skipped). */
   function jobActions(job) {
@@ -61,39 +76,54 @@
     if (!isFinished(job)) {
       const cancel = ui.el('button', 'pub-outline-button', 'Cancel');
       cancel.type = 'button';
-      cancel.addEventListener('click', function () { bridge.send('cancel_publish', { id: job.id }); });
+      cancel.addEventListener('click', function (e) { e.stopPropagation(); bridge.send('cancel_publish', { id: job.id }); });
       cell.appendChild(cancel);
-    } else if (job.phase === 'error' || failedRows(job)) {
+    } else if (canRetry(job)) {
       const retry = ui.el('button', 'pub-outline-button', 'Retry');
       retry.type = 'button';
       retry.title = 'Send the failed requests to Fusion Manage again. What it already accepted is skipped.';
-      retry.addEventListener('click', function () { retry.disabled = true; bridge.send('retry_publish', { id: job.id }); });
+      retry.addEventListener('click', function (e) { e.stopPropagation(); retry.disabled = true; bridge.send('retry_publish', { id: job.id }); });
       cell.appendChild(retry);
     }
     return cell;
   }
 
-  /** The items of a job, one row each: "Number - Title", a status icon and, on the first row, the job's note and buttons. */
-  function itemRows(table, job, rows) {
-    rows.forEach(function (row, index) {
-      const tr = ui.el('tr', index === 0 ? 'pub-job-first' : '');
-      const name = ui.el('td', 'pub-job-item', row.description ? row.item + ' - ' + row.description : (row.item || '-'));
-      name.title = name.textContent;
-      if (index === 0 && jobNote(job)) name.appendChild(ui.el('div', 'muted pub-job-note', jobNote(job)));
-      if (row.status === 'error' && row.detail) name.appendChild(ui.el('div', 'pub-job-reason', row.detail));
-      tr.appendChild(name);
-      tr.appendChild(statusIcon(row));
-      tr.appendChild(index === 0 ? jobActions(job) : ui.el('td'));
-      table.appendChild(tr);
+  /** One row per job: its name and where it stands, a status icon and its buttons. Clicking it opens the details. */
+  function jobRow(table, job) {
+    const status = jobStatus(job);
+    const tr = ui.el('tr', 'pub-job-first pub-job-click');
+    tr.tabIndex = 0;
+    tr.setAttribute('role', 'button');
+    tr.title = 'Show the details';
+    const name = ui.el('td', 'pub-job-item', job.name);
+    name.appendChild(ui.el('div', 'muted pub-job-note', jobLine(job)));
+    tr.appendChild(name);
+    const icon = ICONS[status] || ICONS.queued;
+    const mark = ui.el('td', 'pub-job-status pub-job-' + status);
+    mark.appendChild(ui.svg(icon.paths, 18));
+    mark.title = icon.title;
+    tr.appendChild(mark);
+    tr.appendChild(jobActions(job));
+    tr.addEventListener('click', function () { openDetails(job.id); });
+    tr.addEventListener('keydown', function (e) {
+      if (e.target === tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetails(job.id); }
     });
+    table.appendChild(tr);
   }
 
-  /** The message in the top bar: what is running and waiting. */
+  /** The message in the top bar: what is running and waiting, and when nothing is, what stays here until cleared (cancelled publishes, failed items). */
   function queueMessage() {
     const running = jobs.filter(function (j) { return j.phase === 'running'; }).length;
     const waiting = jobs.filter(function (j) { return j.phase === 'queued'; }).length;
     const failed = jobs.reduce(function (n, j) { return n + (j.rows || []).filter(function (r) { return r.status === 'error'; }).length; }, 0);
-    if (!running && !waiting) return failed ? 'Nothing is waiting. ' + failed + ' failed item' + (failed === 1 ? ' stays' : 's stay') + ' here until cleared.' : 'Nothing in the queue. Publish an item and it appears here.';
+    const cancelled = jobs.filter(function (j) { return j.phase === 'cancelled'; }).length;
+    if (!running && !waiting) {
+      const kept = [];
+      if (cancelled) kept.push(cancelled + ' cancelled publish' + (cancelled === 1 ? '' : 'es'));
+      if (failed) kept.push(failed + ' failed item' + (failed === 1 ? '' : 's'));
+      if (!kept.length) return 'Nothing in the queue. Publish an item and it appears here.';
+      return 'Nothing is waiting. ' + kept.join(' and ') + (cancelled + failed === 1 ? ' stays' : ' stay') + ' here until cleared.';
+    }
     return [running ? running + ' running' : '', waiting ? waiting + ' waiting' : ''].filter(Boolean).join(', ') + '. Publishing runs in the background.';
   }
 
@@ -104,18 +134,77 @@
     box.textContent = '';
     const table = ui.el('table', 'pub-job-rows');
     const head = ui.el('tr');
-    ['Item', 'Status', ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
+    ['Job', 'Status', ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
     table.appendChild(head);
     let shown = 0;
     jobs.slice().reverse().forEach(function (job) {   // newest first
-      if (stoppedInValidation(job)) return;
-      const rows = visibleRows(job);
-      if (!rows.length && isFinished(job)) return;   // everything in it is done
-      itemRows(table, job, rows.length ? rows : [{ item: job.name, description: '', status: job.phase }]);
+      if (!listed(job)) return;
+      jobRow(table, job);
       shown += 1;
     });
     if (shown) box.appendChild(table);
     $('pub-jobs-clear').disabled = !jobs.some(function (job) { return isFinished(job) && !stoppedInValidation(job); });
+    renderDetails();
+  }
+
+  // ---- Details window (Job Queue) -------------------------------------------------
+
+  let detailId = '';   // id of the job whose details are open ("" = none)
+
+  function detailJob() { return jobs.filter(function (j) { return j.id === detailId; })[0] || null; }
+
+  function closeDetails() {
+    detailId = '';
+    if ($('jq-detail')) $('jq-detail').hidden = true;
+  }
+
+  function openDetails(id) {
+    detailId = id;
+    renderDetails();
+    if (!$('jq-detail').hidden) $('jq-close').focus();
+  }
+
+  /** What a job's rows say, one line each: a status icon, the item and, where there is one, why. */
+  function detailItems(job) {
+    const list = $('jq-items');
+    list.textContent = '';
+    (job.rows || []).forEach(function (row) {
+      const icon = ICONS[row.status] || ICONS.queued;
+      const li = ui.el('li', 'jq-item jq-' + (ICONS[row.status] ? row.status : 'queued'));
+      const mark = ui.el('span', 'jq-icon');
+      mark.appendChild(ui.svg(icon.paths, 16));
+      mark.title = icon.title;
+      li.appendChild(mark);
+      li.appendChild(ui.el('span', 'jq-name', row.description ? row.item + ' - ' + row.description : (row.item || '-')));
+      if ((row.status === 'error' || row.status === 'skipped') && row.detail) li.appendChild(ui.el('span', 'jq-reason', row.detail));
+      list.appendChild(li);
+    });
+  }
+
+  /** What the details say after the list of items: what happened to the work, and what to do next. */
+  function detailNote(job) {
+    if (job.phase === 'cancelled') return 'Items already sent stay in Fusion Manage. The rest were not published: publish the design again to send them.';
+    if (job.phase === 'error' || (isFinished(job) && failedRows(job))) return 'Retry sends the failed requests again. What Fusion Manage already accepted is skipped.';
+    return '';
+  }
+
+  /** Draw (or refresh) the details window of the job it is open for; close it when the job has gone from the list. */
+  function renderDetails() {
+    const box = $('jq-detail');
+    if (!box || !detailId) return;
+    const job = detailJob();
+    if (!job || !listed(job)) { closeDetails(); return; }
+    const view = describe(job);
+    $('jq-title').textContent = view.title;
+    $('jq-status').textContent = (view.status || '').replace(' See the Job Queue for the reasons.', '');
+    $('jq-badge').className = 'pub-badge pub-badge-' + badgeOf(view, job);
+    drawTally('jq-tally', 'jq-', job);
+    $('jq-elapsed').textContent = elapsedText(job);
+    detailItems(job);
+    $('jq-note').textContent = detailNote(job);
+    $('jq-cancel').hidden = isFinished(job);
+    $('jq-retry').hidden = !canRetry(job);
+    box.hidden = false;
   }
 
   function schedule() {
@@ -210,18 +299,20 @@
              status: job.sends ? job.name + ' was published to Fusion Manage.' : job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.' };
   }
 
-  /** The tally under the bar: items by result, hidden when there is no job to count. It belongs to the publishing, so it is hidden through the validation. Skipped shows only when something was left out. */
-  function showTally(job) {
-    const box = $('progress-tally');
-    box.hidden = !job || !job.total || job.stage === 'validating';
+  /** Fill a tally box (the `box` id, its numbers' ids starting with `prefix`): items by result, hidden when there is no job to count. In the progress dialog it belongs to the publishing, so it is hidden through the validation. Skipped shows only when something was left out. */
+  function drawTally(boxId, prefix, job) {
+    const box = $(boxId);
+    box.hidden = !job || !job.total || (boxId === 'progress-tally' && job.stage === 'validating');
     if (box.hidden) return;
     const counts = tally(job);
     [['ok', counts.successful], ['failed', counts.failed], ['skipped', counts.skipped], ['pending', counts.pending]].forEach(function (stat) {
-      $('tally-' + stat[0]).textContent = stat[1].toLocaleString();
-      $('tally-' + stat[0]).parentNode.classList.toggle('progress-stat-on', stat[1] > 0);
+      $(prefix + stat[0]).textContent = stat[1].toLocaleString();
+      $(prefix + stat[0]).parentNode.classList.toggle('progress-stat-on', stat[1] > 0);
     });
-    $('tally-skipped-box').hidden = !counts.skipped;
+    $(prefix + 'skipped-box').hidden = !counts.skipped;
   }
+
+  function showTally(job) { drawTally('progress-tally', 'tally-', job); }
 
   /** Draw one of the two bars (``step``: 'validate' or 'publish'): ``percent`` is null while it is not measured, ``tone`` colours it. */
   function showBar(step, percent, tone) {
@@ -384,11 +475,18 @@
         if (confirming) askCancel(false); else closeProgress();
       });
     }
+    if ($('jq-detail')) {
+      $('jq-close').addEventListener('click', closeDetails);
+      $('jq-cancel').addEventListener('click', function () { bridge.send('cancel_publish', { id: detailId }); });
+      $('jq-retry').addEventListener('click', function () { $('jq-retry').disabled = true; bridge.send('retry_publish', { id: detailId }); });
+      $('jq-detail').addEventListener('click', function (e) { if (e.target === $('jq-detail')) closeDetails(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('jq-detail').hidden) closeDetails(); });
+    }
     if (listOpen()) {
       $('pub-jobs-clear').addEventListener('click', function () { bridge.send('clear_publish_jobs'); });
       bridge.send('list_publish_jobs');
     }
   }
 
-  ns.pubJobs = { init: init, start: start, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText };
+  ns.pubJobs = { init: init, start: start, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
 })(window.MfgUi);

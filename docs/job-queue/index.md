@@ -8,7 +8,7 @@ title: Job Queue
 
 Every publish is a **job**. The Job Queue shows the jobs that are waiting, running and finished, so you can see what the add-in is doing without keeping the Publish panel open.
 
-**Quick steps:** open it with **Manage ▸ Item Management ▸ Administration ▸ Job Queue**. Hover a row's status icon to see the reason for a failure. To send a failed job again, see [Retry a failed run](#retry-a-failed-run).
+**Quick steps:** open it with **Manage ▸ Item Management ▸ Administration ▸ Job Queue**. Click a job to see the reason for a failure. To send a failed job again, see [Retry a failed run](#retry-a-failed-run).
 
 
 ## How jobs run
@@ -17,39 +17,35 @@ Jobs go through a **single queue, one after another**. A publish returns at once
 
 ## Reading the queue
 
-The panel lists every job, newest first, with one row per item. Each row shows a status icon, and hovering it shows the reason when there is one.
+The panel lists every job that is waiting, running, failed or cancelled, newest first, **one row per job**. Each row shows the job's name, a sentence on where it stands (for example *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.*), a status icon and its buttons.
 
-!!! example "Screenshot placeholder: Job Queue with a completed and a failed run"
-    **Show:** Job cards with status icons, one row per item, and the Cancel button on an active job.
+**Click a row for its details.** A window opens over the Job Queue with the result in words, the count of successful, failed and pending items, every item with its own status and, for a failed one, the reason in full, and what to do next. **Retry** and **Cancel publish** are there too. Close it with **Close**, **Esc**, or by clicking outside it.
 
-    Save the image as `docs/images/job-queue-panel.png`, then replace this box with `![Job Queue with a completed and a failed run](../images/job-queue-panel.png)`.
+![The Job Queue with one running job: the header "1 running. Publishing runs in the background.", one row for the job PN-000701 saying "Publishing 4 of 5 items.", its status icon and Cancel button, and the Clear finished button at the bottom](../images/job-queue-panel.png){ width="450" }
 
 | Status | Meaning |
 |---|---|
 | **Queued** | Waiting for earlier jobs to finish |
 | **Running** | Being prepared or sent |
 | **Done** | Completed |
-| **Error** | Failed. The full reason is on the row |
+| **Error** | Failed. The full reason is in the job's details |
 | **Cancelled** | Stopped before it finished |
 
-Each BOM sent for a parent assembly also has its own row, after the items.
+In a job's details, each BOM sent for a parent assembly also has its own line, after the items.
 
 ## Actions
 
-- **Cancel** stops a job that is waiting or running. Items already processed are kept in the run's folder, and the rest are not published.
-- **Clear finished** removes finished jobs from the list. A job that finished with every row done removes itself.
+- **Cancel** stops a job that is waiting or running. Items already processed are kept in the run's folder, and the rest are not published. The job stays listed as **Cancelled**, and the message at the top of the Job Queue says how many cancelled publishes are waiting to be cleared.
+- **Clear finished** removes finished jobs from the list, and their files with them: a cleared job can no longer be retried. A job that finished with every row done removes itself.
 - **Retry** appears on a job that failed or has failed rows. It sends the failed requests again. See [Request Files and Retry](#request-files-and-retry).
 
 ## Knowing when something ends
 
-!!! example "Screenshot placeholder: Job Queue ribbon button states"
-    **Show:** The ribbon button in its idle, running and error looks.
-
-    Save the image as `docs/images/job-queue-button.png`, then replace this box with `![Job Queue ribbon button states](../images/job-queue-button.png)`.
+![The Item Management panel on the ribbon, with the Job Queue button in the middle showing a green dot while a publish is running](../images/job-queue-button.png){ width="250" }
 
 You do not have to watch the panel.
 
-- The **Job Queue** button on the ribbon changes its icon: one for a job that is working, another when a listed job has failed.
+- The **Job Queue** button on the ribbon changes its icon. A **green dot** means a publish is waiting or running, a **red dot** means a listed job has failed, and the plain clock means nothing is running. The tooltip says which.
 - When a job ends, a message box reports the result. A publish that completed shows **Total Items Processed**, **Total Items Created** and **Total Items Updated**. A failure lists the items that failed and why. This appears even if the Publish and Job Queue panels are closed.
 
 ## A failed job
@@ -60,7 +56,13 @@ Open the Job Queue and read the reason on each failed row. Fix the cause, then c
 
 ### What a run keeps
 
-Every publish keeps its files, in a `publishes` folder in your user profile. The path is listed in [Troubleshooting and Limitations](../reference/troubleshooting.md#where-files-are-kept). Each run has its own folder, containing:
+Every publish writes its files to a temporary folder (`MfgToFm` under the system temp folder) while it runs. The add-in removes only folders inside it, and nothing else.
+
+- **A run that goes through** is removed when it ends, because everything was sent and there is nothing left to retry.
+- **A run that fails, has failed rows or is cancelled** keeps its folder, so you can read it and use Retry.
+- **Clear finished** removes those folders along with the jobs.
+
+The path is listed in [Troubleshooting and Limitations](../reference/troubleshooting.md#where-files-are-kept). Each run has its own folder, containing:
 
 !!! example "Screenshot placeholder: A run's folder in File Explorer"
     **Show:** The folder of a run with the request files, bom folder, manifest.json and send-log.json.
@@ -75,7 +77,7 @@ Every publish keeps its files, in a `publishes` folder in your user profile. The
 | `manifest.json` | A summary of the run |
 | `send-log.json` | A record of every request Fusion Manage accepted |
 
-The files are a record of what was sent, and what the retry below works from.
+The files are what the retry below works from, and a record of what was sent for a run that did not go through.
 
 ### Retry a failed run
 
