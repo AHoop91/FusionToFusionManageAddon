@@ -77,7 +77,7 @@ Key features:
 
 ### Unofficial Project Notice
 
-This project is an independent, custom-built extension for Autodesk Fusion Manage. It is **not** an official Autodesk product, and it is not supported, endorsed or maintained by Autodesk. It integrates with Autodesk Fusion Manage through supported web and API interactions.
+This project is an independent, custom-built addon for Fusion. It is **not** an official Autodesk product, and it is not supported, endorsed or maintained by Autodesk. It integrates with Autodesk Fusion Manage through supported web and API interactions.
 
 ### Disclaimer
 

@@ -49,5 +49,10 @@ Publish your released designs from Fusion into Fusion Manage as manufacturing it
 
 </div>
 
-!!! note "Unofficial project"
-    This is an independent add-in. It is not an Autodesk product and is not supported by Autodesk. Download the latest version from the [Releases page](https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest).
+!!! warning "Unofficial Project Notice"
+    This project is an independent, custom-built addon for Fusion. **It is not an official Autodesk product, and it is not supported, endorsed or maintained by Autodesk.** It integrates with Autodesk Fusion Manage through supported web and API interactions.
+
+    Download the latest version from the [Releases page](https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest).
+
+!!! warning "Disclaimer"
+    This project is provided **"as is"**, **without warranty of any kind**, express or implied, including but not limited to warranties of reliability, accuracy, completeness or fitness for a particular purpose. **Use of this software is at your own discretion and risk.**
