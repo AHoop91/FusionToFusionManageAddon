@@ -39,8 +39,8 @@ Publishing always starts from the top of the design, so open the design first (a
 
 1. **From the design.** Right-click the top-level component in the browser and choose **Publish Fusion Manage Item**. The entry is offered on the top-level component only.
 2. **From the Item panel.** Select the component and choose **Open Fusion Manage Item**, then do one of the following:
-    - If the item is not in Fusion Manage yet, click **Publish**.
-    - If it already exists, open the **Actions** (**...**) menu and choose **Republish**.
+    - If the item is not in Fusion Manage yet, click **Publish to Fusion Manage**.
+    - Open the **Actions** (**...**) menu and choose **Republish**. It is offered whenever a design is open.
     - If the tab's pill shows **Out of date**, click it to open the report, then click **Republish**.
 
     The Item panel closes as the Publish panel opens.
@@ -57,7 +57,7 @@ The pill at the top right of the Details Panel shows what publishing will do for
 |---|---|
 | **New** | No item exists in Fusion Manage yet; publishing creates it. See [Item Creation](#item-creation). |
 | **Update** | The Fusion Manage value differs; publishing changes it. See [Item Update](#item-update). |
-| **Up to date** | The values already match. |
+| **Up to date** | The mapped property values already match. A default value to send again, or a missing component link, is not shown here but is still sent with a publish. |
 | **Shared number** | Several Fusion Manage items have this number. Fix it in Fusion Manage: publishing fails until then. |
 | **Error** | Fusion Manage could not be read for this item. |
 
@@ -69,26 +69,26 @@ Properties with no mapping are listed as not published. Mapped properties are li
 
 1. Review the BOM and details. **Refresh** reads the design and Fusion Manage again.
 2. Optionally use **Add Existing Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](#add-existing-items)).
-3. Click **Publish**. The button is enabled once the BOM has loaded.
+3. Click **Publish**. The button is enabled once the BOM has loaded. It stays disabled while a line still needs a choice (**Review**), while **Expand all** is reading the tree, and when the design's own item number is shared.
 
-A progress dialog appears with two bars, one after the other. **Validation** looks up every item number in Fusion Manage and shows how many it has checked. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). Once validation is complete and green, **Publishing** fills as the items are created or updated, then the Bill of Materials. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
+A progress dialog appears with two bars, one after the other, each with its own count. **Validation** looks up every item number in Fusion Manage and shows how many it has checked. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). Once validation is complete and green, **Publishing** fills as the items are created or updated, then the Bill of Materials. You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
 
-The dialog shows a progress bar with the count of items done and the time elapsed, and a tally of **Successful**, **Failed** and **Pending** items.
+Under the bars the dialog shows the time elapsed and a tally of **Successful**, **Failed** and **Pending** items. A **Skipped** box is added when items were left out on purpose.
 
-![The progress dialog over the Publish panel: the bar at 2 of 12 items, the Successful, Failed and Pending counts, and the Cancel publish and Close buttons](../images/publish-progress.png){ width="900" height="465" }
+![The progress dialog over the Publish panel: the Validation bar complete and the Publishing bar at 6 of 12 items, the Successful, Failed and Pending counts, and the Cancel publish and Close buttons](../images/publish-progress.png){ width="900" height="465" }
 
 ### What a run does
 
 1. Reads each item's properties from the Data Model and compares them with Fusion Manage (up to five items at once).
-2. Downloads the thumbnail, for an item that has something to send and a thumbnail mapped to an image field.
+2. Downloads the thumbnail, for an item that has something to send. It is attached only when a thumbnail is mapped to an image field; otherwise the downloaded `thumbnail.png` stays in the run's folder.
 3. Writes a request file for each item, then sends it: a `POST` creates an item, a `PATCH` updates one.
 4. Once **every** item exists, sends the BOM changes of each parent assembly. BOMs go last so that new parents and children already have IDs.
 
-When the run ends, the progress dialog turns into the result. It reads **Publish complete** when every item went through, **Completed with errors** when some failed (see the [Job Queue](../job-queue/index.md) for the reasons), **Publish cancelled** after **Cancel publish**, or **Publish failed** when the run could not finish.
+When the run ends, the progress dialog turns into the result. It reads **Publish complete** when every item went through, **Completed with errors** when some failed (see the [Job Queue](../job-queue/index.md) for the reasons), **Publish cancelled** after **Cancel publish**, **Validation failed** when the item numbers could not be checked or several items carry one (Publishing shows *Not started*), or **Publish failed** when the run could not finish after validation.
 
 ![The Publish complete dialog: 12 of 12 items on a full green bar, 12 Successful, 0 Failed and 0 Pending, with a pointer to the Job Queue](../images/publish-complete.png){ width="900" height="465" }
 
-If you closed the dialog, Fusion shows a message box instead when the run ends, with **Total Items Processed**, **Total Items Created** and **Total Items Updated**, and, for any failure, the item and the reason.
+If you closed the dialog, Fusion shows a message box instead when the run completes or completes with errors (titled **Publish completed with errors**; nothing is shown for a cancelled run), with **Total Items Processed**, **Total Items Created** and **Total Items Updated**, and, for any failure, the item and the reason.
 
 The run itself is shown in the [Job Queue](../job-queue/index.md), and if something fails you can send it again with [Request Files and Retry](../job-queue/index.md#request-files-and-retry).
 
@@ -98,7 +98,7 @@ A publish sends item data, the BOM and the thumbnail. It does **not** attach a S
 
 ## What is and is not sent
 
-- Mapped properties with no value in the Data Model are not sent; the run records "No value in the Data Model, not sent" with the field names.
+- Mapped properties with no value in the Data Model are never sent. On a create the run records "No value in the Data Model, not sent" with the field names. On an update, a value Fusion Manage already holds is kept: Fusion having none never clears it. Only a real difference, such as Steel in Fusion and Plastic in Fusion Manage, is pushed.
 - Properties are only ever added or changed. The add-in does not delete items, and removes a BOM line only when you choose **Remove** on it.
 - A component whose item number is shared with another component is not published. See [Shared item numbers](#shared-item-numbers).
 
@@ -178,6 +178,7 @@ Numbers are compared at the precision of the Fusion Manage field. If the field a
 
 An update never changes:
 
+- **A value Fusion Manage holds where Fusion has none.** Publishing never blanks a field.
 - **Fields you have not mapped.** Anything entered in Fusion Manage that is not part of the mapping is untouched. This is how the manufacturing information added after publishing survives a later publish.
 - **The item's lifecycle state and workflow.** Fusion Manage owns them.
 - **BOM lines that only Fusion Manage has.** They are kept unless you choose to remove them. See [Bill of Materials](#bill-of-materials).
@@ -226,10 +227,10 @@ The panel reads the BOM one level at a time, so a large assembly opens quickly. 
 
 A line that needs a choice (**Review**) holds **Publish** back only while it is in view.
 
-Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a design is bigger than the add-in can read, the panel says so instead of showing a table:
+Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a read is bigger than the add-in can handle, the panel says so instead of showing a table when the first level fails, and shows a message and keeps the table when **Expand all** fails:
 
-- More than **25,000 lines**.
-- Nested **50 levels deep or more**.
+- More than **25,000 lines** in one read (a level, or the whole tree for **Expand all**).
+- Nested **50 levels deep or more** (checked on the whole-tree read).
 - A component that contains itself.
 
 ### How lines are compared
@@ -241,7 +242,9 @@ For each parent assembly, the lines of the design are matched to the Fusion Mana
 | **New** | The design has the line; Fusion Manage does not. | Adds the line. |
 | **Update** | Same item, different quantity. | Updates the quantity in Fusion Manage. |
 | *(no chip)* | Same item and quantity. | Nothing. |
-| **Fusion Manage Only** | Fusion Manage has a line the design does not. | **Keeps it** unless you choose **Remove**. |
+| **Fusion Manage Only** | Fusion Manage has a line the design does not. It has no chip of its own; use the **Fusion Manage Only** filter to find it. | **Keeps it** unless you choose **Remove**. |
+| **Review** | A **New** line and a **Fusion Manage Only** line sit under the same parent and need your choice (see [Paired rows](#paired-rows-a-replaced-item)). | Holds **Publish** back while in view. |
+| **Keep** / **Remove** | Your choice on a Fusion Manage Only line or a pair. | Keeps the line, or deletes it. |
 | **Added** | You picked the item with [Add Existing Items](#add-existing-items). | Adds the line to the end of the Fusion Manage BOM. |
 | **Skipped** | The component has no item number, shares one with another component, or sits below such a line. | Nothing: no item is created and no BOM line is added. |
 
@@ -251,31 +254,36 @@ Fusion Manage often extends the design BOM with manufacturing lines such as oil 
 
 Each line reads **Item Number - Part Name**. A component with no item number is **Skipped**: no item can be created for it. Its quantity box is greyed out and cannot be edited, and the **i** on its chip explains why when you hover it. Everything below a skipped assembly is skipped too, because it has no item to join in the Fusion Manage BOM.
 
-### Items that share an item number
-
-Lines are matched by item number, and two Fusion Manage items can carry the same number (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). When a design line could match either, the Fusion Manage line with the same name is taken, and the other is shown as a **Fusion Manage Only** line. If no name matches, the first line with that number is taken.
-
-### Shared item numbers
-
-If two different components carry the same item number, they would both write to the one Fusion Manage item, each overwriting the other. The add-in does not publish either. Both lines are **Skipped**, with the names of the others in the tooltip, and so is everything below them. The same component appearing on several lines is not a clash. Give each component its own item number in Fusion, save, and refresh.
-
-!!! example "Screenshot placeholder: BOM table with New, Changed, Skipped and Fusion Manage Only rows"
-    **Show:** The BOM table with status chips, including a Skipped row, and the Filters drop-down and the collapse and expand buttons above it.
-
-    Save the image as `docs/images/bom-statuses.png`, then replace this box with `![BOM table with New, Changed, Skipped and Fusion Manage Only rows](../images/bom-statuses.png)`.
+![The Bill of Materials with status chips: a New line, a Review pair, and three Skipped lines under the 24mm Bearing assembly, with the 3 Lines Skipped pill at the bottom and the Filters drop-down and the collapse and expand buttons above the table](../images/bom-statuses.png){ width="900" }
 
 ### Filters
 
-The **Filters** drop-down above the table (top left) narrows it to rows of one status (**Review**, **New**, **Added**, **Update**, **Fusion Manage Only**, **Skipped** or **Duplicates**); tick any number at once. **Duplicates** holds the lines whose item number several Fusion Manage items carry, once a publish has found them, so you can go straight to the items to fix. **Show Hidden Components** is separate: it adds the components that are hidden in the Fusion component tree, marked with a crossed eye. Each filter shows how many lines it holds, and its tooltip explains what it shows. **Clear filters** unticks them all. Next to it, at the right, **Collapse all** and **Expand all** fold the whole tree.
+The **Filters** drop-down above the table (top left) narrows it to rows of one status. Tick any number at once.
+
+- **Statuses you can filter by:** **Review**, **New**, **Added**, **Update**, **Fusion Manage Only**, **Skipped** and **Duplicates**.
+- **Counts and tooltips.** Each filter shows how many lines it holds, and its tooltip explains what it shows.
+- **Show Hidden Components** is separate. It adds the components that are hidden in the Fusion component tree, marked with a crossed eye.
+- **Clear filters** unticks them all.
+- **Collapse all** and **Expand all**, next to it at the right, fold the whole tree.
+
+#### Duplicates
+
+**Duplicates** holds the lines whose item number several Fusion Manage items carry, so you can go straight to the items to fix.
+
+- **When it fills.** Only when you click **Publish**. The Validation step looks up every item number in Fusion Manage, and any number that comes back with several items is added to the filter. Opening the panel or a component's details does not fill it.
+- **What you see.** The lines appear under the filter, and the same red crosses show on their rows.
+- **How long it lasts.** Until you refresh the panel, or the next publish checks the numbers again.
+- **What to do.** Renumber or remove the extra items in Fusion Manage, then publish again.
 
 ### Paired rows: a replaced item
 
-When a **New** design line and a **Fusion Manage Only** line sit under the same parent, they are shown **paired**, one above the other, each carrying the other's item number. The item number differs at that position, which may mean an item was replaced, so the add-in asks you to decide rather than guessing. For a pair you can choose:
+When a **New** design line and a **Fusion Manage Only** line sit under the same parent **at the same position in the BOM**, they are shown **paired**, one above the other, each carrying the other's item number. The item number differs at that position, which may mean an item was replaced, so the add-in asks you to decide rather than guessing.
 
-!!! example "Screenshot placeholder: Paired rows: a replaced item"
-    **Show:** A New row and a Fusion Manage Only row paired, with the Keep and Remove choices.
+Lines at different positions are not paired. For example, if line 11 was removed in Fusion Manage and a line 12 (oil) was added there, the design's line 11 is simply **New** and the oil line is **Fusion Manage Only**, kept unless you choose **Remove**. Nothing needs a choice.
 
-    Save the image as `docs/images/bom-paired-rows.png`, then replace this box with `![Paired rows: a replaced item](../images/bom-paired-rows.png)`.
+![Paired rows: the design's New line PN-001274 - Gasket at position 11 with the Fusion Manage Only line 00000001 - Oil, also at position 11, marked Review](../images/bom-paired-rows.png){ width="900" }
+
+For a pair you can choose:
 
 - **Keep** the Fusion Manage line, which is renumbered to the end of the BOM, and add the new design line.
 - **Remove** the Fusion Manage line from Fusion Manage and add the design's line.
@@ -290,16 +298,14 @@ A quantity can be edited in the table. An edited cell shows a revert button that
 
 **Add Existing Items** (top right of the BOM) opens a picker that searches the Items workspace so you can add items that are not in the design.
 
-!!! example "Screenshot placeholder: Add Existing Items picker"
-    **Show:** The Add Existing Items dialog with its property filters, results and some items ticked.
-
-    Save the image as `docs/images/add-items.png`, then replace this box with `![Add Existing Items picker](../images/add-items.png)`.
+![The Add Existing Items picker: the search box, the version drop-down and Search, the Filter pane with Add Row and Add Group, the results with their checkboxes, and Show only selected, Cancel, Clear and Add to BOM at the bottom](../images/add-items.png){ width="900" }
 
 - With nothing typed the picker lists every item of the workspace; **Search** applies the search box and the filters.
 - The search box matches the item descriptor. The **Filter** pane on the left narrows the results by property: choose a property and a value (a drop-down for properties with a fixed list). **Add Row** adds another property to the group and **Add Group** starts a new group. Rows of a group, and groups, are joined by **AND** or **OR**; the Items workspace is always applied on top.
 - Results load 50 at a time as you scroll. Tick the items to add; selections survive searching and paging, and **Clear** unticks them all.
 - The bar under the list shows how many items are selected. **Show only selected** narrows the list to the ticked items, so you can review them before adding. **Cancel** closes the picker without adding anything.
 - Items the Bill of Materials already holds, or that you have already added in the panel, are hidden. Turn on **Show hidden items** to see them ticked, greyed out and locked.
+- Next to **Search** a version picker chooses the latest or the working version of the items. **Add to BOM** in the footer adds the ticked items; **Show only selected** is disabled until something is ticked.
 - Added lines appear in the BOM as **Added** and can be taken out again with their own **Remove** button before publishing.
 
 ### What gets sent
@@ -315,18 +321,18 @@ Each change becomes one request against the parent item's BOM:
 
 They are ordered so a line is freed before another takes its number: remove, renumber, update, add.
 
-All BOM requests are sent **after** every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding an item the BOM already has is reported by Fusion Manage as a duplicate and is recorded against that parent. See [Request Files and Retry](../job-queue/index.md#request-files-and-retry) for sending it again.
+All BOM requests are sent **after** every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding a line the BOM already has is reported by Fusion Manage as a duplicate; the add-in logs it and treats it as done, so no failure is recorded. See [Request Files and Retry](../job-queue/index.md#request-files-and-retry) for sending it again.
 
 ## The Export Window
 
 **Export** (in the **Export** panel of the **Manage** tab) opens one small window for every file the add-in can attach. You choose two things:
 
-1. **Attach to.** Two cards, at the top. **Item** attaches the file to the item of the part in the Items workspace. **Component** attaches it to the part's record in the Components workspace: its **working version**, when the part has several revisions. When the window opens it checks, in Fusion Manage, that you may attach files to each workspace (**View Items**, **Add Attachments** and **Edit Attachments**; the last is for a new version of a file already there). A card you may not use is greyed out and says why. If the Items workspace is not set up in Preferences, **Item** says *Item is not configured* and **Component** is chosen for you.
+1. **Attach to.** Two cards, at the top. **Item** attaches the file to the item of the part in the Items workspace. **Component** attaches it to the part's record in the Components workspace: its **working version**, when the part has several revisions. When the window opens it checks, in Fusion Manage, that you may attach files to each workspace (**View Items**, **Add Attachments** and **Edit Attachments**; the last is for a new version of a file already there). A card you may not use is greyed out and says why. If the Items workspace is not set up in Preferences, **Item** says *Item is not configured. Complete it in Preferences.* and a usable card is chosen for you: the default for that format in **Preferences ▸ Export** if it can be used, otherwise the first usable one. **Component** is also greyed out when the connection is invalid or there is no Components workspace.
 2. **File format.** What the open document can be exported as: a **design** makes a **STEP** file; a **drawing** makes a **PDF**, **DWG** or **DXF**. The window names what is being exported: the selected component of a design (else the whole design), or the top of a drawing.
 
 The window starts with what is being exported: its item number (a grey bar stands there while it is read from Fusion Manage), and under it the description of the design. The attachment card shows whether the file already in Fusion Manage is **Up to date**, with the date the component was last modified, the file's version, size and who changed it.
 
-Choose **Export** and the window stays open and shows the progress: **Find item**, the file being made, and **Upload**, with a percentage where one can be measured. It then says how it went. On success it reads *Export complete* with where the file went, and **Done** closes it. On a failure it reads *Export failed* with the reason; **Try again** takes you back to the choices, and **Close** closes the window. The file is named after the item number and a file of the same name is replaced by a new version. See [STEP File](#step-file) and [Drawing Representation](#drawing-representation).
+Choose **Export** and the window stays open and shows the progress: **Find item**, the file being made, and **Upload**, with a percentage where one can be measured. It then says how it went. On success it reads *Export complete* with where the file went, and **Done** closes it. On a failure it reads *Export failed* with the reason; **Try again** takes you back to the choices, and **Close** closes the window. **Cancel** closes the window before an export starts. The file is named after the item number and a file of the same name is replaced by a new version. See [STEP File](#step-file) and [Drawing Representation](#drawing-representation).
 
 The **Actions** menu of the [Item Panel](../item-panel/index.md) and the right-click entries do not open this window: they export in one step and always attach to the item.
 
@@ -339,10 +345,17 @@ The add-in can attach a **STEP file** of a component to its Fusion Manage item, 
 
 The item must already exist. Publish it first ([Item Creation](#item-creation)).
 
-!!! example "Screenshot placeholder: Right-click menu: Export STEP File"
-    **Show:** The right-click menu of a component with the STEP upload entry.
+### Find the right-click entry
 
-    Save the image as `docs/images/step-context-menu.png`, then replace this box with `![Right-click menu: Export STEP File](../images/step-context-menu.png)`.
+**Export STEP File** is in the right-click menu of a component. It is the quickest way to upload, with no window to fill in.
+
+1. Open the saved design in the Design workspace. The entry is not offered in a drawing.
+2. Right-click the component you want, in the browser or on the canvas. Any component works, not only the top one. With nothing selected, the design's top-level component is used.
+3. Choose **Export STEP File**.
+
+The entry appears only once the add-in is set up. The upload then runs as described below: the item is found by its item number, a STEP file of the selected component is made and attached to that item, and a file already attached with the same name becomes a new version. See [New versions, not duplicates](#new-versions-not-duplicates).
+
+You can also click **Export** in the **Export** panel of the **Manage** tab on the ribbon. This opens the [Export window](#the-export-window), where you choose whether to attach to the item or the component, and the file format (STEP for a design). The upload is also in the **Actions** menu of the [Item Panel](../item-panel/index.md). The right-click entry and the Actions menu always attach to the item. Only the Export window lets you attach to the component record instead.
 
 ### Upload a STEP file
 
@@ -359,10 +372,7 @@ The file is named after the item number, for example `PN-1001.step`.
 
 If a file of the same name is already attached, the upload creates **a new version** of it instead of a duplicate, and the confirmation says so. You can refresh a STEP file as the design changes without cluttering the item.
 
-!!! example "Screenshot placeholder: Upload confirmation"
-    **Show:** The confirmation that the file was attached, or that a new version was uploaded.
-
-    Save the image as `docs/images/step-uploaded.png`, then replace this box with `![Upload confirmation](../images/step-uploaded.png)`.
+![The Export window after an upload: the Export complete message "A new version of PN-001276.step was uploaded to the item in Fusion Manage", with the attachment card behind it showing Up to date](../images/step-uploaded.png){ width="450" }
 
 ### Which geometry is exported
 
@@ -374,18 +384,19 @@ The STEP file contains the **selected component**, not the whole design.
 
 The part number only locates the component in Fusion. The item it is attached to is found by the component's **item number**, read from the Data Model. Finding a component by part number can take a while in large designs. The progress window stays responsive and you will see the percentage move.
 
-!!! example "Screenshot placeholder: Uploading STEP File progress window"
-    **Show:** The small window with the Find item, Create STEP and Upload stages and the percentage.
-
-    Save the image as `docs/images/step-progress.png`, then replace this box with `![Uploading STEP File progress window](../images/step-progress.png)`.
+![The Uploading STEP File progress window over the Export window, with the Find item, Create STEP and Upload stages and the percentage](../images/step-progress.png){ width="450" }
 
 ### Messages you may see
 
 - **Open the design to publish as a STEP file first.** No design is open.
-- **No component with part number … in the open design.** The selected component's part number is not found, for example because the part number is empty.
+- **Select a component that has a part number, or open a design that has one.** The selected component has no part number.
+- **No component with part number … in the open design.** The selected component's part number is not found in the open design.
+- **… has no item number, so it has not been published to Fusion Manage.** and **The design has not been saved, so it has no item number.** The item number cannot be read.
 - **No item exists for …** No item in Fusion Manage has that item number. Publish the item first.
 - **… Fusion Manage items match … Open the item in the Item panel and choose one first.** Several items share the item number. Open the item from the Item panel, pick one from the list, and try again.
-- **Fusion could not export the STEP file.** Fusion refused the export; the message lists each method that was tried.
+- **Fusion could not export the STEP file.** Fusion refused the export; the message lists each method that was tried (open design, component, own document).
+
+Messages after the item search start with *Could not attach a STEP file:* or *Could not create PN.step:*.
 
 Only one upload runs at a time. Starting another reports that a file is already being uploaded.
 
@@ -402,10 +413,7 @@ The add-in can attach a **PDF of a drawing** to the Fusion Manage item of the de
 
 A drawing is **not an item of its own**. Its PDF is attached to the item of the design's top-level component. That item must already exist; publish it first ([Item Creation](#item-creation)).
 
-!!! example "Screenshot placeholder: Fusion Manage ribbon tab in the Drawing workspace"
-    **Show:** The Item panel with Open Fusion Manage Item and the drawing upload button.
-
-    Save the image as `docs/images/ribbon-drawing.png`, then replace this box with `![Fusion Manage ribbon tab in the Drawing workspace](../images/ribbon-drawing.png)`.
+![The Export window for an open drawing: the PDF, DWG and DXF formats, the Item and Component cards, and the attachment card for PN-000701.pdf showing Up to date](../images/ribbon-drawing.png){ width="450" }
 
 ### Upload a drawing PDF
 
@@ -415,7 +423,7 @@ A drawing is **not an item of its own**. Its PDF is attached to the item of the 
 
 The Export window and the Item Panel's **Actions** menu can also make a **DWG** or a **DXF** of the drawing, attached the same way, as `PN-1001.dwg` or `PN-1001.dxf`. The right-click entry makes the PDF only. A Fusion that cannot export those formats says so.
 
-The right-click entry is offered only when the **top of the tree** is selected, not a component below it.
+The right-click entry is meant for the top of the tree. It is not offered on an occurrence or on a component other than the design's top-level one, but it can appear for other kinds of selection.
 
 #### New versions, not duplicates
 
@@ -423,21 +431,7 @@ If a file of the same name is already attached, the upload creates **a new versi
 
 ### The drawing must be loaded
 
-A drawing takes a moment to load. Until its design reference has loaded and the top-level component's part number can be read, the drawing button and menu entry are greyed out and the tooltip says what it is waiting for, for example *The drawing has no references yet.* or *The top-level component of … has no part number.* The add-in checks again every couple of seconds, so the button enables itself.
-
-!!! example "Screenshot placeholder: Drawing upload button greyed out with its tooltip"
-    **Show:** The disabled button and the tooltip that says what the drawing is waiting for.
-
-    Save the image as `docs/images/drawing-greyed.png`, then replace this box with `![Drawing upload button greyed out with its tooltip](../images/drawing-greyed.png)`.
-
-### A drawing of a different item
-
-If the item you are attaching to is not the one the drawing shows, you are asked: *The open drawing is of X, but the item is Y (its part number). Upload this drawing as Y.pdf anyway?* Choose **Yes** only if that is what you intend.
-
-!!! example "Screenshot placeholder: Drawing of a different item prompt"
-    **Show:** The question asking whether to upload the drawing as another item's PDF.
-
-    Save the image as `docs/images/drawing-different-item.png`, then replace this box with `![Drawing of a different item prompt](../images/drawing-different-item.png)`.
+A drawing takes a moment to load. Until its design reference has loaded and the top-level component's part number can be read, the right-click entry is greyed out and its tooltip says what it is waiting for (*Not available:* followed by a reason such as *The drawing has no references yet.* or *The top-level component of … has no part number.*). The add-in checks again when Fusion reports a document or workspace change, or after 15 seconds without one, and gives up after 60 seconds. In the Item panel's **Actions** menu the entry is disabled with *The drawing is still loading* and updates when you open the menu or return to the window. The Export window shows *The drawing is not ready yet* and asks again every 2 seconds.
 
 ### If the PDF is empty
 
