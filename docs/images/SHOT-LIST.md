@@ -24,6 +24,5 @@ Capture each image, save it under `docs/images/` with the file name shown, then 
 | docs/item-panel/index.md | fm-item-workflow.png | The item open in Fusion Manage in the browser, showing the workflow action used to release it. |
 | docs/job-queue/index.md | job-queue-panel.png | Job cards with status icons, one row per item, and the Cancel button on an active job. |
 | docs/job-queue/index.md | job-queue-button.png | The ribbon button in its idle, running and error looks. |
-| docs/job-queue/index.md | publish-folder.png | The folder of a run with the request files, bom folder, manifest.json and send-log.json. |
 | docs/reference/troubleshooting.md | greyed-button.png | A disabled ribbon button and its tooltip ending with Not available and the reason. |
 | docs/getting-started/overview.md | context-menu.png | The right-click menu of a component in the browser, showing the Fusion Manage entries. |

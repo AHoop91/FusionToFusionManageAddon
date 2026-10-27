@@ -17,18 +17,29 @@ Jobs go through a **single queue, one after another**. A publish returns at once
 
 ## Reading the queue
 
-The panel lists every job that is waiting, running, failed or cancelled, newest first, **one row per job**. Each row shows the job's name, a sentence on where it stands (for example *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.*), a status icon and its buttons.
+The panel is a table of every job that is waiting, running, failed or cancelled, newest first, **one row per job**. A job that went through leaves the list.
 
-**Click a row for its details.** A window opens over the Job Queue with the result in words, the count of successful, failed and pending items, every item with its own status and, for a failed one, the reason in full, and what to do next. **Retry** and **Cancel publish** are there too. Close it with **Close**, **Esc**, or by clicking outside it.
+| Column | What it shows |
+|---|---|
+| **Status** | A pill with an icon and the status in words, the same width for every job |
+| **Job** | The name of the job, the design it publishes |
+| **Progress** | A sentence on where it stands, for example *Checking item numbers.*, *Publishing 4 of 5 items.*, *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.* |
+| **Time** | How long the job has taken, counting up while it runs. A dash while it waits |
+| | **Cancel** while it is waiting or running, **Retry** once it has failed |
 
-![The Job Queue with one running job: the header "1 running. Publishing runs in the background.", one row for the job PN-000701 saying "Publishing 4 of 5 items.", its status icon and Cancel button, and the Clear finished button at the bottom](../images/job-queue-panel.png){ width="450" }
+![The Job Queue with one running job: a table with the columns Status, Job, Progress and Time, and a row for PN-000701 with the blue Running pill, the progress "Checking item numbers.", the time 0:03 and a Cancel button. The Clear finished button is at the bottom](../images/job-queue-panel.png){ width="1000" }
+
+**Click a row for its details.** A window opens over the Job Queue with the result in words, the time it took, and a table of the job's items:
+
+- **Filters** above the table show all items, or only the failed, skipped, cancelled, running, waiting or done ones, with how many there are of each. A job with failures opens on the failed items. **Find an item** narrows the table by item number or description.
+- **Click an item** to see its details beside the table: its number, description, status and publish, and under them the reason in full when it failed, was skipped or was cancelled.
+- **Retry** and **Cancel publish** are in the window too. Close it with **Close**, **Esc**, or by clicking outside it.
 
 | Status | Meaning |
 |---|---|
 | **Queued** | Waiting for earlier jobs to finish |
 | **Running** | Being prepared or sent |
-| **Done** | Completed |
-| **Error** | Failed. The full reason is in the job's details |
+| **Failed** | Failed, or finished with failed rows. The full reason is in the job's details |
 | **Cancelled** | Stopped before it finished |
 
 In a job's details, each BOM sent for a parent assembly also has its own line, after the items.
@@ -50,7 +61,14 @@ You do not have to watch the panel.
 
 ## A failed job
 
-Open the Job Queue and read the reason on each failed row. Fix the cause, then click **Retry** on the job. What Fusion Manage already accepted is skipped. For common causes, see [Troubleshooting and Limitations](../reference/troubleshooting.md#publishing).
+A failed job stays in the Job Queue, marked **Failed**, until you clear it. **Click it to open its details**, which show what happened to every item in the job.
+
+1. Open the [Job Queue](#reading-the-queue) and click the failed job. The details open on the **Failed** items.
+2. Click an item in the table. Its **Reason** shows beside the table, in full.
+3. Fix the cause in Fusion or Fusion Manage.
+4. Click **Retry**, on the job's row or in its details. What Fusion Manage already accepted is skipped.
+
+Choose **All** above the table to see the items that went through too. For common causes, see [Troubleshooting and Limitations](../reference/troubleshooting.md#publishing).
 
 ## Request Files and Retry
 
@@ -63,11 +81,6 @@ Every publish writes its files to a temporary folder (`MfgToFm` under the system
 - **Clear finished** removes those folders along with the jobs.
 
 The path is listed in [Troubleshooting and Limitations](../reference/troubleshooting.md#where-files-are-kept). Each run has its own folder, containing:
-
-!!! example "Screenshot placeholder: A run's folder in File Explorer"
-    **Show:** The folder of a run with the request files, bom folder, manifest.json and send-log.json.
-
-    Save the image as `docs/images/publish-folder.png`, then replace this box with `![A run's folder in File Explorer](../images/publish-folder.png)`.
 
 | File | What it holds |
 |---|---|
