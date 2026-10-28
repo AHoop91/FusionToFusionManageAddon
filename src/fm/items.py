@@ -15,6 +15,7 @@ from urllib.parse import quote_plus
 
 from ..core.logging_setup import get_logger
 from .client import WORKSPACES, FmClient
+from .search_query import LATEST
 
 log = get_logger("fm.items")
 
@@ -138,10 +139,13 @@ class ItemChoices:
 
 
 class ItemService:
-    """Finds and reads items of a workspace through an ``FmClient``."""
+    """Finds and reads items of a workspace through an ``FmClient``.
 
-    def __init__(self, client: FmClient) -> None:
-        self._client = client
+    ``revision`` is the version of each item that searches list: ``LATEST`` (the default) or ``WORKING`` (see ``search_query``). Whatever
+    changes an item (the publish, an export's attachment) searches for ``WORKING``: a released version cannot be changed."""
+
+    def __init__(self, client: FmClient, revision: int = LATEST) -> None:
+        self._client, self._revision = client, revision
 
     def search(self, workspace_id: str, item_number: str) -> List[Dict[str, str]]:
         """Items of the workspace whose descriptor matches ``item_number``, as ``{"id", "descriptor"}``."""
@@ -149,7 +153,7 @@ class ItemService:
             return []
         query = quote_plus(f'itemDescriptor="{item_number}" AND (workspaceId={workspace_id})', safe="()")
         data = self._client.get_json(
-            f"/api/v3/search-results?limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision=1")
+            f"/api/v3/search-results?limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision={self._revision}")
         hits = _hits(data)
         log.info("Item number %s matched %d item(s) in workspace %s", item_number, len(hits), workspace_id)
         return hits
@@ -174,7 +178,7 @@ class ItemService:
         offset = 0
         while True:
             data = self._client.get_json(
-                f"/api/v3/search-results?limit={FIND_PAGE}&offset={offset}&page={offset // FIND_PAGE + 1}&query={query}&revision=1",
+                f"/api/v3/search-results?limit={FIND_PAGE}&offset={offset}&page={offset // FIND_PAGE + 1}&query={query}&revision={self._revision}",
                 accept=ITEMS_BULK)
             rows = _rows(data)
             for row in rows:

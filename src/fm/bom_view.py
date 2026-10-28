@@ -11,6 +11,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Set
 
 from ..core.logging_setup import get_logger
+from .bom import WORKING_BIAS
 from .client import WORKSPACES, FmApiError, FmClient
 from .item_view import cell_of, no_image, no_page
 from .linkable import BOM_VIEW_ID
@@ -20,7 +21,6 @@ from .where_used import split_title
 log = get_logger("fm.bom_view")
 
 BOM_DEPTH = 10   # levels read at once: the tree is drawn from one answer
-BIAS = "working"   # the working revision of each line, as Fusion Manage's own BOM tab shows an item that is not released
 ACCEPT = "application/vnd.autodesk.plm.bom.bulk+json"   # asked for by name: a general Accept is sometimes answered with the tree form (item, fields ...) that has no nodes and edges
 _VIEWDEF = re.compile(r"^(.*/views/[^/]+/viewdef/[^/]+)/fields/[^/]+/?$")
 TITLE_KEYS = ("displayName", "name")
@@ -233,7 +233,7 @@ class BomViewService:
 
     def _read(self, workspace_id: str, item_id: str, view_id: str) -> Dict[str, Any]:
         path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/bom"
-                f"?depth={BOM_DEPTH}&effectiveDate={date.today().isoformat()}&revisionBias={BIAS}&rootId={item_id}"
+                f"?depth={BOM_DEPTH}&effectiveDate={date.today().isoformat()}&revisionBias={WORKING_BIAS}&rootId={item_id}"
                 + (f"&viewDefId={view_id}" if view_id else ""))
         data = self._client.get_json(path, accept=ACCEPT)
         if data is None:   # 204: an item with no lines

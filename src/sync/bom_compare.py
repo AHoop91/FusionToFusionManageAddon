@@ -12,7 +12,7 @@ Fusion Manage does not know yet have every child ``new``; a design that is not i
 
 from typing import Any, Dict, List, Set
 
-from ..fm.bom import BomService
+from ..fm.bom import RELEASED_BIAS, BomService
 from ..fm.client import FmClient
 from .item_compare import item_number_of
 
@@ -146,8 +146,10 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str,
     return out
 
 
-def read_and_compare_bom(rows: List[Dict[str, Any]], root_number: str, fm: FmClient, workspace_id: str, item_id: str) -> List[Dict[str, Any]]:
+def read_and_compare_bom(rows: List[Dict[str, Any]], root_number: str, fm: FmClient, workspace_id: str, item_id: str,
+                         bias: str = RELEASED_BIAS) -> List[Dict[str, Any]]:
     """``compare_bom`` of the design's ``rows`` with the Fusion Manage BOM of the item ``item_id``, read deep enough for the whole tree in one
-    call. Runs on a worker thread; the publish panel and the item panel's up-to-date check both use it."""
+    call, with the revision of each line ``bias`` names (see ``BomService``). Runs on a worker thread; the publish panel and the item panel's
+    up-to-date check both use it."""
     depth = max([int(r["level"]) for r in rows] + [0]) + 1
-    return compare_bom(rows, root_number, BomService(fm).read(workspace_id, item_id, depth))
+    return compare_bom(rows, root_number, BomService(fm, bias).read(workspace_id, item_id, depth))

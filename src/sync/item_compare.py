@@ -9,6 +9,7 @@ from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.items import ItemService, display_values
 from ..fm.picklists import PicklistResolver
+from ..fm.search_query import LATEST
 from .property_compare import FOUND, MULTIPLE, NEW, UNKNOWN, compare_properties
 
 log = get_logger("item_compare")
@@ -26,11 +27,13 @@ def item_number_of(summary: Dict[str, Any]) -> str:
     return str(summary.get("item_number") or "").strip()
 
 
-def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, found: Optional[List[Dict[str, Any]]] = None) -> ItemLookup:
+def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, found: Optional[List[Dict[str, Any]]] = None,
+                revision: int = LATEST) -> ItemLookup:
     """Find the component's item in Fusion Manage. Runs on a worker thread.
 
     ``found`` is what an earlier search already found for the number (hits, each with the item's ``values`` when the search gave them):
-    it saves the search, and the read of an item whose values came with it.
+    it saves the search, and the read of an item whose values came with it. ``revision`` is the version of the item searched for (see
+    ``ItemService``).
 
     The item is searched by item number in the Items workspace. When several items match, none is used: the state is ``multiple`` and
     ``candidates`` lists them, for the number to be fixed in Fusion Manage. It needs only the component's numbers, so it can run while
@@ -46,7 +49,7 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, fou
         return ItemLookup(info, None)
     values = None
     try:
-        service = ItemService(fm)
+        service = ItemService(fm, revision)
         hits = found if found is not None else service.search(cfg.workspace_id, number)
         picked = hits[0] if len(hits) == 1 else None
         if picked:

@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from ..core.logging_setup import get_logger
 from .client import LOOKUPS, WORKSPACES, FmClient, last_segment
+from .search_query import WORKING
 from .ttl_cache import TtlCache
 
 log = get_logger("fm.components")
@@ -38,7 +39,6 @@ def is_working(version: str) -> bool:
 
 
 SEARCH = "/api/v3/search-results"
-WORKING_REVISION = "3"   # the search's ``revision`` filter: 1 gives the latest revision of each record, 2 every revision, 3 the working version
 
 
 def manage_link(urn: str, url: str) -> str:
@@ -92,7 +92,7 @@ class ComponentService:
         if not workspace_id:
             return "", f"No workspace called {COMPONENTS_WORKSPACE} could be found in Fusion Manage."
         query = quote(f"{number} AND (workspaceId={workspace_id})")
-        data = self._client.get_json(f"{SEARCH}?isFullQuery=true&limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision={WORKING_REVISION}")
+        data = self._client.get_json(f"{SEARCH}?isFullQuery=true&limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision={WORKING}")
         rows = data.get("items") if isinstance(data, dict) else None
         found = [(str(r.get("__self__") or ""), str(r.get("descriptor") or ""), str(r.get("version") or ""))
                  for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []

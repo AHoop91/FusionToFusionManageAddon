@@ -16,6 +16,8 @@ from .items import FIELD_ID, display_text
 log = get_logger("fm.bom")
 
 QUANTITY_FIELDS = ("103", "293")   # quantity field ids seen in BOM views; others fall back to the first number
+RELEASED_BIAS = "release"   # ``revisionBias``: the released revision of each line, or ...
+WORKING_BIAS = "working"    # ... its working revision, which is where a line has to be changed or removed: a released one cannot be
 ACCEPT = "application/vnd.autodesk.plm.bom.bulk+json"   # asked for by name: any other Accept can be answered with the tree form (item, fields ...) that has no nodes and edges
 _REVISION = re.compile(r"\s*\[REV:[^\]]*\]\s*$")
 
@@ -85,10 +87,13 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
 
 
 class BomService:
-    """Reads BOMs of a workspace through an ``FmClient``."""
+    """Reads BOMs of a workspace through an ``FmClient``.
 
-    def __init__(self, client: FmClient) -> None:
-        self._client = client
+    ``bias`` is the revision of each line that is read (``RELEASED_BIAS``, the default, or ``WORKING_BIAS``). The ids of the lines belong to
+    one revision of a parent, so a BOM read to change the working version has to be read with the working bias."""
+
+    def __init__(self, client: FmClient, bias: str = RELEASED_BIAS) -> None:
+        self._client, self._bias = client, bias
 
     def read(self, workspace_id: str, item_id: str, depth: int) -> Dict[str, List[Dict[str, str]]]:
         """The item's BOM down to ``depth`` levels in the workspace's default view, by parent item number.
@@ -96,7 +101,7 @@ class BomService:
         ``effectiveDate`` is always sent: without it Fusion Manage sometimes answers 400 (``null wrong date format``).
         """
         path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/bom"
-                f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias=release&rootId={item_id}")
+                f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias={self._bias}&rootId={item_id}")
         data = self._client.get_json(path, accept=ACCEPT)
         nodes = len(data.get("nodes") or []) if isinstance(data, dict) else 0
         log.info("BOM answer for %s: %d node(s)", path, nodes)

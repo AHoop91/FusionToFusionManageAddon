@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core.logging_setup import get_logger
 from ..fm.client import FmClient
 from ..fm.items import ItemService
+from ..fm.search_query import WORKING
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import publish_batch_size, read_publish_components
 from ..sync.item_compare import item_number_of
@@ -77,7 +78,7 @@ class ReadAhead:
         """The hits of each number the search found. A failed search raises: the run needs every number looked for before it writes."""
         if self._cancelled():
             return {}
-        found = ItemService(self._fm).find_many(self._workspace_id, numbers)
+        found = ItemService(self._fm, WORKING).find_many(self._workspace_id, numbers)
         with self._count_lock:
             self.searched += len(numbers)
             self._hits.update({number: len(found.get(number.strip().lower()) or []) for number in numbers})

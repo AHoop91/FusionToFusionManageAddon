@@ -90,15 +90,16 @@ def encode(query: str) -> str:
     return quote_plus(query, safe="()")
 
 
-REVISIONS = (1, 3)   # the search's ``revision`` filter: 1 the latest version of each item, 3 the working version
+LATEST, WORKING = 1, 3   # the search's ``revision`` filter: 1 the latest version of each item, 3 the working version
+REVISIONS = (LATEST, WORKING)
 
 
-def search_path(workspace_id: str, text: str, groups: Any, offset: int, limit: int, revision: int = 1) -> str:
+def search_path(workspace_id: str, text: str, groups: Any, offset: int, limit: int, revision: int = LATEST) -> str:
     """The request path of one page of a search, oldest first (a stable order to page through).
 
     ``revision`` picks the versions listed: 1 the latest version of each item (a working one included), 3 the working version
     only. Items that are not revision controlled are listed in both."""
-    revision = revision if revision in REVISIONS else 1
+    revision = revision if revision in REVISIONS else LATEST
     query = encode(build_query(workspace_id, text, groups))
     return (f"/api/v3/search-results?limit={int(limit)}&offset={max(0, int(offset))}&query={query}"
             f"&revision={revision}&sort={quote_plus('createdOn asc')}")

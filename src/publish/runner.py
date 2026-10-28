@@ -19,6 +19,7 @@ from ..core.logging_setup import get_logger
 from ..fm.client import LOOKUPS, FmApiError, FmClient
 from ..fm.components import ComponentService, manage_link
 from ..fm.picklists import PicklistResolver
+from ..fm.search_query import WORKING
 from ..fm.sections import SectionService
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import read_thumbnail_url
@@ -209,7 +210,7 @@ class PublishRun(JobState):
         component = summary if item.get("root") else {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
         # Fusion Manage is asked for the item while the Data Model request this item shares is on its way.
         with ThreadPoolExecutor(max_workers=1) as background:
-            pending = background.submit(lookup_item, component, self.cfg, self._fm, self._ahead.found(number))
+            pending = background.submit(lookup_item, component, self.cfg, self._fm, self._ahead.found(number), WORKING)
             read = self._ahead.read(component_id)
             lookup = pending.result()
         result = compare_with_item(read["properties"], component, self.cfg, lookup, self._picklists.fit_number,

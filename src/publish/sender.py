@@ -21,6 +21,7 @@ from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient, SendResult
 from ..fm.items import ItemService
+from ..fm.search_query import WORKING
 from .job_state import JobState
 from .placeholders import Unresolved, key_of, markers, resolve
 from .states import CANCELLED, DONE, ERROR, RUNNING
@@ -104,7 +105,7 @@ class Dispatcher:
 
     def __init__(self, path: str, fm: FmClient, workspace_id: str, known: Optional[Dict[str, str]] = None) -> None:
         self.path, self._fm, self._workspace_id = path, fm, workspace_id
-        self._search = ItemService(fm)
+        self._search = ItemService(fm, WORKING)
         self._lock = threading.RLock()
         self._slots = threading.BoundedSemaphore(BOM_REQUESTS)   # shared by every parent being sent
         self._ids: Dict[str, str] = {}   # item number (any case) -> id; empty when the item is known to exist but not its id

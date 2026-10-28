@@ -11,8 +11,10 @@ from typing import Any, Dict, List
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..config.workspace_models import WorkspaceConfig
+from ..fm.bom import WORKING_BIAS
 from ..fm.client import FmClient
 from ..fm.items import ItemService
+from ..fm.search_query import WORKING
 from .bom_compare import PARENT_SKIPPED, SKIPPED, UNCOMPARED, compare_bom, mark_skipped, read_and_compare_bom
 from .item_compare import item_number_of
 
@@ -30,12 +32,13 @@ def _uncompared(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def search_design(fm: FmClient, cfg: WorkspaceConfig, summary: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """The Fusion Manage items with the design's number (none when there is nothing to look for). It needs only the
-    summary, so it runs while the structure is still being read."""
+    """The working versions of the Fusion Manage items with the design's number (none when there is nothing to look for). A publish changes
+    the working version, so its Bill of Materials is the one compared with: the ids of its lines are the ones to change or remove. It needs
+    only the summary, so it runs while the structure is still being read."""
     number = item_number_of(summary)
     if not cfg or not cfg.workspace_id or not number:
         return []
-    return ItemService(fm).search(cfg.workspace_id, number)
+    return ItemService(fm, WORKING).search(cfg.workspace_id, number)
 
 
 def compare_design_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: WorkspaceConfig,
@@ -63,7 +66,7 @@ def compare_design_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg:
     # A Fusion Manage or sign-in failure is not caught: the section fails and the panel offers Retry,
     # rather than caching a table that looks compared but is not.
     watch = Stopwatch()
-    compared = read_and_compare_bom(rows, number, fm, cfg.workspace_id, picked["id"])
+    compared = read_and_compare_bom(rows, number, fm, cfg.workspace_id, picked["id"], WORKING_BIAS)
     log.debug("Read and compared the BOM of %s in %.2fs, %d rows", number, watch.lap(), len(rows))
     return {"rows": compared, "shared": False, "fm_item_id": picked["id"]}
 
@@ -80,11 +83,11 @@ def compare_level(rows: List[Dict[str, Any]], parent_number: str, parent_skipped
         return {"rows": [{**row, "status": SKIPPED, "skip": PARENT_SKIPPED} for row in rows]}
     if not compared or not cfg or not cfg.workspace_id or not parent_number:
         return {"rows": _uncompared(rows)}
-    hits = ItemService(fm).search(cfg.workspace_id, parent_number)
+    hits = ItemService(fm, WORKING).search(cfg.workspace_id, parent_number)
     if len(hits) > 1:
         log.info("%s matches %d Fusion Manage items: its lines are not compared", parent_number, len(hits))
         return {"rows": _uncompared(rows)}
     marked = mark_skipped(rows)
     if not hits:   # Fusion Manage does not hold this assembly, so it holds none of its lines
         return {"rows": compare_bom(marked, parent_number, {})}
-    return {"rows": read_and_compare_bom(marked, parent_number, fm, cfg.workspace_id, hits[0]["id"])}
+    return {"rows": read_and_compare_bom(marked, parent_number, fm, cfg.workspace_id, hits[0]["id"], WORKING_BIAS)}

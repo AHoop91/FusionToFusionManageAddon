@@ -28,6 +28,7 @@ from ..fm.attachments import AttachmentService
 from ..fm.client import FmClient
 from ..fm.components import ComponentService, link_ids
 from ..fm.items import ItemChoices, ItemService
+from ..fm.search_query import WORKING
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.run_files import remove_run, temp_root
@@ -134,12 +135,13 @@ class AttachmentUpload:
         self._tasks.post(lambda: self._make(job, workspace_id, item_id, subject, destination))
 
     def _find_item(self, number: str, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
-        """``(workspace id, item id)`` of the item numbered ``number`` in the Items workspace."""
+        """``(workspace id, item id)`` of the working version of the item numbered ``number`` in the Items workspace: a released version
+        cannot have files attached."""
         problem = self._config.items_setup_problem()
         if problem:
             raise ValueError(f"{problem} Complete it in Preferences.")
         workspace_id = self._config.config.workspaces.get(ITEMS_KIND).workspace_id
-        hits = ItemService(FmClient(self._config.effective_settings(), self._auth, cancel)).search(workspace_id, number)
+        hits = ItemService(FmClient(self._config.effective_settings(), self._auth, cancel), WORKING).search(workspace_id, number)
         if not hits:
             raise LookupError(f"No item exists for {number}.")
         picked, competing = self._choices.resolve(workspace_id, number, hits)

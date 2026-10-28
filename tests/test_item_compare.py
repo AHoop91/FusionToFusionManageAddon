@@ -16,7 +16,7 @@ ITEM = {"item_number": "PN-1", "part_number": "PN-1"}
 def service(hits=None, error=None):
     """An ItemService whose search finds ``hits`` (or fails with ``error``) and whose read gives a fixed set of values."""
     class Fake:
-        def __init__(self, _fm):
+        def __init__(self, _fm, _revision=1):
             pass
 
         def search(self, _workspace, _number):
@@ -113,7 +113,7 @@ class KnownLookupTests(unittest.TestCase):
 
     def test_a_failure_of_fusion_manage_is_unknown(self):
         class Failing:
-            def __init__(self, _fm):
+            def __init__(self, _fm, _revision=1):
                 pass
 
             def read(self, _workspace, _item_id):

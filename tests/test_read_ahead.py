@@ -54,7 +54,7 @@ class ReadAheadTests(unittest.TestCase):
 
     def test_numbers_are_searched_together_and_found_by_trimmed_lower_case_number(self):
         class Items:
-            def __init__(self, _fm):
+            def __init__(self, _fm, _revision=1):
                 pass
 
             def find_many(self, _workspace, numbers):
@@ -68,7 +68,7 @@ class ReadAheadTests(unittest.TestCase):
 
     def test_the_progress_of_the_search_counts_the_numbers_looked_for(self):
         class Items:
-            def __init__(self, _fm):
+            def __init__(self, _fm, _revision=1):
                 pass
 
             def find_many(self, _workspace, _numbers):
@@ -82,7 +82,7 @@ class ReadAheadTests(unittest.TestCase):
 
     def test_the_hits_of_each_number_are_counted_as_the_search_answers(self):
         class Items:
-            def __init__(self, _fm):
+            def __init__(self, _fm, _revision=1):
                 pass
 
             def find_many(self, _workspace, numbers):
@@ -95,7 +95,7 @@ class ReadAheadTests(unittest.TestCase):
 
     def test_a_failed_search_raises_for_the_run_to_stop(self):
         class Items:
-            def __init__(self, _fm):
+            def __init__(self, _fm, _revision=1):
                 pass
 
             def find_many(self, _workspace, _numbers):

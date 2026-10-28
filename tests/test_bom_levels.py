@@ -3,6 +3,7 @@
 import unittest
 from unittest import mock
 
+from src.fm.bom import WORKING_BIAS
 from src.sync import bom_levels
 from src.sync.bom_compare import UNCOMPARED
 
@@ -43,7 +44,7 @@ class DesignNotInFusionManageTests(unittest.TestCase):
         with mock.patch.object(bom_levels, "read_and_compare_bom", return_value=[]) as compare:
             data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, cfg, mock.Mock(), [{"id": "2"}])
         self.assertEqual(data["fm_item_id"], "2")
-        self.assertEqual(compare.call_args[0][3:], ("242", "2"))
+        self.assertEqual(compare.call_args[0][3:], ("242", "2", WORKING_BIAS))   # the working version's BOM: its line ids are the ones to change
 
 
 class LevelUnderAnAssemblyTests(unittest.TestCase):
@@ -60,7 +61,7 @@ class LevelUnderAnAssemblyTests(unittest.TestCase):
     def test_lines_are_compared_with_the_bom_of_the_one_item_that_matches_the_assembly(self):
         result, _, compare = self.compared([row("A"), row("B")], hits=[{"id": "9"}])
         self.assertEqual(result, [("A", "match"), ("B", "match")])
-        self.assertEqual(compare.call_args[0][1:], ("ASM", compare.call_args[0][2], "242", "9"))
+        self.assertEqual(compare.call_args[0][1:], ("ASM", compare.call_args[0][2], "242", "9", WORKING_BIAS))
 
     def test_an_assembly_fusion_manage_does_not_hold_has_every_line_new(self):
         result, _, compare = self.compared([row("A")], hits=[])

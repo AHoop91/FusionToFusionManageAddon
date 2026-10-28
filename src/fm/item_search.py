@@ -10,7 +10,7 @@ import re
 from datetime import date
 from typing import Any, Dict, List
 
-from .bom import ACCEPT, name_of, number_of
+from .bom import ACCEPT, WORKING_BIAS, name_of, number_of
 from .client import WORKSPACES, FmClient
 from .linkable import linkable_row
 from .search_query import search_path
@@ -86,7 +86,8 @@ class ItemSearchService:
     def members(self, workspace_id: str, item_id: str) -> Dict[str, List[str]]:
         """``{"ids", "numbers"}`` of the items the Bill of Materials of ``item_id`` holds now (the item itself included).
 
-        A line may point at another revision of an item than a search finds, so the picker matches on the number too."""
+        It is the working Bill of Materials of ``item_id``, the one a publish changes. A line may point at another revision of an item than a
+        search finds, so the picker matches on the number too."""
         path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/bom"
-                f"?depth=1&effectiveDate={date.today().isoformat()}&revisionBias=release&rootId={item_id}")
+                f"?depth=1&effectiveDate={date.today().isoformat()}&revisionBias={WORKING_BIAS}&rootId={item_id}")
         return parse_members(self._client.get_json(path, accept=ACCEPT))
