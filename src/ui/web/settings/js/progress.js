@@ -73,6 +73,8 @@
 
   ns.progress = {
     show: show,
+    /** An outcome with nothing before it to wait for: the dialog opens already done. */
+    notify: function (title, text) { show(title, ''); result(true, title, text); },
     done: function (title, text) { result(true, title, text); },
     fail: function (title, text) { result(false, title, text || 'Something went wrong.'); },
   };

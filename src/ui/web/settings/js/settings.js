@@ -241,6 +241,7 @@
   const SAVE_POLL_MS = 500;
   const CONFIG_FILE_NAME = 'Fusion-Manage-Item-Management-config.json';   // the name Python stores the file under
   let hubSavePlace = '';   // where the file is being saved, for the dialog that shows how it goes
+  const TAB_SAVES = ['save', 'ws-save', 'ex-save'];   // id prefixes of the tabs' Save buttons, as against the first-setup steps
 
   /** Show how saving to the hub stands: the dialog's balls while it is under way, its outcome when it ends. */
   function onHubSave(r) {
@@ -265,10 +266,11 @@
     }, { folder: true, hubId: hubId, title: 'Save to Fusion Hub', action: 'Save here', fileName: CONFIG_FILE_NAME });
   }
 
-  /** Save the settings. A Hub Admin is asked, once they are saved, whether to share them with the hub too. */
-  function saveClicked(source) {
+  /** Save the settings. With ``publish`` (Hub Admins only), once they are saved the Configuration File is stored in the hub too. */
+  function saveClicked(source, publish) {
+    if (publish && roleState !== 'admin') return;
     saveSource = source;
-    askShareAfterSave = roleState === 'admin';
+    publishAfterSave = publish;
     bridge.send('save_settings', readSettings());
   }
 
@@ -350,7 +352,7 @@
 
   // Set when the wizard's sign-in is waiting for the Client ID to be saved.
   let signInAfterSave = false;
-  let askShareAfterSave = false;   // an admin pressed Save: once the save has passed validation, they are asked about the hub
+  let publishAfterSave = false;   // an admin pressed Save & Publish: once the save has passed validation, the file goes to the hub
 
   /**
    * First setup, until a Client ID is saved. A Hub Admin gets the wizard; anyone else is asked to find the hub's Configuration File, and
@@ -456,6 +458,8 @@
     if (!member && fileTab.classList.contains('active')) document.querySelector('.tab[data-tab="connection"]').click();
     if (member && !memberTabShown) { memberTabShown = true; fileTab.click(); }
     applyMemberLock(member);
+    const publisher = signedInNow && roleState === 'admin';   // only a Hub Admin publishes
+    TAB_SAVES.forEach(function (prefix) { $(prefix + '-publish-btn').hidden = !publisher; });
   }
 
   function initTenantStep() {
@@ -503,13 +507,16 @@
       const problems = r.ok ? (r.result.problems || []) : [{ message: r.error, where: {} }];
       ns.validation.show(error, problems);
       const signIn = signInAfterSave;
-      const askShare = askShareAfterSave;
-      signInAfterSave = askShareAfterSave = false;
+      const publish = publishAfterSave;
+      signInAfterSave = publishAfterSave = false;
       if (problems.length) return;
       fillSettings(r.result);
-      msg.textContent = 'Saved';
-      setTimeout(function () { msg.textContent = ''; }, 2000);
-      if (askShare) ns.shareDialog.open(document.querySelector('[data-hub-name]').textContent, saveToHub);   // a file in the hub never holds settings that failed validation
+      if (publish) saveToHub();   // a file in the hub never holds settings that failed validation
+      else if (TAB_SAVES.indexOf(saveSource) >= 0) ns.progress.notify('Save successful', 'The settings are saved on this computer.');
+      else {   // the first-setup steps have no dialog: they say it beside the button
+        msg.textContent = 'Saved';
+        setTimeout(function () { msg.textContent = ''; }, 2000);
+      }
       // Refresh sign-in state now that the connection details changed (or sign in, from the wizard).
       if (signIn) bridge.send('auth_login'); else ns.auth.refresh();
     });
@@ -531,8 +538,9 @@
       $('callback-copy').textContent = 'Copied';
       setTimeout(function () { $('callback-copy').textContent = 'Copy'; }, 2000);
     });
-    [['save-btn', 'save'], ['ws-save-btn', 'ws-save'], ['ex-save-btn', 'ex-save']].forEach(function (pair) {
-      $(pair[0]).addEventListener('click', function () { saveClicked(pair[1]); });
+    TAB_SAVES.forEach(function (prefix) {
+      $(prefix + '-btn').addEventListener('click', function () { saveClicked(prefix, false); });
+      $(prefix + '-publish-btn').addEventListener('click', function () { saveClicked(prefix, true); });
     });
     bridge.on('save_to_hub', onHubSave);
     bridge.on('save_to_hub_status', onHubSave);

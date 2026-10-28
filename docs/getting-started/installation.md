@@ -221,15 +221,11 @@ The tab shows the callback URL it will use. It must be registered on your APS ap
 
 ### Save to Fusion Hub
 
-Saving puts the settings on your own computer only. **Save to Fusion Hub** also stores them in the hub, as a Configuration File, so the other people in the hub can use the same setup without entering it themselves. Only a Hub Admin is offered it.
+**Save** puts the settings on your own computer only. **Save & Publish** saves them and also stores them in the hub, as a Configuration File, so the other people in the hub can use the same setup without entering it themselves. Only a Hub Admin sees **Save & Publish**.
 
-![Settings saved dialog](../images/share-dialog.png){ width="640" height="886" }
-
-1. Click **Save**. Once the settings pass validation, the **Settings saved** dialog asks: "Do you also want to share them with the members of *your hub*?"
-2. Click **Not now** to keep them on this computer only. Press **Esc** or click outside the dialog to do the same. You can share later by saving again.
-3. Click **Save to Fusion Hub**. A **Save to Fusion Hub** window opens, showing the hub's projects and folders.
-4. Open a project, then a folder in it, where the hub's members can read files. **New project** (at the top of the hub) and **New folder** (inside a project) make one if you need it.
-5. Click **Save here**. The add-in uploads `Fusion-Manage-Item-Management-config.json` to that folder and tells you which folder it went to.
+1. Click **Save & Publish**. Once the settings pass validation and are saved on this computer, a **Save to Fusion Hub** window opens, showing the hub's projects and folders.
+2. Open a project, then a folder in it, where the hub's members can read files. **New project** (at the top of the hub) and **New folder** (inside a project) make one if you need it.
+3. Click **Save here**. The add-in uploads `Fusion-Manage-Item-Management-config.json` to that folder and tells you which folder it went to.
 
 ![Save to Fusion Hub window](../images/save-to-hub.png){ width="640" height="894" }
 
@@ -238,14 +234,14 @@ What to know:
 - **It holds your setup, not your sign-in.** The file has the tenant, workspaces, field mappings and exports. It never holds sign-in tokens.
 - **The upload uses your Fusion session.** It needs no extra permission, but you must be allowed to add files to the folder you pick. If not, the add-in says so.
 - **It is for the active hub.** A file saved from one hub is refused by another.
-- **Share again after a change.** Each share uploads the file again to the folder you choose. Choose the folder your colleagues already use, so they keep reading the same file.
+- **Publish again after a change.** Each Save & Publish uploads the file again to the folder you choose. Choose the folder your colleagues already use, so they keep reading the same file.
 - **Colleagues find it once.** A member who is not a Hub Admin is asked to **Find Configuration File** and picks the file in the hub. After that, their add-in reads it again each time Preferences opens, so a change you share reaches them without them doing anything.
 
 ### Sharing a setup with colleagues
 
 Each Fusion hub has its own settings, so switching hubs in Fusion switches the settings too. Only a **Hub Admin** of the hub can change them. When you open **Preferences** the add-in checks your role in the active hub.
 
-- **Hub Admin**: click **Save**. Once the settings pass validation and are saved on this computer, you are asked whether to share them: **Save to Fusion Hub** asks for a project and folder in the hub and stores the Configuration File there (`Fusion-Manage-Item-Management-config.json`). It never contains sign-in tokens.
+- **Hub Admin**: click **Save & Publish**. Once the settings pass validation and are saved on this computer, you are asked for a project and folder in the hub, and the Configuration File is stored there (`Fusion-Manage-Item-Management-config.json`). It never contains sign-in tokens.
 - **Everyone else**: the add-in asks you to find the hub's Configuration File. Click **Find Configuration File**, pick the file in the hub, and its tenant, workspaces, field mappings and exports become your settings, read-only. You still sign in with your own Client ID. The file is read again each time Preferences opens.
 - A file saved from another hub is refused, and files over 1 MB or that are not an MfgToFm configuration are rejected.
 
