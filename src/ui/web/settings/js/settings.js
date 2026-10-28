@@ -191,11 +191,16 @@
     }
   }
 
+  /** Switch off (or on) every button that starts or changes the read of a Configuration File, while one is read. */
+  function setFileButtons(disabled) {
+    ['member-find', 'wiz-file-find', 'cfg-check', 'hub-file-change'].forEach(function (id) { $(id).disabled = disabled; });
+  }
+
   /** Read the Configuration File ``file`` (``{project_id, item_id, name}``) and make it this hub's settings. */
   function useHubConfig(file) {
     if (usingFile) return;
     usingFile = true;
-    ['member-find', 'cfg-check', 'hub-file-change'].forEach(function (id) { $(id).disabled = true; });
+    setFileButtons(true);
     ns.progress.show('Reading the Configuration File', 'Reading ' + (file.name || 'the file') + ' from the hub. This takes a few seconds.');
     stopUseWait();
     stopUseWait = bridge.expect(USE_WAIT_MS, function () { onUseHubConfig({ ok: false, error: 'The hub did not answer in time. Try again.' }); });
@@ -207,7 +212,7 @@
     if (result.pending) return;   // only the start: Python pushes the outcome when it is done
     stopUseWait();
     usingFile = false;
-    ['member-find', 'cfg-check', 'hub-file-change'].forEach(function (id) { $(id).disabled = false; });
+    setFileButtons(false);
     if (!result.ok) {
       ns.progress.fail('Could not read the Configuration File', result.message || 'The Configuration File could not be read.');
       if (!hubFile) { readFailed = true; showWizard(wizardNeeded); }
@@ -227,7 +232,7 @@
     bridge.on('use_hub_config', onUseHubConfig);
     bridge.on('use_hub_config_status', onUseHubConfig);
     $('member-find').addEventListener('click', findFile);
-    $('wiz-find').addEventListener('click', findFile);
+    $('wiz-file-find').addEventListener('click', findFile);
     $('first-find').addEventListener('click', openMemberPicker);
     $('hub-file-change').addEventListener('click', findFile);
     $('cfg-check').addEventListener('click', checkFile);
@@ -407,7 +412,23 @@
     try { document.execCommand('copy'); } finally { box.remove(); }
   }
 
+  const SETUP_OPTIONS = [['wiz-opt-new', false], ['wiz-opt-file', true]];   // [button id, whether it sets up from a Configuration File]
+
+  /** The first setup of a Hub Admin starts as a new setup, or from the Configuration File another Hub Admin saved. */
+  function chooseSetup(useFile) {
+    $('wiz-new').hidden = useFile;
+    $('wiz-file').hidden = !useFile;
+    SETUP_OPTIONS.forEach(function (option) {
+      const chosen = option[1] === useFile;
+      $(option[0]).classList.toggle('active', chosen);
+      $(option[0]).setAttribute('aria-pressed', String(chosen));
+    });
+  }
+
   function initWizard() {
+    SETUP_OPTIONS.forEach(function (option) {
+      $(option[0]).addEventListener('click', function () { chooseSetup(option[1]); });
+    });
     [$('wiz-guide'), $('conn-guide')].forEach(function (button) {
       button.addEventListener('click', function () { bridge.send('open_url', { url: GUIDE_URL }); });
     });

@@ -37,55 +37,71 @@
           <h2>Set up Fusion Manage</h2>
           <span class="hub-pill" data-hub-name></span>
         </header>
-        <p class="muted">Sign-in needs an app of your own on the Autodesk Platform Services (APS) portal. Follow these steps once.</p>
-        <p class="hint">A Hub Admin may have saved this hub's setup already. <button id="wiz-find" class="link-btn" type="button">Find the Configuration File</button></p>
-        <ol class="wiz-steps">
-          <li class="wiz-step">
-            <span class="wiz-num">1</span>
-            <div class="wiz-body">
-              <strong>Create an APS app</strong>
-              <p class="hint">Create it on the APS portal with the settings below. <button id="wiz-guide" class="link-btn" type="button">Open the setup guide</button></p>
-              <div class="app-types">
-                <div class="req-row"><strong>Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
-                <div class="req-row"><strong>Grant Type</strong><span>Authorization Code with PKCE</span></div>
-                <div class="req-row"><strong>API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
+        <p class="muted">Is this hub already set up, or is this the first time? Choose how to start.</p>
+        <div class="wiz-choice">
+          <button id="wiz-opt-new" class="wiz-opt active" type="button" aria-pressed="true">
+            <strong>New setup</strong>
+            <span>Make an APS app and connect it</span>
+          </button>
+          <button id="wiz-opt-file" class="wiz-opt" type="button" aria-pressed="false">
+            <strong>Already set up</strong>
+            <span>Use the hub's Configuration File</span>
+          </button>
+        </div>
+        <div id="wiz-file" class="wiz-file" hidden>
+          <p>Another Hub Admin has already set this hub up and saved the setup as a Configuration File in the Fusion Hub. Choose that file to use the same setup. You do not need an APS app of your own or to enter a tenant.</p>
+          <button id="wiz-file-find" class="btn" type="button">Find Configuration File</button>
+        </div>
+        <div id="wiz-new" class="wiz-new">
+          <p class="hint">Sign-in needs an app of your own on the Autodesk Platform Services (APS) portal. Follow these steps once.</p>
+          <ol class="wiz-steps">
+            <li class="wiz-step">
+              <span class="wiz-num">1</span>
+              <div class="wiz-body">
+                <strong>Create an APS app</strong>
+                <p class="hint">Create it on the APS portal with the settings below. <button id="wiz-guide" class="link-btn" type="button">Open the setup guide</button></p>
+                <div class="app-types">
+                  <div class="req-row"><strong>Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
+                  <div class="req-row"><strong>Grant Type</strong><span>Authorization Code with PKCE</span></div>
+                  <div class="req-row"><strong>API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
+                </div>
               </div>
-            </div>
-          </li>
-          <li class="wiz-step">
-            <span class="wiz-num">2</span>
-            <div class="wiz-body">
-              <strong>Add the callback URL</strong>
-              <p class="hint">On your app's page, add this as a Callback URL, and save the app.</p>
-              <span class="inline-row">
-                <code id="wiz-callback" class="wiz-callback"></code>
-                <button id="wiz-copy" class="btn btn-secondary" type="button">Copy</button>
-              </span>
-            </div>
-          </li>
-          <li class="wiz-step">
-            <span class="wiz-num">3</span>
-            <div class="wiz-body">
-              <strong>Enter the Client ID</strong>
-              <p class="hint">Copy it from your app's page on the APS portal.</p>
-              <label class="wiz-field">
-                <input id="wiz-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the Client ID of your app">
-              </label>
-            </div>
-          </li>
-          <li class="wiz-step">
-            <span class="wiz-num">4</span>
-            <div class="wiz-body">
-              <strong>Sign in</strong>
-              <p class="hint">Saves the Client ID and opens the Autodesk sign-in in your browser.</p>
-              <div class="row">
-                <button id="wiz-signin" class="btn" type="button" disabled>Save and sign in</button>
+            </li>
+            <li class="wiz-step">
+              <span class="wiz-num">2</span>
+              <div class="wiz-body">
+                <strong>Add the callback URL</strong>
+                <p class="hint">On your app's page, add this as a Callback URL, and save the app.</p>
+                <span class="inline-row">
+                  <code id="wiz-callback" class="wiz-callback"></code>
+                  <button id="wiz-copy" class="btn btn-secondary" type="button">Copy</button>
+                </span>
               </div>
-            </div>
-          </li>
-        </ol>
-        <button id="wiz-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
-        <span id="wiz-msg" class="muted"></span>
+            </li>
+            <li class="wiz-step">
+              <span class="wiz-num">3</span>
+              <div class="wiz-body">
+                <strong>Enter the Client ID</strong>
+                <p class="hint">Copy it from your app's page on the APS portal.</p>
+                <label class="wiz-field">
+                  <input id="wiz-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the Client ID of your app">
+                </label>
+              </div>
+            </li>
+            <li class="wiz-step">
+              <span class="wiz-num">4</span>
+              <div class="wiz-body">
+                <strong>Sign in</strong>
+                <p class="hint">Saves the Client ID and opens the Autodesk sign-in in your browser.</p>
+                <div class="row">
+                  <button id="wiz-signin" class="btn" type="button" disabled>Save and sign in</button>
+                </div>
+              </div>
+            </li>
+          </ol>
+          <button id="wiz-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
+          <span id="wiz-msg" class="muted"></span>
+        </div>
       </div>
 
       <div id="login-card" class="card login-card">

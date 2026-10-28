@@ -4,19 +4,7 @@ title: Installation and Authentication
 
 # Installation and Authentication
 
-**What you'll do here:** install the add-in in Fusion and sign in to Fusion Manage. Allow about 15 minutes, plus time for an administrator if your organisation has no APS application yet.
-
-## Quick steps
-
-1. **Install:** download the latest release zip, unzip it, and add the folder in Fusion ([stage 1](#1-install-the-add-in)).
-2. **Get a Client ID:** ask your administrator for the organisation's Client ID, or create an APS application yourself ([stage 2](#2-get-a-client-id)).
-3. **Connect:** open **Preferences** and follow the setup wizard: add the callback URL, enter the Client ID and sign in (approve access in your browser), then enter your tenant ([stage 3](#3-configure-the-connection)).
-
-| Stage | What you do | Who |
-|---|---|---|
-| [1. Install the add-in](#1-install-the-add-in) | Load the add-in into Fusion | Each user |
-| [2. Get a Client ID](#2-get-a-client-id) | Obtain the **Client ID** that identifies the add-in | Once per organisation (or per developer) |
-| [3. Configure the connection](#3-configure-the-connection) | Follow the setup wizard: Client ID, sign in, then tenant | Each user, or import a shared file |
+**What you'll do here:** install the add-in in Fusion and sign in to Fusion Manage. Install it first, then choose your route: **Admin Route** for the Hub Admin who sets it up, **Member Route** for everyone else.
 
 ---
 
@@ -30,9 +18,21 @@ The add-in supports Windows and macOS. Once it is running, an **Export** panel a
 
 ![Scripts and Add-Ins dialog with the add-in running](../images/scripts-and-addins.png){ width="800" height="515" }
 
+### Choose your route
+
+[Admin Route](#2-get-a-client-id){ .md-button .md-button--primary }
+[Member Route](#members-connect-with-the-hubs-configuration-file){ .md-button }
+
+**Admin Route** is for the Hub Admin who sets the add-in up for the hub, once. **Member Route** is for everyone else in the hub, once a Hub Admin has published the setup.
+
+!!! important "Has another Hub Admin already set this up?"
+    Then do the **Member Route**, even if you are a Hub Admin yourself. The hub only needs one setup, and the Configuration File already holds it, so you do not need your own APS app or tenant. If the setup wizard opens, choose **Already set up**, then click **Find Configuration File** and pick the file. You can still change the settings afterwards as a Hub Admin, and publish them again with **Save & Publish**.
+
 ---
 
 ## 2. Get a Client ID
+
+*Admin Route. Members skip to [the Member Route](#members-connect-with-the-hubs-configuration-file).*
 
 The add-in signs in through Autodesk Platform Services (APS), so it needs an APS application. The application's **Client ID** identifies the add-in when you sign in. This is done on the APS website, not in Fusion.
 
@@ -138,13 +138,20 @@ An application of this type has no client secret that you need. Never type one i
 
 ## 3. Configure the connection
 
+*Admin Route.*
+
 Open **Manage ▸ Item Management ▸ Administration ▸ Preferences**. Until a Client ID is saved, the panel shows a setup wizard instead of the sign-in card. It walks you through the connection in two parts: the app and Client ID, then your tenant.
 
 ### 3.1 Set up Fusion Manage
 
-The first screen, **Set up Fusion Manage**, has four steps.
+The first screen, **Set up Fusion Manage**, asks how to start:
 
-![Preferences, Set up Fusion Manage wizard](../images/setup-wizard.png){ width="640" height="888" }
+- **New setup** shows the four steps below. Use it when nobody has set this hub up yet.
+- **Already set up** is for a hub another Hub Admin has already set up and published. Click **Find Configuration File** and choose the file ([Member Route](#members-connect-with-the-hubs-configuration-file)). You skip the steps below and the tenant step.
+
+The steps for a new setup:
+
+![Preferences, Set up Fusion Manage wizard](../images/setup-wizard.png){ width="640" height="849" }
 
 1. **Create an APS app.** If you have not done so, follow [stage 2](#2-get-a-client-id). The wizard lists the settings the app needs: **Desktop, Mobile, Single-Page Web App**, grant type **Authorization Code with PKCE**, and the **Manufacturing Data Model API** and **Identity API**. **Open the setup guide** opens Autodesk's guide to creating an app.
 2. **Add the callback URL.** On your app's page in the APS portal, add the callback URL the wizard shows and save the app. **Copy** puts it on your clipboard. With the default port it is:
@@ -189,7 +196,7 @@ The tenant can only be letters, digits and hyphens, never a whole address. The h
 
 Whichever way you filled it in, click **Save and finish** to keep it. **Find** only fills in the field; it does not save.
 
-Anyone who is not a Hub Admin does not see this step. They are asked to find the hub's Configuration File instead ([below](#sharing-a-setup-with-colleagues)).
+Anyone who is not a Hub Admin does not see this step. They are asked to find the hub's Configuration File instead ([below](#members-connect-with-the-hubs-configuration-file)).
 
 ### 3.3 Change the connection later
 
@@ -202,8 +209,7 @@ To change a setting, as a Hub Admin:
 
 1. Open **Preferences** and go to the **Connection** tab.
 2. Edit the field. If you change the **Callback port**, the callback URL shown under it updates as you type.
-3. Click **Save**. The settings are checked first, and a problem is shown instead of saving.
-4. When the save passes, you are asked whether to share the settings with the hub. Choose **Save to Fusion Hub**, so your colleagues get the change ([how it works](#save-to-fusion-hub)).
+3. Click **Save** to keep the change on this computer, or **Save & Publish** to also share it with the hub, so your colleagues get the change ([how it works](#save-to-fusion-hub)). The settings are checked first, and a problem is shown instead of saving. A **Save successful** window confirms a save.
 
 Two changes need a follow-up:
 
@@ -224,26 +230,80 @@ The tab shows the callback URL it will use. It must be registered on your APS ap
 **Save** puts the settings on your own computer only. **Save & Publish** saves them and also stores them in the hub, as a Configuration File, so the other people in the hub can use the same setup without entering it themselves. Only a Hub Admin sees **Save & Publish**.
 
 1. Click **Save & Publish**. Once the settings pass validation and are saved on this computer, a **Save to Fusion Hub** window opens, showing the hub's projects and folders.
-2. Open a project, then a folder in it, where the hub's members can read files. **New project** (at the top of the hub) and **New folder** (inside a project) make one if you need it.
+2. Open a project, then a folder in it, where the hub's members can read files. **New project** (at the top of the hub) and **New folder** (inside a project) make one if you need it. A project of its own is best ([see below](#give-your-members-access-to-the-file)).
 3. Click **Save here**. The add-in uploads `Fusion-Manage-Item-Management-config.json` to that folder and tells you which folder it went to.
 
-![Save to Fusion Hub window](../images/save-to-hub.png){ width="640" height="894" }
+![Save to Fusion Hub window](../images/save-to-hub.png){ width="640" height="855" }
+
+#### Give your members access to the file
+
+It is recommended to **create a new project** for the Configuration File, with **New project**, and save it there. A project of its own keeps the file out of the way of design data, and lets you control who can see it in one place. Saving the file does not give anyone access to it. Members can only find it, read it and download it if they have access, so set that up once, straight after the first **Save & Publish**:
+
+1. In Fusion, open the project (or the folder) the file is in, and go to its **Members and Permissions** tab.
+2. Make sure everyone who needs the add-in is there with **Reader** access. **Reader** is enough to view and download the file, and members never need to change it. Use **Add member** to add people by email, or a group to add several at once. A group that already holds your members, such as **Everyone (System Group)**, is the quickest way, if it suits who may see the file.
+3. Check the **Permission level** of each person or group. Anyone not listed, or with no access, will not see the file when they look for it.
+
+![Members and Permissions of the project holding the Configuration File, with Everyone as a Reader](../images/hub-permissions.png){ width="1000" height="251" }
+
+!!! tip "Keep editing for Hub Admins"
+    Only the Hub Admins who publish need to be able to add files to the folder. Everyone else can be a **Reader**.
 
 What to know:
 
-- **It holds your setup, not your sign-in.** The file has the tenant, workspaces, field mappings and exports. It never holds sign-in tokens.
+- **It holds your setup, not anyone's sign-in.** The file has the tenant, workspaces, field mappings, exports, and the Client ID with its callback port and scopes, so members can sign in without making an APS app. It never holds sign-in tokens or a client secret.
 - **The upload uses your Fusion session.** It needs no extra permission, but you must be allowed to add files to the folder you pick. If not, the add-in says so.
 - **It is for the active hub.** A file saved from one hub is refused by another.
 - **Publish again after a change.** Each Save & Publish uploads the file again to the folder you choose. Choose the folder your colleagues already use, so they keep reading the same file.
-- **Colleagues find it once.** A member who is not a Hub Admin is asked to **Find Configuration File** and picks the file in the hub. After that, their add-in reads it again each time Preferences opens, so a change you share reaches them without them doing anything.
+- **Members find it once.** After that, their add-in reads it again each time Preferences opens, so a change you publish reaches them without them doing anything ([what members do](#members-connect-with-the-hubs-configuration-file)).
 
-### Sharing a setup with colleagues
+### Members: connect with the hub's Configuration File
 
-Each Fusion hub has its own settings, so switching hubs in Fusion switches the settings too. Only a **Hub Admin** of the hub can change them. When you open **Preferences** the add-in checks your role in the active hub.
+*Member Route.*
 
-- **Hub Admin**: click **Save & Publish**. Once the settings pass validation and are saved on this computer, you are asked for a project and folder in the hub, and the Configuration File is stored there (`Fusion-Manage-Item-Management-config.json`). It never contains sign-in tokens.
-- **Everyone else**: the add-in asks you to find the hub's Configuration File. Click **Find Configuration File**, pick the file in the hub, and its tenant, workspaces, field mappings and exports become your settings, read-only. You still sign in with your own Client ID. The file is read again each time Preferences opens.
-- A file saved from another hub is refused, and files over 1 MB or that are not an MfgToFm configuration are rejected.
+Each Fusion hub has its own settings, so switching hubs in Fusion switches the settings too. Only a **Hub Admin** of the hub can change them. When you open **Preferences** the add-in checks your role in the active hub. If you are a member, not a Hub Admin, you do not create an APS app, copy a Client ID or enter a tenant. A Hub Admin has done that once and published the result, and you use it.
+
+**Before you start:** a Hub Admin must have used **Save & Publish** ([above](#save-to-fusion-hub)) so the file is in the hub, and given you **Reader** access to the project it is in ([how](#give-your-members-access-to-the-file)). If you cannot find the file, ask a Hub Admin where it is and whether you have access.
+
+#### The route
+
+1. **Install the add-in.** Follow [stage 1](#1-install-the-add-in). It is the same for everyone.
+2. **Make the right hub active.** In Fusion, open the hub the setup was published for. A file from another hub is refused.
+3. **Open Preferences.** Choose **Manage ▸ Item Management ▸ Administration ▸ Preferences**. The panel shows **Find your Configuration File**, with the hub's name. Click **Find Configuration File**.
+4. **Open the folder.** The **Find the Configuration File** window lists the hub's projects. Open the project and folders the Hub Admin saved the file in. **Use this file** stays greyed out until you choose a file.
+
+    ![Find the Configuration File window, showing the hub's projects](../images/member-find-file.png){ width="640" height="842" }
+
+5. **Choose the file.** Click `Fusion-Manage-Item-Management-config.json`. The window names it at the bottom (**Selected …**). Click **Use this file**.
+
+    ![The Configuration File chosen in a project folder](../images/member-select-file.png){ width="640" height="853" }
+
+6. **Sign in.** The add-in reads the file and the panel changes to **Sign in to Fusion Manage**, with the hub's name. Click **Sign in**, approve access in your browser and return to Fusion. You sign in with your own Autodesk account ([how sign-in works](#how-sign-in-works)).
+
+    ![Sign in to Fusion Manage, shown once the file has been read](../images/member-sign-in.png){ width="640" height="844" }
+
+7. **Check the Configuration tab.** Once you are signed in, the panel opens on the **Configuration** tab. It shows the file you are using and whether it is up to date. Your role shows as **Member**.
+
+    ![The Configuration tab of a member, showing the file in use](../images/member-configuration.png){ width="640" height="847" }
+
+You are ready to use the add-in. There is nothing else to set up.
+
+#### How it works
+
+- **The file is the setup.** It holds the tenant, workspaces, field mappings, exports, and the Client ID with its callback port and scopes. The add-in takes these from it, so you do not enter them. It never holds sign-in tokens, so you still sign in yourself.
+- **Your settings are read-only.** The **Connection**, **Item Workspace** and **Export** tabs show what the file defines, with fields greyed out and the note "These settings come from the hub's Configuration File. Only a Hub Admin can change them." Members do not see **Save & Publish**.
+- **It stays up to date.** The file is read again each time **Preferences** opens, so a change a Hub Admin publishes reaches you without you doing anything. The status at the top of the **Configuration** tab says where you stand:
+
+    | Status | Meaning |
+    |---|---|
+    | **Up to date** | You are using the latest file in the hub. It shows when it was read or checked. |
+    | **Checking for updates…** | The add-in is asking the hub if the file has changed. |
+    | **Updated to the latest version** | The file had changed, and you now use the new one. It names who changed it. |
+    | **Could not check for updates** | The check got no answer. The add-in keeps the file you have, so try again in a moment. |
+
+- **Check for updates** asks the hub at once, without closing Preferences. **Change file** lets you pick a different file, for example if the Hub Admin moved it to another folder.
+- **The file's details.** The card shows the file's name and project, **Last updated in the hub**, **Updated by**, its **Version** in the hub, and **Last read by you**.
+- **Your own Client ID is kept.** If you already had a Client ID, the add-in keeps it, and your sign-in, and takes only the setup from the file.
+- **Files that are refused:** one saved from another hub, one over 1 MB, or one that is not a Fusion Manage Item Management configuration. A file with no Client ID is also refused, so ask the Hub Admin to publish again.
 
 ---
 
