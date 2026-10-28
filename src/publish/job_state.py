@@ -1,10 +1,11 @@
 """What a publish run and a send run share: their state, cancelling, and the snapshot the panels poll."""
 
 import threading
+import time
 import uuid
 from typing import Any, Dict, List
 
-from .states import CANCELLED, QUEUED, RUNNING, time_now
+from .states import CANCELLED, QUEUED, RUNNING
 
 
 class JobState:
@@ -25,7 +26,7 @@ class JobState:
         self.done = 0
         self.total = 0
         self.rows: List[Dict[str, Any]] = []   # one per step, for the Jobs window: queued -> running -> done | error | cancelled
-        self.queued_at, self.started_at, self.finished_at = time_now(), 0.0, 0.0
+        self.queued_at, self.started_at, self.finished_at = time.time(), 0.0, 0.0
 
     @staticmethod
     def row(item: str, description: str, root: bool = False) -> Dict[str, Any]:
@@ -42,7 +43,7 @@ class JobState:
             if self.phase != QUEUED:
                 return False
             self.phase = RUNNING
-            self.started_at = time_now()
+            self.started_at = time.time()
         return True
 
     def cancel(self) -> None:
@@ -64,7 +65,7 @@ class JobState:
             for row in self.rows:
                 if row["status"] == QUEUED:
                     row["status"], row["detail"] = CANCELLED, "Cancelled." if self.cancelled else self.unreached
-        self._set(phase=phase, message=message, finished_at=time_now())
+        self._set(phase=phase, message=message, finished_at=time.time())
 
     def _finish(self, phase: str, message: str) -> None:
         raise NotImplementedError
