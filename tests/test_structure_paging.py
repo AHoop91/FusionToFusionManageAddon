@@ -3,7 +3,7 @@
 import unittest
 
 from src.fusion_mfg import model_service
-from src.fusion_mfg.graphql_client import MfgApiError
+from src.fusion_mfg.fusion_graphql_client import MfgApiError
 
 SUMMARY = {"component_id": "root", "composition": "ORIGINAL"}
 

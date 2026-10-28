@@ -7,11 +7,121 @@ first and fetch the rest only when it is needed.
 from typing import Any, Callable, Dict, List, Union
 
 from ..core.logging_setup import get_logger
-from .graphql_client import MfgApiError, MfgGraphQlClient
+from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
 from .physical import COMPONENT_WITH_PHYSICAL_QUERY, PHYSICAL_FIELDS, parse_physical
 from .parsers import parse_component, parse_properties, parse_structure, parse_summary
-from .queries import (COMPONENT_PROPERTIES_QUERY, MANAGE_QUERY, PROPERTIES_QUERY, STRUCTURE_DEPTH,
-                      STRUCTURE_PAGE_SIZE, STRUCTURE_QUERY, SUMMARY_QUERY, THUMBNAIL_QUERY, publish_query)
+
+# GraphQL text for reading one model. The ``bulkModels`` queries take its input list.
+SUMMARY_QUERY = """
+query ($input: [BulkModelsQueryInput!]!) {
+  bulkModels(input: $input) {
+    model {
+      id
+      component {
+        id
+        composition
+        itemNumber { id }
+        name { value }
+        description { value }
+        partNumber { value }
+      }
+    }
+  }
+}
+"""
+
+# The Fusion Manage item a component is linked to (the hyperlink on its Item Number in Fusion).
+MANAGE_QUERY = """
+query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
+  component(componentId: $componentId, composition: $composition, time: $time) {
+    lifecycle { itemUrn itemUrl }
+  }
+}
+"""
+
+PROPERTIES_QUERY = """
+query ($input: [BulkModelsQueryInput!]!) {
+  bulkModels(input: $input) {
+    model {
+      component {
+        allProperties(pagination: { limit: 500 }) {
+          results { name displayValue }
+        }
+      }
+    }
+  }
+}
+"""
+
+COMPONENT_PROPERTIES_QUERY = """
+query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
+  component(componentId: $componentId, composition: $composition, time: $time) {
+    allProperties(pagination: { limit: 500 }) {
+      results { name displayValue }
+    }
+  }
+}
+"""
+
+# A component's thumbnail alone, so a slow one never holds up the rest. The url is short-lived, so a publish asks for it
+# again when it needs it.
+THUMBNAIL_QUERY = """
+query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
+  component(componentId: $componentId, composition: $composition, time: $time) {
+    thumbnail { status signedUrl }
+  }
+}
+"""
+
+# What a publish reads of a component: its properties, its thumbnail url and the Fusion Manage item it is linked to. Several
+# components go in one request, each under its own alias (``c0``, ``c1`` ...), so the Data Model is asked once for all of them.
+PUBLISH_FIELDS = """
+    allProperties(pagination: { limit: 500 }) {
+      results { name displayValue }
+    }
+    thumbnail { status signedUrl }
+    lifecycle { itemUrn itemUrl }"""
+
+
+def publish_query(count: int, extra_fields: str = "") -> str:
+    """The query for ``count`` components (variables ``id0`` ... , ``composition`` and ``time``); ``extra_fields`` are added to each."""
+    declared = "".join(f", $id{n}: ID!" for n in range(count))
+    components = "\n".join(f"  c{n}: component(componentId: $id{n}, composition: $composition, time: $time) {{{PUBLISH_FIELDS}\n    {extra_fields}\n  }}"
+                           for n in range(count))
+    return f"query ($composition: BOMCompositionEnum!, $time: DateTime{declared}) {{\n{components}\n}}\n"
+
+
+# The whole bill of materials: one flat list of relations down to STRUCTURE_DEPTH
+# levels. Each relation names its parent (fromComponent), so the parser rebuilds
+# the tree. Results are paged with a cursor.
+STRUCTURE_DEPTH = 50   # no assembly is assumed to stop at some depth: a read that still reaches this is an error, not a cut-off BOM
+# The most a page may hold is 250 ("PaginationInput.limit must be between 1 and 250"), and a page of that size costs 467 of
+# the 1000 points a query may cost. Every page has a fixed cost in time (about two seconds with six relations in it), so
+# the biggest page is used. How long a full page takes has not been measured.
+STRUCTURE_PAGE_SIZE = 250
+
+STRUCTURE_QUERY = """
+query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime, $depth: Int, $cursor: String, $limit: Int) {
+  component(componentId: $componentId, composition: $composition, time: $time) {
+    bomRelations(depth: $depth, pagination: { cursor: $cursor, limit: $limit }) {
+      pagination { cursor }
+      results {
+        sequenceNumber
+        quantityProperty { displayValue }
+        fromComponent { id }
+        toComponent {
+          id
+          hasChildren
+          itemNumber { id }
+          name { value }
+          description { value }
+          partNumber { value }
+        }
+      }
+    }
+  }
+}
+"""
 
 # Sections read with ``bulkModels`` from the open model.
 SECTIONS = {
@@ -33,7 +143,7 @@ PUBLISH_BATCH_PHYSICAL = 2
 log = get_logger("model_service")
 
 
-def read_section(client: MfgGraphQlClient, section: str, model_id: str, time: str = "",
+def read_section(client: FusionGraphQlClient, section: str, model_id: str, time: str = "",
                  summary: Dict[str, Any] = None, component_id: str = "", physical: bool = False,
                  progress: Callable[[int], None] = None) -> Any:
     """Parsed ``section`` of a model.
@@ -77,13 +187,13 @@ def _component_variables(summary: Dict[str, Any], component_id: str, time: str) 
     return variables
 
 
-def read_thumbnail_url(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> str:
+def read_thumbnail_url(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> str:
     """A fresh signed url of a component's thumbnail (empty when it has none yet); it expires soon, so use it at once."""
     node = (client.query(THUMBNAIL_QUERY, _component_variables(summary, component_id, time), label="thumbnail").get("component") or {})
     return str((node.get("thumbnail") or {}).get("signedUrl") or "")
 
 
-def read_manage_item(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> Dict[str, str]:
+def read_manage_item(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> Dict[str, str]:
     """``{"urn", "url"}`` of the Fusion Manage item a component is linked to (empty values when it is not linked)."""
     return _manage_item(client.query(MANAGE_QUERY, _component_variables(summary, component_id, time), label="manage link").get("component") or {})
 
@@ -93,7 +203,7 @@ def publish_batch_size(physical: bool) -> int:
     return PUBLISH_BATCH_PHYSICAL if physical else PUBLISH_BATCH
 
 
-def read_publish_components(client: MfgGraphQlClient, summary: Dict[str, Any], component_ids: List[str], time: str = "",
+def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any], component_ids: List[str], time: str = "",
                             physical: bool = False) -> Dict[str, Union[Dict[str, Any], Exception]]:
     """What a publish reads of each component, in one request: by component id, ``properties`` (with the physical ones when ``physical``),
     the ``thumbnail_url`` (empty when it has none yet; it expires soon, so use it at once) and the Fusion Manage ``link`` of the item it is
@@ -138,13 +248,13 @@ def _manage_item(node: Dict[str, Any]) -> Dict[str, str]:
     return {"urn": str(lifecycle.get("itemUrn") or ""), "url": str(lifecycle.get("itemUrl") or "")}
 
 
-def _read_component(client: MfgGraphQlClient, summary: Dict[str, Any], component_id: str, time: str, physical: bool = False) -> Any:
+def _read_component(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, time: str, physical: bool = False) -> Any:
     query, label = (COMPONENT_WITH_PHYSICAL_QUERY, "properties + physical") if physical else (COMPONENT_PROPERTIES_QUERY, "properties")
     data = client.query(query, _component_variables(summary, component_id, time), label=label)
     return {"properties": _properties_of(data, physical)}
 
 
-def _read_structure(client: MfgGraphQlClient, summary: Dict[str, Any], time: str, progress: Callable[[int], None] = None,
+def _read_structure(client: FusionGraphQlClient, summary: Dict[str, Any], time: str, progress: Callable[[int], None] = None,
                     root_id: str = "", depth: int = STRUCTURE_DEPTH) -> Any:
     """The lines below ``root_id`` (the design when empty) down to ``depth`` levels, as ``parse_structure`` rows. ``depth`` 1 is one
     level: only the lines directly under it, whatever the answer holds below them."""

@@ -15,13 +15,11 @@ from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 import adsk.core
 import adsk.fusion
 
-from ..auth.auth_service import AuthService
-from ..config.config_service import ConfigService
 from ..core.cancel import CancelToken
 from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
 from ..fusion_mfg.design_reads import DesignReads
-from ..fusion_mfg.graphql_client import MfgGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.properties import HUBS_QUERY, find_hub_id
 
 log = get_logger("item_numbers")
@@ -134,16 +132,14 @@ def _remembered_path() -> str:
 class ItemNumbers:
     """Finds item numbers; the reads run on a worker thread, never on Fusion's."""
 
-    def __init__(self, config: ConfigService, auth: AuthService, remembered_path: Optional[str] = None) -> None:
-        self._config = config
-        self._auth = auth
+    def __init__(self, remembered_path: Optional[str] = None) -> None:
         self._remembered = _Remembered(remembered_path or _remembered_path())
         self.reads = DesignReads()   # the Data Model's summary and bill of materials of the design in use, read once per saved version
         self._file_lock = threading.Lock()   # one find of a design by its file at a time (the read ahead and the click arrive together)
         self._files: Dict[str, Tuple[str, str]] = {}   # design file id -> (model id, time), kept while the Export window is open
         self._hubs: Dict[str, str] = {}   # hub name -> hub id
 
-    def _model_of_file(self, client: MfgGraphQlClient, ref: DesignRef) -> DesignRef:
+    def _model_of_file(self, client: FusionGraphQlClient, ref: DesignRef) -> DesignRef:
         """``ref`` with the Data Model id of its design, found from the design's data file (the hub's item whose id is the file's lineage id)."""
         with self._file_lock:
             kept = self._files.get(ref.file_id)
@@ -165,7 +161,7 @@ class ItemNumbers:
             return ref
         if not ref.file_id:
             raise NoItemNumber("The design has not been saved, so it has no item number.")
-        return self._model_of_file(MfgGraphQlClient(self._config.effective_settings(), self._auth, cancel), ref)
+        return self._model_of_file(FusionGraphQlClient(cancel), ref)
 
     def forget_files(self) -> None:
         """Drop the models found for design files, so the next lookup asks again (the design may have been saved since)."""
@@ -178,9 +174,9 @@ class ItemNumbers:
             raise NoItemNumber("The design has not been saved, so it has no item number.")
         client = None   # made when the Data Model is first asked, so an item number kept from before needs no settings
 
-        def data_model() -> MfgGraphQlClient:
+        def data_model() -> FusionGraphQlClient:
             nonlocal client
-            client = client or MfgGraphQlClient(self._config.effective_settings(), self._auth, cancel)
+            client = client or FusionGraphQlClient(cancel)
             return client
         if not ref.model_id:   # a design a drawing references: Fusion has not loaded it, so it is found by its file
             ref = self._model_of_file(data_model(), ref)

@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core.logging_setup import get_logger
 from ..fm.client import FmClient
 from ..fm.items import ItemService
-from ..fusion_mfg.graphql_client import MfgGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import publish_batch_size, read_publish_components
 from ..sync.item_compare import item_number_of
 
@@ -36,7 +36,7 @@ def _chunks(values: List[str], size: int) -> List[List[str]]:
 class ReadAhead:
     """Starts the shared reads of a run on entering, and waits for them to finish on leaving."""
 
-    def __init__(self, items: List[Dict[str, Any]], summary: Dict[str, Any], client: MfgGraphQlClient, fm: FmClient, workspace_id: str,
+    def __init__(self, items: List[Dict[str, Any]], summary: Dict[str, Any], client: FusionGraphQlClient, fm: FmClient, workspace_id: str,
                  model_time: str, physical: bool, cancelled: Callable[[], bool]) -> None:
         self._items, self._summary, self._client, self._fm = items, summary, client, fm
         self._workspace_id, self._time, self._physical, self._cancelled = workspace_id, model_time, physical, cancelled

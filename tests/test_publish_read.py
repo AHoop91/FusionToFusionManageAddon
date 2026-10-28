@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.fusion_mfg.graphql_client import MfgApiError
+from src.fusion_mfg.fusion_graphql_client import MfgApiError
 from src.fusion_mfg.model_service import read_publish_components
 
 SUMMARY = {"composition": "DESIGN"}

@@ -31,7 +31,7 @@ Reading the cloud description, rather than asking the open Fusion document, has 
 
 - A publish runs in the background. It does not freeze Fusion, and **the design does not need to stay open** while it runs.
 - Properties of every component, at every level of the assembly, are available without opening each one.
-- The same signed-in session reads the Data Model and writes to Fusion Manage, so there is no second login. The `data:read` scope covers it.
+- The Data Model is read through Fusion itself, as the user Fusion is signed in as, so it needs no Client ID or second login. Writing to Fusion Manage still uses the sign-in set up in Settings.
 
 !!! note "The add-in reads what has been saved"
     Because the source is the saved cloud version of the design, changes you have not saved are not seen. A design that Fusion has not finished processing may also be incomplete. Save, and let the design finish processing, before you publish or compare.

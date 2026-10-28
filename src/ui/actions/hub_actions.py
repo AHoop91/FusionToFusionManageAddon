@@ -50,7 +50,7 @@ def register_hub_actions(bridge: MessageBridge, config: ConfigService) -> None:
 
     def read(key: Tuple[str, str], hub_name: str) -> None:
         try:
-            client = FusionGraphQlClient()   # Fusion's own sign-in: the role is known before any Client ID exists
+            client = FusionGraphQlClient()
             with lock:
                 known = hub_ids.get(key[0])
             if known is None:

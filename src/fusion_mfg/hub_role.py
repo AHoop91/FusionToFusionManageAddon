@@ -6,8 +6,7 @@ an answer, "not an admin"; anything else that goes wrong (the network, the servi
 
 from typing import Any, Dict, NamedTuple
 
-from ..auth.errors import AuthError
-from .graphql_client import MfgApiError, MfgGraphQlClient
+from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
 
 ROLE_ADMIN = "ADMIN"
 ACCESS_DENIED = "FHQ-403"
@@ -49,7 +48,7 @@ def parse_hub_role(data: Dict[str, Any], email: str) -> HubRole:
     return HubRole(admin=role == ROLE_ADMIN, known=True, role=role)
 
 
-def read_hub_role(client: MfgGraphQlClient, hub_id: str, email: str) -> HubRole:
+def read_hub_role(client: FusionGraphQlClient, hub_id: str, email: str) -> HubRole:
     """Ask the Data Model for the role of ``email`` in the hub ``hub_id``. Slow (a network call): not on Fusion's thread."""
     if not hub_id or not email.strip():
         return UNKNOWN
@@ -57,5 +56,3 @@ def read_hub_role(client: MfgGraphQlClient, hub_id: str, email: str) -> HubRole:
         return parse_hub_role(client.query(HUB_ROLE_QUERY, {"hubId": hub_id, "email": email.strip()}, "hub role"), email)
     except MfgApiError as exc:
         return NOT_ADMIN if exc.code == ACCESS_DENIED else UNKNOWN
-    except AuthError:
-        return UNKNOWN   # not signed in

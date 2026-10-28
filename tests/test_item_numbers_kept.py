@@ -55,7 +55,7 @@ class KeptItemNumbersTest(unittest.TestCase):
 
     def _numbers(self):
         # No config or sign-in: a read of the Data Model would fail, so an answer can only come from the file.
-        return item_numbers.ItemNumbers(None, None, remembered_path=self.path)
+        return item_numbers.ItemNumbers(remembered_path=self.path)
 
     def test_kept_across_sessions(self):
         subject = item_numbers.Subject("IT-1", "PN-1")

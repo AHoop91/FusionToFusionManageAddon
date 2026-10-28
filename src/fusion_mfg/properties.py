@@ -8,12 +8,13 @@ the items the add-in reads.
 from typing import Any, Dict, List
 
 from ..config.workspace_models import PHYSICAL_NAMES
-from .graphql_client import MfgApiError, MfgGraphQlClient
+from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
 
 BASE = "base"
 CUSTOM = "custom"
 PHYSICAL = "physical"
 
+# Every hub the user can see: a hub is found by name (``find_hub_id``), whichever of the add-in's reads needs its id.
 HUBS_QUERY = "query Hubs { hubs { results { id name } } }"
 
 DEFINITIONS_QUERY = """
@@ -74,7 +75,7 @@ def parse_definitions(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 class PropertyService:
     """Lists the properties available in a hub."""
 
-    def __init__(self, client: MfgGraphQlClient) -> None:
+    def __init__(self, client: FusionGraphQlClient) -> None:
         self._client = client
 
     def list_properties(self, hub_name: str) -> List[Dict[str, Any]]:

@@ -4,12 +4,12 @@ import unittest
 from unittest import mock
 
 from src.core.cancel import Cancelled, CancelToken
-from src.fusion_mfg.graphql_client import MfgApiError, MfgGraphQlClient
+from src.fusion_mfg.fusion_graphql_client import FusionGraphQlClient, MfgApiError
 
 
 def client(outcomes):
     """A client whose requests give ``outcomes`` in turn: an exception is raised, anything else returned."""
-    made = MfgGraphQlClient(None, None)
+    made = FusionGraphQlClient()
     calls = iter(outcomes)
 
     def once(text, variables, label=""):

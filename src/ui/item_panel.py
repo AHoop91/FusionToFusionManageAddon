@@ -37,7 +37,7 @@ from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.tabs import TabService
 from ..fm.ttl_cache import TtlCache
 from ..fm.where_used import WhereUsedService
-from ..fusion_mfg.graphql_client import MfgGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..publish.writer import safe_name
 from ..sync.up_to_date import UNAVAILABLE, ShownItem, check_bom, check_properties
 from . import drawing_source
@@ -179,7 +179,7 @@ class ItemPanel:
         self._auth = auth
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
-        self._numbers = ItemNumbers(config, auth)
+        self._numbers = ItemNumbers()
         self._saved = TtlCache(SAVED_STATE_SECONDS)   # when the document was last saved, by (document, modified, part number)
         self._export_read = TtlCache()   # what Fusion says of what the Export window exports (its design reference, when it was saved), read once per window
         self._number = ""   # the item number the panel shows, for Refresh
@@ -277,7 +277,7 @@ class ItemPanel:
                 ref_found = self._numbers.model_of(ref, fm.cancel)
             except NoItemNumber:   # no saved design is open
                 return {"state": UNAVAILABLE}
-            mfg = MfgGraphQlClient(self._config.effective_settings(), self._auth, fm.cancel)
+            mfg = FusionGraphQlClient(fm.cancel)
             cfg = self._config.config.workspaces.get(ITEMS_KIND)
             return check(ShownItem(self._numbers.reads, mfg, fm, cfg, ref_found.model_id, ref_found.time, number, item_id))
         return self._lookup(payload, work, result_action)

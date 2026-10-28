@@ -23,7 +23,7 @@ class Fixture:
         config = mock.Mock()
         config.config.workspaces.get.return_value = mock.Mock(workspace_id="242", maps_physical=lambda: False)
         self.patches = [
-            mock.patch.object(panel_sections, "MfgGraphQlClient"), mock.patch.object(panel_sections, "FmClient"),
+            mock.patch.object(panel_sections, "FusionGraphQlClient"), mock.patch.object(panel_sections, "FmClient"),
             mock.patch.object(panel_sections, "ADDIN"),
             mock.patch.object(panel_sections, "publish_denial", return_value=denied),
             mock.patch.object(panel_sections, "read_section", side_effect=self.read),

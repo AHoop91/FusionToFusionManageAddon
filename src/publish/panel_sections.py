@@ -21,7 +21,7 @@ from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..fm.client import FmClient
 from ..fm.permissions import denial
-from ..fusion_mfg.graphql_client import MfgGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_section
 from ..sync.bom_levels import compare_design_bom, compare_level, search_design
 from ..sync.item_compare import item_number_of, read_and_compare
@@ -63,7 +63,7 @@ class _Load:
     slot: str
     name: str
     key: str
-    client: MfgGraphQlClient
+    client: FusionGraphQlClient
     fm: FmClient
     cfg: WorkspaceConfig
     model_id: str
@@ -93,7 +93,7 @@ class PublishSections:
             model_id, time = self._model_ref()
             settings = self._config.effective_settings()
             token = ADDIN.child(f"loading {slot} for the Publish panel")
-            client, fm = MfgGraphQlClient(settings, self._auth, token), FmClient(settings, self._auth, token)
+            client, fm = FusionGraphQlClient(token), FmClient(settings, self._auth, token)
             cfg = self._config.config.workspaces.get(ITEMS_KIND)
         except Exception as exc:
             log.exception("Could not start loading %s", slot)

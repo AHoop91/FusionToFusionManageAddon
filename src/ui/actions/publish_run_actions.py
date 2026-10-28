@@ -13,7 +13,7 @@ from ...config.config_service import ConfigService
 from ...config.workspace_models import ITEMS_KIND
 from ...core.logging_setup import get_logger
 from ...fm.client import FmApiError, FmClient
-from ...fusion_mfg.graphql_client import MfgGraphQlClient
+from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...publish.job_queue import JobQueue
 from ...publish.panel_sections import publish_denial
 from ...publish.reports import publish_report, send_report
@@ -93,7 +93,7 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
                "operations": list(payload.get("operations") or []), "root_number": str(payload.get("root_number") or "")}
         folder = PublishFolder(temp_root(), job["root_number"])   # its files are kept until the run ends clean or is cleared
         settings = config.effective_settings()
-        run = PublishRun(folder, job, cfg, MfgGraphQlClient(settings, auth), FmClient(settings, auth), model_id, time, send=True)
+        run = PublishRun(folder, job, cfg, FusionGraphQlClient(), FmClient(settings, auth), model_id, time, send=True)
         watched.touch(run.id)   # the panel opens its progress dialog on this run
         queue.add(run)
         log.info("Publish queued into %s: %d item(s), %d BOM operation(s)", folder.path, len(job["items"]), len(job["operations"]))

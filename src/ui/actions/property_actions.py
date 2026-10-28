@@ -3,9 +3,8 @@
 import threading
 from typing import Any, Dict
 
-from ...auth.auth_service import AuthService
-from ...config.config_service import CompanyModeUnavailable, ConfigService
-from ...fusion_mfg.graphql_client import MfgGraphQlClient
+from ...config.config_service import CompanyModeUnavailable
+from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...fusion_mfg.properties import PropertyService
 from ...core.logging_setup import get_logger
 from ..message_bridge import MessageBridge
@@ -20,7 +19,7 @@ def _active_hub_name() -> str:
     return hub.name if hub else ""
 
 
-def register_property_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:
+def register_property_actions(bridge: MessageBridge) -> None:
     """Register ``list_custom_properties`` and ``list_custom_properties_status``.
 
     Like workspace validation, the query runs on a worker thread, which pushes the answer to the panel when it is done, so Fusion's UI
@@ -30,7 +29,7 @@ def register_property_actions(bridge: MessageBridge, config: ConfigService, auth
     state: Dict[str, Any] = {"pending": False, "ok": False, "properties": [], "message": ""}
     lock = threading.Lock()
 
-    def run(client: MfgGraphQlClient, hub_name: str) -> None:
+    def run(client: FusionGraphQlClient, hub_name: str) -> None:
         try:
             properties = PropertyService(client).list_properties(hub_name)
             log.info("Properties loaded for hub '%s': %d", hub_name, len(properties))
@@ -47,7 +46,7 @@ def register_property_actions(bridge: MessageBridge, config: ConfigService, auth
             if state["pending"]:
                 return dict(state)
         try:
-            client = MfgGraphQlClient(config.effective_settings(), auth)
+            client = FusionGraphQlClient()
             hub_name = _active_hub_name()
         except CompanyModeUnavailable as exc:
             return {"pending": False, "ok": False, "properties": [], "message": str(exc)}

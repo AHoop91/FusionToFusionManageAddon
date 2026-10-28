@@ -20,7 +20,7 @@ from ..fm.client import LOOKUPS, FmApiError, FmClient
 from ..fm.components import ComponentService, manage_link
 from ..fm.picklists import PicklistResolver
 from ..fm.sections import SectionService
-from ..fusion_mfg.graphql_client import MfgGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import read_thumbnail_url
 from ..sync.item_compare import compare_with_item, item_number_of, lookup_item
 from ..sync.property_compare import FOUND, MISMATCH, NEW
@@ -59,7 +59,7 @@ class PublishRun(JobState):
     stage = "validating"   # then "items", then "bom": the run looks up every item number before it writes anything
     unreached = "Not published: the run failed."
 
-    def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: MfgGraphQlClient,
+    def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: FusionGraphQlClient,
                  fm: FmClient, model_id: str, time: str, send: bool = False) -> None:
         super().__init__(str(job.get("root_number") or "design"), folder.path)
         self.folder, self.job, self.cfg = folder, job, cfg

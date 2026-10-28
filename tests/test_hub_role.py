@@ -2,8 +2,7 @@
 
 import unittest
 
-from src.auth.errors import AuthError
-from src.fusion_mfg.graphql_client import MfgApiError
+from src.fusion_mfg.fusion_graphql_client import MfgApiError
 from src.fusion_mfg.hub_role import ACCESS_DENIED, NOT_ADMIN, UNKNOWN, parse_hub_role, read_hub_role
 
 
@@ -50,7 +49,6 @@ class ReadTests(unittest.TestCase):
 
     def test_other_failures_say_nothing(self):
         self.assertEqual(read_hub_role(FakeClient(error=MfgApiError("busy", transient=True)), "hub", "me@x.com"), UNKNOWN)
-        self.assertEqual(read_hub_role(FakeClient(error=AuthError("Not signed in.")), "hub", "me@x.com"), UNKNOWN)
 
     def test_nothing_is_asked_without_a_hub_or_an_email(self):
         client = FakeClient(error=AssertionError("must not be asked"))

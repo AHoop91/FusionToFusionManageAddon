@@ -11,7 +11,7 @@ from typing import Any, Dict, List, NamedTuple
 from ..config.workspace_models import WorkspaceConfig
 from ..fm.client import FmClient
 from ..fusion_mfg.design_reads import DesignReads
-from ..fusion_mfg.graphql_client import MfgGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from .bom_compare import DIFFERING as BOM_DIFFERING, read_and_compare_bom
 from .item_compare import item_number_of, read_and_compare
 from .property_compare import FOUND, MISMATCH, NEW
@@ -23,7 +23,7 @@ class ShownItem(NamedTuple):
     """The item the panel shows, and the saved version of the open design it is compared with."""
 
     reads: DesignReads
-    mfg: MfgGraphQlClient
+    mfg: FusionGraphQlClient
     fm: FmClient
     cfg: WorkspaceConfig   # the Items workspace
     model_id: str
