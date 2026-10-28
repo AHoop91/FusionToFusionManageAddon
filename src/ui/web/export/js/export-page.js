@@ -22,6 +22,7 @@
   const FILES_WAIT_MS = 30000;    // how long to wait for the attached files before saying they could not be read
 
   let context = null;      // what Python said is on offer
+  let thumbnail = null;     // the thumbnail of what is exported, once read: {target, url} (url empty when there is none); null until then
   let itemNumber = null;    // the item number of what is exported: null until it has been read, then it (empty when there is none)
   let format = '';         // the key of the format chosen
   let destination = '';    // the key of the destination chosen
@@ -245,12 +246,23 @@
     else title.textContent = itemNumber;
   }
 
+  /** The thumbnail beside the title: a sweeping skeleton while it is read, the picture when it came, nothing when there is none. */
+  function paintThumbnail() {
+    const box = $('export-thumbnail');
+    const url = thumbnail && thumbnail.target === context.target ? thumbnail.url : null;   // null: still being read
+    box.hidden = !context.target || (url !== null && !/^https:\/\//i.test(url));
+    box.classList.toggle('is-loading', url === null);
+    box.style.backgroundImage = url ? 'url("' + url.replace(/"/g, '%22') + '")' : '';
+  }
+
   /** The choices: what is exported, any problem with it, the formats and destinations, and what pressing Export will do. */
   function renderForm() {
     if (access) applyAccess();
     const waiting = context.destinations.some(function (d) { return d.checking; });
     if (waiting && !accessTimer) accessTimer = setTimeout(accessTimedOut, ACCESS_WAIT_MS);
     paintTarget();
+    paintThumbnail();
+    $('export-name').textContent = context.name;   // the component's name in Fusion
     $('export-description').textContent = context.description;   // when Fusion has one for the design
     const problem = $('export-problem');
     problem.textContent = context.problem;
@@ -375,6 +387,11 @@
       if (!r.ok) return;
       itemNumber = r.result.item_number;
       if (context && context.target === r.result.target) paintTarget();   // else it is shown when the context arrives
+    });
+    bridge.on('export_thumbnail', function (r) {
+      if (!r.ok) return;
+      thumbnail = r.result;
+      if (context) paintThumbnail();   // else it is shown when the context arrives
     });
     bridge.on('export_access', function (r) {
       if (!r.ok) return;

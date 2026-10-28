@@ -66,7 +66,7 @@ def _export_design(path: str, subject: Subject, progress: Progress) -> None:
     if occurrence is None:
         raise LookupError(f"No component with part number {number} in the open design.")
     progress(None)   # one call that cannot be followed
-    export_step(path, [occurrence], part_number=number)
+    export_step(path, occurrence)
 
 
 def _confirm_design(ui: adsk.core.UserInterface, subject: Subject) -> bool:

@@ -15,15 +15,22 @@ body { background: var(--bg); }
 
 /* ---- The choices ----------------------------------------------------------------------- */
 
-/* What is being exported: the part number, and under it the description of the design. */
-.export-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+/* What is being exported: its thumbnail, the part number, and under it the name and the description. */
+.export-summary { display: flex; align-items: flex-start; gap: 12px; }
+.export-thumbnail { flex: none; width: 56px; height: 56px; border: 1px solid var(--border); border-radius: 8px; background: #fff center / contain no-repeat; }
+/* The same sweeping skeleton as the thumbnails of the Publish window, while the picture is on its way. */
+.export-thumbnail.is-loading { background-image: linear-gradient(90deg, #eceff1 25%, #f7f8f9 50%, #eceff1 75%); background-size: 200% 100%; background-repeat: repeat-x; animation: export-thumb-sweep 1.3s linear infinite; }
+@keyframes export-thumb-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .export-thumbnail.is-loading { animation: none; } }
 .export-target { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
-.export-description { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+.export-name { margin: 2px 0 0; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.export-name:empty { display: none; }
+.export-description { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .export-description:empty { display: none; }
 
 .export-alert { margin: 0; padding: 10px 14px; border: 1px solid #f3c1c5; border-left: 4px solid var(--danger); border-radius: 8px; color: var(--danger); background: #fff5f5; }
 
-.export-summary-text { min-width: 0; }
+.export-summary-text { flex: 1; min-width: 0; }
 
 /* The destination chosen, as a coloured pill at the top right of the window. */
 .export-pill { flex: none; margin-top: 4px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #fff; background: var(--muted); }

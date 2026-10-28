@@ -11,6 +11,7 @@ they run on a worker thread; the page polls ``get_item_view`` for the answer.
 """
 
 import json
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -45,7 +46,7 @@ from .attachment_upload import AttachmentUpload, UploadJob
 from .design_history import saved_state
 from .export_freshness import STALE, UNSAVED, compare as compare_freshness
 from .export_options import FORMATS
-from .item_numbers import DesignRef, ItemNumbers, NoItemNumber, Subject, active_design_ref, design_ref
+from .item_numbers import DesignRef, ItemNumbers, NoItemNumber, Subject, active_design_ref, component_ref, design_ref
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
@@ -142,11 +143,30 @@ def _selected_part_number(from_menu: bool = False) -> str:
     return str(design.rootComponent.partNumber or "").strip() if design is not None else ""
 
 
+def _own_ref(part_number: str) -> Optional[DesignRef]:
+    """The reference of the Data Model's own model of the selected component that has ``part_number`` (see ``component_ref``), or None when
+    the selection holds no such component or it has none. UI thread."""
+    if drawing_source.active_drawing() is not None:
+        return None
+    design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+    for entity in _active_selection():
+        component = _component_of(entity)
+        if component is not None and str(component.partNumber or "").strip() == part_number:
+            return component_ref(component, design)
+    return None
+
+
 def _active_ref() -> DesignRef:
     """The Data Model reference of the open design, or of the design the open drawing shows. UI thread."""
     if drawing_source.active_drawing() is not None:
         return design_ref(drawing_source.referenced_design())
     return active_design_ref()
+
+
+def _part_ref(part_number: str) -> DesignRef:
+    """Where the Data Model finds the component with ``part_number``: its own model when it is selected and has one, else the open design
+    (or the design the open drawing shows). UI thread."""
+    return _own_ref(part_number) or _active_ref()
 
 
 class _SelectionHandler(adsk.core.ActiveSelectionEventHandler):
@@ -181,7 +201,8 @@ class ItemPanel:
         self._state: Dict[str, Any] = _answer(seq=0)
         self._numbers = ItemNumbers()
         self._saved = TtlCache(SAVED_STATE_SECONDS)   # when the document was last saved, by (document, modified, part number)
-        self._export_read = TtlCache()   # what Fusion says of what the Export window exports (its design reference, when it was saved), read once per window
+        self._export_refs: Dict[str, DesignRef] = {}   # part number -> where the Data Model finds it, as the window opened
+        self._export_read = TtlCache()   # what Fusion says of what the Export window exports (when it was saved), read once per window
         self._number = ""   # the item number the panel shows, for Refresh
         self._part = ""   # the part number Fusion gives that component
         self._selection_handler = _SelectionHandler(self._follow_selection)   # kept, or Fusion drops it
@@ -348,14 +369,21 @@ class ItemPanel:
         if number and number != self._part:
             self._find(number, lambda subject: self._open(subject, show=False), quiet=True, cancel=self._follow.replace())   # it is open already; a find for the last selection still going is not wanted
 
+    def _export_ref(self, number: str) -> DesignRef:
+        """Where the Data Model finds the part ``number`` the Export window shows (see ``_part_ref``), read once per window: the selection may
+        change while it is open. UI thread."""
+        if number not in self._export_refs:
+            self._export_refs[number] = _part_ref(number)
+        return self._export_refs[number]
+
     def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False, fail: Optional[Callable[[str], None]] = None,
-              cancel: Optional[CancelToken] = None) -> None:
+              cancel: Optional[CancelToken] = None, ref: Optional[DesignRef] = None) -> None:
         """Read the item number of the component with ``part_number`` from the Data Model (a worker thread), then call ``then`` with it on the
         UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log; ``fail`` is
         given the reason instead of a message box showing it). UI thread."""
         if not self._has_number(part_number, quiet):
             return
-        ref = _active_ref()
+        ref = ref or _part_ref(part_number)
 
         def work() -> None:
             self._warm()   # the workspace's layouts are read while the Data Model answers
@@ -528,9 +556,9 @@ class ItemPanel:
         number = _selected_part_number()
         return (number, "") if number else ("", "Select a component that has a part number, or open a design that has one.")
 
-    def export_description(self) -> str:
-        """The description Fusion holds for what Export exports: the selected component of the open design (else the design's top), or the
-        design a drawing shows; "" when it has none or cannot be read. UI thread."""
+    def export_names(self) -> Tuple[str, str]:
+        """``(name, description)`` Fusion holds for what Export exports: the selected component of the open design (else the design's top), or
+        the design a drawing shows; "" for what it has none of or cannot be read. UI thread."""
         try:
             if drawing_source.active_drawing() is not None:
                 design = drawing_source.referenced_design()
@@ -539,34 +567,37 @@ class ItemPanel:
                 component = next((c for c in map(_component_of, _active_selection()) if c is not None), None)
                 design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
                 component = component or (design.rootComponent if design is not None else None)
-            return str(component.description or "").strip() if component is not None else ""
+            if component is None:
+                return "", ""
+            name = str(component.name or "").strip()
+            if design is not None and component.id == design.rootComponent.id:
+                name = re.sub(r" v\d+$", "", name)   # the top is named with the version of the document ("Bracket v12")
+            return name, str(component.description or "").strip()
         except (AttributeError, RuntimeError):
-            return ""
+            return "", ""
 
-    def _export_state(self, number: str) -> Tuple[DesignRef, Dict[str, Any]]:
-        """The design reference and the last save (``design_history.saved_state``) of what Export exports, numbered ``number``. Reading them holds
-        Fusion's thread, so it is done once per window, and timed in the log. UI thread."""
+    def _export_state(self, number: str) -> Dict[str, Any]:
+        """The last save (``design_history.saved_state``) of what Export exports, numbered ``number``. Reading it holds Fusion's thread, so it is
+        done once per window, and timed in the log. UI thread."""
         document = adsk.core.Application.get().activeDocument
         key = (number, document.name if document is not None else "")
         kept = self._export_read.get(key)
         if kept:
             return kept
         began = time.monotonic()
-        ref = _active_ref()
-        referenced = time.monotonic()
         source = saved_state(number, _active_selection())
-        log.info("Export state of %s read on Fusion's thread in %.2fs (design reference %.2fs, last saved %.2fs)", number,
-                 time.monotonic() - began, referenced - began, time.monotonic() - referenced)
-        return self._export_read.put(key, (ref, source))
+        log.info("Export state of %s read on Fusion's thread in %.2fs", number, time.monotonic() - began)
+        return self._export_read.put(key, source)
 
-    def warm_export_target(self, found: Callable[[str, str], None]) -> None:
+    def warm_export_target(self, found: Callable[[str, str], None], thumbnail: Callable[[str, str], None]) -> None:
         """Read the item number of what Export will export ahead of the click, on a worker thread, so that the Data Model (about two seconds
         the first time for a design) is already read, and kept, when Export is pressed. ``found(part number, item number)`` is called from the
-        worker once it is known, with "" when it could not be read. A failure is left for the click to report. UI thread."""
+        worker once it is known, with "" when it could not be read; ``thumbnail(part number, url)`` follows with the component's thumbnail ("" when
+        it has none). A failure is left for the click to report. UI thread."""
         number, _problem = self.export_target()
         if not number:
             return
-        ref = _active_ref()
+        ref = self._export_ref(number)
         cancel = self._export.token
 
         def work() -> None:
@@ -577,8 +608,16 @@ class ItemPanel:
             except Exception as exc:  # noqa: BLE001 - only an optimisation
                 log.info("Item number of %s not read ahead: %s", number, exc)
                 found(number, "")   # no item number: the title is left empty
+                thumbnail(number, "")
                 return
             found(number, subject.item_number)
+            try:
+                thumbnail(number, self._numbers.thumbnail_url(ref, number, cancel))
+            except Cancelled:
+                return
+            except Exception as exc:  # noqa: BLE001 - the title does without a picture
+                log.info("Thumbnail of %s not read: %s", number, exc)
+                thumbnail(number, "")
             self._uploads.warm_component(subject.item_number, cancel)
 
         threading.Thread(target=work, daemon=True).start()
@@ -596,6 +635,7 @@ class ItemPanel:
         """Forget what was read for an earlier Export window: the document may have been saved since. UI thread."""
         self.cancel_export()   # what an earlier window was still reading is not wanted
         self._export_read.clear()
+        self._export_refs.clear()
         self._numbers.forget_files()
 
     def export_files(self, key: str, destination: str, number: str, done: Callable[[Dict[str, Any]], None]) -> None:
@@ -604,7 +644,8 @@ class ItemPanel:
         if not number:
             done({"state": "unavailable", "message": "Nothing to export yet."})
             return
-        ref, source = self._export_state(number)
+        source = self._export_state(number)
+        ref = self._export_ref(number)
         extension = FORMATS[key].extension
         cancel = self._export.token   # the window's: its other looks are not ended by this one, but closing it ends them all
 
@@ -634,7 +675,8 @@ class ItemPanel:
             raise ValueError("A file is already being uploaded.")
         began = time.monotonic()
         pick(_active_selection())
-        self._find(number, lambda subject: self._uploads.continue_in_window(job, subject, destination), fail=self._uploads.fail_in_window)
+        self._find(number, lambda subject: self._uploads.continue_in_window(job, subject, destination), fail=self._uploads.fail_in_window,
+                   ref=self._export_ref(number))
         log.info("Export began its search after %.2fs on Fusion's thread", time.monotonic() - began)
 
     def _reload(self) -> None:

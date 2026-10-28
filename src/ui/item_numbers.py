@@ -20,6 +20,7 @@ from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
 from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
+from ..fusion_mfg.model_service import read_thumbnail_url
 from ..fusion_mfg.properties import HUBS_QUERY, find_hub_id
 
 log = get_logger("item_numbers")
@@ -69,6 +70,19 @@ def design_ref(design: Any) -> DesignRef:
     if data is None:
         return DesignRef("", "", file_id, hub_name)
     return DesignRef(str(data.mfgdmModelId or ""), str(data.timestamp or ""), file_id, hub_name)
+
+
+def component_ref(component: Any, design: Any) -> Optional[DesignRef]:
+    """The reference of a component's own Data Model model, which Fusion gives a component that lives in a document of its own. Its summary
+    names the component, so the design's bill of materials need not be read to find it. ``None`` for the design's top, a component with no
+    model of its own, or one that shares the design's model: those are found in the design. UI thread."""
+    try:
+        model = str(component.mfgdmModelId or "")
+        if not model or design is None or component.id == design.rootComponent.id or model == str(design.rootComponent.mfgdmModelId or ""):
+            return None
+    except (AttributeError, RuntimeError):
+        return None
+    return design_ref(design)._replace(model_id=model, time="")
 
 
 def active_design_ref() -> DesignRef:
@@ -168,6 +182,28 @@ class ItemNumbers:
         with self._file_lock:
             self._files.clear()
 
+    def _matching(self, client: FusionGraphQlClient, ref: DesignRef, summary: Dict[str, Any], part_number: str) -> Tuple[bool, List[Dict[str, Any]]]:
+        """``(is the design itself, the components that have this part number)``, each with its ``id``, ``item_number`` and ``part_number``: the
+        design's top from its summary ("" or its own part number), else the lines of its bill of materials (read once per version, then kept)."""
+        top_part = str(summary.get("part_number") or "")
+        if not part_number or _same(part_number, top_part):
+            return True, [{"id": summary.get("component_id"), "item_number": summary.get("item_number"), "part_number": top_part}]
+        rows = self.reads.structure(client, ref.model_id, ref.time, summary)
+        return False, [r for r in rows if _same(str(r["part_number"]), part_number)]
+
+    def thumbnail_url(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> str:
+        """A signed url of the thumbnail of the component with ``part_number`` in the design ``ref`` ("" is the design itself); "" when the Data
+        Model has none yet. It expires soon, so use it at once. Raises ``NoItemNumber`` when the component is not in the design. Worker thread."""
+        ref = self.model_of(ref, cancel)
+        client = FusionGraphQlClient(cancel)
+        summary = self.reads.summary(client, ref.model_id, ref.time)
+        _, matches = self._matching(client, ref, summary, part_number)
+        ids = {str(m["id"] or "") for m in matches} - {""}
+        if len(ids) != 1:
+            raise NoItemNumber(f"{part_number or 'The design'} " + ("was not found in the Data Model's bill of materials of the open design."
+                                                                  if not ids else "is more than one component in this design."))
+        return read_thumbnail_url(client, summary, ids.pop(), ref.time)
+
     def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""
         if not ref.model_id and not ref.file_id:
@@ -187,12 +223,10 @@ class ItemNumbers:
             return known
         began = time.monotonic()
         summary = self.reads.summary(data_model(), ref.model_id, ref.time)
-        top_part = str(summary.get("part_number") or "")
-        if not part_number or _same(part_number, top_part):
-            found, part_number = {str(summary.get("item_number") or "")}, top_part
-        else:
-            rows = self.reads.structure(data_model(), ref.model_id, ref.time, summary)
-            found = {str(r["item_number"]) for r in rows if _same(str(r["part_number"]), part_number)}
+        is_design, matches = self._matching(data_model(), ref, summary, part_number)
+        found = {str(m["item_number"] or "") for m in matches}
+        if is_design:
+            part_number = matches[0]["part_number"]
         label = part_number or "The design"
         if not found:
             raise NoItemNumber(f"{label} was not found in the Data Model's bill of materials of the open design.")

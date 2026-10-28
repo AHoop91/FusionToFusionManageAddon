@@ -142,7 +142,7 @@ class ExportDialog:
             self._checking = True
             threading.Thread(target=self._check_access, args=(setup,), daemon=True).start()
             if document and not problem:
-                self._panel.warm_export_target(self._item_found)   # while the user chooses, so Find item has nothing left to read
+                self._panel.warm_export_target(self._item_found, self._thumbnail_found)   # while the user chooses, so Find item has nothing left to read
         destinations = []
         for key in (ITEM, COMPONENT):
             reason = setup[key] or self._access.get(key, "")
@@ -150,7 +150,8 @@ class ExportDialog:
                                  "checking": not reason and key not in self._access})
         usable = [d["key"] for d in destinations if not d["reason"] and not d["checking"]]
         exports = self._config.config.exports
-        return {"target": number, "description": self._panel.export_description() if number else "", "problem": problem,
+        name, description = self._panel.export_names() if number else ("", "")
+        return {"target": number, "name": name, "description": description, "problem": problem,
                 "formats": [describe(key) for key in formats_for(document)],
                 "destinations": destinations, "destination": usable[0] if usable else "",
                 "defaults": {key: exports.destination_of(key) for key in formats_for(document)}}   # set in Preferences ▸ Export
@@ -160,6 +161,11 @@ class ExportDialog:
         than the part number to read). A worker thread."""
         message = json.dumps({"ok": True, "result": {"target": part_number, "item_number": item_number}, "error": None})
         self._tasks.post(lambda: self._host.send("export_item", message))
+
+    def _thumbnail_found(self, part_number: str, url: str) -> None:
+        """Tell the page the thumbnail of what is exported (a signed https address, shown beside the title). A worker thread."""
+        message = json.dumps({"ok": True, "result": {"target": part_number, "url": url}, "error": None})
+        self._tasks.post(lambda: self._host.send("export_thumbnail", message))
 
     def _files(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the files attached where the export would go, to tell the page whether it adds a file or makes a new version of one
