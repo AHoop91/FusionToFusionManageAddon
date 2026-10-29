@@ -7,6 +7,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, dict_rows, dig
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 
 log = get_logger("fm.attachments")
@@ -16,15 +17,12 @@ LIST_MEDIA_TYPE = "application/vnd.autodesk.plm.attachments.bulk+json"   # the l
 
 def parse_files(data: Any) -> List[Dict[str, Any]]:
     """The rows of the Files tab from an attachments answer."""
-    rows = data.get("attachments") if isinstance(data, dict) else None
     files = []
-    for row in rows if isinstance(rows, list) else []:
-        if not isinstance(row, dict):
-            continue
-        kind = row.get("type") if isinstance(row.get("type"), dict) else {}
-        created = row.get("created") if isinstance(row.get("created"), dict) else {}
-        user = created.get("user") if isinstance(created.get("user"), dict) else {}
-        markups = row.get("markups") if isinstance(row.get("markups"), dict) else {}
+    for row in dict_rows(dig(data, "attachments")):
+        kind = as_dict(row.get("type"))
+        created = as_dict(row.get("created"))
+        user = as_dict(created.get("user"))
+        markups = as_dict(row.get("markups"))
         name = str(row.get("name") or "")
         files.append({"id": str(row.get("id") or ""), "urn": str(row.get("urn") or ""), "name": name,
                       "title": str(row.get("resourceName") or name),
@@ -62,10 +60,10 @@ class AttachmentService:
     def _existing(self, path: str, name: str) -> Tuple[str, Optional[Dict[str, str]]]:
         """``(id, folder)`` of the file already attached under ``name`` ("" when there is none); ``folder`` is ``{"id"}`` or None for the top."""
         data = self._client.get_json(f"{path}?asc=name", accept=LIST_MEDIA_TYPE)
-        for row in data.get("attachments") if isinstance(data, dict) and isinstance(data.get("attachments"), list) else []:
-            if isinstance(row, dict) and row.get("name") == name and row.get("id"):
-                folder = row.get("folder") if isinstance(row.get("folder"), dict) else None
-                return str(row["id"]), ({"id": folder["id"]} if folder and folder.get("id") else None)
+        for row in dict_rows(dig(data, "attachments")):
+            if row.get("name") == name and row.get("id"):
+                folder = as_dict(row.get("folder"))
+                return str(row["id"]), ({"id": folder["id"]} if folder.get("id") else None)
         return "", None
 
     def upload(self, workspace_id: str, item_id: str, name: str, content: bytes, description: str = "",
@@ -81,13 +79,13 @@ class AttachmentService:
         if existing_id:
             body.update(fileName=name, fileTypeString="file/type")
         made = self._client.send_json("POST", f"{path}/{existing_id}" if existing_id else path, body)
-        data = made.data if isinstance(made.data, dict) else {}
+        data = as_dict(made.data)
         attachment_id = str(data.get("id") or last_segment(made.headers.get("Location")))
         address = str(data.get("url") or "")
         if not (attachment_id and address):
             log.error("The attachment answer held no id or upload address: %s %s", made.headers, made.data)
             raise FmApiError("Fusion Manage did not give an address to upload the file to.")
-        extra = data.get("extraHeaders") if isinstance(data.get("extraHeaders"), dict) else {}   # signed into the address, so sent exactly as given
+        extra = as_dict(data.get("extraHeaders"))   # signed into the address, so sent exactly as given
         self._client.put_bytes(address, content, {str(k): str(v) for k, v in extra.items()}, progress=progress)
         self._client.send_json("PATCH", f"{path}/{attachment_id}", {"status": {"name": "CheckIn"}})   # the file is complete
         kind = "version" if existing_id else "new"

@@ -12,6 +12,8 @@ import re
 from typing import Any, List
 from urllib.parse import quote_plus
 
+from ..core.shapes import dict_rows, dig
+
 _UNSAFE = re.compile(r"[`():<>=\\/\]\[\{\}\"]")   # characters that mean something to the search syntax
 _FIELD = re.compile(r"[^A-Z0-9_]")
 _PREFIX = "ITEM_DETAILS:"
@@ -51,10 +53,7 @@ def _group_clause(group: Any) -> str:
     """``(A=1 OR B=2)`` for one group, or an empty string when none of its rows is filled in."""
     pieces: List[str] = []
     joins: List[str] = []
-    rows = group.get("filters") if isinstance(group, dict) else None
-    for row in rows if isinstance(rows, list) else []:
-        if not isinstance(row, dict):
-            continue
+    for row in dict_rows(dig(group, "filters")):
         field, value = field_id(row.get("field")), clean_value(row.get("value"))
         if not field or not value:
             continue   # a row not filled in is no filter
@@ -71,7 +70,7 @@ def build_query(workspace_id: str, text: str = "", groups: Any = None) -> str:
         clauses.append(term(typed))
     found: List[str] = []
     joins: List[str] = []
-    for group in groups if isinstance(groups, list) else []:
+    for group in dict_rows(groups):
         clause = _group_clause(group)
         if clause:
             found.append(clause)

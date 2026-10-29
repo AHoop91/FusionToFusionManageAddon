@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from ..core.shapes import as_dict, dig
+
 STEP, PDF, DWG, DXF = "step", "pdf", "dwg", "dxf"
 ITEM, COMPONENT = "item", "component"
 
@@ -30,6 +32,5 @@ class ExportSettings:
     @classmethod
     def from_dict(cls, data: Any) -> "ExportSettings":
         """Build from stored JSON, ignoring unknown formats and bad destinations."""
-        stored = data.get("destinations") if isinstance(data, dict) else None
-        stored = stored if isinstance(stored, dict) else {}
+        stored = as_dict(dig(data, "destinations"))
         return cls({key: stored[key] if stored.get(key) in DESTINATIONS else DEFAULT_DESTINATION for key in EXPORT_FORMATS})

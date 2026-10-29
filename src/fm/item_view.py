@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .items import display_text
 from .pages import field_id, item_page, link_page, tenant_of
@@ -47,7 +48,7 @@ def no_page(_link: str) -> str:
 def cell_of(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dict[str, Any]:
     """``{"id", "title", "kind", "value"}`` of an item's field; kind is ``text``, ``html``, ``image`` or ``links`` (a list of ``{"title", "url"}``)."""
     raw = node.get("value")
-    kind = (node.get("type") or {}).get("title", "") if isinstance(node.get("type"), dict) else ""
+    kind = dig(node, "type", "title") or ""
     cell = {"id": field_id(node), "title": str(node.get("title") or node.get("name") or field_id(node)), "kind": "text", "value": ""}
     if kind == "Image":
         link = str(raw.get("link") or "") if isinstance(raw, dict) else ""
@@ -133,26 +134,24 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
 
     ``hidden`` holds the ids of fields the workspace does not show; a field that says so itself is left out too.
     """
-    item = item if isinstance(item, dict) else {}
+    item = as_dict(item)
     hidden = hidden or set()
     tenant = tenant_of(item)
 
     def pages(link: str) -> str:
         return link_page(base_url, tenant, link)
 
-    workspace = item.get("workspace") if isinstance(item.get("workspace"), dict) else {}
+    workspace = as_dict(item.get("workspace"))
     sections: List[Dict[str, Any]] = []
     shown: Dict[str, Dict[str, str]] = {}
-    for node in item.get("sections") or []:
-        if not isinstance(node, dict):
-            continue
-        found = [f for f in node.get("fields") or [] if isinstance(f, dict)]
+    for node in dict_rows(item.get("sections")):
+        found = dict_rows(node.get("fields"))
         shown.update({c["id"]: c for c in (cell_of(f, images, pages) for f in found if field_id(f) in HEADER_FIELDS) if c["id"]})
         cells = {c["id"]: c for c in (cell_of(f, images, pages) for f in found if not not_shown(f, hidden)) if c["id"]}
         layout = layouts.get(last_segment(str(node.get("link") or node.get("__self__") or "")), {})
-        matrices = [m for m in (_matrix(m, cells, hidden) for m in layout.get("matrices") or [] if isinstance(m, dict)) if m]
-        in_matrix = {field_id(ref) for m in layout.get("matrices") or [] if isinstance(m, dict)
-                     for row in m.get("fields") or [] if isinstance(row, list) for ref in row}
+        grids = dict_rows(layout.get("matrices"))
+        matrices = [m for m in (_matrix(grid, cells, hidden) for grid in grids) if m]
+        in_matrix = {field_id(ref) for grid in grids for row in as_list(grid.get("fields")) for ref in as_list(row)}
         fields = [c for i, c in cells.items() if i not in in_matrix]
         if fields or matrices:
             sections.append({"title": str(node.get("title") or ""), "fields": fields, "matrices": matrices})
@@ -204,7 +203,7 @@ class ItemViewService:
             return {}
         for layout in list(layouts.values())[:3]:
             log.debug("Section %s layout keys: %s; matrices: %s", last_segment(str(layout.get("__self__") or layout.get("link") or "")),
-                     sorted(layout), [sorted(m) for m in (layout.get("matrices") or [])[:1] if isinstance(m, dict)])
+                     sorted(layout), [sorted(m) for m in dict_rows(layout.get("matrices"))[:1]])
         return layouts
 
     def _hidden_fields(self, workspace_id: str) -> Set[str]:
@@ -218,8 +217,7 @@ class ItemViewService:
         except FmApiError as exc:   # every field shows
             log.warning("Could not read the fields of workspace %s: %s", workspace_id, exc)
             return set()
-        rows = data.get("fields") if isinstance(data, dict) else data
-        rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+        rows = rows_in(data, "fields")
         hidden = {last_segment(r.get("__self__")) for r in rows if not_shown(r, set())}
         log.debug("Workspace %s: %d field(s), %d hidden; visibility values %s", workspace_id, len(rows), len(hidden),
                  sorted({str(r.get("visibility")) for r in rows}))

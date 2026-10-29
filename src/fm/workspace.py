@@ -20,6 +20,7 @@ from urllib.parse import quote_plus
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceKind
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
 from .item_view import not_shown
 from .permissions import missing, parse_granted, title
@@ -55,11 +56,11 @@ class WorkspaceService:
         offset = 0
         while True:
             data = self._client.get_json(f"{WORKSPACES}?offset={offset}&limit={WORKSPACES_PAGE}", WORKSPACES_BULK)   # plain JSON leaves out each workspace's name and type
-            rows = data.get("items") if isinstance(data, dict) else None
-            if not isinstance(rows, list) or not rows:
+            rows = as_list(dig(data, "items"))
+            if not rows:
                 break
-            for row in rows:
-                if not isinstance(row, dict) or row.get("deleted") or row.get("controlled"):
+            for row in dict_rows(rows):
+                if row.get("deleted") or row.get("controlled"):
                     continue   # a controlled workspace (Components, Drawings) is not one that holds items
                 workspace_id = last_segment(row.get("__self__"))
                 kind = row.get("type")   # a link, or an object holding one
@@ -131,15 +132,12 @@ class WorkspaceService:
         except (FmApiError, AuthError) as exc:
             log.warning("Could not load fields for %s: %s", base, exc)
             return [], f"Could not load the workspace's fields: {exc}"
-        rows = data.get("fields") if isinstance(data, dict) else data
         fields = []
-        for row in rows if isinstance(rows, list) else []:
-            if not isinstance(row, dict):
-                continue
+        for row in rows_in(data, "fields"):
             field_id = last_segment(row.get("__self__"))
             if not field_id:
                 continue
-            kind = row.get("type") if isinstance(row.get("type"), dict) else {}
+            kind = as_dict(row.get("type"))
             # Fixed-list fields take one of the lookup's options. Fields that link to
             # another workspace (picklistFieldDefinition) and fields nobody can edit are left as text.
             pick = row.get("picklist")
@@ -167,11 +165,9 @@ class WorkspaceService:
         ``raw`` is how many options the page held (where the next page starts)."""
         data = self._client.get_json(
             f"{LOOKUPS}/{lookup}?offset={max(0, int(offset))}&limit={int(limit)}&filter={quote_plus(text.strip())}&asc=&desc=")
-        items = data.get("items") if isinstance(data, dict) else None
-        rows = items if isinstance(items, list) else []
-        options = [{"value": str(i["link"]), "title": str(i.get("title") or i["link"])}
-                   for i in rows if isinstance(i, dict) and i.get("link")]
-        total = int(data.get("totalCount") or 0) if isinstance(data, dict) else 0
+        rows = as_list(dig(data, "items"))
+        options = [{"value": str(i["link"]), "title": str(i.get("title") or i["link"])} for i in dict_rows(rows) if i.get("link")]
+        total = int(as_dict(data).get("totalCount") or 0)
         return {"options": options, "total": max(total, offset + len(rows)) if rows else total, "raw": len(rows)}
 
     def options(self, lookup: str) -> List[Dict[str, str]]:
@@ -182,11 +178,11 @@ class WorkspaceService:
             while offset < MAX_OPTIONS:
                 data = self._client.get_json(
                     f"{LOOKUPS}/{lookup}?offset={offset}&limit={OPTIONS_PAGE}&filter=&asc=&desc=")
-                items = data.get("items") if isinstance(data, dict) else None
-                if not isinstance(items, list) or not items:
+                items = as_list(dig(data, "items"))
+                if not items:
                     break
-                for item in items:
-                    if isinstance(item, dict) and item.get("link"):
+                for item in dict_rows(items):
+                    if item.get("link"):
                         options.append({"value": str(item["link"]), "title": str(item.get("title") or item["link"])})
                 offset += len(items)
                 if offset >= int(data.get("totalCount") or 0):

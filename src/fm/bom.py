@@ -10,6 +10,7 @@ from datetime import date
 from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, as_list, dict_rows, dig
 from .client import WORKSPACES, FmApiError, FmClient
 from .items import FIELD_ID, display_text
 
@@ -41,13 +42,12 @@ def _is_number(text: str) -> bool:
     return True
 
 
-def _quantity(fields: List[Any]) -> str:
+def _quantity(fields: Any) -> str:
     """Quantity among an edge's fields: a known quantity field, else the first numeric value."""
     values = []
-    for field in fields:
-        if isinstance(field, dict):
-            match = FIELD_ID.search(str((field.get("metaData") or {}).get("link", "")))
-            values.append((match.group(1) if match else "", display_text(field.get("value"))))
+    for field in dict_rows(fields):
+        match = FIELD_ID.search(str(dig(field, "metaData", "link") or ""))
+        values.append((match.group(1) if match else "", display_text(field.get("value"))))
     for field_id, text in values:
         if field_id in QUANTITY_FIELDS:
             return text
@@ -68,14 +68,11 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
     ``sequence`` is the line's BOM item number, ``edge_id`` the id Fusion Manage gives the line (to change or delete it). The quantity is the edge field with
     one of ``QUANTITY_FIELDS`` as its id, else the first numeric edge field.
     """
-    data = data if isinstance(data, dict) else {}
-    titles = {str((n.get("item") or {}).get("urn", "")): str((n.get("item") or {}).get("title", ""))
-              for n in data.get("nodes") or [] if isinstance(n, dict)}
+    data = as_dict(data)
+    titles = {str(dig(n, "item", "urn") or ""): str(dig(n, "item", "title") or "") for n in dict_rows(data.get("nodes"))}
     numbers = {urn: number_of(title) for urn, title in titles.items()}
     children: Dict[str, List[Dict[str, str]]] = {number: [] for number in numbers.values() if number}
-    for edge in data.get("edges") or []:
-        if not isinstance(edge, dict):
-            continue
+    for edge in dict_rows(data.get("edges")):
         parent, child = numbers.get(str(edge.get("parent", ""))), numbers.get(str(edge.get("child", "")))
         if not parent or not child:
             continue
@@ -103,7 +100,7 @@ class BomService:
         path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/bom"
                 f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias={self._bias}&rootId={item_id}")
         data = self._client.get_json(path, accept=ACCEPT)
-        nodes = len(data.get("nodes") or []) if isinstance(data, dict) else 0
+        nodes = len(as_list(dig(data, "nodes")))
         log.info("BOM answer for %s: %d node(s)", path, nodes)
         if not nodes:   # an item is always a node of its own BOM, so an answer with none is not a BOM
             raise FmApiError("Fusion Manage did not return the Bill of Materials (no nodes).")

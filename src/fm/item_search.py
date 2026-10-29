@@ -10,6 +10,7 @@ import re
 from datetime import date
 from typing import Any, Dict, List
 
+from ..core.shapes import as_dict, as_list, dict_rows, dig
 from .bom import ACCEPT, WORKING_BIAS, name_of, number_of
 from .client import WORKSPACES, FmClient
 from .linkable import linkable_row
@@ -32,12 +33,10 @@ def parse_search(data: Any, workspace_id: str, parent_id: str) -> Dict[str, Any]
 
     ``raw`` is how many rows the page held, to continue from: the parent item is left out of ``items`` (it cannot hold
     itself; there is none while the design is not in Fusion Manage) and ``total`` is as the search counted, so it is one too high once the parent is among the matches."""
-    data = data if isinstance(data, dict) else {}
+    data = as_dict(data)
     items: List[Dict[str, Any]] = []
-    rows = data.get("items") if isinstance(data.get("items"), list) else []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
+    rows = as_list(data.get("items"))
+    for row in dict_rows(rows):
         match = None
         for key in ("__self__", "link", "urn"):
             match = _ITEM_ID.search(str(row.get(key, "")))
@@ -59,8 +58,8 @@ def parse_members(data: Any) -> Dict[str, List[str]]:
     """``{"ids", "numbers"}`` of the nodes of a bulk BOM answer."""
     ids: List[str] = []
     numbers: List[str] = []
-    for node in data.get("nodes") or [] if isinstance(data, dict) else []:
-        item = node.get("item") if isinstance(node, dict) else None
+    for node in dict_rows(dig(data, "nodes")):
+        item = node.get("item")
         if not isinstance(item, dict):
             continue
         match = _ITEM_ID.search(str(item.get("link", "")))

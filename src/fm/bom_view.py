@@ -11,6 +11,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Set
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, dict_rows, dig
 from .bom import WORKING_BIAS
 from .client import WORKSPACES, FmApiError, FmClient
 from .item_view import cell_of, no_image, no_page
@@ -32,11 +33,9 @@ ICON_FIELDS = (ATTACHMENTS, CHANGE, PIN)
 def _fields_of(holder: Any) -> Dict[str, Dict[str, Any]]:
     """A node's or edge's fields by view definition field id; the picture fields are left out."""
     found: Dict[str, Dict[str, Any]] = {}
-    for field in holder.get("fields") if isinstance(holder, dict) and isinstance(holder.get("fields"), list) else []:
-        if not isinstance(field, dict):
-            continue
+    for field in dict_rows(dig(holder, "fields")):
         fid = field_id(field.get("metaData"))
-        kind = (field.get("type") or {}).get("title") if isinstance(field.get("type"), dict) else ""
+        kind = dig(field, "type", "title")
         if fid and kind != "Image":
             found[fid] = field
     return found
@@ -44,9 +43,9 @@ def _fields_of(holder: Any) -> Dict[str, Dict[str, Any]]:
 
 def _viewdef_address(data: Dict[str, Any]) -> str:
     """The address of the BOM view definition the answer's fields belong to ("" if no field names it)."""
-    for node in data.get("nodes") or []:
-        for field in node.get("fields") or [] if isinstance(node, dict) else []:
-            match = _VIEWDEF.match(str((field.get("metaData") or {}).get("link") or "")) if isinstance(field, dict) else None
+    for node in dict_rows(dig(data, "nodes")):
+        for field in dict_rows(node.get("fields")):
+            match = _VIEWDEF.match(str(dig(field, "metaData", "link") or ""))
             if match:
                 return match.group(1)
     return ""
@@ -54,7 +53,7 @@ def _viewdef_address(data: Dict[str, Any]) -> str:
 
 def parse_viewdef(data: Any) -> Dict[str, str]:
     """``{view definition field id: title}`` in display order, from the answer of ``.../viewdef/{id}/fields`` (a list)."""
-    entries = [e for e in data if isinstance(e, dict)] if isinstance(data, list) else []
+    entries = dict_rows(data)
     titles: Dict[str, str] = {}
     for entry in sorted(entries, key=lambda e: int(e.get("displayOrder") or 0)):
         fid = str(entry.get("viewDefFieldId") or "")
@@ -66,7 +65,7 @@ def parse_viewdef(data: Any) -> Dict[str, str]:
 
 def parse_kinds(data: Any) -> Dict[str, str]:
     """``{view definition field id: field id}`` (``ATTACHMENTS``, ``PIN`` ...) from the answer of ``.../viewdef/{id}/fields``."""
-    entries = [e for e in data if isinstance(e, dict) and e.get("viewDefFieldId")] if isinstance(data, list) else []
+    entries = [e for e in dict_rows(data) if e.get("viewDefFieldId")]
     return {str(e["viewDefFieldId"]): str(e.get("fieldId") or "") for e in entries}
 
 
@@ -97,7 +96,7 @@ def _icon_cell(kind: str, field: Dict[str, Any], base_url: str, item: Dict[str, 
 
 
 def _line(edge: Dict[str, Any], node: Dict[str, Any], base_url: str, hidden: Set[str], kinds: Dict[str, str]) -> Dict[str, Any]:
-    item = node.get("item") if isinstance(node.get("item"), dict) else {}
+    item = as_dict(node.get("item"))
     title = str(item.get("title") or "")
     number, name = split_title(title)
     page = item_page(base_url, item)
@@ -119,15 +118,14 @@ def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, k
     """``{"rows": [line], "columns": [{"id", "title"}]}``: one line, the item itself (``root``), with the BOM lines as its ``children`` in BOM order."""
     if not (isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("edges"), list)):
         raise FmApiError("Fusion Manage did not return the Bill of Materials.")
-    nodes = {str((n.get("item") or {}).get("urn") or ""): n for n in data["nodes"] if isinstance(n, dict) and isinstance(n.get("item"), dict)}
+    nodes = {str(n["item"].get("urn") or ""): n for n in dict_rows(data["nodes"]) if isinstance(n.get("item"), dict)}
     root = nodes.get(root_urn) or {}
     kinds = kinds or {}
     # the descriptor is already the item's title, so its column is not repeated
-    hidden = {fid for fid, field in _fields_of(root).items() if field.get("value") == (root.get("item") or {}).get("title")}
+    hidden = {fid for fid, field in _fields_of(root).items() if field.get("value") == dig(root, "item", "title")}
     below: Dict[str, List[Dict[str, Any]]] = {}
-    for edge in data["edges"]:
-        if isinstance(edge, dict):
-            below.setdefault(str(edge.get("parent") or ""), []).append(edge)
+    for edge in dict_rows(data["edges"]):
+        below.setdefault(str(edge.get("parent") or ""), []).append(edge)
 
     def lines(parent: str, seen: Set[str]) -> List[Dict[str, Any]]:
         out = []
@@ -210,11 +208,11 @@ class BomViewService:
         try:
             listing = self._client.get_json(f"{WORKSPACES}/{workspace_id}/views/{BOM_VIEW_ID}/")
             found = []
-            for entry in (listing or {}).get("bomViews") or []:
-                link = str(entry.get("link") or "") if isinstance(entry, dict) else ""
+            for entry in dict_rows(dig(listing, "bomViews")):
+                link = str(entry.get("link") or "")
                 if not link:
                     continue
-                definition = self._client.get_json(link) or {}
+                definition = as_dict(self._client.get_json(link))
                 view_id = str(definition.get("id") or link.rstrip("/").split("/")[-1])
                 found.append({"id": view_id, "name": str(definition.get("name") or view_id), "default": bool(definition.get("isDefault"))})
             return found
@@ -238,12 +236,12 @@ class BomViewService:
         data = self._client.get_json(path, accept=ACCEPT)
         if data is None:   # 204: an item with no lines
             return {"rows": [], "columns": []}
-        root_urn = next((str((n.get("item") or {}).get("urn") or "") for n in data.get("nodes") or []
-                         if isinstance(n, dict) and str((n.get("item") or {}).get("link") or "").rstrip("/").endswith(f"/items/{item_id}")), "")
+        root_urn = next((str(dig(n, "item", "urn") or "") for n in dict_rows(dig(data, "nodes"))
+                         if str(dig(n, "item", "link") or "").rstrip("/").endswith(f"/items/{item_id}")), "")
         address = _viewdef_address(data)
         fields = self._client.get_json(f"{address}/fields") if address else None
         titles = parse_viewdef(fields)
-        if not titles and any(isinstance(e, dict) for e in data.get("edges") or []):
+        if not titles and dict_rows(dig(data, "edges")):
             raise FmApiError("Fusion Manage did not name the columns of the Bill of Materials.")
         return parse_bom(data, titles, self._client.base_url, root_urn, parse_kinds(fields))
 

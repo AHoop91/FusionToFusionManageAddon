@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict
 from ..fm.client import FmApiError, FmClient, SendResult
 from ..fm.items import ItemService
 from ..fm.search_query import WORKING
@@ -243,7 +244,7 @@ class Dispatcher:
         """Tenant code and revision of an item, read from the item itself."""
         if item_id not in self._facts:
             data = self._fm.get_json(f"/api/v3/workspaces/{self._workspace_id}/items/{item_id}")
-            data = data if isinstance(data, dict) else {}
+            data = as_dict(data)
             tenant = _TENANT.search(str(data.get("urn", "")))
             self._facts[item_id] = {"tenant": tenant.group(1) if tenant else "", "version": str(data.get("version") or "")}
             log.info("Item %s: tenant %r, version %r", item_id, self._facts[item_id]["tenant"], self._facts[item_id]["version"])

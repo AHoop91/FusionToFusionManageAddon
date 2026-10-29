@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List, Tuple
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, dict_rows
 from .client import WORKSPACES, FmApiError, FmClient
 from .pages import item_page
 
@@ -21,8 +22,8 @@ _DEPTH = re.compile(r"([?&])depth=\d+&?")
 
 def _fields(node: Dict[str, Any]) -> Dict[str, str]:
     fields = {}
-    for field in node.get("fields") if isinstance(node.get("fields"), list) else []:
-        if isinstance(field, dict) and field.get("title") and field["title"] not in HIDDEN_FIELDS:
+    for field in dict_rows(node.get("fields")):
+        if field.get("title") and field["title"] not in HIDDEN_FIELDS:
             fields[str(field["title"])] = "" if field.get("value") is None else str(field["value"])
     return fields
 
@@ -49,14 +50,14 @@ def parse_where_used(data: Any, base_url: str) -> Dict[str, Any]:
     if not (isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("edges"), list)):
         raise FmApiError("Fusion Manage did not return where this item is used.")
     nodes = {}
-    for node in data["nodes"]:
-        item = node.get("item") if isinstance(node, dict) and isinstance(node.get("item"), dict) else {}
+    for node in dict_rows(data["nodes"]):
+        item = as_dict(node.get("item"))
         if item.get("urn"):
             nodes[str(item["urn"])] = (node, item)
     rows: List[Dict[str, Any]] = []
     columns: List[str] = []
-    for edge in data["edges"]:
-        found = nodes.get(str(edge.get("child") or "")) if isinstance(edge, dict) else None
+    for edge in dict_rows(data["edges"]):
+        found = nodes.get(str(edge.get("child") or ""))
         if found is None:
             continue
         node, item = found

@@ -6,6 +6,7 @@ current state and the last step of its workflow history.
 
 from typing import Any, Dict, List
 
+from ..core.shapes import as_dict, dict_rows
 from .client import WORKSPACES, FmApiError, FmClient
 from .pages import item_page
 
@@ -14,9 +15,9 @@ REFERENCES_VIEW = "2"   # the view of an item that lists the workflow items refe
 
 def _step(history: Any) -> Dict[str, str]:
     """When, by whom, and with which transition a workflow history entry was made, and its comments."""
-    history = history if isinstance(history, dict) else {}
-    user = history.get("user") if isinstance(history.get("user"), dict) else {}
-    transition = history.get("workflowTransition") if isinstance(history.get("workflowTransition"), dict) else {}
+    history = as_dict(history)
+    user = as_dict(history.get("user"))
+    transition = as_dict(history.get("workflowTransition"))
     return {"date": str(history.get("created") or ""), "user": str(user.get("title") or ""),
             "action": str(transition.get("title") or ""), "comments": str(history.get("comments") or "")}
 
@@ -28,11 +29,11 @@ def parse_associated_workflows(data: Any, base_url: str) -> List[Dict[str, Any]]
     if not isinstance(data, list):
         raise FmApiError("Fusion Manage did not return the associated workflows of this item.")
     rows = []
-    for entry in data:
-        item = entry.get("item") if isinstance(entry, dict) and isinstance(entry.get("item"), dict) else None
-        if item is None:
+    for entry in dict_rows(data):
+        item = entry.get("item")
+        if not isinstance(item, dict):
             continue
-        state = entry.get("workflow-state") if isinstance(entry.get("workflow-state"), dict) else {}
+        state = as_dict(entry.get("workflow-state"))
         rows.append({"title": str(item.get("title") or ""), "state": str(state.get("title") or item.get("currentState") or ""),
                      "url": item_page(base_url, item), "last": _step(entry.get("last-workflow-history"))})
     return rows

@@ -7,6 +7,7 @@ The names are only ever Fusion Manage's own: a tab the workspace does not list i
 
 from typing import Any, Dict, Set
 
+from ..core.shapes import dict_rows, dig
 from .client import WORKSPACES, FmClient
 from .ttl_cache import TtlCache
 
@@ -23,8 +24,8 @@ COUNTED = {"PART_ATTACHMENTS": "PART_ATTACHMENTS/DIRECT_ATTACHMENTS"}
 def parse_labels(data: Any) -> Dict[str, str]:
     """``{workspaceTabName: label}`` from the workspace's tab list."""
     labels = {}
-    for tab in data if isinstance(data, list) else []:
-        if isinstance(tab, dict) and tab.get("workspaceTabName"):
+    for tab in dict_rows(data):
+        if tab.get("workspaceTabName"):
             label = str(tab.get("name") or tab.get("key") or "")
             if label:
                 labels[str(tab["workspaceTabName"])] = label
@@ -34,11 +35,11 @@ def parse_labels(data: Any) -> Dict[str, str]:
 def parse_counts(data: Any) -> Dict[str, int]:
     """``{workspaceTabName: totalCount}`` from the item's tab counts, and ``{"TAB/SECTION": count}`` for each section a tab has."""
     counts = {}
-    for tab in data.get("tabs") if isinstance(data, dict) and isinstance(data.get("tabs"), list) else []:
-        if isinstance(tab, dict) and tab.get("name"):
+    for tab in dict_rows(dig(data, "tabs")):
+        if tab.get("name"):
             counts[str(tab["name"])] = int(tab.get("totalCount") or 0)
-            for section in tab.get("sectionCounts") if isinstance(tab.get("sectionCounts"), list) else []:
-                if isinstance(section, dict) and section.get("name"):
+            for section in dict_rows(tab.get("sectionCounts")):
+                if section.get("name"):
                     counts[f"{tab['name']}/{section['name']}"] = int(section.get("totalCount") or 0)
     return counts
 

@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple
 from urllib.parse import quote
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import dict_rows, dig
 from .client import LOOKUPS, WORKSPACES, FmClient, last_segment
 from .search_query import WORKING
 from .ttl_cache import TtlCache
@@ -69,9 +70,8 @@ class ComponentService:
         found = _WORKSPACES.get(key)
         if found is None:
             data = self._client.get_json(f"{WORKSPACES}?offset=0&limit={WORKSPACES_LIMIT}")
-            rows = data.get("items") if isinstance(data, dict) else None
             titled = [(str(r.get("title") or r.get("name") or ""), str(r.get("link") or r.get("__self__") or ""))
-                      for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+                      for r in dict_rows(dig(data, "items"))]
             log.info("Workspaces: %s", [f"{title} ({link})" for title, link in titled])
             found = next((last_segment(link) for title, link in titled if title.strip().casefold() == COMPONENTS_WORKSPACE.casefold()), "")
             if found:
@@ -93,9 +93,8 @@ class ComponentService:
             return "", f"No workspace called {COMPONENTS_WORKSPACE} could be found in Fusion Manage."
         query = quote(f"{number} AND (workspaceId={workspace_id})")
         data = self._client.get_json(f"{SEARCH}?isFullQuery=true&limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision={WORKING}")
-        rows = data.get("items") if isinstance(data, dict) else None
         found = [(str(r.get("__self__") or ""), str(r.get("descriptor") or ""), str(r.get("version") or ""))
-                 for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+                 for r in dict_rows(dig(data, "items"))]
         hits = [(link, descriptor, version) for link, descriptor, version in found if link and _matches(descriptor, number)]
         log.info("Working versions for %s in workspace %s: %s", number, workspace_id, [f"{d} {v} {link}" for link, d, v in found])
         working = [h for h in hits if is_working(h[2])] or hits   # the filter gives working versions; the version is checked anyway
@@ -110,9 +109,8 @@ class ComponentService:
         if not number:
             return "", "The item has no number to look up."
         data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset=0&limit={CANDIDATES}&filter={quote(number)}&asc=&desc=")
-        rows = data.get("items") if isinstance(data, dict) else None
         options: List[Dict[str, str]] = [{"link": str(r["link"]), "title": str(r.get("title") or ""), "version": str(r.get("version") or "")}
-                                         for r in rows if isinstance(r, dict) and r.get("link")] if isinstance(rows, list) else []
+                                         for r in dict_rows(dig(data, "items")) if r.get("link")]
         hits = [o for o in options if _matches(o["title"], number)]
         log.debug("Component options for %s: %s", number, [o["title"] for o in options])
         if len(hits) == 1:

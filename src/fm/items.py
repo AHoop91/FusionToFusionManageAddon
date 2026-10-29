@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import dict_rows, dig
 from .client import WORKSPACES, FmClient
 from .search_query import LATEST
 
@@ -59,8 +60,7 @@ def display_values(values: Dict[str, Any]) -> Dict[str, str]:
 
 def _rows(data: Any) -> List[Dict[str, Any]]:
     """The items of a search-results answer."""
-    rows = data.get("items") if isinstance(data, dict) else None
-    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+    return dict_rows(dig(data, "items"))
 
 
 def _item_id(row: Dict[str, Any]) -> str:

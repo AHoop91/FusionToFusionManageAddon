@@ -7,6 +7,7 @@ a time, so a long log opens as fast as a short one; the page asks for the next w
 
 from typing import Any, Dict
 
+from ..core.shapes import as_dict, dict_rows
 from .client import WORKSPACES, FmApiError, FmClient
 
 PAGE_SIZE = 100   # the most the API gives in one answer
@@ -23,13 +24,11 @@ def parse_change_log(data: Any, offset: int) -> Dict[str, Any]:
     if not isinstance(data, dict) or not isinstance(data.get("items"), list):
         raise FmApiError("Fusion Manage did not return the change log of this item.")
     rows = []
-    for entry in data["items"]:
-        if not isinstance(entry, dict):
-            continue
-        user = entry.get("user") if isinstance(entry.get("user"), dict) else {}
-        action = entry.get("action") if isinstance(entry.get("action"), dict) else {}
+    for entry in dict_rows(data["items"]):
+        user = as_dict(entry.get("user"))
+        action = as_dict(entry.get("action"))
         changes = [{"field": _text(d.get("fieldName")), "old": _text(d.get("oldValue")), "new": _text(d.get("newValue"))}
-                   for d in entry.get("details") or [] if isinstance(d, dict)]
+                   for d in dict_rows(entry.get("details"))]
         rows.append({"date": _text(entry.get("timeStamp")), "user": _text(user.get("title")), "action": _text(action.get("shortName")),
                      "description": _text(entry.get("description")), "changes": changes})
     total = int(data.get("totalCount") or 0)

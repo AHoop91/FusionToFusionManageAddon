@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 from ..auth.errors import AuthError
 from ..core.units import convert
 from ..core.logging_setup import get_logger
+from ..core.shapes import rows_in
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .ttl_cache import TtlCache
 from .workspace import WorkspaceService
@@ -46,14 +47,15 @@ class PicklistResolver:
                 except (FmApiError, AuthError) as exc:
                     log.warning("Could not read the fields of workspace %s: %s", self._workspace_id, exc)
                     return ""   # not remembered, so the next field tries again
-                rows = data.get("fields") if isinstance(data, dict) else data
-                for row in rows if isinstance(rows, list) else []:
-                    if isinstance(row, dict) and isinstance(row.get("fieldPrecision"), int) and not isinstance(row["fieldPrecision"], bool):
-                        precisions[last_segment(row.get("__self__"))] = row["fieldPrecision"]
-                    if isinstance(row, dict) and row.get("picklist") and not row.get("picklistFieldDefinition"):
-                        lookups[last_segment(row.get("__self__"))] = last_segment(row["picklist"])
-                    if isinstance(row, dict) and row.get("unitOfMeasure"):
-                        units[last_segment(row.get("__self__"))] = str(row["unitOfMeasure"])
+                for row in rows_in(data, "fields"):
+                    field = last_segment(row.get("__self__"))
+                    precision = row.get("fieldPrecision")
+                    if isinstance(precision, int) and not isinstance(precision, bool):
+                        precisions[field] = precision
+                    if row.get("picklist") and not row.get("picklistFieldDefinition"):
+                        lookups[field] = last_segment(row["picklist"])
+                    if row.get("unitOfMeasure"):
+                        units[field] = str(row["unitOfMeasure"])
                 known = _fields_cache.put(self._workspace_id, (lookups, precisions, units))
             self._lookups, self._precisions, self._units = known
         return self._lookups.get(field_id, "")

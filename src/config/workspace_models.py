@@ -11,6 +11,7 @@ To offer another source field, add a ``SourceField`` to ``SOURCE_FIELDS``.
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
+from ..core.shapes import dict_rows
 from .problems import Problem
 
 
@@ -222,8 +223,7 @@ class WorkspaceConfig:
     def from_dict(cls, data: Dict[str, Any]) -> "WorkspaceConfig":
         rows = data.get("mappings")
         statics = data.get("static_values")
-        mappings = ([FieldMapping.from_dict(r) for r in rows if isinstance(r, dict)]
-                    if isinstance(rows, list) else [])
+        mappings = [FieldMapping.from_dict(r) for r in dict_rows(rows)]
         # Earlier versions mapped the Part number to NUMBER; the Item Number is what that field holds now.
         if not any(m.source == ITEM_NUMBER_SOURCE for m in mappings):
             for m in mappings:
@@ -233,8 +233,7 @@ class WorkspaceConfig:
             workspace_id=str(data.get("workspace_id", "")).strip(),
             component_field=str(data.get("component_field", "")).strip(),
             mappings=mappings,
-            static_values=[StaticValue.from_dict(r) for r in statics if isinstance(r, dict)]
-            if isinstance(statics, list) else [],
+            static_values=[StaticValue.from_dict(r) for r in dict_rows(statics)],
         )
 
 

@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, as_list, dict_rows
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .pages import field_id
 from .ttl_cache import TtlCache
@@ -30,21 +31,22 @@ def parse_sections(data: Any) -> Dict[str, str]:
         if field:
             out.setdefault(field, section)
 
-    for section in data:
+    for section in dict_rows(data):
         link = _link(section)
         if not link:
             continue
-        for field in section.get("fields") or []:
+        for field in as_list(section.get("fields")):
             add(field, link)
-        for matrix in section.get("matrices") or []:
-            for row in matrix.get("fields") or [] if isinstance(matrix, dict) else []:
-                for field in row if isinstance(row, list) else []:
+        for matrix in dict_rows(section.get("matrices")):
+            for row in as_list(matrix.get("fields")):
+                for field in as_list(row):
                     add(field, link)
     return out
 
 
 def _link(node: Any) -> str:
-    return str(node.get("__self__") or node.get("link") or "") if isinstance(node, dict) else ""
+    node = as_dict(node)
+    return str(node.get("__self__") or node.get("link") or "")
 
 
 class SectionService:
@@ -73,8 +75,7 @@ class SectionService:
         if cached is not None:
             return cached
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")
-        listed = (data.get("sections") or data.get("items") or []) if isinstance(data, dict) else data
-        entries = [e for e in listed if isinstance(e, dict)] if isinstance(listed, list) else []
+        entries = dict_rows((data.get("sections") or data.get("items")) if isinstance(data, dict) else data)
         # The list holds links only; a section carrying its fields already needs no second read.
         with ThreadPoolExecutor(max_workers=READERS) as pool:
             details = list(pool.map(lambda e: e if "fields" in e or not _link(e) else self._client.get_json(_link(e)), entries))

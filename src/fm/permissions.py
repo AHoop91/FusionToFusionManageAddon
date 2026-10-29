@@ -6,6 +6,7 @@
 
 from typing import Any, Iterable, List, Set
 
+from ..core.shapes import dict_rows, dig
 from .client import WORKSPACES, FmApiError, FmClient
 
 PERMISSION_PREFIX = "permission.shortname."
@@ -15,10 +16,9 @@ ATTACH_PERMISSIONS = (VIEW_ITEMS, "add_attachments", "edit_attachments")   # to 
 
 def parse_granted(data: Any) -> Set[str]:
     """Short permission names (``add_items``) in the answer of the permissions request."""
-    rows = data.get("permissions") if isinstance(data, dict) else None
     names = set()
-    for row in rows if isinstance(rows, list) else []:
-        name = row.get("name") if isinstance(row, dict) else None
+    for row in dict_rows(dig(data, "permissions")):
+        name = row.get("name")
         if isinstance(name, str):
             names.add(name[len(PERMISSION_PREFIX):] if name.startswith(PERMISSION_PREFIX) else name)
     return names
