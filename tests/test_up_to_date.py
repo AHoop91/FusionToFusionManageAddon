@@ -51,6 +51,19 @@ class BomCheckTests(unittest.TestCase):
         self.assertEqual(found, {"state": "unavailable"})
         service.assert_not_called()
 
+    def test_a_changed_quantity_says_what_the_design_and_the_item_hold(self):
+        found = self.check([row("A", quantity="3")], {"TOP": [line("A", "2")]})
+        self.assertEqual(found["details"], [{"name": "A", "design": "3", "item": "2"}])
+
+    def test_a_component_without_an_item_number_is_not_a_difference(self):
+        self.assertEqual(self.check([row("")], {"TOP": []})["state"], "ok")
+
+    def test_the_top_is_found_without_regard_to_case_or_outer_spaces(self):
+        with mock.patch.object(bom_compare, "BomService") as service:
+            service.return_value.read.return_value = {"TOP": []}
+            found = check_bom(shown({"item_number": " top "}, structure=[]))
+        self.assertEqual(found["state"], "ok")
+
 
 class PropertiesCheckTests(unittest.TestCase):
     def check(self, rows, fm_state="found", summary=None):
@@ -73,6 +86,16 @@ class PropertiesCheckTests(unittest.TestCase):
 
     def test_an_item_that_could_not_be_read_is_an_error_with_the_reason(self):
         self.assertEqual(self.check([], fm_state="unknown")[0], {"state": "error", "message": "no way"})
+
+    def test_a_value_the_design_lacks_is_shown_as_empty_text(self):
+        found, _ = self.check([{"name": "Mass", "status": "mismatch", "value": None, "fm_value": None}])
+        self.assertEqual(found["details"], [{"name": "Mass", "design": "", "item": ""}])
+
+    def test_an_item_that_could_not_be_read_without_a_reason_gets_a_general_one(self):
+        compared = {"fm": {"state": "unknown", "message": ""}, "rows": []}
+        with mock.patch.object(up_to_date, "read_and_compare", return_value=([], compared)):
+            found = check_properties(shown({"item_number": "TOP"}))
+        self.assertEqual(found, {"state": "error", "message": "Fusion Manage could not be read."})
 
     def test_the_item_is_read_by_its_id_not_searched_for(self):
         _, compare = self.check([])

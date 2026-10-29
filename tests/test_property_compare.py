@@ -3,7 +3,8 @@
 import unittest
 
 from src.config.workspace_models import FieldMapping, data_model_name
-from src.sync.property_compare import FOUND, MATCH, MISMATCH, NEW, UNMAPPED, compare_properties
+from src.sync.property_compare import (FOUND, MATCH, MISMATCH, MULTIPLE, NEW, UNCHECKED, UNKNOWN, UNMAPPED,
+                                        compare_properties)
 
 
 class DataModelNameTests(unittest.TestCase):
@@ -67,6 +68,59 @@ class CompareTests(unittest.TestCase):
         mappings = [FieldMapping("custom:Material Name", "MATERIAL")]
         rows = compare_properties(self.properties, self.summary, mappings, None, "new")
         self.assertEqual([r["status"] for r in rows if r["name"] == "materialName"], [NEW])
+
+
+class StateTests(unittest.TestCase):
+    mappings = [FieldMapping("material", "MATERIAL")]
+    properties = [{"name": "materialName", "value": "Steel"}]
+
+    def status(self, state):
+        return compare_properties(self.properties, {}, self.mappings, {"MATERIAL": "Steel"}, state)[0]["status"]
+
+    def test_a_lookup_state_other_than_found_is_the_status_of_a_mapped_row(self):
+        for state in (NEW, UNKNOWN, UNCHECKED, MULTIPLE):
+            self.assertEqual(self.status(state), state)
+
+    def test_a_state_that_is_not_one_of_them_is_refused_not_read_as_a_new_item(self):
+        with self.assertRaises(ValueError):
+            self.status("fond")
+
+
+class UnlistedSourceTests(unittest.TestCase):
+    def test_a_mapped_source_the_list_lacks_gets_a_row_from_the_summary(self):
+        rows = compare_properties([], {"part_number": "PN-9"}, [FieldMapping("part_number", "NUMBER")], {"NUMBER": "PN-9"}, FOUND)
+        self.assertEqual([(r["name"], r["value"], r["status"]) for r in rows], [("Part number", "PN-9", MATCH)])
+
+    def test_a_built_in_in_the_summary_is_fresher_than_the_list(self):
+        rows = compare_properties([{"name": "partNumber", "value": "OLD"}], {"part_number": "NEW"},
+                                  [FieldMapping("part_number", "NUMBER")], {"NUMBER": "OLD"}, FOUND)
+        self.assertEqual((rows[0]["value"], rows[0]["status"]), ("NEW", MISMATCH))
+
+
+class OrderAndShownTests(unittest.TestCase):
+    def test_rows_that_will_change_come_first_then_by_name(self):
+        mappings = [FieldMapping("custom:B", "FB"), FieldMapping("custom:A", "FA"), FieldMapping("custom:C", "FC")]
+        properties = [{"name": "Other", "value": "x"}, {"name": "C", "value": "1"}, {"name": "B", "value": "2"}, {"name": "A", "value": "1"}]
+        rows = compare_properties(properties, {}, mappings, {"FA": "1", "FB": "9", "FC": "1"}, FOUND)
+        self.assertEqual([(r["name"], r["status"]) for r in rows],
+                         [("B", MISMATCH), ("A", MATCH), ("C", MATCH), ("Other", UNMAPPED)])
+
+    def test_the_value_is_shown_at_the_precision_of_its_field(self):
+        mappings = [FieldMapping("custom:Mass", "MASS")]
+        rows = compare_properties([{"name": "Mass", "value": "0.104455"}], {}, mappings, None, NEW, lambda field, text: text[:5])
+        self.assertEqual((rows[0]["value"], rows[0]["shown"]), ("0.104455", "0.104"))
+
+    def test_a_unit_conversion_that_gives_nothing_leaves_the_value_as_it_is(self):
+        mappings = [FieldMapping("physical:Mass", "MASS")]
+        properties = [{"name": "Physical Mass", "value": "5", "unit": "kg"}]
+        row = compare_properties(properties, {}, mappings, None, NEW, None, lambda field, number, unit: None)[0]
+        self.assertEqual((row["value"], row["unit"]), ("5", "kg"))
+
+    def test_a_converted_value_and_unit_replace_the_originals(self):
+        mappings = [FieldMapping("physical:Mass", "MASS")]
+        properties = [{"name": "Physical Mass", "value": "5", "unit": "kg"}]
+        row = compare_properties(properties, {}, mappings, None, NEW, None, lambda field, number, unit: ("5000", "g"))[0]
+        self.assertEqual((row["value"], row["unit"]), ("5000", "g"))
 
 
 if __name__ == "__main__":

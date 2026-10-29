@@ -16,7 +16,7 @@ from ..fm.items import ItemService
 from ..fm.search_query import WORKING
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import publish_batch_size, read_publish_components
-from ..sync.item_compare import item_number_of
+from ..sync.item_number import item_number_of
 
 log = get_logger("publish")
 

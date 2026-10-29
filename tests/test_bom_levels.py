@@ -47,6 +47,37 @@ class DesignNotInFusionManageTests(unittest.TestCase):
         self.assertEqual(compare.call_args[0][3:], ("242", "2", WORKING_BIAS))   # the working version's BOM: its line ids are the ones to change
 
 
+class DesignWithNothingToLookUpTests(unittest.TestCase):
+    """Without a workspace or an item number nothing is asked of Fusion Manage, and only the lines that are skipped get a status."""
+
+    def test_a_design_without_an_item_number_marks_only_the_skipped_lines(self):
+        data = bom_levels.compare_design_bom([row("A"), row("", 1)], {"item_number": ""}, mock.Mock(workspace_id="242"), mock.Mock(), [])
+        self.assertEqual([r.get("status") for r in data["rows"]], [None, "skipped"])
+        self.assertFalse(data["shared"])
+        self.assertNotIn("design_new", data)
+
+    def test_no_workspace_marks_only_the_skipped_lines(self):
+        data = bom_levels.compare_design_bom([row("A")], {"item_number": "TOP"}, None, mock.Mock(), [])
+        self.assertEqual([r.get("status") for r in data["rows"]], [None])
+
+    def test_the_log_line_copes_with_rows_that_lack_a_quantity(self):
+        data = bom_levels.compare_design_bom([{"level": 0, "item_number": "A"}], {"item_number": "TOP"}, None, mock.Mock(), [])
+        self.assertEqual(len(data["rows"]), 1)
+
+    def test_searching_asks_nothing_without_a_workspace_or_a_number(self):
+        fm = mock.Mock()
+        self.assertEqual(bom_levels.search_design(fm, None, {"item_number": "TOP"}), [])
+        self.assertEqual(bom_levels.search_design(fm, mock.Mock(workspace_id="242"), {"item_number": " "}), [])
+        self.assertEqual(fm.method_calls, [])
+
+    def test_searching_looks_the_number_up_in_the_workspace(self):
+        with mock.patch.object(bom_levels, "ItemService") as items:
+            items.return_value.search.return_value = [{"id": "1"}]
+            found = bom_levels.search_design(mock.Mock(), mock.Mock(workspace_id="242"), {"item_number": " TOP "})
+        self.assertEqual(found, [{"id": "1"}])
+        items.return_value.search.assert_called_once_with("242", "TOP")
+
+
 class LevelUnderAnAssemblyTests(unittest.TestCase):
     """The lines under one opened assembly are compared with that assembly's Fusion Manage BOM alone."""
 

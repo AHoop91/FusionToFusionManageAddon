@@ -25,7 +25,8 @@ from ..fm.search_query import WORKING
 from ..fm.sections import SectionService
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import read_thumbnail_url
-from ..sync.item_compare import compare_with_item, item_number_of, lookup_item
+from ..sync.item_compare import compare_with_item, lookup_item
+from ..sync.item_number import item_number_of
 from ..sync.property_compare import FOUND, MISMATCH, NEW
 from .bom_requests import bom_requests
 from .download import download

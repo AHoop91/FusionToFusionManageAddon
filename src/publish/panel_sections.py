@@ -24,7 +24,8 @@ from ..fm.permissions import denial
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_section
 from ..sync.bom_levels import compare_design_bom, compare_level, search_design
-from ..sync.item_compare import item_number_of, read_and_compare
+from ..sync.item_compare import read_and_compare
+from ..sync.item_number import item_number_of
 
 log = get_logger("panel_sections")
 

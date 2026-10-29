@@ -7,7 +7,7 @@ cannot publish them either. The two apply one rule, so a change to it is made in
 
 from typing import Any, Dict, List
 
-from ..sync.item_compare import item_number_of
+from ..sync.item_number import item_number_of
 from .read_ahead import component_id_of
 
 UNNAMED = "a component without a name"
