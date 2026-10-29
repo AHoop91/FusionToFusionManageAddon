@@ -1,10 +1,10 @@
 """Make a file from the open document and attach it to a Fusion Manage item (a new version when the file is there already).
 
 What file is made is an ``UploadJob``: a STEP file of a design, or a PDF, DWG or DXF of a drawing. It starts from the Actions menu of the
-Item panel (the item shown), from the right-click menu (the item of a number) or from the Export window (the item or the component of a number). The file is made on Fusion's UI
-thread; finding the item and the upload run on a worker thread. How far it has got is kept in ``status``, and pushed to the pages
-(``upload_status``) each time it changes; a page also asks for it now and then, in case a push is missed. The Item panel shows it over
-itself, and the other starts in a small window of their own.
+Item panel (the item shown), from the right-click menu (the item of a number) or from the Export window (the item or the component of
+a number). The file is made on Fusion's UI thread; finding the item and the upload run on a worker thread. How far it has got is kept
+in ``status``, and pushed to the pages (``upload_status``) each time it changes; a page also asks for it now and then, in case a push
+is missed. The Item panel shows it over itself, and the others start in a small window of their own.
 """
 
 import json
@@ -24,7 +24,7 @@ from ..config.workspace_models import ITEMS_KIND
 from ..core.cancel import Cancelled, CancelToken
 from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
-from ..fm.attachments import AttachmentService
+from ..fm.attachments import NEW_VERSION, AttachmentService
 from ..fm.client import FmClient
 from ..fm.components import ComponentService, link_ids
 from ..fm.items import ItemChoices, ItemService
@@ -78,8 +78,8 @@ class AttachmentUpload:
         self._lock = threading.Lock()
         self._components = TtlCache(60)   # (workspace id, item id) of a component's working version by item number, found ahead of an export
         self._status: Dict[str, Any] = {"active": False}   # when over, with the ``result`` of the last one: ``ok`` and a ``message``
-        self._window_open = False
-        self._in_window = False   # the upload on show is one the Export window follows: its end is told to the window, not in a message box
+        self._window_open = False   # the progress window is shown; only the UI thread changes it
+        self._in_window = False   # the upload on show is one the Export window follows: its end is told to the window, not in a message box (under ``_lock``)
 
     # ---- Starting -------------------------------------------------------------------
 
@@ -99,7 +99,12 @@ class AttachmentUpload:
             self._ui.messageBox("A file is already being uploaded.", ITEM_COMMAND_NAME)
             return
         self._window_open = True
-        self._window.show()
+        try:
+            self._window.show()
+        except Exception as exc:  # noqa: BLE001 - the upload is already marked as under way: end it, or no other could start
+            log.exception("Could not show the upload window")
+            self._fail(f"Could not attach a {job.label}:\n{exc}")
+            return
         threading.Thread(target=self._find_then_make, args=(job, subject, destination), daemon=True).start()
 
     def begin_in_window(self, job: UploadJob) -> bool:
@@ -197,14 +202,16 @@ class AttachmentUpload:
         log.info("Making the %s on Fusion's thread", job.label)
         name = f"{safe_name(subject.item_number)}{job.extension}"
         folder = os.path.join(temp_root(), uuid.uuid4().hex)   # while the file waits to be read
-        os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, name)
         try:
+            os.makedirs(folder, exist_ok=True)
             self._stage(job, MAKE)
             self._let_page_draw()
             job.make(path, subject, lambda percent: self._stage(job, MAKE, percent))
             with open(path, "rb") as handle:
                 content = handle.read()
+            if not content:   # an export that wrote nothing must not become a new, empty version of a good file
+                raise ValueError(f"The {job.label} came out empty.")
         except Exception as exc:  # shown to the user, never raised into Fusion
             log.exception("Could not make %s", name)
             self._fail(f"Could not create {name}:\n{exc}")
@@ -240,8 +247,11 @@ class AttachmentUpload:
     def _done(self, name: str, kind: str, destination: str) -> None:
         """Say the file is attached (to the Export window if it follows it, else a green tick in the panel when it is open, else a message
         box) and read the item again. UI thread."""
-        message = f"A new version of {name} was uploaded to the {destination} in Fusion Manage." if kind == "version" else f"{name} was attached to the {destination} in Fusion Manage."
-        if self._in_window:
+        if kind == NEW_VERSION:
+            message = f"A new version of {name} was uploaded to the {destination} in Fusion Manage."
+        else:
+            message = f"{name} was attached to the {destination} in Fusion Manage."
+        if self._follows_window():
             self._finish({"ok": True, "message": message})
             self._reload()
             return
@@ -256,7 +266,7 @@ class AttachmentUpload:
     def _fail(self, message: str) -> None:
         """Stop and tell the user why, from any thread (the Export window if it follows the upload, else a message box); the progress goes
         first, so it is not left over the message."""
-        if self._in_window:
+        if self._follows_window():
             self._finish({"ok": False, "message": message})
             return
         self._end()
@@ -269,6 +279,11 @@ class AttachmentUpload:
         among ``steps`` and the ``percent`` (None while unknown). Once one the Export window follows is over, ``result`` says how it went."""
         with self._lock:
             return dict(self._status)
+
+    def _follows_window(self) -> bool:
+        """Whether the upload under way is one the Export window follows."""
+        with self._lock:
+            return self._in_window
 
     def _tell(self, status: Dict[str, Any]) -> None:
         """Push ``status`` to the pages that follow an upload."""
@@ -288,7 +303,9 @@ class AttachmentUpload:
 
     def _stage(self, job: UploadJob, step: int, percent: Optional[int] = None) -> None:
         with self._lock:
-            if (self._status.get("step"), self._status.get("percent")) == (step, percent):   # nothing new to say
+            if not self._status["active"]:   # a late report of an upload that has ended must not bring it back
+                return
+            if (self._status["step"], self._status["percent"]) == (step, percent):   # nothing new to say
                 return
             self._status.update(step=step, stage=job.stage(step), percent=percent)
             status = dict(self._status)
@@ -305,8 +322,15 @@ class AttachmentUpload:
         with self._lock:
             self._status = {"active": False}
         self._tell({"active": False})
-        if self._window_open:
-            self._tasks.post(self._close_window)
+        self._tasks.post(self._close_idle_window)   # the window belongs to the UI thread
+
+    def _close_idle_window(self) -> None:
+        """Close the progress window, unless another upload has begun by now: this runs after the upload that posted it ended, and the
+        next one may already be showing the window."""
+        with self._lock:
+            busy = self._status["active"]
+        if not busy:
+            self._close_window()
 
     def _close_window(self) -> None:
         if self._window_open:

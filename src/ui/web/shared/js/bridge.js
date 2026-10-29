@@ -29,10 +29,17 @@
   }
 
   // Fusion invokes this global to deliver messages from Python.
+  // A message that cannot be read, or a listener that throws, is logged and does not stop the next message from being delivered.
   window.fusionJavaScriptHandler = {
     handle: function (action, data) {
       const callback = listeners[action];
-      if (callback) callback(JSON.parse(data));
+      if (callback) {
+        try {
+          callback(JSON.parse(data));
+        } catch (error) {
+          console.error('The panel could not handle "' + action + '":', error);
+        }
+      }
       return 'OK';
     },
   };

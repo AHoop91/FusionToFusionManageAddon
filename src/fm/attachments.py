@@ -12,6 +12,8 @@ from .client import WORKSPACES, FmApiError, FmClient, last_segment
 
 log = get_logger("fm.attachments")
 
+NEW_VERSION = "version"   # what ``upload`` answers: the file was there already, and this is a new version of it
+NEW_FILE = "new"   # ... or it was not, and it is attached as a new file
 LIST_MEDIA_TYPE = "application/vnd.autodesk.plm.attachments.bulk+json"   # the list; plain application/json is answered with a link
 
 
@@ -68,7 +70,7 @@ class AttachmentService:
 
     def upload(self, workspace_id: str, item_id: str, name: str, content: bytes, description: str = "",
                progress: Optional[Callable[[float], None]] = None) -> str:
-        """Attach a file to the item, or a new version of the file already attached under ``name``; returns ``"version"`` or ``"new"``.
+        """Attach a file to the item, or a new version of the file already attached under ``name``; returns ``NEW_VERSION`` or ``NEW_FILE``.
 
         The v3 API takes three steps: register it (the answer holds a signed address), put the bytes at that address,
         then check it in. A new version is registered by posting to the existing attachment instead of the list.
@@ -88,6 +90,6 @@ class AttachmentService:
         extra = as_dict(data.get("extraHeaders"))   # signed into the address, so sent exactly as given
         self._client.put_bytes(address, content, {str(k): str(v) for k, v in extra.items()}, progress=progress)
         self._client.send_json("PATCH", f"{path}/{attachment_id}", {"status": {"name": "CheckIn"}})   # the file is complete
-        kind = "version" if existing_id else "new"
+        kind = NEW_VERSION if existing_id else NEW_FILE
         log.info("Uploaded %s (%d bytes) to item %s as %s attachment %s", name, len(content), item_id, kind, attachment_id)
         return kind

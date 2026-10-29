@@ -45,7 +45,7 @@
       status.textContent = state.stage ? state.stage + '...' : 'Starting...';
       count.textContent = known ? state.percent + '%' : '';
       bar.classList.toggle('indeterminate', !known);
-      bar.setAttribute('aria-valuenow', known ? String(state.percent) : '');
+      if (known) bar.setAttribute('aria-valuenow', String(state.percent)); else bar.removeAttribute('aria-valuenow');
       fill.style.width = known ? state.percent + '%' : '';
       const steps = state.steps || [];
       if (stages.children.length !== steps.length) {
