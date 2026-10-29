@@ -1,15 +1,17 @@
 """Palette actions that list the hub's custom properties for field mapping."""
 
-import threading
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from ...config.config_service import CompanyModeUnavailable
+from ...core.logging_setup import get_logger
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...fusion_mfg.properties import PropertyService
-from ...core.logging_setup import get_logger
 from ..message_bridge import MessageBridge
+from .background import BackgroundRead, Runner, in_thread
 
 log = get_logger("property_actions")
+
+ACTION = "list_custom_properties_status"
 
 
 def _active_hub_name() -> str:
@@ -19,50 +21,32 @@ def _active_hub_name() -> str:
     return hub.name if hub else ""
 
 
-def register_property_actions(bridge: MessageBridge) -> None:
+def register_property_actions(bridge: MessageBridge, hub_name: Callable[[], str] = _active_hub_name, run: Runner = in_thread) -> None:
     """Register ``list_custom_properties`` and ``list_custom_properties_status``.
 
     Like workspace validation, the query runs on a worker thread, which pushes the answer to the panel when it is done, so Fusion's UI
-    thread is never blocked.
+    thread is never blocked. ``hub_name`` gives the name of the open hub (on Fusion's thread), and ``run`` starts the read on a worker.
     """
+    reads = BackgroundRead(bridge, ACTION, {"properties": []}, run)
 
-    state: Dict[str, Any] = {"pending": False, "ok": False, "properties": [], "message": ""}
-    lock = threading.Lock()
+    def prepare() -> Callable[[], Dict[str, Any]]:
+        client, name = FusionGraphQlClient(), hub_name()
+        log.info("Loading custom properties for active hub '%s'", name)
 
-    def run(client: FusionGraphQlClient, hub_name: str) -> None:
-        try:
-            properties = PropertyService(client).list_properties(hub_name)
-            log.info("Properties loaded for hub '%s': %d", hub_name, len(properties))
-            outcome = {"pending": False, "ok": True, "properties": properties, "message": ""}
-        except Exception as exc:  # never leave the panel waiting
-            log.exception("Custom property load failed for hub '%s'", hub_name)
-            outcome = {"pending": False, "ok": False, "properties": [], "message": str(exc) or type(exc).__name__}
-        with lock:
-            state.update(outcome)
-        bridge.push("list_custom_properties_status", outcome)   # the panel is told, not left to ask
+        def work() -> Dict[str, Any]:
+            properties = PropertyService(client).list_properties(name)
+            log.info("Properties loaded for hub '%s': %d", name, len(properties))
+            return {"properties": properties}
+        return work
 
     def list_custom_properties(_payload: Dict[str, Any]) -> Dict[str, Any]:
-        with lock:
-            if state["pending"]:
-                return dict(state)
         try:
-            client = FusionGraphQlClient()
-            hub_name = _active_hub_name()
+            return reads.start(prepare)
         except CompanyModeUnavailable as exc:
-            return {"pending": False, "ok": False, "properties": [], "message": str(exc)}
-        except Exception as exc:
+            return reads.failure(str(exc))
+        except Exception as exc:  # noqa: BLE001 - what Fusion says when no hub is open, or there is no Fusion to ask
             log.exception("Could not start the custom property load")
-            return {"pending": False, "ok": False, "properties": [], "message": f"No active hub: {exc}"}
-        log.info("Loading custom properties for active hub '%s'", hub_name)
-        with lock:
-            state.update(pending=True, ok=False, properties=[], message="")
-            snapshot = dict(state)
-        threading.Thread(target=run, args=(client, hub_name), daemon=True).start()
-        return snapshot
-
-    def list_custom_properties_status(_payload: Dict[str, Any]) -> Dict[str, Any]:
-        with lock:
-            return dict(state)
+            return reads.failure(f"No active hub: {exc}")
 
     bridge.register("list_custom_properties", list_custom_properties)
-    bridge.register("list_custom_properties_status", list_custom_properties_status)
+    bridge.register(ACTION, lambda _payload: reads.status())
