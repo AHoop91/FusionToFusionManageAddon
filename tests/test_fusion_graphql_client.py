@@ -50,6 +50,33 @@ def worker(call):
     return outcome["value"]
 
 
+class DataOfTests(unittest.TestCase):
+    def test_the_data_object_is_given(self):
+        self.assertEqual(module.data_of({"data": {"a": 1}}), {"a": 1})
+
+    def test_an_error_carries_its_message_and_code(self):
+        with self.assertRaises(MfgApiError) as caught:
+            module.data_of({"errors": [{"message": "No", "extensions": {"code": "FHQ-403"}}]})
+        self.assertEqual((str(caught.exception), caught.exception.code, caught.exception.transient), ("No", "FHQ-403", False))
+
+    def test_a_busy_service_is_transient(self):
+        for extensions in ({"code": "DATA_NOT_READY"}, {"http": {"status": 503}}):
+            with self.subTest(extensions=extensions):
+                with self.assertRaises(MfgApiError) as caught:
+                    module.data_of({"errors": [{"message": "busy", "extensions": extensions}]})
+                self.assertTrue(caught.exception.transient)
+
+    def test_an_answer_of_an_unexpected_shape_is_an_error_not_a_crash(self):
+        for payload in (None, "x", [], {"data": None}, {"data": "x"}):
+            with self.subTest(payload=payload):
+                with self.assertRaises(MfgApiError):
+                    module.data_of(payload)
+        for errors in ("boom", [None], [{"extensions": "x"}], [{"extensions": {"http": "x"}}]):
+            with self.subTest(errors=errors):
+                with self.assertRaises(MfgApiError):
+                    module.data_of({"errors": errors})
+
+
 class QueryTests(unittest.TestCase):
     def test_an_answer_gives_its_data(self):
         with fusion(lambda: Response(data=json.dumps({"data": {"a": 1}}))):

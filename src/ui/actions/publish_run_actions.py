@@ -12,6 +12,7 @@ from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...config.workspace_models import ITEMS_KIND
 from ...core.logging_setup import get_logger
+from ...core.shapes import dig
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...publish.job_queue import JobQueue
@@ -115,7 +116,7 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         return jobs()
 
     def list_publish_jobs(payload: Dict[str, Any]) -> Dict[str, Any]:
-        watched.touch(str((payload or {}).get("watching") or ""))   # the progress dialog names the run it follows
+        watched.touch(str(dig(payload, "watching") or ""))   # the progress dialog names the run it follows
         return jobs()
 
     def cancel_publish(payload: Dict[str, Any]) -> Dict[str, Any]:

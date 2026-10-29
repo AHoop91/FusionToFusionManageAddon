@@ -61,6 +61,8 @@ class MessageBridge:
             return {"ok": False, "result": None, "error": f"Unknown action: {action}"}
         try:
             payload = json.loads(raw_data) if raw_data else {}
+            if not isinstance(payload, dict):   # every handler reads its payload as an object
+                raise ValueError("The request must be a JSON object.")
             return {"ok": True, "result": handler(payload), "error": None}
         except Exception as exc:  # noqa: BLE001 - boundary to UI, must not raise
             log.exception("Action failed: %s", action)

@@ -9,8 +9,8 @@ import adsk.core
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
+from ...fusion_mfg.hub_lookup import read_hub_id
 from ...fusion_mfg.hub_role import HubRole, read_hub_role
-from ...fusion_mfg.properties import HUBS_QUERY, find_hub_id
 from ..message_bridge import MessageBridge
 
 log = get_logger("hub_actions")
@@ -54,7 +54,7 @@ def register_hub_actions(bridge: MessageBridge, config: ConfigService) -> None:
             with lock:
                 known = hub_ids.get(key[0])
             if known is None:
-                known = find_hub_id(client.query(HUBS_QUERY), hub_name)
+                known = read_hub_id(client, hub_name)
                 with lock:
                     hub_ids[key[0]] = known
             role = read_hub_role(client, known, key[1])

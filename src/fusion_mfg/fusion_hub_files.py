@@ -9,14 +9,34 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, NamedTuple
 
 from ..core.logging_setup import get_logger
-from .hub_files import HubFilesError, Listing, by_name
 
 log = get_logger("fusion_hub_files")
 
 MAIN_THREAD_WAIT_SECONDS = 120   # a download of a file of a few kilobytes; a stalled Fusion does not keep the panel waiting forever
+GONE = "That is no longer in the hub."
+DOWNLOAD_PREFIX = "fusion_manage_config_"
+DOWNLOAD_NAME = "config.json"
+
+Entry = Dict[str, str]   # a project, folder or file of the hub: {"id": ..., "name": ...}
+
+
+class HubFilesError(Exception):
+    """A browse or read failed; the message is safe to show to the user."""
+
+
+class Listing(NamedTuple):
+    """What is inside a place in the hub: its folders and its files, each by name."""
+
+    folders: List[Entry]
+    files: List[Entry]
+
+
+def by_name(entries: List[Entry]) -> List[Entry]:
+    """``entries`` sorted by name, ignoring case."""
+    return sorted(entries, key=lambda entry: entry["name"].lower())
 
 
 def run_on_main(post: Callable[[Callable[[], None]], None], work: Callable[[], Any]) -> Any:
@@ -47,7 +67,7 @@ def _plain(error: str) -> str:
         return ("Fusion would not let you download this file. You may only be able to view this project, and viewers cannot download files. "
                 "Ask a Hub Admin to give you a role that can download in this project, or to move the file to a project you can download from.")
     if "404" in text or "not found" in text:
-        return "That is no longer in the hub."
+        return GONE
     if "offline" in text or "network" in text or "timed out" in text or "timeout" in text:
         return "The hub could not be reached. Check your connection and try again."
     return "Fusion could not read the hub. Try again, and if it keeps happening, ask a Hub Admin for help."
@@ -65,6 +85,29 @@ def _core():
     return adsk.core
 
 
+def _entries(things: Any) -> List[Entry]:
+    """Fusion's projects, folders or files as entries, by name."""
+    return by_name([{"id": thing.id, "name": thing.name} for thing in things])
+
+
+def _find_file(item_id: str):
+    """The file Fusion has under ``item_id``; raises ``HubFilesError`` when there is none. Fusion's main thread."""
+    data_file = _core().Application.get().data.findFileById(item_id)
+    if not data_file:
+        raise HubFilesError(GONE)
+    return data_file
+
+
+def _remove(folder: str, target: str) -> None:
+    """Delete the downloaded ``target`` and its ``folder``; whatever cannot be deleted is left to the system's temp clean-up."""
+    try:
+        if os.path.exists(target):
+            os.remove(target)
+        os.rmdir(folder)
+    except OSError:
+        log.debug("Could not remove %s", folder)
+
+
 class FusionHubFiles:
     """Browses the open hub and reads a file in it, as Fusion does for the signed-in user."""
 
@@ -72,6 +115,7 @@ class FusionHubFiles:
         self._post = post
 
     def _main(self, work: Callable[[], Any]) -> Any:
+        """Run ``work`` on Fusion's main thread; any failure reaches the caller as a ``HubFilesError`` the user can be shown."""
         started = time.monotonic()
         try:
             return run_on_main(self._post, work)
@@ -90,43 +134,36 @@ class FusionHubFiles:
             raise HubFilesError("No hub is open. Open a hub in Fusion, then try again.")
         return hub
 
-    @staticmethod
-    def _listing(folder) -> Listing:
-        folders = [{"id": f.id, "name": f.name} for f in folder.dataFolders]
-        files = [{"id": f.id, "name": f.name} for f in folder.dataFiles]
-        return Listing(by_name(folders), by_name(files))
-
-    def projects(self, hub_id: str) -> Listing:
+    def projects(self) -> Listing:
         """The projects of the open hub that the user can reach (shown as folders)."""
-        def work() -> Listing:
-            return Listing(by_name([{"id": p.id, "name": p.name} for p in self._hub().dataProjects]), [])
-        return self._main(work)
+        return self._main(lambda: Listing(_entries(self._hub().dataProjects), []))
 
-    def top_folders(self, hub_id: str, project_id: str) -> Listing:
+    def top_folders(self, project_id: str) -> Listing:
         """The folder at the top of a project."""
         def work() -> Listing:
             for project in self._hub().dataProjects:
                 if project.id == project_id:
                     root = project.rootFolder
                     return Listing([{"id": root.id, "name": root.name}], [])
-            raise HubFilesError("That is no longer in the hub.")
+            raise HubFilesError(GONE)
         return self._main(work)
 
-    def contents(self, project_id: str, folder_id: str) -> Listing:
+    def contents(self, folder_id: str) -> Listing:
         """The folders and files inside a folder."""
         def work() -> Listing:
             folder = _core().Application.get().data.findFolderById(folder_id)
             if not folder:
-                raise HubFilesError("That is no longer in the hub.")
-            return self._listing(folder)
+                raise HubFilesError(GONE)
+            return Listing(_entries(folder.dataFolders), _entries(folder.dataFiles))
         return self._main(work)
 
     def file_info(self, item_id: str) -> Dict[str, str]:
         """What Fusion knows of a file, as text for the panel: its project, when and by whom it was last updated, and its version. What
         Fusion does not say is left out."""
         def work() -> Dict[str, str]:
-            data_file = _core().Application.get().data.findFileById(item_id)
-            if not data_file:
+            try:
+                data_file = _find_file(item_id)
+            except HubFilesError:
                 return {}
             info: Dict[str, str] = {}
             for key, read in (("project_name", lambda: data_file.parentProject.name),
@@ -142,14 +179,12 @@ class FusionHubFiles:
             return info
         return self._main(work)
 
-    def read_file(self, project_id: str, item_id: str, max_bytes: int) -> bytes:
+    def read_file(self, item_id: str, max_bytes: int) -> bytes:
         """The content of the latest version of a file. Refused when it is larger than ``max_bytes``."""
         def work() -> bytes:
-            data_file = _core().Application.get().data.findFileById(item_id)
-            if not data_file:
-                raise HubFilesError("That is no longer in the hub.")
-            folder = tempfile.mkdtemp(prefix="fusion_manage_config_")
-            target = os.path.join(folder, "config.json")
+            data_file = _find_file(item_id)
+            folder = tempfile.mkdtemp(prefix=DOWNLOAD_PREFIX)
+            target = os.path.join(folder, DOWNLOAD_NAME)
             try:
                 data_file.download(target, None)
                 if not os.path.exists(target):
@@ -159,10 +194,5 @@ class FusionHubFiles:
                 with open(target, "rb") as handle:
                     return handle.read()
             finally:
-                try:
-                    if os.path.exists(target):
-                        os.remove(target)
-                    os.rmdir(folder)
-                except OSError:
-                    pass
+                _remove(folder, target)
         return self._main(work)

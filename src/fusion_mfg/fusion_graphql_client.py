@@ -1,8 +1,9 @@
 """Manufacturing Data Model GraphQL through Fusion itself (the ``mfgdm://`` address).
 
-Fusion sends the request as the user it is signed in as, so no Client ID, sign-in or access token is needed. ``query`` returns the
-``data`` object, and raises ``MfgApiError``.
-The call waits on the network, so use this from a worker thread, never from Fusion's own (a warning is logged when it is).
+Fusion sends the request as the user it is signed in as, so no Client ID, sign-in or access token is needed. ``query`` returns the ``data``
+object of the answer and raises ``MfgApiError`` for a failure.
+
+The call waits on the network, so use it from a worker thread, never from Fusion's own (a warning is logged when it is).
 """
 
 import json
@@ -13,6 +14,7 @@ from typing import Any, Dict, Optional
 
 from ..core.cancel import ADDIN, CancelToken
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict
 from ..core.timing import Stopwatch
 
 log = get_logger("fusion_graphql")
@@ -24,6 +26,12 @@ ATTEMPTS = 3
 RETRY_SECONDS = 2   # wait before the second try, twice that before the third
 RETRY_HTTP = (429, 502, 503, 504)
 TRANSIENT_CODES = ("DATA_NOT_READY", "SUBREQUEST_HTTP_ERROR")   # a service behind the gateway was not ready or not answering
+
+# How much of an answer is kept in a log line or an error message.
+HTTP_DETAIL_CHARS = 4000
+ERRORS_LOG_CHARS = 1000
+EXTENSIONS_LOG_CHARS = 300
+REASON_CHARS = 200
 
 
 def _first_field(query_text: str) -> str:
@@ -41,9 +49,9 @@ def _text_of(response: Any) -> str:
 
 
 def _reason_in(detail: str) -> str:
-    """The message of the first error a failed response reports, when it is a GraphQL answer."""
+    """The message of the first error a failed response reports, when it is a GraphQL answer (empty otherwise)."""
     try:
-        return str(json.loads(detail)["errors"][0]["message"])[:200]
+        return str(json.loads(detail)["errors"][0]["message"])[:REASON_CHARS]
     except (ValueError, KeyError, IndexError, TypeError):
         return ""
 
@@ -59,14 +67,16 @@ class MfgApiError(Exception):
 
 def data_of(payload: Any) -> Dict[str, Any]:
     """The ``data`` object of a GraphQL answer. Raises ``MfgApiError`` for the errors it reports, or when it has no data."""
-    errors = payload.get("errors") if isinstance(payload, dict) else None
+    answer = as_dict(payload)
+    errors = answer.get("errors")
     if errors:
-        log.error("GraphQL errors: %s", json.dumps(errors)[:1000])
-        first = errors[0] if isinstance(errors[0], dict) else {}
-        extensions = first.get("extensions") if isinstance(first.get("extensions"), dict) else {}
-        transient = extensions.get("code") in TRANSIENT_CODES or (extensions.get("http") or {}).get("status") in RETRY_HTTP
-        raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=bool(transient), code=str(extensions.get("code") or ""))
-    data = payload.get("data") if isinstance(payload, dict) else None
+        log.error("GraphQL errors: %s", json.dumps(errors)[:ERRORS_LOG_CHARS])
+        first = as_dict(errors[0])
+        extensions = as_dict(first.get("extensions"))
+        status = as_dict(extensions.get("http")).get("status")
+        transient = extensions.get("code") in TRANSIENT_CODES or status in RETRY_HTTP
+        raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=transient, code=str(extensions.get("code") or ""))
+    data = answer.get("data")
     if not isinstance(data, dict):
         raise MfgApiError("Manufacturing Data Model returned no data.")
     return data
@@ -92,8 +102,9 @@ class FusionGraphQlClient:
                     raise
                 log.warning("Manufacturing Data Model query failed (%s), attempt %d of %d", exc, attempt, ATTEMPTS)
                 self.cancel.wait(RETRY_SECONDS * attempt)
+        raise AssertionError("unreachable: the last attempt returns or raises")
 
-    def _query_once(self, text: str, variables: Optional[Dict[str, Any]], label: str = "") -> Dict[str, Any]:
+    def _query_once(self, text: str, variables: Optional[Dict[str, Any]], label: str) -> Dict[str, Any]:
         name = label or _first_field(text)
         if threading.current_thread() is threading.main_thread():
             log.warning("graphql %s was asked for on Fusion's own thread, which it blocks", name)
@@ -102,7 +113,7 @@ class FusionGraphQlClient:
         seconds = watch.lap()
         if response.statusCode != 200:
             log.debug("graphql %s failed with HTTP %s after %.2fs", name, response.statusCode, seconds)
-            detail = _text_of(response)[:4000]
+            detail = _text_of(response)[:HTTP_DETAIL_CHARS]
             log.error("GraphQL HTTP %s from %s: %s", response.statusCode, FUSION_GRAPHQL_URL, detail)
             reason = _reason_in(detail)
             raise MfgApiError(f"Manufacturing Data Model returned {response.statusCode}" + (f": {reason}" if reason else ""),
@@ -111,13 +122,17 @@ class FusionGraphQlClient:
             payload = json.loads(response.data)
         except ValueError as exc:
             raise MfgApiError("Manufacturing Data Model returned an answer that was not understood.", transient=True) from exc
-        cost = payload.get("extensions") if isinstance(payload, dict) else None   # says what the query cost in points
-        log.debug("graphql %s: %.2fs, %d bytes%s", name, seconds, len(response.data), f", extensions {json.dumps(cost)[:300]}" if cost else "")
+        cost = as_dict(payload).get("extensions")   # says what the query cost in points
+        log.debug("graphql %s: %.2fs, %d bytes%s", name, seconds, len(response.data),
+                  f", extensions {json.dumps(cost)[:EXTENSIONS_LOG_CHARS]}" if cost else "")
         return data_of(payload)
 
     def _execute(self, body: str) -> Any:
-        """Send ``body`` and give Fusion's response. Fusion's call cannot be ended once made, so it runs on a thread of its own and the wait
-        for it is what a cancel or the timeout ends: a request given up on finishes by itself and its answer is dropped."""
+        """Send ``body`` and give Fusion's response.
+
+        Fusion's call cannot be ended once made, so it runs on a thread of its own and the wait for it is what a cancel or the timeout
+        ends: a request given up on finishes by itself and its answer is dropped.
+        """
         self.cancel.check()
         outcome: Dict[str, Any] = {}
         done = threading.Event()

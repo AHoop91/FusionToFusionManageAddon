@@ -1,21 +1,21 @@
 """Property definitions of a Manufacturing Data Model hub.
 
-Definitions are per hub. Base properties ship with the Data Model; custom
-properties come from collections an admin linked to the hub. Both apply to
-the items the add-in reads.
+Definitions are per hub. Base properties ship with the Data Model; custom properties come from collections an admin linked to the hub. Both
+apply to the items the add-in reads.
 """
 
 from typing import Any, Dict, List
 
 from ..config.workspace_models import PHYSICAL_NAMES
-from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
+from ..core.shapes import as_dict, as_list, dict_rows, dig
+from .fusion_graphql_client import FusionGraphQlClient
+from .hub_lookup import read_hub_id
 
 BASE = "base"
 CUSTOM = "custom"
 PHYSICAL = "physical"
-
-# Every hub the user can see: a hub is found by name (``find_hub_id``), whichever of the add-in's reads needs its id.
-HUBS_QUERY = "query Hubs { hubs { results { id name } } }"
+COMPONENT = "COMPONENT"   # the entity type of the items the add-in reads
+COLLECTIONS = (("basePropertyDefinitionCollections", BASE), ("propertyDefinitionCollections", CUSTOM))   # where each group is in the answer
 
 DEFINITIONS_QUERY = """
 query HubProperties($hubId: ID!) {
@@ -36,40 +36,32 @@ fragment propertyCollections on PropertyDefinitionCollections {
 """
 
 
-def find_hub_id(data: Dict[str, Any], hub_name: str) -> str:
-    """Pick the hub matching ``hub_name`` (or the only hub) from a ``hubs`` result."""
-    hubs = [h for h in ((data.get("hubs") or {}).get("results") or []) if isinstance(h, dict)]
-    for hub in hubs:
-        if hub_name and str(hub.get("name", "")).strip().lower() == hub_name.strip().lower():
-            return str(hub.get("id", ""))
-    if len(hubs) == 1:
-        return str(hubs[0].get("id", ""))
-    raise MfgApiError(f"Could not find hub '{hub_name}' in the Manufacturing Data Model.")
+def _usable(definition: Dict[str, Any]) -> bool:
+    """Whether a property definition is one to offer: not hidden or archived, named, and for components (or for every entity type)."""
+    if definition.get("isHidden") or definition.get("isArchived") or not definition.get("name"):
+        return False
+    types = as_list(definition.get("applicableEntityTypes"))
+    return not types or COMPONENT in types
 
 
-def _visible(collections: Any, group: str) -> Dict[str, Dict[str, Any]]:
-    """Usable item (component) properties of one group, keyed by name."""
+def _visible(collections: Any, group: str) -> List[Dict[str, Any]]:
+    """The usable properties of one group, by name; a name a later collection repeats is that collection's."""
     found: Dict[str, Dict[str, Any]] = {}
-    for collection in (collections or {}).get("results") or []:
-        for d in ((collection or {}).get("definitions") or {}).get("results") or []:
-            if not isinstance(d, dict) or d.get("isHidden") or d.get("isArchived") or not d.get("name"):
-                continue
-            types = d.get("applicableEntityTypes") or []
-            if types and "COMPONENT" not in types:
-                continue
-            found[d["name"]] = {"name": d["name"], "group": group,
-                                "specification": str(d.get("specification", ""))}
-    return found
+    for collection in dict_rows(dig(collections, "results")):
+        for definition in dict_rows(dig(collection, "definitions", "results")):
+            if _usable(definition):
+                found[definition["name"]] = {"name": definition["name"], "group": group, "specification": str(definition.get("specification") or "")}
+    return sorted(found.values(), key=lambda prop: prop["name"].lower())
 
 
 def parse_definitions(data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Base then custom properties, each sorted by name."""
-    hub = data.get("hub") or {}
+    """The properties of a ``DEFINITIONS_QUERY`` answer as ``{"name", "group", "specification"}``: base, then custom (each by name), then the
+    physical ones, which every component has."""
+    hub = as_dict(dig(data, "hub"))
     result: List[Dict[str, Any]] = []
-    for key, group in (("basePropertyDefinitionCollections", BASE), ("propertyDefinitionCollections", CUSTOM)):
-        found = _visible(hub.get(key), group)
-        result += sorted(found.values(), key=lambda p: p["name"].lower())
-    return result + [{"name": n, "group": PHYSICAL, "specification": ""} for n in PHYSICAL_NAMES]   # every component has them
+    for key, group in COLLECTIONS:
+        result += _visible(hub.get(key), group)
+    return result + [{"name": name, "group": PHYSICAL, "specification": ""} for name in PHYSICAL_NAMES]
 
 
 class PropertyService:
@@ -79,5 +71,5 @@ class PropertyService:
         self._client = client
 
     def list_properties(self, hub_name: str) -> List[Dict[str, Any]]:
-        hub_id = find_hub_id(self._client.query(HUBS_QUERY), hub_name)
-        return parse_definitions(self._client.query(DEFINITIONS_QUERY, {"hubId": hub_id}))
+        """The properties of the hub called ``hub_name`` (see ``parse_definitions``). Raises ``MfgApiError`` when they cannot be read."""
+        return parse_definitions(self._client.query(DEFINITIONS_QUERY, {"hubId": read_hub_id(self._client, hub_name)}))

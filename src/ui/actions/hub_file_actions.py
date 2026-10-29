@@ -15,8 +15,7 @@ from ...config.config_service import ConfigService
 from ...config.config_transfer import config_from_hub_file
 from ...core.cancel import ADDIN, Cancelled
 from ...core.logging_setup import get_logger
-from ...fusion_mfg.fusion_hub_files import FusionHubFiles
-from ...fusion_mfg.hub_files import HubFilesError
+from ...fusion_mfg.fusion_hub_files import FusionHubFiles, HubFilesError
 from ..message_bridge import MessageBridge
 from .settings_actions import settings_payload
 
@@ -87,21 +86,21 @@ def register_hub_file_actions(bridge: MessageBridge, config: ConfigService, post
         def work() -> Dict[str, Any]:
             hub = files()
             if not project_id:
-                found = hub.projects(hub_id)
+                found = hub.projects()
             elif not folder_id:
-                found = hub.top_folders(hub_id, project_id)
+                found = hub.top_folders(project_id)
                 if len(found.folders) == 1:   # the project's one top folder is the project itself: show what is in it
                     root = found.folders[0]["id"]
-                    inside = hub.contents(project_id, root)
+                    inside = hub.contents(root)
                     return {"folders": inside.folders, "files": inside.files, "folder_id": root}
             else:
-                found = hub.contents(project_id, folder_id)
+                found = hub.contents(folder_id)
             return {"folders": found.folders, "files": found.files}
         return browsing.start(work)
 
     def apply_file(hub_id: str, hub_name: str, project_id: str, item_id: str, name: str) -> Dict[str, Any]:
         """Read the file and make it this hub's settings; the outcome has the settings as the panel shows them. Runs on a worker thread."""
-        raw = files().read_file(project_id, item_id, MAX_CONFIG_BYTES)
+        raw = files().read_file(item_id, MAX_CONFIG_BYTES)
         imported = config_from_hub_file(raw, hub_id, hub_name)
         if config.hub_id != hub_id:   # the user changed hub while the file was being read
             raise HubFilesError("The active hub changed while the file was being read. Try again.")

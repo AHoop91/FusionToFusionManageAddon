@@ -38,6 +38,12 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(parse_hub_role(members(("someone.else@x.com", "ADMIN")), "me@x.com"), UNKNOWN)
         self.assertEqual(parse_hub_role({"hub": None}, "me@x.com"), UNKNOWN)
 
+    def test_an_answer_of_an_unexpected_shape_says_nothing(self):
+        for data in (None, "x", {"hub": "x"}, {"hub": {"members": []}}, {"hub": {"members": {"results": "x"}}},
+                     {"hub": {"members": {"results": [None, "x", {"user": "x"}]}}}):
+            with self.subTest(data=data):
+                self.assertEqual(parse_hub_role(data, "me@x.com"), UNKNOWN)
+
     def test_two_matching_rows_say_nothing(self):
         self.assertEqual(parse_hub_role(members(("me@x.com", "ADMIN"), ("me@x.com", "ADMIN")), "me@x.com"), UNKNOWN)
 

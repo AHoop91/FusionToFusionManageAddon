@@ -1,15 +1,19 @@
 """Read one section of a model from the Manufacturing Data Model.
 
-Sections are read separately and on demand, so the panel can show the summary
-first and fetch the rest only when it is needed.
+Sections are read separately and on demand, so the panel can show the summary first and fetch the rest only when it is needed.
 """
 
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict
 from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
-from .physical import COMPONENT_WITH_PHYSICAL_QUERY, PHYSICAL_FIELDS, parse_physical
 from .parsers import parse_component, parse_properties, parse_structure, parse_summary
+from .physical import COMPONENT_WITH_PHYSICAL_QUERY, PHYSICAL_FIELDS, parse_physical
+
+log = get_logger("model_service")
+
+Progress = Callable[[int], None]   # told how many relations of a bill of materials have been read so far
 
 # GraphQL text for reading one model. The ``bulkModels`` queries take its input list.
 SUMMARY_QUERY = """
@@ -91,13 +95,12 @@ def publish_query(count: int, extra_fields: str = "") -> str:
     return f"query ($composition: BOMCompositionEnum!, $time: DateTime{declared}) {{\n{components}\n}}\n"
 
 
-# The whole bill of materials: one flat list of relations down to STRUCTURE_DEPTH
-# levels. Each relation names its parent (fromComponent), so the parser rebuilds
-# the tree. Results are paged with a cursor.
+# The whole bill of materials: one flat list of relations down to STRUCTURE_DEPTH levels. Each relation names its parent (fromComponent),
+# so the parser rebuilds the tree. Results are paged with a cursor.
 STRUCTURE_DEPTH = 50   # no assembly is assumed to stop at some depth: a read that still reaches this is an error, not a cut-off BOM
-# The most a page may hold is 250 ("PaginationInput.limit must be between 1 and 250"), and a page of that size costs 467 of
-# the 1000 points a query may cost. Every page has a fixed cost in time (about two seconds with six relations in it), so
-# the biggest page is used. How long a full page takes has not been measured.
+# The most a page may hold is 250 ("PaginationInput.limit must be between 1 and 250"), and a page of that size costs 467 of the 1000
+# points a query may cost. Every page has a fixed cost in time (about two seconds with six relations in it), so the biggest page is
+# used. How long a full page takes has not been measured.
 STRUCTURE_PAGE_SIZE = 250
 
 STRUCTURE_QUERY = """
@@ -123,10 +126,12 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime, $d
 }
 """
 
+SUMMARY = "summary"        # the design's name, number and root component
+PROPERTIES = "properties"  # the design's own component's properties
 # Sections read with ``bulkModels`` from the open model.
 SECTIONS = {
-    "summary": (SUMMARY_QUERY, parse_summary),
-    "properties": (PROPERTIES_QUERY, parse_properties),
+    SUMMARY: (SUMMARY_QUERY, parse_summary),
+    PROPERTIES: (PROPERTIES_QUERY, parse_properties),
 }
 STRUCTURE = "structure"    # the whole BOM tree
 LEVEL = "level"            # the lines directly under one component (the design when no id is given), not what is below them
@@ -140,62 +145,79 @@ MAX_PAGES = 100   # at 250 relations a page: 25,000 relations; more is an error 
 PUBLISH_BATCH = 4
 PUBLISH_BATCH_PHYSICAL = 2
 
-log = get_logger("model_service")
 
-
-def read_section(client: FusionGraphQlClient, section: str, model_id: str, time: str = "",
-                 summary: Dict[str, Any] = None, component_id: str = "", physical: bool = False,
-                 progress: Callable[[int], None] = None) -> Any:
+def read_section(client: FusionGraphQlClient, section: str, model_id: str, saved_at: str = "",
+                 summary: Optional[Dict[str, Any]] = None, component_id: str = "", physical: bool = False,
+                 progress: Optional[Progress] = None) -> Any:
     """Parsed ``section`` of a model.
 
-    ``time`` pins the query to a version and is sent only when non-empty.
-    ``structure``, ``component`` and ``thumbnail`` also need the ``summary`` (for the root
-    component id and composition), and ``component`` the ``component_id`` (``thumbnail`` takes one too, else it is the design's).
-    ``physical`` adds the physical properties (mass, volume, ...) to the properties of ``properties`` and
-    ``component``; they are slow for the Data Model to work out, so only a caller that maps them asks.
+    ``saved_at`` pins the query to a version and is sent only when non-empty.
+    ``structure``, ``level``, ``component`` and ``thumbnail`` also need the ``summary`` (for the root component id and composition), and
+    ``component`` the ``component_id`` (``thumbnail`` and ``level`` take one too, else it is the design's).
+    ``physical`` adds the physical properties (mass, volume, ...) to the properties of ``properties`` and ``component``; they are slow for
+    the Data Model to work out, so only a caller that maps them asks.
     ``progress(count)`` is called after each page of the ``structure`` that is followed by another, with the relations read so far.
     Raises when the query fails; the caller decides how to show that.
     """
+    summary = summary or {}
     if section == STRUCTURE:
-        return _read_structure(client, summary or {}, time, progress)
+        return _read_structure(client, summary, saved_at, progress)
     if section == LEVEL:
-        return _read_structure(client, summary or {}, time, progress, root_id=component_id or "", depth=1)
+        return _read_structure(client, summary, saved_at, progress, root_id=component_id, depth=1)
     if section == COMPONENT:
-        return _read_component(client, summary or {}, component_id, time, physical)
+        return _read_component(client, summary, component_id, saved_at, physical)
     if section == THUMBNAIL:
-        return {"url": read_thumbnail_url(client, summary or {}, component_id or (summary or {}).get("component_id", ""), time)}
-    if physical and section == "properties" and summary and summary.get("component_id"):   # the design's own component, with its physical properties
-        return _read_component(client, summary, summary["component_id"], time, physical)["properties"]
+        return {"url": read_thumbnail_url(client, summary, component_id or summary.get("component_id", ""), saved_at)}
+    if physical and section == PROPERTIES and summary.get("component_id"):   # the design's own component, with its physical properties
+        return _read_component(client, summary, summary["component_id"], saved_at, physical)["properties"]
     query, parse = SECTIONS[section]
     entry = {"modelId": model_id}
-    if time:
-        entry["time"] = time
+    if saved_at:
+        entry["time"] = saved_at
     return parse(client.query(query, {"input": [entry]}, label=section))
 
 
-def _sorted(rows: Any) -> Any:
-    return sorted(rows, key=lambda r: r["name"].lower())
+def _by_name(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    return sorted(rows, key=lambda row: row["name"].lower())
 
 
-def _component_variables(summary: Dict[str, Any], component_id: str, time: str) -> Dict[str, Any]:
+def _component_variables(summary: Dict[str, Any], component_id: str, saved_at: str) -> Dict[str, Any]:
+    """The variables that address one component of the design (at version ``saved_at`` when given); raises while the summary has no ids."""
     composition = summary.get("composition", "")
     if not component_id or not composition:
         raise ValueError("The summary has no component id yet.")
     variables: Dict[str, Any] = {"componentId": component_id, "composition": composition}
-    if time:
-        variables["time"] = time
+    if saved_at:
+        variables["time"] = saved_at
     return variables
 
 
-def read_thumbnail_url(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> str:
+def _component_in(data: Dict[str, Any]) -> Dict[str, Any]:
+    """The ``component`` of a query answer (empty when the answer has none)."""
+    return as_dict(data.get("component"))
+
+
+def _thumbnail_url(node: Dict[str, Any]) -> str:
+    """The signed thumbnail url of a component in a query answer (empty when it has none yet)."""
+    return str(as_dict(node.get("thumbnail")).get("signedUrl") or "")
+
+
+def _manage_item(node: Dict[str, Any]) -> Dict[str, str]:
+    """``{"urn", "url"}`` of the Fusion Manage item a component in a query answer is linked to (empty values when it is not linked)."""
+    lifecycle = as_dict(node.get("lifecycle"))
+    return {"urn": str(lifecycle.get("itemUrn") or ""), "url": str(lifecycle.get("itemUrl") or "")}
+
+
+def read_thumbnail_url(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, saved_at: str = "") -> str:
     """A fresh signed url of a component's thumbnail (empty when it has none yet); it expires soon, so use it at once."""
-    node = (client.query(THUMBNAIL_QUERY, _component_variables(summary, component_id, time), label="thumbnail").get("component") or {})
-    return str((node.get("thumbnail") or {}).get("signedUrl") or "")
+    data = client.query(THUMBNAIL_QUERY, _component_variables(summary, component_id, saved_at), label="thumbnail")
+    return _thumbnail_url(_component_in(data))
 
 
-def read_manage_item(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, time: str = "") -> Dict[str, str]:
+def read_manage_item(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, saved_at: str = "") -> Dict[str, str]:
     """``{"urn", "url"}`` of the Fusion Manage item a component is linked to (empty values when it is not linked)."""
-    return _manage_item(client.query(MANAGE_QUERY, _component_variables(summary, component_id, time), label="manage link").get("component") or {})
+    data = client.query(MANAGE_QUERY, _component_variables(summary, component_id, saved_at), label="manage link")
+    return _manage_item(_component_in(data))
 
 
 def publish_batch_size(physical: bool) -> int:
@@ -203,7 +225,7 @@ def publish_batch_size(physical: bool) -> int:
     return PUBLISH_BATCH_PHYSICAL if physical else PUBLISH_BATCH
 
 
-def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any], component_ids: List[str], time: str = "",
+def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any], component_ids: List[str], saved_at: str = "",
                             physical: bool = False) -> Dict[str, Union[Dict[str, Any], Exception]]:
     """What a publish reads of each component, in one request: by component id, ``properties`` (with the physical ones when ``physical``),
     the ``thumbnail_url`` (empty when it has none yet; it expires soon, so use it at once) and the Fusion Manage ``link`` of the item it is
@@ -215,8 +237,8 @@ def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any]
     if not composition or not component_ids or not all(component_ids):
         raise ValueError("The summary has no component id yet.")
     variables: Dict[str, Any] = {"composition": composition, **{f"id{n}": cid for n, cid in enumerate(component_ids)}}
-    if time:
-        variables["time"] = time
+    if saved_at:
+        variables["time"] = saved_at
     try:
         data = client.query(publish_query(len(component_ids), PHYSICAL_FIELDS if physical else ""), variables,
                             label=f"publish x{len(component_ids)}" + (" + physical" if physical else ""))
@@ -227,45 +249,42 @@ def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any]
             return {component_ids[0]: exc}
         log.info("The Data Model refused %d components together (%s); reading them in halves", len(component_ids), exc)
         half = len(component_ids) // 2
-        return {**read_publish_components(client, summary, component_ids[:half], time, physical),
-                **read_publish_components(client, summary, component_ids[half:], time, physical)}
-    return {cid: _publish_read(data.get(f"c{n}") or {}, physical) for n, cid in enumerate(component_ids)}
+        return {**read_publish_components(client, summary, component_ids[:half], saved_at, physical),
+                **read_publish_components(client, summary, component_ids[half:], saved_at, physical)}
+    return {cid: _publish_read(as_dict(data.get(f"c{n}")), physical) for n, cid in enumerate(component_ids)}
 
 
 def _properties_of(data: Dict[str, Any], physical: bool) -> List[Dict[str, str]]:
     """The properties of the component in a query answer, with its physical ones (``physical``), by name."""
     properties = parse_component(data)["properties"]
-    return _sorted(properties + parse_physical(data)) if physical else properties
+    return _by_name(properties + parse_physical(data)) if physical else properties
 
 
 def _publish_read(node: Dict[str, Any], physical: bool) -> Dict[str, Any]:
-    return {"properties": _properties_of({"component": node}, physical),
-            "thumbnail_url": str((node.get("thumbnail") or {}).get("signedUrl") or ""), "link": _manage_item(node)}
+    """What a publish keeps of one component's part of a ``publish_query`` answer."""
+    return {"properties": _properties_of({"component": node}, physical), "thumbnail_url": _thumbnail_url(node), "link": _manage_item(node)}
 
 
-def _manage_item(node: Dict[str, Any]) -> Dict[str, str]:
-    lifecycle = node.get("lifecycle") or {}
-    return {"urn": str(lifecycle.get("itemUrn") or ""), "url": str(lifecycle.get("itemUrl") or "")}
-
-
-def _read_component(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, time: str, physical: bool = False) -> Any:
+def _read_component(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, saved_at: str, physical: bool = False) -> Any:
+    """``{"properties": [...]}`` of one component, with its physical properties when ``physical``."""
     query, label = (COMPONENT_WITH_PHYSICAL_QUERY, "properties + physical") if physical else (COMPONENT_PROPERTIES_QUERY, "properties")
-    data = client.query(query, _component_variables(summary, component_id, time), label=label)
+    data = client.query(query, _component_variables(summary, component_id, saved_at), label=label)
     return {"properties": _properties_of(data, physical)}
 
 
-def _read_structure(client: FusionGraphQlClient, summary: Dict[str, Any], time: str, progress: Callable[[int], None] = None,
+def _read_structure(client: FusionGraphQlClient, summary: Dict[str, Any], saved_at: str, progress: Optional[Progress] = None,
                     root_id: str = "", depth: int = STRUCTURE_DEPTH) -> Any:
     """The lines below ``root_id`` (the design when empty) down to ``depth`` levels, as ``parse_structure`` rows. ``depth`` 1 is one
     level: only the lines directly under it, whatever the answer holds below them."""
     root_id = root_id or summary.get("component_id", "")
-    variables = _component_variables(summary, root_id, time)
+    variables = _component_variables(summary, root_id, saved_at)
     variables.update(depth=depth, limit=STRUCTURE_PAGE_SIZE, cursor=None)
-    relations = []
+    relations: List[Any] = []
     for page in range(1, MAX_PAGES + 1):
-        node = (client.query(STRUCTURE_QUERY, variables, label=f"structure page {page}").get("component") or {}).get("bomRelations") or {}
+        data = client.query(STRUCTURE_QUERY, variables, label=f"structure page {page}")
+        node = as_dict(_component_in(data).get("bomRelations"))
         relations.extend(node.get("results") or [])
-        variables["cursor"] = (node.get("pagination") or {}).get("cursor")
+        variables["cursor"] = as_dict(node.get("pagination")).get("cursor")
         if not variables["cursor"]:
             break
         if progress:   # only a structure of several pages has a count worth showing
@@ -273,10 +292,10 @@ def _read_structure(client: FusionGraphQlClient, summary: Dict[str, Any], time: 
     else:   # the last page still named a next one: showing what was read would pass a part of the BOM off as all of it
         raise MfgApiError(f"The Bill of Materials has more than {MAX_PAGES * STRUCTURE_PAGE_SIZE} components, more than can be read.")
     rows = parse_structure(relations, root_id)
-    deepest = max((int(r["level"]) for r in rows), default=-1) + 1   # levels below the root
+    deepest = max((int(row["level"]) for row in rows), default=-1) + 1   # levels below the root
     log.debug("Read the structure of %s to depth %d: %d relation(s) in %d page(s), %d level(s) deep", root_id, depth, len(relations), page, deepest)
     if depth == 1:   # one level was asked for: keep the direct lines, whatever else the answer carried
-        return [r for r in rows if int(r["level"]) == 0]
+        return [row for row in rows if int(row["level"]) == 0]
     if deepest >= STRUCTURE_DEPTH:   # the read stopped at its depth: there may be more below
         raise MfgApiError(f"The Bill of Materials is nested {STRUCTURE_DEPTH} levels deep or more, more than can be read.")
     return rows

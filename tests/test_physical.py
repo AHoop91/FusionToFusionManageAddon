@@ -40,6 +40,32 @@ class PhysicalTests(unittest.TestCase):
         self.assertEqual(rows["Physical Density"]["unit"], "kg/cm³")
         self.assertEqual(rows["Physical Area"]["unit"], "")
 
+    def test_every_mass_unit_is_converted_whether_named_in_the_singular_or_the_plural(self):
+        for unit, value, kilograms in (("Kilograms", 2, "2"), ("kg", 2, "2"), ("Grams", 500, "0.5"), ("g", 500, "0.5"), ("Milligrams", 500, "0.0005"),
+                                       ("Pounds", 1, "0.453592"), ("lbs", 1, "0.453592"), ("Ounces", 16, "0.453592"), ("oz", 16, "0.453592")):
+            with self.subTest(unit=unit):
+                data = {"component": {"primaryModel": {"physicalProperties": {"status": "COMPLETED",
+                        "mass": {"value": value, "displayValue": str(value), "definition": {"units": {"name": unit}}}}}}}
+                row = {r["name"]: r for r in parse_physical(data)}["Physical Mass"]
+                self.assertEqual((row["value"], row["unit"]), (kilograms, "kg"))
+
+    def test_a_mass_in_an_unknown_unit_is_sent_as_it_is(self):
+        data = {"component": {"primaryModel": {"physicalProperties": {"status": "COMPLETED",
+                "mass": {"value": 3.0, "displayValue": "3", "definition": {"units": {"name": "Stones"}}}}}}}
+        row = {r["name"]: r for r in parse_physical(data)}["Physical Mass"]
+        self.assertEqual((row["value"], row["unit"]), ("3", "stones"))   # unconverted, and its unit shown as the Data Model named it
+
+    def test_an_answer_of_an_unexpected_shape_has_nothing(self):
+        for data in ({}, {"component": "x"}, {"component": {"primaryModel": "x"}}, {"component": {"primaryModel": {"physicalProperties": "x"}}}):
+            with self.subTest(data=data):
+                self.assertEqual(parse_physical(data), [])
+
+    def test_a_missing_or_odd_measurement_is_empty(self):
+        data = {"component": {"primaryModel": {"physicalProperties": {"status": "COMPLETED", "mass": "x", "boundingBox": "x"}}}}
+        rows = {r["name"]: r for r in parse_physical(data)}
+        self.assertEqual({r["value"] for r in rows.values()}, {""})
+        self.assertEqual(len(rows), 7)
+
     def test_nothing_until_calculated(self):
         pending = {"component": {"primaryModel": {"physicalProperties": {"status": "IN_PROGRESS"}}}}
         self.assertEqual(parse_physical(pending), [])

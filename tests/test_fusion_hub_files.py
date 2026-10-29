@@ -5,8 +5,7 @@ import unittest
 from unittest import mock
 
 from src.fusion_mfg import fusion_hub_files
-from src.fusion_mfg.fusion_hub_files import _plain, run_on_main
-from src.fusion_mfg.hub_files import HubFilesError, by_name
+from src.fusion_mfg.fusion_hub_files import HubFilesError, _plain, by_name, run_on_main
 
 
 def main_thread(task):

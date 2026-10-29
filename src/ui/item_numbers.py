@@ -18,10 +18,11 @@ import adsk.fusion
 from ..core.cancel import CancelToken
 from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, dig
 from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
+from ..fusion_mfg.hub_lookup import read_hub_id
 from ..fusion_mfg.model_service import read_thumbnail_url
-from ..fusion_mfg.properties import HUBS_QUERY, find_hub_id
 
 log = get_logger("item_numbers")
 
@@ -159,9 +160,9 @@ class ItemNumbers:
             kept = self._files.get(ref.file_id)
             if kept is None:
                 if ref.hub_name not in self._hubs:
-                    self._hubs[ref.hub_name] = find_hub_id(client.query(HUBS_QUERY), ref.hub_name)
+                    self._hubs[ref.hub_name] = read_hub_id(client, ref.hub_name)
                 data = client.query(FILE_MODEL_QUERY, {"hubId": self._hubs[ref.hub_name], "itemId": ref.file_id})
-                model = (data.get("item") or {}).get("tipRootModel") or {}
+                model = as_dict(dig(data, "item", "tipRootModel"))
                 if not model.get("id"):
                     raise NoItemNumber("The design this drawing shows was not found in the Manufacturing Data Model.")
                 log.info("Design file %s is the Data Model's %s", ref.file_id, model["id"])

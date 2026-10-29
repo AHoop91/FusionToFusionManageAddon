@@ -1,29 +1,34 @@
 """The physical properties of a component: mass, volume, area, density and the bounding box.
 
-They are not in ``allProperties``; the Data Model works them out from the geometry (``status`` says when they
-are ready), so they are read next to a component's properties and added to its property rows as
-"Physical Mass", "Physical Length" and so on (the names a ``physical:<name>`` mapping source reads).
+They are not in ``allProperties``; the Data Model works them out from the geometry (``status`` says when they are ready), so they are read
+next to a component's properties and added to its property rows as "Physical Mass", "Physical Length" and so on (the names a
+``physical:<name>`` mapping source reads).
 """
 
 from typing import Any, Dict, List
 
 from ..config.workspace_models import PHYSICAL_NAMES
 from ..core.logging_setup import get_logger
+from ..core.shapes import as_dict, dig
 
 log = get_logger("physical")
 
+READY = "COMPLETED"   # the ``status`` of physical properties the Data Model has worked out
+
+_MEASURE = "{ value displayValue definition { units { name } } }"   # a measurement: its number, how it is shown and its unit
+
 _PHYSICAL = """physicalProperties {
         status
-        area { value displayValue definition { units { name } } }
-        volume { value displayValue definition { units { name } } }
-        mass { value displayValue definition { units { name } } }
-        density { value displayValue definition { units { name } } }
+        area %(m)s
+        volume %(m)s
+        mass %(m)s
+        density %(m)s
         boundingBox {
-          length { value displayValue definition { units { name } } }
-          height { value displayValue definition { units { name } } }
-          width { value displayValue definition { units { name } } }
+          length %(m)s
+          height %(m)s
+          width %(m)s
         }
-      }"""
+      }""" % {"m": _MEASURE}
 
 # A component's properties and its physical properties, which belong to its primary model, in one request.
 COMPONENT_WITH_PHYSICAL_QUERY = """
@@ -40,26 +45,23 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 # The physical properties as the fields of a component, to add to a query (see ``model_service.publish_query``).
 PHYSICAL_FIELDS = "primaryModel { %s }" % _PHYSICAL
 
-READY = "COMPLETED"
-
-
-# Fusion Manage's weight field is in kilograms; the Data Model gives the mass in whatever unit it names (grams in a metric design).
-KILOGRAMS_PER = {"kilograms": 1.0, "kilogram": 1.0, "kg": 1.0, "grams": 0.001, "gram": 0.001, "g": 0.001, "milligrams": 1e-6, "milligram": 1e-6, "mg": 1e-6,
-                 "pounds": 0.45359237, "pound": 0.45359237, "lbs": 0.45359237, "lb": 0.45359237, "ounces": 0.028349523125, "ounce": 0.028349523125, "oz": 0.028349523125}
-
-
-def _unit(node: Dict[str, Any]) -> str:
-    """The unit a property's value is in: the one its definition names, else the word after the number of its display value."""
-    named = (((node.get("definition") or {}).get("units")) or {}).get("name")
-    if named:
-        return str(named).strip().lower()
-    parts = str(node.get("displayValue") or "").split()
-    return parts[-1].strip("[]()").lower() if len(parts) > 1 else ""
-
+# Fusion Manage's weight field is in kilograms; the Data Model gives the mass in whatever unit it names (grams in a metric design). A unit is
+# looked up in the singular, so "grams" and "lbs" are found as "gram" and "lb".
+KILOGRAMS_PER = {"kilogram": 1.0, "kg": 1.0, "gram": 0.001, "g": 0.001, "milligram": 1e-6, "mg": 1e-6,
+                 "pound": 0.45359237, "lb": 0.45359237, "ounce": 0.028349523125, "oz": 0.028349523125}
 
 _SHORT = {"kilogram": "kg", "gram": "g", "milligram": "mg", "pound": "lb", "ounce": "oz", "millimeter": "mm", "centimeter": "cm",
           "meter": "m", "inch": "in", "foot": "ft"}
 _POWERS = {"square": "²", "cubic": "³"}
+
+
+def _unit(node: Dict[str, Any]) -> str:
+    """The unit a property's value is in: the one its definition names, else the word after the number of its display value."""
+    named = dig(node, "definition", "units", "name")
+    if named:
+        return str(named).strip().lower()
+    parts = str(node.get("displayValue") or "").split()
+    return parts[-1].strip("[]()").lower() if len(parts) > 1 else ""
 
 
 def _symbol(unit: str) -> str:
@@ -85,12 +87,13 @@ def _number(node: Any, kilograms: bool = False) -> Dict[str, str]:
         return {"value": "", "unit": "", "original": ""}
     value = node.get("value")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        unit = _symbol(_unit(node))
+        unit_name = _unit(node)
+        unit = _symbol(unit_name)
         original = f"{value:.10g} {unit}".strip()
         if kilograms:
-            factor = KILOGRAMS_PER.get(_unit(node))
+            factor = KILOGRAMS_PER.get(unit_name.rstrip("s"))
             if factor is None:
-                log.warning("Mass is in an unknown unit %r (value %s, shown as %r); sent as it is", _unit(node), value, node.get("displayValue"))
+                log.warning("Mass is in an unknown unit %r (value %s, shown as %r); sent as it is", unit_name, value, node.get("displayValue"))
             else:
                 value, unit = value * factor, "kg"
         return {"value": f"{value:.6g}", "unit": unit, "original": original}
@@ -100,12 +103,14 @@ def _number(node: Any, kilograms: bool = False) -> Dict[str, str]:
 
 
 def parse_physical(data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Property rows (``Physical <name>``, with its ``unit`` and ``original`` value) from a ``COMPONENT_WITH_PHYSICAL_QUERY`` answer; none until the Data Model has them ready."""
-    node = (((data.get("component") or {}).get("primaryModel") or {}).get("physicalProperties")) or {}
+    """Property rows (``Physical <name>``, with its ``unit`` and ``original`` value) from a ``COMPONENT_WITH_PHYSICAL_QUERY`` answer.
+
+    None until the Data Model has them ready."""
+    node = as_dict(dig(data, "component", "primaryModel", "physicalProperties"))
     if node.get("status") != READY:
         return []
-    box = node.get("boundingBox") or {}
+    box = as_dict(node.get("boundingBox"))
     found = {"Mass": node.get("mass"), "Volume": node.get("volume"), "Area": node.get("area"), "Density": node.get("density"),
              "Length": box.get("length"), "Width": box.get("width"), "Height": box.get("height")}
     log.debug("Physical properties as the Data Model gave them: %s", found)
-    return [{"name": "Physical " + name, **_number(found[name], kilograms=name == "Mass")} for name in PHYSICAL_NAMES]
+    return [{"name": "Physical " + name, **_number(found.get(name), kilograms=name == "Mass")} for name in PHYSICAL_NAMES]

@@ -6,6 +6,7 @@ an answer, "not an admin"; anything else that goes wrong (the network, the servi
 
 from typing import Any, Dict, NamedTuple
 
+from ..core.shapes import as_list, dig
 from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
 
 ROLE_ADMIN = "ADMIN"
@@ -38,21 +39,28 @@ UNKNOWN = HubRole(admin=False, known=False)
 NOT_ADMIN = HubRole(admin=False, known=True)
 
 
+def _normal(email: Any) -> str:
+    """``email`` as it is compared: trimmed, in lower case."""
+    return str(email or "").strip().lower()
+
+
 def parse_hub_role(data: Dict[str, Any], email: str) -> HubRole:
     """The role of ``email`` in a ``HUB_ROLE_QUERY`` answer. The filter matches on names, so only the row of exactly this email counts."""
-    members = ((data.get("hub") or {}).get("members") or {}).get("results") or []
-    mine = [m for m in members if isinstance(m, dict) and str((m.get("user") or {}).get("email", "")).strip().lower() == email.strip().lower()]
+    members = dig(data, "hub", "members", "results")
+    wanted = _normal(email)
+    mine = [member for member in as_list(members) if _normal(dig(member, "user", "email")) == wanted]
     if len(mine) != 1:
         return UNKNOWN   # not found, or not told apart
-    role = str(mine[0].get("role") or "")
+    role = str(dig(mine[0], "role") or "")
     return HubRole(admin=role == ROLE_ADMIN, known=True, role=role)
 
 
 def read_hub_role(client: FusionGraphQlClient, hub_id: str, email: str) -> HubRole:
     """Ask the Data Model for the role of ``email`` in the hub ``hub_id``. Slow (a network call): not on Fusion's thread."""
-    if not hub_id or not email.strip():
+    email = email.strip()
+    if not hub_id or not email:
         return UNKNOWN
     try:
-        return parse_hub_role(client.query(HUB_ROLE_QUERY, {"hubId": hub_id, "email": email.strip()}, "hub role"), email)
+        return parse_hub_role(client.query(HUB_ROLE_QUERY, {"hubId": hub_id, "email": email}, "hub role"), email)
     except MfgApiError as exc:
-        return NOT_ADMIN if exc.code == ACCESS_DENIED else UNKNOWN
+        return NOT_ADMIN if exc.code == ACCESS_DENIED else UNKNOWN   # a refusal is the answer; any other failure says nothing
