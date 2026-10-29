@@ -301,7 +301,7 @@ A quantity can be edited in the table. An edited cell shows a revert button that
 
 - With nothing typed the picker lists every item of the workspace; **Search** applies the search box and the filters.
 - The search box matches the item descriptor. The **Filter** pane on the left narrows the results by property: choose a property and a value (a drop-down for properties with a fixed list). **Add Row** adds another property to the group and **Add Group** starts a new group. Rows of a group, and groups, are joined by **AND** or **OR**; the Items workspace is always applied on top.
-- Results load 50 at a time as you scroll. Tick the items to add; selections survive searching and paging, and **Clear** unticks them all.
+- Results load 25 at a time as you scroll. When some of them are hidden (see below), the picker reads on until it has 25 to show, or the matches run out. The count above the list is of the items it shows, so it ends as, for example, "61 of 61". Tick the items to add; selections survive searching and paging, and **Clear** unticks them all.
 - The bar under the list shows how many items are selected. **Show only selected** narrows the list to the ticked items, so you can review them before adding. **Cancel** closes the picker without adding anything.
 - Items the Bill of Materials already holds, or that you have already added in the panel, are hidden. Turn on **Show hidden items** to see them ticked, greyed out and locked.
 - Next to **Search** a version picker chooses the latest or the working version of the items. **Add to BOM** in the footer adds the ticked items; **Show only selected** is disabled until something is ticked.

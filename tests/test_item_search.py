@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.fm.item_search import parse_members, parse_search
+from src.fm.item_search import PAGE_SIZE, ItemSearchService, parse_members, parse_search
 
 
 class ParseSearchTests(unittest.TestCase):
@@ -53,6 +53,27 @@ class ParseSearchTests(unittest.TestCase):
 
     def test_rubbish_gives_an_empty_page(self):
         self.assertEqual(parse_search("x", "57", "1"), {"total": 0, "raw": 0, "items": []})
+
+
+class PageTests(unittest.TestCase):
+    class Client:
+        def __init__(self, answer):
+            self.answer, self.paths = answer, []
+
+        def get_json(self, path, **kwargs):
+            self.paths.append(path)
+            return self.answer
+
+    def test_a_page_asks_for_a_lot_of_rows_and_says_how_many_a_page_holds(self):
+        client = self.Client({"totalCount": 62, "items": [{"__self__": "/api/v3/workspaces/57/items/1", "descriptor": "A - B"}]})
+        page = ItemSearchService(client).page("57", "9", "", [], 25)
+        self.assertEqual(PAGE_SIZE, 25)
+        self.assertIn(f"limit={PAGE_SIZE}&offset=25&", client.paths[0])
+        self.assertEqual((page["limit"], page["total"], page["raw"], len(page["items"])), (PAGE_SIZE, 62, 1, 1))
+
+    def test_a_page_that_could_not_be_read_still_says_how_many_a_page_holds(self):
+        page = ItemSearchService(self.Client("rubbish")).page("57", "9", "", [], 0)
+        self.assertEqual(page, {"total": 0, "raw": 0, "items": [], "limit": PAGE_SIZE})
 
 
 class ParseMembersTests(unittest.TestCase):

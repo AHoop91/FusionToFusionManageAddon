@@ -9,6 +9,8 @@
  * It is made to stay quick with thousands of matches:
  *   - pages load as the list is scrolled near its end, one request at a time, each on a Python worker thread
  *     (polled here), and a reply that no longer matches the search on screen is dropped;
+ *   - a lot is as many visible rows as a page holds: when some of a page's items are hidden (the Bill of Materials already
+ *     holds them) the next pages are read at once, until the lot is made up or the matches run out;
  *   - a page is appended once, as a fragment, rows are never rebuilt, and one click listener serves every row;
  *   - rows skip layout and paint while off screen (``content-visibility`` in add-items.css).
  * Items the Bill of Materials already holds, or that are staged in the panel, are left out of the list; a switch shows them ticked,
@@ -45,6 +47,8 @@
   let selected = new Map();     // item id -> item; survives searching and paging
   let total = 0;
   let offset = 0;               // rows of the search read so far (the next page starts here)
+  let pageSize = 0;             // rows a page holds, as Python says with each page
+  let wanted = 0;               // visible rows to have before waiting for the list to be scrolled: a lot more each time it is
   let query = null;             // { text, groups } of the search on screen
   let loading = false;
   let onlySelected = false;     // show only the ticked items
@@ -111,18 +115,29 @@
       }
       append(entry.result);
       offset += entry.result.raw;
-      if (!entry.result.raw) total = items.length;   // an empty page is the end, whatever the total said
+      // Every row is read: the count is that of the items shown. The search counts the design's own item too, which the list leaves out,
+      // so its total would stay one too high ("61 of 62"). An empty page is the end as well, whatever the total said.
+      if (!entry.result.raw || offset >= total) total = items.length;
+      paintTotal();
       paintStatus();
       paintSelection();
       afterPage();
     });
   }
 
-  /** Keep loading while the list is too short to scroll. */
+  function visibleCount() {
+    return items.filter(function (item) { return !rows.get(item.id).hidden; }).length;
+  }
+
+  /** Read on while the lot is short of visible rows (some of a page is hidden) or the list is too short to scroll; a scroll to the end asks for the next lot. */
   function afterPage() {
     if (!moreToLoad() || onlySelected) return;
+    if (visibleCount() < wanted) { loadNext(); return; }
     const list = dialog.list;
-    if (list.scrollHeight - list.scrollTop - list.clientHeight < PREFETCH_PX) loadNext();
+    if (list.scrollHeight - list.scrollTop - list.clientHeight < PREFETCH_PX) {
+      wanted = visibleCount() + pageSize;
+      loadNext();
+    }
   }
 
   function onScroll() {
@@ -191,6 +206,8 @@
 
   function append(page) {
     total = page.total;
+    pageSize = page.limit || pageSize;
+    if (!wanted) wanted = pageSize;   // the first page: a lot is wanted before the list waits for a scroll
     const fragment = document.createDocumentFragment();
     page.items.forEach(function (item) {
       if (byId.has(item.id)) return;
@@ -313,6 +330,7 @@
     byId = new Map();
     total = 0;
     offset = 0;
+    wanted = 0;
     query = { text: dialog.search.value.trim(), groups: payloadGroups(), revision: dialog.version.value };
     dialog.list.scrollTop = 0;
     paintTotal();

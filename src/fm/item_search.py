@@ -17,7 +17,7 @@ from .items import DESCRIPTOR_KEYS, item_id_of
 from .linkable import linkable_row
 from .search_query import search_path
 
-PAGE_SIZE = 50
+PAGE_SIZE = 25   # rows asked of the search at a time; the picker also reads on until this many rows are visible (see ``page``)
 MEMBERS_DEPTH = 1   # levels of the Bill of Materials read for its members: the lines directly under the item
 _ITEM_ID = re.compile(r"/items/(\d+)")
 _TRAILING_REVISION = re.compile(r"\[REV:([^\]]*)\]\s*$")   # the ``[REV:w]`` that ends a title
@@ -79,9 +79,13 @@ class ItemSearchService:
         self._client = client
 
     def page(self, workspace_id: str, parent_id: str, text: str, groups: Any, offset: int, revision: int = 1) -> Dict[str, Any]:
-        """One page of the items matching ``text`` and the filter ``groups``, from ``offset``, oldest first; ``revision`` is as in ``search_path``."""
+        """One page of the items matching ``text`` and the filter ``groups``, from ``offset``, oldest first; ``revision`` is as in ``search_path``.
+
+        The answer is that of ``parse_search`` and ``limit``, how many rows a page holds: the picker keeps reading pages until that many
+        rows are visible, so a page whose items are mostly hidden (already in the Bill of Materials) does not leave the list short.
+        """
         data = self._client.get_json(search_path(workspace_id, text, groups, offset, PAGE_SIZE, revision))
-        return parse_search(data, workspace_id, parent_id)
+        return {**parse_search(data, workspace_id, parent_id), "limit": PAGE_SIZE}
 
     def members(self, workspace_id: str, item_id: str) -> Dict[str, List[str]]:
         """``{"ids", "numbers"}`` of the items the Bill of Materials of ``item_id`` holds now (the item itself included).
