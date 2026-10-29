@@ -6,7 +6,7 @@ from src.config.workspace_models import StaticValue
 from src.fm.components import _matches
 from src.fm.sections import parse_sections
 from src.publish.bom_requests import bom_requests
-from src.publish.item_requests import item_request
+from src.publish.item_requests import field_entry, item_request
 from src.sync.property_compare import FOUND, MATCH, MISMATCH, NEW
 
 SECTIONS = {"TITLE": "/api/v3/workspaces/1/sections/10", "TYPE": "/api/v3/workspaces/1/sections/10",
@@ -66,10 +66,26 @@ class ItemRequestTests(unittest.TestCase):
 
     def test_a_static_value_the_item_already_holds_does_not_make_an_update(self):
         held = {"TYPE": {"link": TYPE.value, "title": "Part"}}
-        request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [TYPE], SECTIONS,
-                                       [("IMAGE", "data:image/png;base64,AA")], held)
+        request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [TYPE], SECTIONS, [], held)
         self.assertIsNone(request)
         self.assertTrue(reason)
+
+    def test_an_image_makes_an_update_on_its_own_since_it_cannot_be_compared(self):
+        held = {"TYPE": {"link": TYPE.value, "title": "Part"}}
+        request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [TYPE], SECTIONS,
+                                       [("IMAGE", "data:image/png;base64,AA")], held)
+        self.assertEqual((request["method"], request["url"]), ("PATCH", "/api/v3/workspaces/1/items/7"))
+        self.assertEqual(entries(request), {"IMAGE": "data:image/png;base64,AA"})   # nothing else differs: only the image goes
+        self.assertEqual(reason, "")
+
+    def test_an_image_goes_along_with_an_update_that_has_other_differences(self):
+        request, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MISMATCH)], [], SECTIONS,
+                                  [("IMAGE", "data:image/png;base64,AA")], {})
+        self.assertEqual(entries(request), {"TITLE": "Axle", "IMAGE": "data:image/png;base64,AA"})
+
+    def test_an_item_that_is_not_found_or_new_gets_no_image_request(self):
+        request, reason = item_request("1", {"state": "error", "message": "No access"}, [], [], SECTIONS, [("IMAGE", "data:image/png;base64,AA")])
+        self.assertEqual((request, reason), (None, "No access"))
 
     def test_a_static_value_the_item_lacks_makes_an_update(self):
         held = {"TYPE": {"link": "/api/v3/lookups/TYPES/options/2"}}
@@ -90,6 +106,31 @@ class ItemRequestTests(unittest.TestCase):
         request, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "A", MATCH)], [], SECTIONS)
         self.assertIsNone(request)
         self.assertTrue(reason)
+
+    def test_a_blank_or_missing_mapped_value_is_never_sent_but_zero_is(self):
+        rows = [row("TITLE", None, NEW), row("MATERIAL", "   ", NEW), row("COST", 0, NEW)]
+        request, _ = item_request("1", {"state": NEW}, rows, [], {**SECTIONS, "COST": SECTIONS["TITLE"]})
+        self.assertEqual(entries(request), {"COST": 0})
+
+    def test_an_item_found_without_an_id_cannot_be_updated(self):
+        for fm in ({"state": FOUND}, {"state": FOUND, "item_id": ""}, {"state": FOUND, "item_id": None}):
+            with self.subTest(fm=fm):
+                request, reason = item_request("1", fm, [row("TITLE", "Axle", MISMATCH)], [], SECTIONS)
+                self.assertIsNone(request)
+                self.assertIn("did not give its id", reason)
+
+    def test_a_state_that_is_neither_new_nor_found_gives_its_message_or_names_itself(self):
+        self.assertEqual(item_request("1", {"state": "ERROR", "message": "No access"}, [], [], SECTIONS), (None, "No access"))
+        self.assertEqual(item_request("1", {"state": "ERROR"}, [], [], SECTIONS), (None, "Fusion Manage state is ERROR."))
+
+    def test_a_picklist_option_is_sent_as_a_link_and_other_text_as_it_is(self):
+        self.assertEqual(field_entry("/w/1", "TYPE", TYPE.value)["value"], {"link": TYPE.value})
+        self.assertEqual(field_entry("/w/1", "TITLE", "/api/v3/other")["value"], "/api/v3/other")
+        self.assertEqual(field_entry("/w/1", "TITLE", "Axle")["__self__"], "/w/1/views/1/fields/TITLE")
+
+    def test_a_new_item_names_the_workspaces_sections(self):
+        request, _ = item_request("1", {"state": NEW}, [row("TITLE", "Axle", NEW)], [], SECTIONS)
+        self.assertEqual(request["body"]["sections"][0]["link"], SECTIONS["TITLE"])
 
     def test_values_are_grouped_by_section(self):
         rows = [row("TITLE", "Axle", NEW), row("MATERIAL", "Steel", NEW)]
@@ -135,7 +176,7 @@ class BomRequestTests(unittest.TestCase):
         self.assertEqual(body["item"]["link"], "/api/v3/workspaces/57/items/{{item:C}}")
         self.assertEqual(body["__self__"], "/api/v3/workspaces/57/items/{{item:A}}/views/5/linkable-items/{{item:C}}")
         self.assertEqual(body["urn"], "urn:adsk.plm:tenant.workspace.item.view.linkable-item:{{tenant}}.57.{{item:A}}.5.{{item:C}}")
-        self.assertEqual(list(body), ["__self__", "urn", "item", "itemNumber", "quantity", "children", "fields"])
+        self.assertEqual(list(body), ["__self__", "urn", "item", "itemNumber", "children", "fields"])   # no quantity was given: none is sent
 
     def test_a_changed_line_is_sent_as_the_bom_tab_sends_it(self):
         request = bom_requests("242", [{"op": "update", "parent": "A", "number": "B", "quantity": 2, "sequence": "1", "edge": "5284"}])["A"][0]
@@ -145,6 +186,43 @@ class BomRequestTests(unittest.TestCase):
         self.assertEqual((body["__self__"], body["quantity"], body["children"], body["fields"]), (url, "2", [], []))
         self.assertEqual(body["item"]["link"], "/api/v3/workspaces/242/items/{{item:B}}")
         self.assertEqual(body["item"]["version"], "{{version:B}}")
+
+    def test_a_line_whose_id_is_not_known_is_named_by_a_marker_of_where_it_was(self):
+        update = bom_requests("242", [{"op": "update", "parent": "A", "number": "B", "quantity": 2, "sequence": "1"}])["A"][0]
+        renumber = bom_requests("242", [{"op": "renumber", "parent": "A", "number": "B", "sequence": "3", "from_sequence": "1"}])["A"][0]
+        self.assertTrue(update["url"].endswith("/bom-items/{{edge:A>B@1}}"))
+        self.assertTrue(renumber["url"].endswith("/bom-items/{{edge:A>B@1}}"))   # by the number it has now, not the one it is given
+
+    def test_an_item_picked_in_fusion_manage_keeps_its_link(self):
+        body = bom_requests("57", [{"op": "add", "parent": "A", "number": "C", "sequence": "2", "link": "/api/v3/workspaces/57/items/77"}])["A"][0]["body"]
+        self.assertEqual(body["item"]["link"], "/api/v3/workspaces/57/items/77")
+        self.assertEqual((body["item"]["title"], body["item"]["version"]), ("C", "{{version:C}}"))
+
+    def test_a_renumber_that_has_a_quantity_keeps_it(self):
+        body = bom_requests("242", [{"op": "renumber", "parent": "A", "number": "B", "sequence": "3", "quantity": 4, "edge": "9"}])["A"][0]["body"]
+        self.assertEqual(body["quantity"], "4")
+
+    def test_a_number_that_is_not_plain_digits_is_sent_as_it_is(self):
+        body = bom_requests("242", [{"op": "renumber", "parent": "A", "number": "B", "sequence": "\u00b2", "from_sequence": "1", "edge": "9"}])["A"][0]["body"]
+        self.assertEqual(body["itemNumber"], "\u00b2")
+        padded = bom_requests("242", [{"op": "renumber", "parent": "A", "number": "B", "sequence": " 12 ", "edge": "9"}])["A"][0]["body"]
+        self.assertEqual(padded["itemNumber"], 12)
+
+    def test_a_blank_quantity_is_never_sent(self):
+        for blank in ("", "  ", None):
+            with self.subTest(quantity=blank):
+                add = bom_requests("57", [{"op": "add", "parent": "A", "number": "C", "sequence": "2", "quantity": blank}])["A"][0]["body"]
+                renumber = bom_requests("57", [{"op": "renumber", "parent": "A", "number": "B", "sequence": "3", "quantity": blank, "edge": "9"}])["A"][0]["body"]
+                self.assertNotIn("quantity", add)
+                self.assertNotIn("quantity", renumber)
+                self.assertEqual(bom_requests("57", [{"op": "update", "parent": "A", "number": "B", "quantity": blank, "edge": "9"}]), {})
+
+    def test_a_quantity_of_zero_is_sent(self):
+        body = bom_requests("57", [{"op": "update", "parent": "A", "number": "B", "quantity": 0, "edge": "9"}])["A"][0]["body"]
+        self.assertEqual(body["quantity"], "0")
+
+    def test_an_operation_of_another_kind_makes_no_request(self):
+        self.assertEqual(bom_requests("1", [{"op": "frobnicate", "parent": "A", "number": "B"}]), {})
 
     def test_a_renumbered_line_carries_its_new_number(self):
         body = bom_requests("242", [{"op": "renumber", "parent": "A", "number": "B", "sequence": "3", "from_sequence": "1", "edge": "9"}])["A"][0]["body"]

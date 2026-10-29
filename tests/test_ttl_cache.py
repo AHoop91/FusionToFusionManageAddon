@@ -69,5 +69,16 @@ class TtlCacheTests(unittest.TestCase):
         self.assertEqual(len(cache._entries), 8 * 20)
 
 
+class ClockTests(unittest.TestCase):
+    def test_a_cache_goes_by_the_clock_it_is_given(self):
+        now = [100.0]
+        cache = TtlCache(5, clock=lambda: now[0])
+        cache.put("a", 1)
+        now[0] = 104.9
+        self.assertEqual(cache.get("a"), 1)
+        now[0] = 105.0
+        self.assertIsNone(cache.get("a"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from src.config.config_service import ConfigError, ConfigService
-from src.publish.sender import SEND_LOG, FolderError, _load_log
+from src.publish.send_log import SEND_LOG, FolderError, load_log as _load_log
 
 
 class ConfigFileTests(unittest.TestCase):

@@ -155,5 +155,16 @@ class PutBytesTests(unittest.TestCase):
         auth.get_access_token.assert_not_called()
 
 
+class WithCancelTests(unittest.TestCase):
+    def test_a_client_made_with_a_token_has_it_and_the_original_keeps_its_own(self):
+        from src.core.cancel import ADDIN, CancelToken
+        client = FmClient(mock.Mock(tenant="acme"), mock.Mock())
+        token = CancelToken()
+        other = client.with_cancel(token)
+        self.assertIs(other.cancel, token)
+        self.assertIs(client.cancel, ADDIN)
+        self.assertEqual(other.tenant, "acme")
+
+
 if __name__ == "__main__":
     unittest.main()

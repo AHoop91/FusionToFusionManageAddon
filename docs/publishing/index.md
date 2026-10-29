@@ -80,7 +80,7 @@ Under the bars the dialog shows the time elapsed and a tally of **Successful**, 
 ### What a run does
 
 1. Reads each item's properties from the Data Model and compares them with Fusion Manage (up to five items at once).
-2. Downloads the thumbnail, for an item that has something to send. It is attached only when a thumbnail is mapped to an image field; otherwise the downloaded `thumbnail.png` stays in the run's folder.
+2. Downloads the thumbnail, for each item that is created or updated. It is attached only when a thumbnail is mapped to an image field; otherwise nothing is downloaded.
 3. Writes a request file for each item, then sends it: a `POST` creates an item, a `PATCH` updates one.
 4. Once **every** item exists, sends the BOM changes of each parent assembly. BOMs go last so that new parents and children already have IDs. Removals, updates and renumbers go first, up to five requests at a time; once they are all done, the adds follow, also up to five at a time. A line is therefore freed before another takes its position.
 
@@ -168,9 +168,9 @@ An update sends only what has changed:
 - **Mapped properties whose values differ.** These are the ones marked **Update** in the Details Panel.
 - **Default values the item does not hold.** A default value is sent again when the item's field does not hold it, so a value someone changed in Fusion Manage is set back to the default. A field already holding the default is left alone.
 - **The component link, if the item lacks it.**
-- **The thumbnail.** Images cannot be compared, so the thumbnail goes along with an update that already has a difference. It is not sent on its own.
+- **The thumbnail.** Images cannot be compared, so the thumbnail is sent with every update, even when nothing else differs. An item with a mapped thumbnail is therefore updated by every publish.
 
-If nothing differs, **no request is sent** and the run records *Fusion Manage already has the same values*. Such an item is not counted as updated.
+If nothing differs and no thumbnail is mapped (or the component has none yet), **no request is sent** and the run records *Fusion Manage already has the same values*. Such an item is not counted as updated.
 
 Numbers are compared at the precision of the Fusion Manage field. If the field already holds the number at its precision, it is not sent again.
 

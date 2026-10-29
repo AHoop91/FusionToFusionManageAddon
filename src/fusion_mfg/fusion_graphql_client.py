@@ -88,6 +88,10 @@ class FusionGraphQlClient:
     def __init__(self, cancel: Optional[CancelToken] = None) -> None:
         self.cancel = cancel or ADDIN   # every request checks it, and a wait for an answer is ended by it
 
+    def with_cancel(self, cancel: CancelToken) -> "FusionGraphQlClient":
+        """A client whose requests are checked and ended by ``cancel`` instead."""
+        return FusionGraphQlClient(cancel)
+
     def query(self, text: str, variables: Optional[Dict[str, Any]] = None, label: str = "") -> Dict[str, Any]:
         """Run a query and return its ``data`` object.
 

@@ -240,7 +240,7 @@ The Data Model gives a physical property in Fusion's own units: centimetres for 
 
 ##### Thumbnail
 
-An image field takes a file, not text. The add-in fetches a fresh thumbnail when it publishes the item and sends it as an image. An image cannot be compared with what is already there, so it is sent with any create, and with any update that has another difference.
+An image field takes a file, not text. The add-in fetches a fresh thumbnail when it publishes the item and sends it as an image. An image cannot be compared with what is already there, so it is sent on every publish: with a create, and with an update even when nothing else differs. An item with a mapped thumbnail is therefore updated by every publish.
 
 ### Default fields
 

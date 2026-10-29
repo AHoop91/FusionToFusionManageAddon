@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.publish.shared_numbers import shared_numbers, shared_reason
+from src.publish.shared_numbers import UNNAMED, shared_key, shared_numbers, shared_reason
 
 SUMMARY = {"component_id": "root-id"}
 
@@ -28,6 +28,26 @@ class SharedNumbersTests(unittest.TestCase):
 
     def test_an_item_without_a_number_shares_nothing(self):
         self.assertEqual(shared_numbers([item("", "a"), item("", "b")], SUMMARY), {})
+
+    def test_the_key_of_a_number_is_trimmed_and_lower_case(self):
+        self.assertEqual(shared_key("  PN-1 "), "pn-1")
+        self.assertEqual(shared_key(""), "")
+
+    def test_lines_with_no_component_id_are_told_apart_by_their_place(self):
+        items = [item("PN-1", "", "Bracket"), item("PN-1", "", "Plate")]
+        self.assertEqual(shared_numbers(items, SUMMARY), {"pn-1": ["Bracket", "Plate"]})
+
+    def test_a_component_is_named_by_its_name_then_its_description_then_a_placeholder(self):
+        items = [{"item_number": "PN-1", "id": "a", "name": "Bracket"}, {"item_number": "PN-1", "id": "b", "description": "A plate"},
+                 {"item_number": "PN-1", "id": "c"}, {"item_number": "PN-1", "id": "d", "name": "  "}]
+        self.assertEqual(shared_numbers(items, SUMMARY), {"pn-1": ["Bracket", "A plate", UNNAMED, UNNAMED]})
+
+    def test_the_designs_own_component_is_told_by_the_summarys_id(self):
+        items = [item("TOP", "", "Top", root=True), item("TOP", "root-id", "Same component")]
+        self.assertEqual(shared_numbers(items, SUMMARY), {})   # the design's id is root-id: it is the same component as the line
+
+    def test_a_job_with_no_items_shares_nothing(self):
+        self.assertEqual(shared_numbers([], SUMMARY), {})
 
     def test_the_reason_names_the_number_and_the_components(self):
         reason = shared_reason("PN-1", ["Bracket", "Plate"])

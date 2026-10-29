@@ -13,15 +13,16 @@ from typing import Dict, Tuple
 import adsk.core
 
 from ..core.logging_setup import get_logger
+from ..publish.job_queue import FAILED, IDLE, WORKING
 from .ui_thread import UiThread
 
 log = get_logger("jobs_badge")
 
 # state -> (icon folder under resources, what the tooltip adds)
 LOOKS: Dict[str, Tuple[str, str]] = {
-    "idle": ("jobs", ""),
-    "running": ("jobs_running", " A publish is running."),
-    "error": ("jobs_error", " A publish failed: see the list."),
+    IDLE: ("jobs", ""),
+    WORKING: ("jobs_running", " A publish is running."),
+    FAILED: ("jobs_error", " A publish failed: see the list."),
 }
 
 
@@ -35,10 +36,10 @@ class JobsBadge:
         self._command_id = command_id
         self._tooltip = tooltip
         self._resources = resources_dir
-        self._state = "idle"
+        self._state = IDLE
 
     def update(self, state: str) -> None:
-        """Show the look of ``state`` ('idle', 'running' or 'error'); safe from any thread."""
+        """Show the look of ``state`` (``IDLE``, ``WORKING`` or ``FAILED`` of the queue); safe from any thread."""
         if state in LOOKS:
             self._tasks.post(lambda: self._apply(state))
 

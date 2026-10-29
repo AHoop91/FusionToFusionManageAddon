@@ -109,6 +109,10 @@ class FmClient:
         self._auth = auth
         self.cancel = cancel or ADDIN   # every request checks it, and is ended by it: work for a tab or panel gives its own
 
+    def with_cancel(self, cancel: CancelToken) -> "FmClient":
+        """A client for the same tenant and sign-in whose requests are checked and ended by ``cancel`` instead."""
+        return FmClient(self._settings, self._auth, cancel)
+
     @property
     def tenant(self) -> str:
         return self._settings.tenant.strip()

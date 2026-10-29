@@ -6,22 +6,25 @@ the message box after all.
 """
 
 import time
-from typing import Callable, Dict
+from typing import Callable
+
+from ..fm.ttl_cache import TtlCache
 
 SECONDS = 5.0   # a dialog that has not asked for this long is gone
 
 
 class Watched:
+    """Which runs a dialog is following. ``touch`` is called from the thread that answers the panel, ``following`` from the queue's worker
+    thread when a run ends; a run asked for long ago is forgotten, so the runs of a long session do not pile up."""
+
     def __init__(self, seconds: float = SECONDS, clock: Callable[[], float] = time.monotonic) -> None:
-        self._seconds, self._clock = seconds, clock
-        self._seen: Dict[str, float] = {}   # run id -> when a dialog last asked for it
+        self._seen = TtlCache(seconds, clock)   # run id -> True, for as long as a dialog's last ask counts
 
     def touch(self, run_id: str) -> None:
-        """A dialog is following the run."""
+        """A dialog is following the run (nothing for an empty id: a dialog that follows no run)."""
         if run_id:
-            self._seen[run_id] = self._clock()
+            self._seen.put(run_id, True)
 
     def following(self, run_id: str) -> bool:
-        """Whether a dialog is following the run now."""
-        seen = self._seen.get(run_id)
-        return seen is not None and self._clock() - seen <= self._seconds
+        """Whether a dialog asked for the run less than ``SECONDS`` ago."""
+        return self._seen.get(run_id) is not None

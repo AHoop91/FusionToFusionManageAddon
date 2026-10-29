@@ -164,6 +164,42 @@ class SectionTests(unittest.TestCase):
         done = self.fx.wait("summary")
         self.assertEqual(done["key"], "m2|t1")
 
+    def test_the_slots_of_components_of_another_design_are_dropped(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("children", id="A", item_number="PN-A")
+        self.fx.wait("children:A")
+        self.fx.model = ("m2", "t1")
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.assertEqual(self.fx.sections.status({"section": "children:A"})["pending"], False)
+        self.assertIn("Unknown section", self.fx.sections.status({"section": "children:A"})["message"])
+        self.assertNotIn("children:A", self.fx.sections._slots)
+
+    def test_a_load_whose_slot_was_dropped_ends_quietly(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.gate = threading.Event()
+        self.fx.ask("children", id="A", item_number="PN-A")
+        self.fx.model = ("m2", "t1")
+        self.fx.ask("summary")   # drops children:A while its read is still going
+        self.fx.gate.set()
+        self.fx.wait("summary")
+        time.sleep(0.1)   # the dropped load finishes, and finds nothing waiting for it
+        self.assertNotIn("children:A", self.fx.sections._slots)
+
+    def test_a_failure_making_the_clients_is_reported_not_left_pending(self):
+        panel_sections.FmClient.side_effect = RuntimeError("no settings")
+        self.fx.ask("summary")
+        done = self.fx.wait("summary")
+        self.assertEqual((done["ok"], done["message"]), (False, "no settings"))
+
+    def test_a_design_that_cannot_be_asked_for_is_an_answer_not_a_crash(self):
+        fx = Fixture()
+        self.addCleanup(fx.stop)
+        fx.sections._model_ref = mock.Mock(side_effect=RuntimeError("no design"))
+        self.assertEqual(fx.ask("summary")["message"], "no design")
+
     def test_an_unknown_section_and_no_open_design_are_answers_not_crashes(self):
         self.assertIn("Unknown section", self.fx.ask("nope")["message"])
         fx = Fixture(model=("", ""))

@@ -5,7 +5,8 @@ component's own document.
 """
 
 import time
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator, List, Optional
 
 from ..core.logging_setup import get_logger
 
@@ -31,7 +32,7 @@ def catch_up() -> None:
     adsk.doEvents()
 
 
-def _timed(label: str, action: Any) -> Any:
+def _timed(label: str, action: Callable[[], Any]) -> Any:
     """Run action() and log how long it took, so a slow step shows in the log (a step that never returns logs only its start)."""
     log.info("%s ...", label)
     began = time.monotonic()
@@ -41,47 +42,71 @@ def _timed(label: str, action: Any) -> Any:
         log.info("%s took %.1fs", label, time.monotonic() - began)
 
 
-def _export_with(manager: Any, path: str, geometry: Any = None) -> None:
-    options = manager.createSTEPExportOptions(path, geometry) if geometry is not None else manager.createSTEPExportOptions(path)
+def _export_with(manager: Any, path: str, geometry: Optional[Any] = None) -> None:
+    """Write a STEP file of ``geometry`` (a component or an occurrence; the whole design of ``manager`` when not given) to ``path``.
+    Raises ``RuntimeError`` when Fusion says it could not."""
+    options = manager.createSTEPExportOptions(path) if geometry is None else manager.createSTEPExportOptions(path, geometry)
     if not _timed("STEP export", lambda: manager.execute(options)):
         raise RuntimeError("Fusion could not export the STEP file.")
 
 
-def _own_document_design(occurrence: Any) -> Any:
-    """The design of the component's own document, found among the open documents or opened from its data file."""
-    app = _app()
-    import adsk.fusion
+def _data_file_of(occurrence: Any) -> Any:
+    """The data file of the component's own document, or None for a component nested in another (Fusion fails the lookup then)."""
     try:
-        data_file = occurrence.documentReference.dataFile   # fails for a component nested in another
+        return occurrence.documentReference.dataFile
     except RuntimeError:
-        data_file = None
+        return None
+
+
+@contextmanager
+def _own_document_design(occurrence: Any) -> Iterator[Any]:
+    """The design of the component's own document: found among the open documents, else opened (out of sight) from its data file and
+    closed again, unsaved, when the caller is done with it."""
+    import adsk.fusion
+    data_file = _data_file_of(occurrence)
     if data_file is None:
         raise LookupError("The component's own document could not be found (it is nested in another component).")
-    document = next((d for d in app.documents if d.dataFile is not None and d.dataFile.id == data_file.id), None)
-    if document is None:
-        document = app.documents.open(data_file, False)
-    catch_up()
-    design = adsk.fusion.Design.cast(document.products.itemByProductType("DesignProductType"))
-    if design is None:
-        raise RuntimeError("The component's document has no design.")
-    return design
+    documents = _app().documents
+    document = next((d for d in documents if d.dataFile is not None and d.dataFile.id == data_file.id), None)
+    opened = document is None
+    if opened:
+        document = documents.open(data_file, False)
+    try:
+        catch_up()
+        design = adsk.fusion.Design.cast(document.products.itemByProductType("DesignProductType"))
+        if design is None:
+            raise RuntimeError("The component's document has no design.")
+        yield design
+    finally:
+        if opened:   # one this call opened is not left open: a batch of components would pile them up
+            try:
+                document.close(False)
+                catch_up()
+            except Exception as exc:   # failing to close must not hide the export's own outcome
+                log.warning("Could not close the document opened for the STEP export: %s", exc)
+
+
+def _export_from_own_document(path: str, occurrence: Any) -> None:
+    with _own_document_design(occurrence) as design:
+        _export_with(design.exportManager, path)
 
 
 def export_step(path: str, occurrence: Any = None) -> None:
-    """Write a STEP file: the open design (no ``occurrence``) or one component of it, given by an occurrence of it."""
-    if occurrence is None:
-        _export_with(_design().exportManager, path)
-        return
+    """Write a STEP file: the open design (no ``occurrence``) or one component of it, given by an occurrence of it.
+
+    A component is tried as its occurrence, then as its component, then from its own document; ``RuntimeError`` lists why each failed."""
     manager = _design().exportManager
-    failures = []
-    for label, geometry in (("occurrence", lambda: occurrence), ("component", lambda: occurrence.component)):
+    if occurrence is None:
+        _export_with(manager, path)
+        return
+    ways = (("occurrence", lambda: _export_with(manager, path, occurrence)),
+            ("component", lambda: _export_with(manager, path, occurrence.component)),
+            ("own document", lambda: _export_from_own_document(path, occurrence)))
+    failures: List[str] = []
+    for label, way in ways:
         try:
-            _export_with(manager, path, geometry())
+            way()
             return
-        except Exception as exc:  # try the next way
+        except Exception as exc:   # try the next way
             failures.append(f"{label}: {exc}")
-    try:   # last way: export the root of the component's own document
-        _export_with(_own_document_design(occurrence).exportManager, path)
-    except Exception as exc:
-        failures.append(f"own document: {exc}")
-        raise RuntimeError("; ".join(failures))
+    raise RuntimeError("; ".join(failures))

@@ -8,7 +8,7 @@ import unittest
 
 from src.publish.job_queue import JobQueue
 from src.publish.job_state import JobState
-from src.publish.states import DONE, ERROR
+from src.publish.states import CANCELLED, DONE, ERROR
 
 
 class Run(JobState):
@@ -35,6 +35,33 @@ class Run(JobState):
         self.ended.set()
 
 
+class Crashing(Run):
+    """A run whose ``work`` raises: after it started, or before."""
+
+    def __init__(self, name, after_start=True):
+        super().__init__(name)
+        self.after_start = after_start
+
+    def work(self):
+        if self.after_start:
+            self._start()
+        raise RuntimeError("boom")
+
+
+class Blocked(Run):
+    """A run that works until it is let go."""
+
+    def __init__(self, name):
+        super().__init__(name)
+        self.started, self.go = threading.Event(), threading.Event()
+
+    def work(self):
+        self._start()
+        self.started.set()
+        self.go.wait(5)
+        super().work()
+
+
 def names(queue):
     return [s["name"] for s in queue.snapshots()]
 
@@ -43,10 +70,7 @@ class JobQueueTests(unittest.TestCase):
     def finish(self, queue, run):
         queue.add(run)
         self.assertTrue(run.ended.wait(5))
-        for _ in range(250):   # the worker thread is still leaving the queue
-            if queue._worker is None:
-                break
-            threading.Event().wait(0.02)
+        queue.join(5)   # the worker thread is still leaving the queue
 
     def test_a_run_that_ended_clean_is_still_listed_so_the_panel_can_read_how_it_ended(self):
         queue = JobQueue()
@@ -121,6 +145,76 @@ class JobQueueTests(unittest.TestCase):
         self.assertEqual(names(queue), ["A"])   # the panel that queued it still reads how it ended
         self.finish(queue, Run("B"))
         self.assertEqual(names(queue), ["B"])
+
+    def test_a_run_that_crashes_is_ended_as_an_error_and_the_queue_goes_on(self):
+        for after_start in (True, False):
+            with self.subTest(after_start=after_start):
+                queue, crashing = JobQueue(), Crashing("A", after_start)
+                self.finish(queue, crashing)   # a run left queued would be taken again and again: this would not end
+                self.assertEqual(crashing.phase, ERROR)
+                self.assertIn("boom", crashing.message)
+                self.assertEqual(queue.state(), "error")
+                self.finish(queue, Run("B"))
+                self.assertEqual(names(queue), ["A", "B"])
+
+    def test_a_run_whose_own_ending_fails_is_still_ended(self):
+        run = Run("A")
+        run._finish = lambda phase, message: (_ for _ in ()).throw(OSError("disk full"))
+        run.crashed("stopped")
+        self.assertEqual((run.phase, run.message), (ERROR, "stopped"))
+
+    def test_a_crash_does_not_overwrite_how_a_run_ended(self):
+        run = Run("A")
+        run.work()
+        run.crashed("late")
+        self.assertEqual((run.phase, run.message), (DONE, ""))
+
+    def test_a_waiting_run_says_its_place_and_cancelling_it_means_it_never_starts(self):
+        queue, first, second, third = JobQueue(), Blocked("A"), Run("B"), Run("C")
+        queue.add(first)
+        self.assertTrue(first.started.wait(5))
+        queue.add(second)
+        queue.add(third)
+        self.assertEqual([(s["name"], s.get("place")) for s in queue.snapshots()], [("A", None), ("B", 1), ("C", 2)])
+        self.assertEqual(queue.state(), "running")
+        queue.cancel(second.id)
+        queue.cancel("not-a-run")   # nothing listed under that id
+        first.go.set()
+        self.assertTrue(third.ended.wait(5))
+        self.assertEqual((second.phase, second.rows[0]["status"]), (CANCELLED, CANCELLED))
+
+    def test_a_retry_takes_the_place_of_the_failed_run_it_replaces(self):
+        queue, failed = JobQueue(), Run("A", ERROR)
+        self.finish(queue, failed)
+        self.finish(queue, Run("B", ERROR))
+        retry = Run("A again")
+        queue.replace(failed, retry)
+        self.assertTrue(retry.ended.wait(5))
+        self.assertEqual(names(queue), ["B", "A again"])
+
+    def test_a_failing_notification_does_not_stop_the_queue(self):
+        def explode(*_):
+            raise RuntimeError("no")
+
+        queue = JobQueue(on_change=explode, on_finished=explode)
+        self.finish(queue, Run("A"))
+        self.finish(queue, Run("B"))
+        self.assertEqual(names(queue), ["B"])
+
+    def test_it_tells_when_a_run_ended(self):
+        ended = []
+        queue = JobQueue(on_finished=ended.append)
+        run = Run("A")
+        self.finish(queue, run)
+        self.assertEqual(ended, [run])
+
+    def test_a_failed_row_in_a_finished_run_makes_the_queue_error(self):
+        queue = JobQueue()
+        run = Run("A")
+        self.finish(queue, run)
+        self.assertEqual(queue.state(), "idle")
+        run.rows[0]["status"] = ERROR
+        self.assertEqual(queue.state(), "error")
 
 
 if __name__ == "__main__":

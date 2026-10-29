@@ -106,6 +106,43 @@ class ReadAheadTests(unittest.TestCase):
                 with self.assertRaises(FmApiError):
                     shared.found("PN-1")
 
+    def test_a_number_is_found_however_it_is_written_and_searched_once(self):
+        searched = []
+
+        class Items:
+            def __init__(self, _fm, _revision=1):
+                pass
+
+            def find_many(self, _workspace, numbers):
+                searched.extend(numbers)
+                return {"pn-1": [{"id": "1"}]}
+
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+            with ahead([item("PN-1", "c1"), item("pn-1", "c2")]) as shared:
+                self.assertEqual(shared.found(" Pn-1 "), [{"id": "1"}])
+        self.assertEqual(len(searched), 1)
+
+    def test_a_component_the_data_model_left_out_is_said_not_called_cancelled(self):
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {"other": {}}):
+            with ahead([item("PN-1", "c1")], workspace_id="") as shared:
+                with self.assertRaises(RuntimeError) as caught:
+                    shared.read("c1")
+        self.assertIn("gave nothing for component c1", str(caught.exception))
+
+    def test_what_was_started_is_stopped_when_entering_fails(self):
+        class Failing(ReadAhead):
+            def _start(self, *args):
+                if self._pools:
+                    raise RuntimeError("no more threads")
+                super()._start(*args)
+
+        shared = Failing([item("PN-1", "c1")], SUMMARY, None, None, "242", "t1", False, lambda: False)
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}):
+            with self.assertRaises(RuntimeError):
+                shared.__enter__()
+        self.assertTrue(all(pool._shutdown for pool in shared._pools))
+        self.assertEqual(len(shared._pools), 1)
+
     def test_nothing_is_asked_once_the_run_is_cancelled(self):
         asked = []
         with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: asked.append(1) or {}):

@@ -17,11 +17,11 @@ from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...publish.job_queue import JobQueue
 from ...publish.panel_sections import publish_denial
-from ...publish.reports import publish_report, send_report
+from ...publish.reports import cut_off, publish_report, send_report
 from ...publish.run_files import temp_root
 from ...publish.runner import PublishRun
 from ...publish.sender import FolderError, SendRun, load_plan
-from ...publish.states import DONE, ERROR, FINISHED
+from ...publish.states import CANCELLED, DONE, ERROR, FINISHED
 from ...publish.watched import Watched
 from ...publish.writer import PublishFolder
 from ..file_dialogs import FileDialogs
@@ -44,15 +44,19 @@ def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, a
         One a progress dialog is following gets none: the dialog already shows how it ended."""
         if watched.following(run.id):
             return
+        if run.phase == CANCELLED:   # the user stopped it: nothing to say, unless a request was cut off and may have been done
+            if cut_off(run):
+                alerts.alert(send_report(run) if run.kind == "send" else publish_report(run), "Cancelled: some requests may have been done")
+            return
         if run.kind == "send":
-            failed = [row for row in run.rows if row["status"] == "error"]
+            failed = [row for row in run.rows if row["status"] == ERROR]
             if run.phase == ERROR or failed:
                 alerts.alert(send_report(run), "Send to Fusion Manage failed")
             elif run.phase == DONE:
                 alerts.done(send_report(run), "Sent to Fusion Manage")
         elif run.phase == ERROR:
             alerts.alert(publish_report(run), "Publish failed")
-        elif run.phase == DONE and any(row["status"] == "error" for row in run.rows):
+        elif run.phase == DONE and any(row["status"] == ERROR for row in run.rows):
             alerts.alert(publish_report(run), "Publish completed with errors")
         elif run.phase == DONE:
             alerts.done(publish_report(run), "Publish complete")

@@ -11,9 +11,11 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core.logging_setup import get_logger
 from .job_state import JobState
 from .run_files import remove_run
-from .states import DONE, ERROR, FINISHED, QUEUED, RUNNING
+from .states import ACTIVE, DONE, FINISHED, QUEUED
 
 log = get_logger("publish_queue")
+
+IDLE, WORKING, FAILED = "idle", "running", "error"   # what ``state`` answers: the ribbon button's look is chosen by them (see ``jobs_badge``)
 
 
 class JobQueue:
@@ -29,6 +31,7 @@ class JobQueue:
         self._worker: Optional[threading.Thread] = None
 
     def add(self, run: JobState) -> None:
+        """Queue ``run`` behind the others, and start the worker thread if none is running. Runs that ended clean are dropped from the list."""
         with self._lock:
             self._runs = [r for r in self._runs if not self._clean(r)]   # the runs that ended clean were kept for the panel that queued them
             self._runs.append(run)
@@ -46,10 +49,14 @@ class JobQueue:
         self.add(new)
 
     def get(self, run_id: str) -> Optional[JobState]:
+        """The listed run with this id, or None."""
         with self._lock:
             return next((r for r in self._runs if r.id == run_id), None)
 
     def cancel(self, run_id: str) -> None:
+        """Cancel a listed run: a waiting one never starts, a running one stops after its step in flight. Nothing for an id not listed.
+
+        A run cancelled while it waits is ended here, not by the worker, so ``on_finished`` is not told of it (the one who cancelled knows)."""
         run = self.get(run_id)
         if run:
             run.cancel()
@@ -64,14 +71,20 @@ class JobQueue:
             self._remove_files(run)
         self._changed()
 
+    def join(self, timeout: Optional[float] = None) -> None:
+        """Wait for the worker thread to end, that is, until no run is waiting (for tests and shutdown)."""
+        with self._lock:
+            worker = self._worker
+        if worker is not None:
+            worker.join(timeout)
+
     def state(self) -> str:
-        """'running' while a run waits or works, else 'error' while a listed run failed, else 'idle'."""
+        """``WORKING`` while a run waits or works, else ``FAILED`` while a listed run failed, else ``IDLE``."""
         with self._lock:
             runs = list(self._runs)
-        if any(r.phase in (QUEUED, RUNNING) for r in runs):
-            return "running"
-        failed = any(r.phase == ERROR or any(row["status"] == "error" for row in r.rows) for r in runs if not r.unlisted)
-        return "error" if failed else "idle"
+        if any(r.phase in ACTIVE for r in runs):
+            return WORKING
+        return FAILED if any(r.failed for r in runs if not r.unlisted) else IDLE
 
     def snapshots(self) -> List[Dict[str, Any]]:
         """Every run, oldest first; a waiting run also says its place in the queue."""
@@ -88,6 +101,7 @@ class JobQueue:
         return result
 
     def _loop(self) -> None:
+        """The worker thread: work the waiting runs in order, and end when none is left."""
         while True:
             with self._lock:
                 run = next((r for r in self._runs if r.phase == QUEUED), None)
@@ -97,12 +111,14 @@ class JobQueue:
             self._changed()
             try:
                 run.work()
-            except Exception:   # work reports its own failures; this only keeps the queue alive
+            except Exception as exc:   # work reports its own failures; this keeps the queue alive and the run from being left unfinished
                 log.exception("Publish run %s crashed", run.id)
+                run.crashed(f"The run stopped unexpectedly: {exc}")
             self._finished(run)
             self._changed()
 
     def _finished(self, run: JobState) -> None:
+        """Tell ``on_finished`` a run has ended, and remove the files of one that has nothing left to retry."""
         if self._on_finished:
             try:
                 self._on_finished(run)
@@ -117,6 +133,7 @@ class JobQueue:
             log.info("Removed the files of run %s", run.id)
 
     def _changed(self) -> None:
+        """Tell ``on_change`` the queue may have changed."""
         if self._on_change:
             try:
                 self._on_change()
@@ -125,7 +142,8 @@ class JobQueue:
 
     @staticmethod
     def _clean(run: JobState) -> bool:
-        """A run that finished with every item done, or that stopped before writing anything, has nothing left to show once the panel has seen how it ended; failed or cancelled ones stay until cleared.
+        """Whether a run has nothing left to show once the panel has seen how it ended: it finished with every item done, or stopped before
+        writing anything. Failed or cancelled ones stay until cleared.
 
         It is forgotten when the next run is added, not when it ends: the panel that queued it is still reading its last state."""
-        return run.unlisted or (run.phase == DONE and not any(row["status"] != "done" for row in run.rows))
+        return run.unlisted or (run.phase == DONE and not any(row["status"] != DONE for row in run.rows))

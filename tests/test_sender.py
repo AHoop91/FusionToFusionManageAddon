@@ -4,25 +4,9 @@ import tempfile
 import unittest
 
 from src.fm.client import FmApiError, SendResult
-from src.publish.placeholders import Unresolved, key_of, markers, resolve
 from src.publish.states import DONE
-from src.publish.sender import SEND_LOG, SendRun, created_id, load_plan
-
-
-class PlaceholderTests(unittest.TestCase):
-    def test_markers_are_found_in_urls_and_nested_bodies(self):
-        request = {"url": "/items/{{item:A}}/bom-items", "body": {"item": {"link": "/items/{{item:B}}"}, "list": ["{{tenant}}"]}}
-        self.assertEqual(markers(request), {key_of("item", "A"), key_of("item", "B"), ("tenant", "")})
-
-    def test_resolve_fills_every_marker_and_item_numbers_ignore_case(self):
-        request = {"url": "/items/{{item:PN-1}}", "body": ["{{version:pn-1}}"]}
-        values = {key_of("item", "pn-1"): "7", key_of("version", "PN-1"): "[REV:w]"}
-        self.assertEqual(resolve(request, values), {"url": "/items/7", "body": ["[REV:w]"]})
-
-    def test_resolve_names_what_is_missing(self):
-        with self.assertRaises(Unresolved) as caught:
-            resolve({"url": "/items/{{item:A}}/{{edge:A>B@1}}"}, {})
-        self.assertEqual(len(caught.exception.keys), 2)
+from src.publish.send_log import SEND_LOG
+from src.publish.sender import SendRun, created_id, load_plan
 
 
 class CreatedIdTests(unittest.TestCase):
@@ -47,12 +31,21 @@ class FakeFm:
             raise FmApiError("Fusion Manage returned 400 for " + path, 400)
         self.sent.append((method, path, body))
         if method == "POST" and path.endswith("/items"):
-            self._next += 1
-            return SendResult(201, {"Location": f"https://t/api/v3/workspaces/57/items/{self._next}"}, None)
+            name = (body or {}).get("n", "")
+            if len(name) == 1 and name.isupper():   # the items are sent together: the one called A is 101, B is 102, whatever order they arrive in
+                new_id = 100 + ord(name) - 64
+            else:
+                self._next += 1
+                new_id = self._next
+            return SendResult(201, {"Location": f"https://t/api/v3/workspaces/57/items/{new_id}"}, None)
         return SendResult(200, {}, None)
 
     def get_json(self, path, accept=""):
         return {"urn": "urn:adsk.plm:tenant.workspace.item:TEST.57.1", "version": "[REV:w]"}
+
+    def with_cancel(self, token):
+        self.token = token
+        return self
 
 
 def write_folder(root, items, boms):

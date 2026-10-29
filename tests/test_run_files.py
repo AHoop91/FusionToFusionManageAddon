@@ -2,9 +2,12 @@
 
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
+from src.publish import run_files
 from src.publish.run_files import FOLDER_NAME, remove_run, temp_root
 
 
@@ -50,6 +53,59 @@ class RunFilesTests(unittest.TestCase):
         os.makedirs(other)
         self.assertFalse(remove_run(self.root, os.path.join(self.root, "..", "other")))
         self.assertTrue(os.path.isdir(other))
+
+    def test_a_drive_or_filesystem_root_is_never_taken_for_a_run_folder(self):
+        top = os.path.abspath(os.sep)
+        self.assertFalse(run_files._inside(top, top))
+
+    def test_a_root_written_in_another_letter_case_is_the_same_folder_where_the_filesystem_ignores_case(self):
+        if not os.path.exists(self.root.swapcase()):
+            self.skipTest("this filesystem tells names apart by letter case")
+        path = self.run_folder()
+        self.assertTrue(remove_run(self.root.swapcase(), path))
+
+    def test_a_root_that_is_not_there_removes_nothing(self):
+        path = self.run_folder()
+        self.assertFalse(remove_run(os.path.join(self.base, "no-root"), path))
+        self.assertTrue(os.path.isdir(path))
+
+    def test_a_folder_that_is_not_there_is_not_removed_and_not_an_error(self):
+        gone = os.path.join(self.root, "gone")
+        self.assertFalse(remove_run(self.root, gone))
+        self.assertFalse(remove_run(self.root, ""))
+
+    def test_a_folder_removed_twice_is_removed_once(self):
+        path = self.run_folder()
+        self.assertTrue(remove_run(self.root, path))
+        self.assertFalse(remove_run(self.root, path))
+
+    def link_to(self, target, link):
+        """Make ``link`` a link to the folder ``target``: a symbolic link, or on Windows (where that needs a privilege) a junction."""
+        try:
+            os.symlink(target, link, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            if os.name != "nt" or subprocess.run(["cmd", "/c", "mklink", "/J", link, target], capture_output=True).returncode != 0:
+                self.skipTest("this system does not let a link be made here")
+
+    def test_a_link_to_a_folder_is_not_followed(self):
+        target = os.path.join(self.base, "target")
+        os.makedirs(os.path.join(target, "keep"))
+        link = os.path.join(self.root, "link")
+        self.link_to(target, link)
+        self.assertFalse(remove_run(self.root, link))
+        self.assertTrue(os.path.isdir(os.path.join(target, "keep")))
+
+    def test_a_folder_that_cannot_be_removed_stays_and_is_said(self):
+        path = self.run_folder()
+        with mock.patch.object(run_files.shutil, "rmtree"), self.assertLogs(run_files.log, "WARNING") as logged:
+            self.assertFalse(remove_run(self.root, path))
+        self.assertIn("Could not remove all of", logged.output[0])
+        self.assertTrue(os.path.isdir(path))
+
+    def test_a_failure_while_removing_never_raises(self):
+        path = self.run_folder()
+        with mock.patch.object(run_files.shutil, "rmtree", side_effect=RuntimeError("boom")):
+            self.assertFalse(remove_run(self.root, path))
 
     def test_no_root_removes_nothing(self):
         path = self.run_folder()

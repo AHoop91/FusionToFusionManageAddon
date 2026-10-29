@@ -15,7 +15,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import KINDS_BY_ID, WorkspaceConfig
+from ..core.cancel import Cancelled
 from ..core.logging_setup import get_logger
+from ..core.timing import Stopwatch
 from ..fm.client import LOOKUPS, FmApiError, FmClient
 from ..fm.components import ComponentService, manage_link
 from ..fm.picklists import PicklistResolver
@@ -28,11 +30,11 @@ from ..sync.property_compare import FOUND, MISMATCH, NEW
 from .bom_requests import bom_requests
 from .download import download
 from .item_requests import item_request
-from .job_state import JobState
+from .job_state import JobState, JobStopped
 from .placeholders import Unresolved
 from .read_ahead import ReadAhead, component_id_of
-from .sender import Dispatcher
-from .shared_numbers import shared_numbers, shared_reason
+from .sender import CUT_OFF, Dispatcher, was_cancelled
+from .shared_numbers import shared_key, shared_numbers, shared_reason
 from .states import CANCELLED, DONE, ERROR, RUNNING
 from .thumbnail import clear_white_background
 from .writer import FAILED, OK, SKIPPED, PublishFolder, safe_name
@@ -40,12 +42,26 @@ from .writer import FAILED, OK, SKIPPED, PublishFolder, safe_name
 log = get_logger("publish")
 
 WORKERS = 5   # items prepared at once
-SENT = "sent to Fusion Manage"   # the artifact of an item that was sent
 
+VALIDATING, ITEMS, BOM = "validating", "items", "bom"   # the stages of a run, as the panel reads them
 SKIPPED_COUNT = "skipped"   # the job's ``counts`` key for the items left out on purpose
 
+# The artifacts the folder records of an item (see ``PublishFolder.record``); the report counts some of them.
+SENT = "sent to Fusion Manage"
+ITEM_REQUEST = "item request"
+THUMBNAIL = "thumbnail"
+COMPONENT_KEYS = ("id", "item_number", "part_number", "description")   # what the run knows of a component that is not the design's own
 
-class SharedItemNumbers(Exception):
+
+def _needs_matching(row: Dict[str, Any]) -> bool:
+    """Whether a row is a text value to be sent to a field, which may need matching to a picklist option or fitting to a number's digits (not a
+    row that matches already, has no field, has no value, or already holds an option's link)."""
+    value = row["value"]
+    return (row["status"] in (NEW, MISMATCH) and bool(row.get("fm_field")) and isinstance(value, str) and value != ""
+            and not value.startswith(LOOKUPS + "/"))
+
+
+class SharedItemNumbers(JobStopped):
     """Item numbers that several Fusion Manage items carry: the run cannot tell which item each means, and must not guess."""
 
     def __init__(self, counts: Dict[str, int]) -> None:
@@ -57,16 +73,18 @@ class PublishRun(JobState):
     """State and steps of one run. ``snapshot`` is what the panel polls."""
 
     kind = "publish"
-    stage = "validating"   # then "items", then "bom": the run looks up every item number before it writes anything
+    stage = VALIDATING   # then ITEMS, then BOM: the run looks up every item number before it writes anything
     unreached = "Not published: the run failed."
 
     def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: FusionGraphQlClient,
-                 fm: FmClient, model_id: str, time: str, send: bool = False) -> None:
+                 fm: FmClient, model_id: str, timestamp: str, send: bool = False) -> None:
         super().__init__(str(job.get("root_number") or "design"), folder.path)
         self.folder, self.job, self.cfg = folder, job, cfg
         self.sends = send   # send each item as it is written, then the Bill of Materials
-        self._dispatcher = Dispatcher(folder.path, fm, cfg.workspace_id) if send else None
-        self._client, self._fm, self._model_id, self._time = client, fm, model_id, time
+        # Every request is made under the run's token, so cancelling the run ends it at once, a write too: one that is cut off is logged as in
+        # doubt (see ``Dispatcher``), and sending again finds out whether it was done.
+        self._client, self._fm, self._model_id, self._time = client.with_cancel(self.token), fm.with_cancel(self.token), model_id, timestamp
+        self._dispatcher = Dispatcher(folder.path, self._fm, cfg.workspace_id) if send else None
         self.total = len(job["items"])
         self.rows = [self.row(item_number_of(i), str(i.get("description") or i.get("name") or ""), bool(i.get("root"))) for i in job["items"]]
         self._row_of = {id(i): row for i, row in zip(job["items"], self.rows)}
@@ -87,37 +105,37 @@ class PublishRun(JobState):
     @property
     def unlisted(self) -> bool:
         """A run that failed in its validation wrote nothing: there is nothing in the Job Queue to look at, retry or clear."""
-        return self.phase == ERROR and self.stage == "validating"
+        return self.phase == ERROR and self.stage == VALIDATING
 
     # ---- Worker thread ----------------------------------------------------------
 
-    def work(self) -> None:
-        if not self._start():   # cancelled while it waited
-            return
-        started = time.monotonic()
-        try:
-            if self.cfg.workspace_id:
-                self._field_sections = SectionService(self._fm).field_sections(self.cfg.workspace_id)
-            publishable = [i for i in self.job["items"] if item_number_of(i).lower() not in self._shared]
-            with ReadAhead(publishable, self.job["summary"], self._client, self._fm, self.cfg.workspace_id, self._time,
-                           self._physical, lambda: self.cancelled) as self._ahead, ThreadPoolExecutor(max_workers=WORKERS) as pool:
-                self._require_unique_numbers(publishable)   # before the first item is written
-                self._set(stage="items")
-                list(pool.map(self._prepare, self.job["items"]))
-            if not self.cancelled:
-                self._write_boms()
-            log.info("Prepared %d item(s) in %.1fs", len(self.job["items"]), time.monotonic() - started)
-            if self.sends and not self.cancelled:
-                self._send_boms()   # only now: every item has been created or updated
-        except SharedItemNumbers as exc:
-            log.warning("Publish stopped before writing: %s", ", ".join(sorted(exc.counts)))
-            self._finish(ERROR, str(exc))
-            return
-        except Exception as exc:
-            log.exception("Publish run failed")
-            self._finish(ERROR, str(exc) or type(exc).__name__)
-            return
-        self._finish(CANCELLED if self.cancelled else DONE, "Cancelled." if self.cancelled else "")
+    def _steps(self) -> None:
+        """Validate the item numbers, prepare (and send) the items, then write and send the Bill of Materials. Raises what ends the run early."""
+        started, watch = time.monotonic(), Stopwatch()
+        publishable = [i for i in self.job["items"] if shared_key(item_number_of(i)) not in self._shared]
+        with ThreadPoolExecutor(max_workers=1) as background, \
+                ReadAhead(publishable, self.job["summary"], self._client, self._fm, self.cfg.workspace_id, self._time,
+                          self._physical, lambda: self.cancelled) as self._ahead, ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            # The sections are read while the shared searches and Data Model reads are on their way, not before them: neither waits for the other.
+            sections = background.submit(self._read_sections) if self.cfg.workspace_id else None
+            self._require_unique_numbers(publishable)   # before the first item is written
+            log.info("The item numbers were checked in %.1fs", watch.lap())
+            if sections:
+                self._field_sections = sections.result()   # an error here stops the run before anything is written, as it did before
+            self._set(stage=ITEMS)
+            list(pool.map(self._prepare, self.job["items"]))
+        if not self.cancelled:
+            self._write_boms()
+        log.info("Prepared %d item(s) in %.1fs", len(self.job["items"]), time.monotonic() - started)
+        if self.sends and not self.cancelled:
+            self._send_boms()   # only now: every item has been created or updated
+
+    def _read_sections(self) -> Dict[str, str]:
+        """The section of each field of the workspace, which the items are written by (see ``SectionService``)."""
+        watch = Stopwatch()
+        sections = SectionService(self._fm).field_sections(self.cfg.workspace_id)
+        log.info("The sections of the workspace were read in %.1fs", watch.lap())
+        return sections
 
     def _require_unique_numbers(self, items: List[Dict[str, Any]]) -> None:
         """Fail the whole run, with nothing written, when an item number is carried by several Fusion Manage items. A search that fails fails the run too:
@@ -125,6 +143,7 @@ class PublishRun(JobState):
         counts = {number: len(self._ahead.found(number) or []) for number in {item_number_of(i) for i in items}}
         shared = {number: count for number, count in counts.items() if count > 1}
         if shared:
+            log.warning("Publish stopped before writing: %s", ", ".join(sorted(shared)))
             raise SharedItemNumbers(shared)
 
     def snapshot(self) -> Dict[str, Any]:
@@ -148,7 +167,7 @@ class PublishRun(JobState):
 
     def _send_boms(self) -> None:
         """Send the Bill of Materials of each parent, several parents at a time; a failure stops that parent only."""
-        self._set(stage="bom")
+        self._set(stage=BOM)
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             list(pool.map(lambda parent: self._send_bom(*parent), self._bom_requests.items()))
 
@@ -160,15 +179,18 @@ class PublishRun(JobState):
         row["status"] = RUNNING
         sent = [0]
 
-        def progress() -> None:
-            sent[0] += 1
-            row["detail"] = f"{sent[0]} of {len(lines)} request(s) sent."
+        def progress() -> None:   # called from the threads that send the parent's requests together
             with self._lock:
+                sent[0] += 1
+                row["detail"] = f"{sent[0]} of {len(lines)} request(s) sent."
                 self._bom_done += 1
 
         try:
             row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled, progress)
-            row["status"] = CANCELLED if row["detail"].startswith("Cancelled") else DONE
+            row["status"] = CANCELLED if was_cancelled(row["detail"]) else DONE
+        except Cancelled:   # the requests under way were cut off; the others in this parent were not started
+            row["status"], row["detail"] = CANCELLED, CUT_OFF
+            self.folder.record(parent, SENT, FAILED, CUT_OFF)
         except (FmApiError, AuthError, Unresolved) as exc:
             row["status"], row["detail"] = ERROR, str(exc)
             self.folder.record(parent, SENT, FAILED, str(exc))
@@ -183,14 +205,17 @@ class PublishRun(JobState):
         # number, or from writing one item from several components.
         if not number:
             return self._leave_out(row, "Skipped: no item number.")
-        if number.lower() in self._shared:
-            reason = shared_reason(number, self._shared[number.lower()])
+        if shared_key(number) in self._shared:
+            reason = shared_reason(number, self._shared[shared_key(number)])
             self.folder.record(number, "item", SKIPPED, reason)
             return self._leave_out(row, reason)
         row["status"] = RUNNING
-        unresolved = False
+        left_out = False
         try:
-            unresolved = self._item(item, number)
+            left_out = self._item(item, number)
+        except Cancelled:   # a read the cancel ended: the item is not a failure
+            row["status"], row["detail"] = CANCELLED, "Cancelled."
+            return
         except Exception as exc:
             log.exception("Publishing %s failed", number)
             self.folder.record(number, "item", FAILED, str(exc) or type(exc).__name__)
@@ -199,15 +224,12 @@ class PublishRun(JobState):
         with self._lock:
             row["status"] = ERROR if any(e["status"] == FAILED for e in entries) else DONE
             self.done += 1
-            self._skipped += unresolved
+            self._skipped += int(left_out)
 
-    def _item(self, item: Dict[str, Any], number: str) -> bool:
-        """Prepare, and with ``sends`` send, one item. True when Fusion Manage could not say which item it is, so nothing was done for it."""
-        folder = self.folder.item_dir(number)
-        began = time.monotonic()
+    def _compare(self, item: Dict[str, Any], number: str, component_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """``(read, result)``: what the Data Model gave for the item's component, and how it compares with the item in Fusion Manage."""
         summary = self.job["summary"]
-        component_id = component_id_of(item, summary)
-        component = summary if item.get("root") else {k: item.get(k, "") for k in ("id", "item_number", "part_number", "description")}
+        component = summary if item.get("root") else {k: item.get(k, "") for k in COMPONENT_KEYS}
         # Fusion Manage is asked for the item while the Data Model request this item shares is on its way.
         with ThreadPoolExecutor(max_workers=1) as background:
             pending = background.submit(lookup_item, component, self.cfg, self._fm, self._ahead.found(number), WORKING)
@@ -215,37 +237,49 @@ class PublishRun(JobState):
             lookup = pending.result()
         result = compare_with_item(read["properties"], component, self.cfg, lookup, self._picklists.fit_number,
                                    with_values=True, convert_unit=self._picklists.convert_unit)
+        return read, result
+
+    def _item(self, item: Dict[str, Any], number: str) -> bool:
+        """Prepare, and with ``sends`` send, one item. True when Fusion Manage could not say which item it is, so nothing was done for it."""
+        folder = self.folder.item_dir(number)
+        began, watch = time.monotonic(), Stopwatch()
+        component_id = component_id_of(item, self.job["summary"])
+        read, result = self._compare(item, number, component_id)
+        compared = watch.lap()
         link = self._component(number, result["fm"], read["link"])
         rows = self._option_rows(number, result["rows"])
         self._record_blank(number, rows)
+        linked = watch.lap()
         request, reason = self._request(number, folder, component_id, read["thumbnail_url"], result, rows, link)
         request_file = self._write_request(number, folder, request, reason)
-        state = self.folder.items[number] = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""),
-                                             "request": request_file}
+        state = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""), "request": request_file}
+        self.folder.set_item(number, state)
+        built = watch.lap()
         if self._dispatcher:
             self._dispatcher.learn(number, state["id"])
             if request is not None:
                 self._send_item(number, request)
         log.debug("Item %s: Fusion Manage is %s (id %s); request: %s", number, state["state"] or "unknown", state["id"] or "none",
                   reason if request is None else request["method"] + " " + request["url"])
-        log.info("Prepared %s in %.1fs", number, time.monotonic() - began)
+        log.info("Prepared %s in %.1fs (read and compare %.1fs, component link %.1fs, request and thumbnail %.1fs, send %.1fs)", number,
+                 time.monotonic() - began, compared, linked, built, watch.lap())
         return request is None and state["state"] != FOUND
 
     def _request(self, number: str, folder: str, component_id: str, thumbnail_url: str, result: Dict[str, Any],
                  rows: List[Dict[str, Any]], link: Optional[Tuple[str, str]]) -> Tuple[Optional[Dict[str, Any]], str]:
-        """``(request, reason)`` of the item (see ``item_request``). A thumbnail goes along with a request only, so one is fetched
-        only for an item that sends something."""
-        def build(files: List[Tuple[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str]:
-            return item_request(self.cfg.workspace_id, result["fm"], rows, self.cfg.static_values, self._field_sections, files,
-                                result["values"], link)   # the values tell which static values an existing item lacks
-
-        request, reason = build([])
-        if request is None:
-            self.folder.record(number, "thumbnail", SKIPPED, "Not needed: nothing is sent for this item.")
-            return request, reason
-        image = self._thumbnail(number, folder, component_id, thumbnail_url)
-        files = [(m.fm_field_id, image) for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id and image]
-        return build(files) if files else (request, reason)
+        """``(request, reason)`` of the item (see ``item_request``). The thumbnail is sent with every item that is created or updated: a picture
+        cannot be compared with the one Fusion Manage holds, so an item whose other values match gets it too."""
+        fields = [m.fm_field_id for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id]
+        files: List[Tuple[str, Any]] = []
+        if not fields:
+            self.folder.record(number, THUMBNAIL, SKIPPED, "No field is mapped to the thumbnail.")
+        elif result["fm"].get("state") not in (NEW, FOUND):   # nothing is sent for the item: the picture would not be used
+            self.folder.record(number, THUMBNAIL, SKIPPED, "Not needed: nothing is sent for this item.")
+        else:
+            image = self._thumbnail(number, folder, component_id, thumbnail_url)
+            files = [(field, image) for field in fields] if image else []
+        return item_request(self.cfg.workspace_id, result["fm"], rows, self.cfg.static_values, self._field_sections, files,
+                            result["values"], link)   # the values tell which static values an existing item lacks
 
     def _record_blank(self, number: str, rows: List[Dict[str, Any]]) -> None:
         blank = [f"{r['name']} (-> {r['fm_field']})" for r in rows if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
@@ -255,10 +289,10 @@ class PublishRun(JobState):
     def _write_request(self, number: str, folder: str, request: Optional[Dict[str, Any]], reason: str) -> str:
         """Write the request to the item's folder and return its path ("" when there is none, and the reason is recorded)."""
         if request is None:
-            self.folder.record(number, "item request", SKIPPED, reason)
+            self.folder.record(number, ITEM_REQUEST, SKIPPED, reason)
             return ""
         path = os.path.join(folder, "item.request.json")
-        self.folder.record(number, "item request", OK, request["method"] + " " + request["url"], self.folder.write_json(path, request))
+        self.folder.record(number, ITEM_REQUEST, OK, request["method"] + " " + request["url"], self.folder.write_json(path, request))
         return path
 
     def _option_rows(self, number: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -270,7 +304,7 @@ class PublishRun(JobState):
         out = []
         for row in rows:
             value = row["value"]
-            if row["status"] not in (NEW, MISMATCH) or not row.get("fm_field") or not isinstance(value, str) or value == "" or value.startswith(LOOKUPS + "/"):
+            if not _needs_matching(row):
                 out.append(row)
                 continue
             link = self._picklists.link(row["fm_field"], value)
@@ -307,34 +341,41 @@ class PublishRun(JobState):
     def _send_item(self, number: str, request: Dict[str, Any]) -> None:
         try:
             self.folder.record(number, SENT, OK, self._dispatcher.send_item(number, request))
+        except Cancelled:
+            self.folder.record(number, SENT, FAILED, CUT_OFF)
+            raise
         except (FmApiError, AuthError) as exc:
             self.folder.record(number, SENT, FAILED, str(exc))
 
     def _download_thumbnail(self, component_id: str, url: str) -> bytes:
         """The thumbnail at ``url``. The signed url expires soon and an item may wait for its turn, so when it will no longer serve, a fresh one is asked for."""
         try:
-            return download(url)
+            return download(url, cancel=self.token)
+        except Cancelled:
+            raise
         except Exception as exc:
             log.info("The thumbnail url of component %s would not serve (%s); asking for a fresh one", component_id, exc)
             fresh = read_thumbnail_url(self._client, self.job["summary"], component_id, self._time)
             if not fresh:
                 raise
-            return download(fresh)
+            return download(fresh, cancel=self.token)
 
     def _thumbnail(self, number: str, folder: str, component_id: str, url: str) -> str:
         """Download and save the thumbnail at ``url`` and return it as a ``data:image/png;base64,...`` value for an image field
         ("" if none). The saved file is the original; the value has its white background cleared."""
         try:
             if not url:
-                self.folder.record(number, "thumbnail", SKIPPED, "The Data Model has no thumbnail for this component yet.")
+                self.folder.record(number, THUMBNAIL, SKIPPED, "The Data Model has no thumbnail for this component yet.")
                 return ""
             data = self._download_thumbnail(component_id, url)
-            self.folder.record(number, "thumbnail", OK, f"{len(data)} bytes",
+            self.folder.record(number, THUMBNAIL, OK, f"{len(data)} bytes",
                                self.folder.write_bytes(os.path.join(folder, "thumbnail.png"), data))
             return "data:image/png;base64," + base64.b64encode(clear_white_background(data)).decode("ascii")
+        except Cancelled:
+            raise
         except Exception as exc:
             log.warning("Thumbnail of %s failed: %s", number, exc)
-            self.folder.record(number, "thumbnail", FAILED, str(exc) or type(exc).__name__)
+            self.folder.record(number, THUMBNAIL, FAILED, str(exc) or type(exc).__name__)
             return ""
 
     def _write_boms(self) -> None:
