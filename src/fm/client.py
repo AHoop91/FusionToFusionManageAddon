@@ -1,8 +1,7 @@
 """Fusion Manage REST client.
 
-Single place that knows how to address a tenant and make authenticated calls.
-Feature classes (profile today; items, BOMs and files later) take an
-``FmClient`` instead of building URLs and headers themselves.
+The one place that knows how to address a tenant and make authenticated calls. The feature classes (items, BOMs, files and the
+rest) take an ``FmClient`` instead of building URLs and headers themselves.
 """
 
 import json
@@ -23,18 +22,18 @@ from ..core.timing import Stopwatch
 log = get_logger("fm.client")
 
 
-def _clip(data: bytes) -> str:
-    """The start of a request or answer, for a verbose log."""
-    return data[:DEBUG_BODY].decode("utf-8", "replace")
-
-FM_HOST_SUFFIX =".autodeskplm360.net"
-DEBUG_BODY = 20000   # characters of a request or answer kept in a verbose log
+FM_HOST_SUFFIX = ".autodeskplm360.net"
+DEBUG_BODY = 20000   # bytes of a request or answer kept in a verbose log
+ANSWER_LOG_BYTES = 500   # bytes of a write's answer kept in the normal log
+ERROR_BODY_BYTES = 1000   # bytes of a refusal read, for the log
+ERROR_MESSAGE_CHARS = 300   # characters of it that go into the message the user can see
 REQUEST_TIMEOUT_SECONDS = 15
 WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
 UPLOAD_TIMEOUT_SECONDS = 300   # a STEP of an assembly can be large
 UPLOAD_CHUNK_BYTES = 64 * 1024   # a file goes out in pieces this big, so progress can be shown
 READ_ATTEMPTS = 3
-RETRY_STATUSES = (429, 502, 503, 504)   # worth another try; a timeout or lost connection (status 0) is too
+NO_RESPONSE = 0   # the ``status`` of an error that had no HTTP response
+RETRY_STATUSES = (429, 502, 503, 504, NO_RESPONSE)   # worth another try: a busy or failing gateway, a timeout or a lost connection
 RETRY_SECONDS = 2   # wait before the second try, twice that before the third
 
 # Path roots of the REST API, shared by every feature that builds a url.
@@ -42,12 +41,31 @@ WORKSPACES = "/api/v3/workspaces"
 LOOKUPS = "/api/v3/lookups"
 
 
+class FmApiError(Exception):
+    """Raised when a Fusion Manage request fails or returns bad data."""
+
+    def __init__(self, message: str, status: int = NO_RESPONSE) -> None:
+        super().__init__(message)
+        self.status = status   # HTTP status, or ``NO_RESPONSE`` when there was none
+
+
+def _clip(data: bytes) -> str:
+    """The start of a request or answer, for a verbose log."""
+    return data[:DEBUG_BODY].decode("utf-8", "replace")
+
+
+def _said(exc: urllib.error.HTTPError) -> str:
+    """What Fusion Manage said in a refusal (the start of it)."""
+    return exc.read()[:ERROR_BODY_BYTES].decode("utf-8", "replace")
+
+
 def last_segment(link: Any) -> str:
     """The id at the end of a link such as ``/api/v3/workspaces/242/views/1/fields/TITLE`` ("" if not text)."""
     return link.rstrip("/").rsplit("/", 1)[-1] if isinstance(link, str) else ""
 
 
-SIGNED_HEADER_PREFIXES = ("x-amz-", "x-goog-", "x-ms-", "content-md5", "content-type", "content-encoding", "cache-control")   # what a signed upload address can ask to be sent with the file
+# What a signed upload address can ask to be sent with the file
+SIGNED_HEADER_PREFIXES = ("x-amz-", "x-goog-", "x-ms-", "content-md5", "content-type", "content-encoding", "cache-control")
 
 
 def signed_headers(extra: Dict[str, str]) -> Dict[str, str]:
@@ -81,14 +99,6 @@ def _chunks(content: bytes, progress: Callable[[float], None]) -> Iterator[bytes
     for start in range(0, len(content), UPLOAD_CHUNK_BYTES):
         yield content[start:start + UPLOAD_CHUNK_BYTES]
         progress(min(1.0, (start + UPLOAD_CHUNK_BYTES) / size))
-
-
-class FmApiError(Exception):
-    """Raised when a Fusion Manage request fails or returns bad data."""
-
-    def __init__(self, message: str, status: int = 0) -> None:
-        super().__init__(message)
-        self.status = status   # HTTP status, or 0 when there was no response
 
 
 class FmClient:
@@ -129,24 +139,33 @@ class FmClient:
         in a way that usually passes (a gateway error or a timeout) is tried
         again a few times, since reading changes nothing.
         """
+        url = self._url(path)   # an address that is refused, or no usable hub, is not a failure that passes: it is not tried again
         for attempt in range(1, READ_ATTEMPTS + 1):
             try:
-                return self._get_once(path, accept)
+                return self._get_once(url, path, accept)
             except FmApiError as exc:
-                if attempt == READ_ATTEMPTS or not (exc.status in RETRY_STATUSES or exc.status == 0):
+                if attempt == READ_ATTEMPTS or exc.status not in RETRY_STATUSES:
                     raise
                 log.warning("Fusion Manage read of %s failed (%s), attempt %d of %d", path, exc, attempt, READ_ATTEMPTS)
                 self.cancel.wait(RETRY_SECONDS * attempt)
 
-    def _get_once(self, path: str, accept: str) -> Any:
+    def _url(self, path: str) -> str:
+        """The address of ``path`` in the tenant; ``FmApiError`` when ``path`` is refused or no usable hub is active."""
+        return f"{self.base_url}{checked_path(path)}"
+
+    def _request(self, url: str, accept: str, method: Optional[str] = None, data: Optional[bytes] = None,
+                 content_type: str = "") -> urllib.request.Request:
+        """A request to ``url`` signed in as the user. The access token is fetched per request, so an expired one is refreshed."""
+        headers = {"Accept": accept, "Authorization": f"Bearer {self.access_token()}"}
+        if content_type:
+            headers["Content-Type"] = content_type
+        return urllib.request.Request(url, data=data, headers=headers, method=method)
+
+    def _get_once(self, url: str, path: str, accept: str) -> Any:
         self.cancel.check()
         watch = Stopwatch()
-        token = self._auth.get_access_token(self._settings)
+        request = self._request(url, accept)
         token_seconds = watch.lap()
-        request = urllib.request.Request(
-            f"{self.base_url}{checked_path(path)}",
-            headers={"Accept": accept, "Authorization": f"Bearer {token}"},
-        )
         try:
             with open_url(request, REQUEST_TIMEOUT_SECONDS, self.cancel) as response:
                 first_byte_seconds = watch.lap()   # until the response headers arrived
@@ -163,8 +182,7 @@ class FmClient:
                               response.headers.get("Content-Type"), body[:300])
                     raise
         except urllib.error.HTTPError as exc:
-            log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path,
-                      exc.read()[:1000].decode("utf-8", "replace"))
+            log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path, _said(exc))
             raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
         except (OSError, ValueError) as exc:
             raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
@@ -175,8 +193,7 @@ class FmClient:
         A file is often served from another host after a redirect; the sign-in is not sent there.
         """
         self.cancel.check()
-        token = self._auth.get_access_token(self._settings)
-        request = urllib.request.Request(f"{self.base_url}{checked_path(path)}", headers={"Accept": "*/*", "Authorization": f"Bearer {token}"})
+        request = self._request(self._url(path), "*/*")
         try:
             with open_url(request, timeout, self.cancel) as response:
                 return response.read(), str(response.headers.get("Content-Type") or "")
@@ -192,21 +209,22 @@ class FmClient:
         ``progress(fraction)`` is called as the bytes go out (0 to 1). Only the client's own token ends it (the add-in's, unless
         the caller gave one): a file being attached is not stopped by leaving a tab.
         """
-        if not url.lower().startswith("https://"):
+        if not self.https_only(url):
             raise FmApiError("The upload address Fusion Manage gave is not https.")
         body: Any = content
         if progress is not None:   # sent in pieces so the caller can see how far it has got
             body = _chunks(content, progress)
-        request = urllib.request.Request(url, data=body, method="PUT", headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(content)), **signed_headers(headers or {})})
+        request = urllib.request.Request(url, data=body, method="PUT", headers={
+            "Content-Type": "application/octet-stream", "Content-Length": str(len(content)), **signed_headers(headers or {})})
         began = time.monotonic()
         try:
             with open_url(request, timeout, self.cancel) as response:
                 log.info("PUT of %d bytes -> %s in %.1fs", len(content), response.status, time.monotonic() - began)
                 return response.status
         except urllib.error.HTTPError as exc:
-            said = exc.read()[:1000].decode("utf-8", "replace")
+            said = _said(exc)
             log.error("Upload HTTP %s: %s", exc.code, said)
-            raise FmApiError(f"The upload returned {exc.code}: {said[:300]}", exc.code) from exc
+            raise FmApiError(f"The upload returned {exc.code}: {said[:ERROR_MESSAGE_CHARS]}", exc.code) from exc
         except OSError as exc:
             raise FmApiError(f"The upload failed: {exc}") from exc
 
@@ -218,12 +236,8 @@ class FmClient:
         the reason the user needs.
         """
         self.cancel.check()
-        token = self._auth.get_access_token(self._settings)
         payload = None if body is None else json.dumps(body).encode("utf-8")
-        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
-        if payload is not None:
-            headers["Content-Type"] = "application/json"
-        request = urllib.request.Request(f"{self.base_url}{checked_path(path)}", data=payload, headers=headers, method=method)
+        request = self._request(self._url(path), "application/json", method, payload, "application/json" if payload is not None else "")
         if log.isEnabledFor(logging.DEBUG):
             log.debug("%s %s body: %s", method, path, _clip(payload or b""))
         began = time.monotonic()
@@ -233,15 +247,16 @@ class FmClient:
                 try:
                     data = json.loads(raw) if raw.strip() else None
                 except ValueError:
+                    log.warning("The answer to %s %s was not JSON; it is read as no answer", method, path)
                     data = None
                 result = SendResult(response.status, dict(response.headers.items()), data)
-                log.info("Fusion Manage %s %s -> %s %s", method, path, result.status, raw[:500].decode("utf-8", "replace"))
+                log.info("Fusion Manage %s %s -> %s %s", method, path, result.status, raw[:ANSWER_LOG_BYTES].decode("utf-8", "replace"))
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("%s %s took %.2fs, answered: %s", method, path, time.monotonic() - began, _clip(raw))
                 return result
         except urllib.error.HTTPError as exc:
-            said = exc.read()[:1000].decode("utf-8", "replace")
+            said = _said(exc)
             log.error("Fusion Manage HTTP %s for %s %s: %s", exc.code, method, path, said)
-            raise FmApiError(f"Fusion Manage returned {exc.code} for {method} {path}: {said[:300]}", exc.code) from exc
+            raise FmApiError(f"Fusion Manage returned {exc.code} for {method} {path}: {said[:ERROR_MESSAGE_CHARS]}", exc.code) from exc
         except OSError as exc:
             raise FmApiError(f"Fusion Manage request failed for {method} {path}: {exc}") from exc

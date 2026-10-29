@@ -113,6 +113,13 @@ class AttachDenialTests(unittest.TestCase):
         message = denial(_Client(FmApiError("no", 403)), "84", ATTACH_PERMISSIONS, "Items", "attach files to")
         self.assertIn("Insufficient permissions to attach files to the Items workspace", message)
 
+    def test_a_failure_that_is_not_a_refusal_is_raised_not_called_a_denial(self):
+        with self.assertRaises(FmApiError):
+            denial(_Client(FmApiError("down", 503)), "84", ATTACH_PERMISSIONS, "Items", "attach files to")
+
+    def test_a_401_is_a_denial_too(self):
+        self.assertIn("Insufficient permissions", denial(_Client(FmApiError("no", 401)), "84", ATTACH_PERMISSIONS, "Items"))
+
 
 if __name__ == "__main__":
     unittest.main()

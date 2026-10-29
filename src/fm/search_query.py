@@ -9,19 +9,22 @@ what goes after ``query=``.
 """
 
 import re
-from typing import Any, List
+from typing import Any, List, Tuple
 from urllib.parse import quote_plus
 
-from ..core.shapes import dict_rows, dig
+from ..core.shapes import dict_rows, dig, whole
 
+LATEST, WORKING = 1, 3   # the search's ``revision`` filter: 1 the latest version of each item, 3 the working version
+REVISIONS = (LATEST, WORKING)
+SORT = "createdOn asc"   # oldest first: a stable order to page through
 _UNSAFE = re.compile(r"[`():<>=\\/\]\[\{\}\"]")   # characters that mean something to the search syntax
 _FIELD = re.compile(r"[^A-Z0-9_]")
 _PREFIX = "ITEM_DETAILS:"
 
 
 def clean_value(raw: Any) -> str:
-    """A value with the characters the search syntax reads as operators removed."""
-    return _UNSAFE.sub("", str(raw or "")).strip()
+    """A value with the characters the search syntax reads as operators removed. A value of 0 is a value, not nothing."""
+    return _UNSAFE.sub("", "" if raw is None else str(raw)).strip()
 
 
 def term(value: str) -> str:
@@ -38,45 +41,38 @@ def field_id(raw: Any) -> str:
 
 
 def _join(raw: Any) -> str:
+    """``OR`` when that is what was asked for, else ``AND``: nothing the page sends can put anything else into the query."""
     return "OR" if str(raw or "").upper() == "OR" else "AND"
 
 
-def _chain(pieces: List[str], joins: List[str]) -> str:
-    """``pieces`` joined as ``joins`` say (``joins[i]`` connects ``pieces[i]`` to the next), in brackets when there is more than one."""
-    text = pieces[0]
-    for join, piece in zip(joins, pieces[1:]):
-        text += f" {join} {piece}"
-    return f"({text})" if len(pieces) > 1 else text
+def _chain(parts: List[Tuple[str, str]]) -> str:
+    """``parts``, each a clause and how it joins to the next, as one clause: in brackets when there is more than one."""
+    text = parts[0][0]
+    for (_, join), (clause, _) in zip(parts, parts[1:]):
+        text += f" {join} {clause}"
+    return f"({text})" if len(parts) > 1 else text
 
 
 def _group_clause(group: Any) -> str:
     """``(A=1 OR B=2)`` for one group, or an empty string when none of its rows is filled in."""
-    pieces: List[str] = []
-    joins: List[str] = []
+    parts: List[Tuple[str, str]] = []
     for row in dict_rows(dig(group, "filters")):
         field, value = field_id(row.get("field")), clean_value(row.get("value"))
-        if not field or not value:
-            continue   # a row not filled in is no filter
-        pieces.append(f"{_PREFIX}{field}={term(value)}")
-        joins.append(_join(row.get("join")))
-    return _chain(pieces, joins) if pieces else ""   # a row's join says how it connects to the next row
+        if field and value:   # a row not filled in is no filter
+            parts.append((f"{_PREFIX}{field}={term(value)}", _join(row.get("join"))))
+    return _chain(parts) if parts else ""
 
 
 def build_query(workspace_id: str, text: str = "", groups: Any = None) -> str:
-    """The full query for ``text`` and filter ``groups`` (``[{"join", "filters": [{"field", "value", "join"}]}]``) in a workspace."""
+    """The full query for ``text`` and filter ``groups`` (``[{"join", "filters": [{"field", "value", "join"}]}]``) in a workspace.
+    ``workspace_id`` must be a number (``ValueError`` otherwise): it is what keeps the query inside the workspace."""
     clauses: List[str] = []
     typed = clean_value(text)
     if typed:
         clauses.append(term(typed))
-    found: List[str] = []
-    joins: List[str] = []
-    for group in dict_rows(groups):
-        clause = _group_clause(group)
-        if clause:
-            found.append(clause)
-            joins.append(_join(group.get("join")))
-    if found:
-        clauses.append(_chain(found, joins))
+    groups_found = [(clause, _join(group.get("join"))) for group in dict_rows(groups) if (clause := _group_clause(group))]
+    if groups_found:
+        clauses.append(_chain(groups_found))
     scope = f"workspaceId={int(workspace_id)}"
     if not clauses:
         return scope
@@ -89,16 +85,12 @@ def encode(query: str) -> str:
     return quote_plus(query, safe="()")
 
 
-LATEST, WORKING = 1, 3   # the search's ``revision`` filter: 1 the latest version of each item, 3 the working version
-REVISIONS = (LATEST, WORKING)
-
-
 def search_path(workspace_id: str, text: str, groups: Any, offset: int, limit: int, revision: int = LATEST) -> str:
-    """The request path of one page of a search, oldest first (a stable order to page through).
+    """The request path of one page of a search, oldest first.
 
     ``revision`` picks the versions listed: 1 the latest version of each item (a working one included), 3 the working version
     only. Items that are not revision controlled are listed in both."""
     revision = revision if revision in REVISIONS else LATEST
     query = encode(build_query(workspace_id, text, groups))
-    return (f"/api/v3/search-results?limit={int(limit)}&offset={max(0, int(offset))}&query={query}"
-            f"&revision={revision}&sort={quote_plus('createdOn asc')}")
+    return (f"/api/v3/search-results?limit={int(limit)}&offset={max(0, whole(offset))}&query={query}"
+            f"&revision={revision}&sort={quote_plus(SORT)}")

@@ -11,23 +11,23 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Set
 
 from ..core.logging_setup import get_logger
-from ..core.shapes import as_dict, dict_rows, dig
-from .bom import WORKING_BIAS
-from .client import WORKSPACES, FmApiError, FmClient
+from ..core.shapes import as_dict, dict_rows, dig, whole
+from .bom import ACCEPT, WORKING_BIAS, split_title
+from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .item_view import cell_of, no_image, no_page
 from .linkable import BOM_VIEW_ID
 from .pages import ITEM_LINK, field_id, item_page, link_page, tenant_of
-from .where_used import split_title
 
 log = get_logger("fm.bom_view")
 
 BOM_DEPTH = 10   # levels read at once: the tree is drawn from one answer
-ACCEPT = "application/vnd.autodesk.plm.bom.bulk+json"   # asked for by name: a general Accept is sometimes answered with the tree form (item, fields ...) that has no nodes and edges
 _VIEWDEF = re.compile(r"^(.*/views/[^/]+/viewdef/[^/]+)/fields/[^/]+/?$")
 TITLE_KEYS = ("displayName", "name")
 # Columns the page draws as an icon, by the field's own id in the workspace
 ATTACHMENTS, CHANGE, PIN = "ATTACHMENTS", "WORKING_CHANGE_ORDER", "PIN"
 ICON_FIELDS = (ATTACHMENTS, CHANGE, PIN)
+IMAGE = "Image"   # the type of a picture field, which the tab does not draw
+QUANTITY = "quantity"   # the title of the column whose values are added up in the flat form
 
 
 def _fields_of(holder: Any) -> Dict[str, Dict[str, Any]]:
@@ -36,12 +36,12 @@ def _fields_of(holder: Any) -> Dict[str, Dict[str, Any]]:
     for field in dict_rows(dig(holder, "fields")):
         fid = field_id(field.get("metaData"))
         kind = dig(field, "type", "title")
-        if fid and kind != "Image":
+        if fid and kind != IMAGE:
             found[fid] = field
     return found
 
 
-def _viewdef_address(data: Dict[str, Any]) -> str:
+def _viewdef_address(data: Any) -> str:
     """The address of the BOM view definition the answer's fields belong to ("" if no field names it)."""
     for node in dict_rows(dig(data, "nodes")):
         for field in dict_rows(node.get("fields")):
@@ -53,9 +53,8 @@ def _viewdef_address(data: Dict[str, Any]) -> str:
 
 def parse_viewdef(data: Any) -> Dict[str, str]:
     """``{view definition field id: title}`` in display order, from the answer of ``.../viewdef/{id}/fields`` (a list)."""
-    entries = dict_rows(data)
     titles: Dict[str, str] = {}
-    for entry in sorted(entries, key=lambda e: int(e.get("displayOrder") or 0)):
+    for entry in sorted(dict_rows(data), key=lambda e: whole(e.get("displayOrder"))):
         fid = str(entry.get("viewDefFieldId") or "")
         title = next((str(entry[k]) for k in TITLE_KEYS if entry.get(k)), "")
         if fid and title and str(entry.get("visibility") or "ALWAYS").upper() != "NEVER":
@@ -65,8 +64,7 @@ def parse_viewdef(data: Any) -> Dict[str, str]:
 
 def parse_kinds(data: Any) -> Dict[str, str]:
     """``{view definition field id: field id}`` (``ATTACHMENTS``, ``PIN`` ...) from the answer of ``.../viewdef/{id}/fields``."""
-    entries = [e for e in dict_rows(data) if e.get("viewDefFieldId")]
-    return {str(e["viewDefFieldId"]): str(e.get("fieldId") or "") for e in entries}
+    return {str(e["viewDefFieldId"]): str(e.get("fieldId") or "") for e in dict_rows(data) if e.get("viewDefFieldId")}
 
 
 def _truthy(value: Any) -> bool:
@@ -114,12 +112,27 @@ def _line(edge: Dict[str, Any], node: Dict[str, Any], base_url: str, hidden: Set
             "cells": cells, "children": []}
 
 
+def _used_fields(lines: List[Dict[str, Any]]) -> Set[str]:
+    """The ids of the fields that any of ``lines``, or the lines below them, has a cell for."""
+    used: Set[str] = set()
+    for line in lines:
+        used.update(line["cells"])
+        used |= _used_fields(line["children"])
+    return used
+
+
+def _columns(rows: List[Dict[str, Any]], titles: Dict[str, str], kinds: Dict[str, str]) -> List[Dict[str, str]]:
+    """The columns that some line has a cell for, in the order of ``titles``. An icon column is headed by its icon, not its name."""
+    used = _used_fields(rows)
+    return [{"id": fid, "title": title, "icon": kinds[fid] if kinds.get(fid) in ICON_FIELDS else ""} for fid, title in titles.items() if fid in used]
+
+
 def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, kinds: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """``{"rows": [line], "columns": [{"id", "title"}]}``: one line, the item itself (``root``), with the BOM lines as its ``children`` in BOM order."""
-    if not (isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("edges"), list)):
+    if not (isinstance(dig(data, "nodes"), list) and isinstance(dig(data, "edges"), list)):
         raise FmApiError("Fusion Manage did not return the Bill of Materials.")
-    nodes = {str(n["item"].get("urn") or ""): n for n in dict_rows(data["nodes"]) if isinstance(n.get("item"), dict)}
-    root = nodes.get(root_urn) or {}
+    nodes = {str(dig(n, "item", "urn") or ""): n for n in dict_rows(data["nodes"]) if isinstance(n.get("item"), dict)}
+    root = nodes.get(root_urn, {})
     kinds = kinds or {}
     # the descriptor is already the item's title, so its column is not repeated
     hidden = {fid for fid, field in _fields_of(root).items() if field.get("value") == dig(root, "item", "title")}
@@ -129,7 +142,7 @@ def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, k
 
     def lines(parent: str, seen: Set[str]) -> List[Dict[str, Any]]:
         out = []
-        for edge in sorted(below.get(parent, []), key=lambda e: int(e.get("itemNumber") or 0)):
+        for edge in sorted(below.get(parent, []), key=lambda e: whole(e.get("itemNumber"))):
             child = str(edge.get("child") or "")
             node = nodes.get(child)
             if node is None:
@@ -145,32 +158,26 @@ def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, k
     if top is not None:
         top.update(root=True, children=rows)
         rows = [top]
-    used: List[str] = []
-
-    def collect(items: List[Dict[str, Any]]) -> None:
-        for line in items:
-            used.extend(fid for fid in line["cells"] if fid not in used)
-            collect(line["children"])
-
-    collect(rows)
-    order = {fid: i for i, fid in enumerate(titles)}
-    columns = [{"id": fid, "title": titles[fid], "icon": kinds.get(fid) if kinds.get(fid) in ICON_FIELDS else ""}   # an icon column is headed by its icon, not its name
-               for fid in sorted((f for f in used if f in titles), key=order.get)]
-    return {"rows": rows, "columns": columns}
+    return {"rows": rows, "columns": _columns(rows, titles, kinds)}
 
 
 def _number(text: str) -> Optional[float]:
+    """A cell's text as a number, or None when it is not one."""
     try:
         return float(str(text).replace(",", "").strip())
     except ValueError:
         return None
 
 
+def _quantity_text(value: float) -> str:
+    return str(int(value)) if value == int(value) else str(round(value, 4))
+
+
 def flatten(result: Dict[str, Any]) -> Dict[str, Any]:
     """The flat form of a parsed tree: the item as one line whose children are its leaf components (assemblies and the item itself
     are left out), each once, with the quantity of an item used in several places added up through the assemblies above it."""
     columns = result["columns"]
-    qty = next((c["id"] for c in columns if c["title"].strip().lower() == "quantity"), "")
+    qty = next((c["id"] for c in columns if c["title"].strip().lower() == QUANTITY), "")
     leaves: Dict[str, Dict[str, Any]] = {}
     totals: Dict[str, float] = {}
     exact: Dict[str, bool] = {}
@@ -192,9 +199,17 @@ def flatten(result: Dict[str, Any]) -> Dict[str, Any]:
     for key, line in leaves.items():
         if qty and exact[key]:
             value = totals[key]
-            line["cells"][qty] = {**line["cells"].get(qty, {"kind": "text"}), "value": str(int(value)) if value == int(value) else str(round(value, 4))}
+            line["cells"][qty] = {**line["cells"].get(qty, {"kind": "text"}), "value": _quantity_text(value)}
     top = {**result["rows"][0], "children": list(leaves.values())} if result["rows"] else None
     return {"rows": [top] if top else [], "columns": columns}
+
+
+def _urn_of(data: Any, item_id: str) -> str:
+    """The urn of the item ``item_id`` among the answer's nodes ("" if it is not one of them)."""
+    for node in dict_rows(dig(data, "nodes")):
+        if str(dig(node, "item", "link") or "").rstrip("/").endswith(f"/items/{item_id}"):
+            return str(dig(node, "item", "urn") or "")
+    return ""
 
 
 class BomViewService:
@@ -213,7 +228,7 @@ class BomViewService:
                 if not link:
                     continue
                 definition = as_dict(self._client.get_json(link))
-                view_id = str(definition.get("id") or link.rstrip("/").split("/")[-1])
+                view_id = str(definition.get("id") or last_segment(link))
                 found.append({"id": view_id, "name": str(definition.get("name") or view_id), "default": bool(definition.get("isDefault"))})
             return found
         except FmApiError as exc:
@@ -223,8 +238,9 @@ class BomViewService:
     def read(self, workspace_id: str, item_id: str, view_id: str = "", flat: bool = False) -> Dict[str, Any]:
         """The tree, with the workspace's ``views`` and the id of the one drawn (``view``): ``view_id`` when it is one of them, else the default."""
         views = self.views(workspace_id)
-        chosen = view_id if any(v["id"] == view_id for v in views) else next((v["id"] for v in views if v["default"]), "")
-        result = self._read(workspace_id, item_id, chosen if view_id and chosen == view_id else "")
+        requested = view_id if view_id and any(v["id"] == view_id for v in views) else ""
+        chosen = requested or next((v["id"] for v in views if v["default"]), "")
+        result = self._read(workspace_id, item_id, requested)
         if flat:   # Fusion Manage's flat list is the same tree without its assemblies; the plain request for it answers with the item alone
             result = flatten(result)
         return {**result, "views": views, "view": chosen}
@@ -236,8 +252,7 @@ class BomViewService:
         data = self._client.get_json(path, accept=ACCEPT)
         if data is None:   # 204: an item with no lines
             return {"rows": [], "columns": []}
-        root_urn = next((str(dig(n, "item", "urn") or "") for n in dict_rows(dig(data, "nodes"))
-                         if str(dig(n, "item", "link") or "").rstrip("/").endswith(f"/items/{item_id}")), "")
+        root_urn = _urn_of(data, item_id)
         address = _viewdef_address(data)
         fields = self._client.get_json(f"{address}/fields") if address else None
         titles = parse_viewdef(fields)

@@ -1,8 +1,8 @@
 import unittest
 
 from src.fm.client import UPLOAD_CHUNK_BYTES, _chunks
-from src.fm.items import ItemChoices, pick_hit, resolve_hits
-from src.fm.tabs import COUNTED, parse_counts
+from src.fm.items import ItemChoices, resolve_hits
+from src.fm.tabs import COUNTED, TabService, parse_counts
 
 TABS = {"tabs": [
     {"name": "PART_ATTACHMENTS", "totalCount": 6,
@@ -22,15 +22,15 @@ class TabCountTests(unittest.TestCase):
         counts = parse_counts(TABS)
         self.assertEqual(counts[COUNTED["PART_ATTACHMENTS"]], 4)
 
+    def test_a_tab_counts_its_total_when_the_answer_does_not_split_it(self):
+        class Client:
+            tenant = "acme"
 
-class PickHitTests(unittest.TestCase):
-    HITS = [{"id": "1", "descriptor": "PN-0007011 - Other"}, {"id": "2", "descriptor": "PN-000701 - Universal Joint"}]
+            def get_json(self, path):
+                return {"tabs": [{"name": "PART_ATTACHMENTS", "totalCount": 6}, {"name": "BOM_LIST", "totalCount": "many"}]}
 
-    def test_the_exact_item_number_wins_over_an_earlier_hit(self):
-        self.assertEqual(pick_hit(self.HITS, "PN-000701")["id"], "2")
-
-    def test_the_first_hit_is_used_when_none_matches_exactly(self):
-        self.assertEqual(pick_hit(self.HITS, "PN-9")["id"], "1")
+        counts = TabService(Client()).counts("1", "2")
+        self.assertEqual((counts["files"], counts["bom"], counts["changelog"]), (6, 0, 0))
 
 
 class ResolveHitsTests(unittest.TestCase):

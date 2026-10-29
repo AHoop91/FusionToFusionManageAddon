@@ -29,6 +29,16 @@ class PageTests(unittest.TestCase):
         self.assertEqual(field_id({"__self__": "/api/v3/workspaces/57/views/1/fields/TITLE"}), "TITLE")
         self.assertEqual(field_id(None), "")
 
+    def test_field_id_is_found_in_a_link_or_an_urn_and_a_trailing_slash_is_ignored(self):
+        self.assertEqual(field_id({"link": "/api/v3/workspaces/57/views/1/fields/COST/"}), "COST")
+        self.assertEqual(field_id({"__self__": "x", "urn": "urn:y/fields/MASS"}), "MASS")
+        self.assertEqual(field_id({"link": "/api/v3/workspaces/57/items/1"}), "")
+
+    def test_an_answer_that_is_not_an_object_has_no_tenant_and_no_page(self):
+        for item in (None, "x", [], 5):
+            with self.subTest(item=item):
+                self.assertEqual((tenant_of(item), item_page(BASE, item)), ("", ""))
+
 
 class PicklistLinkTests(unittest.TestCase):
     def pages(self, link):

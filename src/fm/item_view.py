@@ -13,7 +13,7 @@ import base64
 import html
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
@@ -31,6 +31,10 @@ HIDDEN = ("NEVER", "HIDDEN", "NONE")   # visibility values of a field that is no
 VISIBLE_ALWAYS = ("ALWAYS", "VISIBLE")
 HEADER_FIELDS = ("TYPE",)   # read for the line under the title, shown or not
 MAX_IMAGE_BYTES = 2_000_000
+LOG_CHARS = 3000   # of an answer that could not be laid out, kept in the log
+IMAGE, CHECK_BOX = "Image", "Check Box"   # the types of field that are drawn or worded differently
+COLUMN_KEYS = ("columns", "columnNames", "columnTitles")   # where a matrix layout may name its columns and rows, in the order tried
+ROW_KEYS = ("rows", "rowNames", "rowTitles")
 _TAG = re.compile(r"<[a-zA-Z][^>]*>")
 
 ImageLoader = Callable[[str], str]
@@ -38,11 +42,28 @@ PageLoader = Callable[[str], str]   # an item's API link -> its page in Fusion M
 
 
 def no_image(_link: str) -> str:
+    """An image loader for a view that does not draw pictures."""
     return ""
 
 
 def no_page(_link: str) -> str:
+    """A page finder for a view that does not link to items."""
     return ""
+
+
+def _item_links(raw: Any, pages: PageLoader) -> List[Dict[str, str]]:
+    """``[{"title", "url"}]`` when ``raw`` is a link to an item, or a list of them, each of which has a page; else ``[]``."""
+    options = raw if isinstance(raw, list) else [raw]   # a picklist that links to items: each is a link to open
+    links = [{"title": display_text(o) or last_segment(o.get("link")), "url": pages(str(o.get("link") or ""))} for o in options if isinstance(o, dict)]
+    return links if links and len(links) == len(options) and all(link["url"] for link in links) else []
+
+
+def _text_of(node: Dict[str, Any], kind: str) -> str:
+    """The text a plain field shows: a check box as Yes or No, a value with its unit of measure."""
+    text = display_text(node.get("value"))
+    if kind == CHECK_BOX and text in ("true", "false"):
+        text = "Yes" if text == "true" else "No"
+    return f"{text} {node['uom']}" if text and node.get("uom") else text
 
 
 def cell_of(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dict[str, Any]:
@@ -50,27 +71,17 @@ def cell_of(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dic
     raw = node.get("value")
     kind = dig(node, "type", "title") or ""
     cell = {"id": field_id(node), "title": str(node.get("title") or node.get("name") or field_id(node)), "kind": "text", "value": ""}
-    if kind == "Image":
-        link = str(raw.get("link") or "") if isinstance(raw, dict) else ""
-        cell.update(kind="image", value=images(link) if link else "")
-        return cell
-    options = raw if isinstance(raw, list) else [raw]   # a picklist that links to items: each is a link to open
-    links = [{"title": display_text(o) or last_segment(o.get("link")), "url": pages(str(o.get("link") or ""))} for o in options if isinstance(o, dict)]
-    if links and len(links) == len(options) and all(l["url"] for l in links):
-        cell.update(kind="links", value=links)
-        return cell
-    text = display_text(raw)
+    if kind == IMAGE:
+        link = str(dig(node, "value", "link") or "")
+        return {**cell, "kind": "image", "value": images(link) if link else ""}
+    links = _item_links(raw, pages)
+    if links:
+        return {**cell, "kind": "links", "value": links}
     if isinstance(raw, str):
         decoded = html.unescape(raw)   # a formula field's markup arrives escaped
         if _TAG.search(decoded):
-            cell.update(kind="html", value=decoded)
-            return cell
-    if kind == "Check Box" and text in ("true", "false"):
-        text = "Yes" if text == "true" else "No"
-    if text and node.get("uom"):
-        text = f"{text} {node['uom']}"
-    cell["value"] = text
-    return cell
+            return {**cell, "kind": "html", "value": decoded}
+    return {**cell, "value": _text_of(node, kind)}
 
 
 def not_shown(node: Any, hidden: Set[str]) -> bool:
@@ -78,9 +89,18 @@ def not_shown(node: Any, hidden: Set[str]) -> bool:
     if not isinstance(node, dict):
         return False
     visibility = str(node.get("visibility") or "").upper()
-    if visibility not in VISIBLE_ALWAYS and (visibility in HIDDEN or ("CREATE" in visibility and "ONLY" in visibility)):
+    if visibility not in VISIBLE_ALWAYS and (visibility in HIDDEN or ("CREATE" in visibility and "ONLY" in visibility)):   # "CREATE_ONLY" and the like
         return True
     return node.get("visible") is False or node.get("hidden") is True or field_id(node) in hidden
+
+
+def _names(layout: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
+    """The titles a matrix layout gives its columns or rows: those under the first of ``keys`` that holds any (empty if none does)."""
+    for key in keys:
+        found = as_list(layout.get(key))
+        if found:
+            return [str(f.get("title") or f.get("name") or "") if isinstance(f, dict) else str(f) for f in found]
+    return []
 
 
 def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Set[str]) -> Dict[str, Any]:
@@ -88,7 +108,7 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
 
     A row or column whose fields are all hidden is left out; a hidden field inside a shown row is blank.
     """
-    grid = [row for row in layout.get("fields") or [] if isinstance(row, list)]
+    grid = [row for row in as_list(layout.get("fields")) if isinstance(row, list)]
     if not grid:
         return {}
     width = max(len(r) for r in grid)
@@ -101,21 +121,12 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
     empty = {"kind": "text", "value": ""}
     rows = [[cells.get(field_id(grid[r][c]), empty) if c < len(grid[r]) and not gone[r][c] else empty for c in keep_cols]
             for r in keep_rows]
-    width = len(keep_cols)
-
-    def names(*keys: str) -> List[str]:
-        for key in keys:
-            found = layout.get(key)
-            if isinstance(found, list) and found:
-                return [str(f.get("title") or f.get("name") or "") if isinstance(f, dict) else str(f) for f in found]
-        return []
-
-    all_columns = names("columns", "columnNames", "columnTitles")
-    if len(all_columns) == len(gone[0]):
+    all_columns = _names(layout, COLUMN_KEYS)
+    if len(all_columns) == width:
         columns = [all_columns[c] for c in keep_cols]
     else:   # not named by the layout: the first row's field titles
-        columns = [rows[0][i].get("title", "") for i in range(width)]
-    all_labels = names("rows", "rowNames", "rowTitles")
+        columns = [rows[0][i].get("title", "") for i in range(len(keep_cols))]
+    all_labels = _names(layout, ROW_KEYS)
     labels = [all_labels[r] for r in keep_rows] if len(all_labels) == len(grid) else [""] * len(rows)
     return {"columns": columns, "labels": labels, "rows": [[{"kind": c["kind"], "value": c["value"]} for c in r] for r in rows]}
 
@@ -126,6 +137,23 @@ def _header(item: Dict[str, Any], fields: Dict[str, Dict[str, str]]) -> List[str
     lifecycle = display_text(item.get("lifecycle"))
     kind = fields.get("TYPE", {}).get("value", "")
     return [t for t in (version, lifecycle, kind) if t]
+
+
+def _cells(nodes: List[Dict[str, Any]], images: ImageLoader, pages: PageLoader) -> Dict[str, Dict[str, Any]]:
+    """The cells of the fields ``nodes`` by field id, in order; a field with no id has none."""
+    cells = (cell_of(node, images, pages) for node in nodes)
+    return {cell["id"]: cell for cell in cells if cell["id"]}
+
+
+def _section(node: Dict[str, Any], cells: Dict[str, Dict[str, Any]], layout: Dict[str, Any], hidden: Set[str]) -> Optional[Dict[str, Any]]:
+    """A section of the view from its ``cells`` and the workspace's ``layout`` of it; None when nothing in it is shown."""
+    grids = dict_rows(layout.get("matrices"))
+    matrices = [m for m in (_matrix(grid, cells, hidden) for grid in grids) if m]
+    in_matrix = {field_id(ref) for grid in grids for row in as_list(grid.get("fields")) for ref in as_list(row)}   # shown there, not again
+    fields = [cell for fid, cell in cells.items() if fid not in in_matrix]
+    if not fields and not matrices:
+        return None
+    return {"title": str(node.get("title") or ""), "fields": fields, "matrices": matrices}
 
 
 def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoader, base_url: str = "",
@@ -141,22 +169,18 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
     def pages(link: str) -> str:
         return link_page(base_url, tenant, link)
 
-    workspace = as_dict(item.get("workspace"))
     sections: List[Dict[str, Any]] = []
-    shown: Dict[str, Dict[str, str]] = {}
+    header_cells: Dict[str, Dict[str, Any]] = {}
     for node in dict_rows(item.get("sections")):
         found = dict_rows(node.get("fields"))
-        shown.update({c["id"]: c for c in (cell_of(f, images, pages) for f in found if field_id(f) in HEADER_FIELDS) if c["id"]})
-        cells = {c["id"]: c for c in (cell_of(f, images, pages) for f in found if not not_shown(f, hidden)) if c["id"]}
-        layout = layouts.get(last_segment(str(node.get("link") or node.get("__self__") or "")), {})
-        grids = dict_rows(layout.get("matrices"))
-        matrices = [m for m in (_matrix(grid, cells, hidden) for grid in grids) if m]
-        in_matrix = {field_id(ref) for grid in grids for row in as_list(grid.get("fields")) for ref in as_list(row)}
-        fields = [c for i, c in cells.items() if i not in in_matrix]
-        if fields or matrices:
-            sections.append({"title": str(node.get("title") or ""), "fields": fields, "matrices": matrices})
-    return {"title": str(item.get("title") or ""), "workspace": str(workspace.get("title") or ""),
-            "header": _header(item, shown), "url": item_page(base_url, item), "sections": sections}
+        header_cells.update(_cells([f for f in found if field_id(f) in HEADER_FIELDS], images, pages))
+        cells = _cells([f for f in found if not not_shown(f, hidden)], images, pages)
+        layout = as_dict(layouts.get(last_segment(node.get("link") or node.get("__self__"))))
+        section = _section(node, cells, layout, hidden)
+        if section:
+            sections.append(section)
+    return {"title": str(item.get("title") or ""), "workspace": str(dig(item, "workspace", "title") or ""),
+            "header": _header(item, header_cells), "url": item_page(base_url, item), "sections": sections}
 
 
 class ItemViewService:
@@ -190,7 +214,7 @@ class ItemViewService:
                 raise FmApiError(f"Fusion Manage gave no item {item_id} in workspace {workspace_id}.")
             view = build_view(data, layouts.result(), self._image, self._client.base_url, self._hidden_fields(workspace_id))
             if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
-                log.error("No sections could be built for item %s: %s", item_id, str(data)[:3000])
+                log.error("No sections could be built for item %s: %s", item_id, str(data)[:LOG_CHARS])
             view["tabs"] = tabs.result()
         view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
         return view

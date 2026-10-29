@@ -28,6 +28,24 @@ class ParseSearchTests(unittest.TestCase):
             data = {"items": [{"__self__": "/api/v3/workspaces/57/items/1", "descriptor": "A - B", "version": sent}]}
             self.assertEqual(parse_search(data, "57", "9")["items"][0]["version"], "W", sent)
 
+    def test_the_item_is_found_by_the_first_field_that_names_it(self):
+        rows = [{"link": "/api/v3/workspaces/57/items/1", "descriptor": "A-1 - One"}, {"urn": "urn:x.57.2", "title": "x", "__self__": "/items/2"},
+                {"urn": "/items/3", "itemDescriptor": "C-3 - Three"}, {"descriptor": "no id"}]
+        ids = [i["id"] for i in parse_search({"items": rows}, "57", "")["items"]]
+        self.assertEqual(ids, ["1", "2", "3"])
+
+    def test_a_row_with_no_title_is_named_by_its_id(self):
+        (item,) = parse_search({"items": [{"__self__": "/items/9"}]}, "57", "")["items"]
+        self.assertEqual((item["number"], item["name"]), ("9", "9"))
+
+    def test_the_total_may_be_called_hits_and_is_zero_when_it_is_not_a_number(self):
+        self.assertEqual(parse_search({"totalHits": 7, "items": []}, "57", "")["total"], 7)
+        self.assertEqual(parse_search({"totalCount": "lots", "items": []}, "57", "")["total"], 0)
+
+    def test_the_revision_comes_from_the_title_when_the_row_has_none(self):
+        (item,) = parse_search({"items": [{"__self__": "/items/9", "descriptor": "A-1 - One [REV:C]"}]}, "57", "")["items"]
+        self.assertEqual(item["version"], "C")
+
     def test_the_parent_item_is_left_out(self):
         data = {"totalCount": 1, "items": [{"link": "/api/v3/workspaces/57/items/14669", "descriptor": "A - B"}]}
         page = parse_search(data, "57", "14669")

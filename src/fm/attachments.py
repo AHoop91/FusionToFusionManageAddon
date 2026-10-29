@@ -7,7 +7,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.logging_setup import get_logger
-from ..core.shapes import as_dict, dict_rows, dig
+from ..core.shapes import as_dict, dict_rows, dig, whole
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 
 log = get_logger("fm.attachments")
@@ -15,27 +15,27 @@ log = get_logger("fm.attachments")
 LIST_MEDIA_TYPE = "application/vnd.autodesk.plm.attachments.bulk+json"   # the list; plain application/json is answered with a link
 
 
+def _text(value: Any) -> str:
+    return str(value or "")
+
+
 def parse_files(data: Any) -> List[Dict[str, Any]]:
     """The rows of the Files tab from an attachments answer."""
     files = []
     for row in dict_rows(dig(data, "attachments")):
-        kind = as_dict(row.get("type"))
-        created = as_dict(row.get("created"))
-        user = as_dict(created.get("user"))
-        markups = as_dict(row.get("markups"))
-        name = str(row.get("name") or "")
-        files.append({"id": str(row.get("id") or ""), "urn": str(row.get("urn") or ""), "name": name,
-                      "title": str(row.get("resourceName") or name),
-                      "version": str(row.get("version") or ""),
-                      "type": str(kind.get("fileType") or ""), "ext": str(kind.get("extension") or os.path.splitext(name)[1]),
-                      "size": int(row.get("size") or 0), "markups": int(markups.get("count") or 0),
-                      "updated": str(created.get("timeStamp") or ""), "user": str(user.get("title") or ""),
-                      "description": str(row.get("description") or "")})
+        name = _text(row.get("name"))
+        files.append({"id": _text(row.get("id")), "urn": _text(row.get("urn")), "name": name,
+                      "title": _text(row.get("resourceName") or name), "version": _text(row.get("version")),
+                      "type": _text(dig(row, "type", "fileType")),
+                      "ext": _text(dig(row, "type", "extension") or os.path.splitext(name)[1]),
+                      "size": whole(row.get("size")), "markups": whole(dig(row, "markups", "count")),
+                      "updated": _text(dig(row, "created", "timeStamp")), "user": _text(dig(row, "created", "user", "title")),
+                      "description": _text(row.get("description"))})
     return files
 
 
 class AttachmentService:
-    """Lists and downloads an item's attachments through an ``FmClient``."""
+    """Lists an item's attachments and attaches files to it through an ``FmClient``."""
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -47,7 +47,7 @@ class AttachmentService:
         data = self._client.get_json(path, accept=LIST_MEDIA_TYPE)
         if data is None:   # 204: nothing is attached
             return []
-        if not (isinstance(data, dict) and isinstance(data.get("attachments"), list)):
+        if not isinstance(dig(data, "attachments"), list):
             log.error("%s did not answer with a list of attachments; it held: %s", path,
                       sorted(data) if isinstance(data, dict) else type(data).__name__)
             raise FmApiError("Fusion Manage did not return the list of files for this item.")
@@ -62,8 +62,8 @@ class AttachmentService:
         data = self._client.get_json(f"{path}?asc=name", accept=LIST_MEDIA_TYPE)
         for row in dict_rows(dig(data, "attachments")):
             if row.get("name") == name and row.get("id"):
-                folder = as_dict(row.get("folder"))
-                return str(row["id"]), ({"id": folder["id"]} if folder.get("id") else None)
+                folder_id = dig(row, "folder", "id")
+                return str(row["id"]), ({"id": folder_id} if folder_id else None)
         return "", None
 
     def upload(self, workspace_id: str, item_id: str, name: str, content: bytes, description: str = "",
@@ -91,5 +91,3 @@ class AttachmentService:
         kind = "version" if existing_id else "new"
         log.info("Uploaded %s (%d bytes) to item %s as %s attachment %s", name, len(content), item_id, kind, attachment_id)
         return kind
-
-

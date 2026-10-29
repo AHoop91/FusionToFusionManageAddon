@@ -1,7 +1,8 @@
 import unittest
 from unittest import mock
 
-from src.fm.picklists import PicklistResolver
+from src.fm.client import FmApiError
+from src.fm.picklists import FieldFacts, PicklistResolver, parse_fields
 
 FIELDS = {"fields": [
     {"__self__": "/api/v3/workspaces/242/views/1/fields/TYPE", "picklist": "/api/v3/lookups/CUSTOM_LOOKUP_ITEM_TYPES"},
@@ -39,6 +40,43 @@ class PicklistTests(unittest.TestCase):
         self.resolver.link("TYPE", "Manufacturing")
         self.resolver.link("TYPE", "Top Level Assembly")
         self.assertEqual(self.client.get_json.call_count, 2)   # the fields, then the options
+
+
+class ParseFieldsTests(unittest.TestCase):
+    def test_what_each_field_takes_is_read_by_field_id(self):
+        data = {"fields": [{"__self__": "/f/MASS", "fieldPrecision": 2, "unitOfMeasure": "kilograms"}, {"__self__": "/f/KIND", "picklist": "/api/v3/lookups/KINDS"},
+                           {"__self__": "/f/FLAG", "fieldPrecision": True}]}
+        self.assertEqual(parse_fields(data), FieldFacts({"KIND": "KINDS"}, {"MASS": 2}, {"MASS": "kilograms"}))
+
+    def test_a_wrong_shape_says_nothing(self):
+        for data in (None, "x", {}, {"fields": "x"}, [1, "x"]):
+            with self.subTest(data=data):
+                self.assertEqual(parse_fields(data), FieldFacts({}, {}, {}))
+
+
+class FieldsUnreadableTests(unittest.TestCase):
+    def test_fields_that_cannot_be_read_are_not_remembered(self):
+        client = mock.Mock()
+        client.get_json.side_effect = [FmApiError("down", 503), {"fields": [{"__self__": "/f/W", "fieldPrecision": 1}]}]
+        resolver = PicklistResolver(client, "unreadable-workspace")
+        self.assertEqual(resolver.fit_number("W", "1.26"), "1.26")   # no limit known yet
+        self.assertEqual(resolver.fit_number("W", "1.26"), "1.3")   # asked again, and now known
+
+
+class UnitTests(unittest.TestCase):
+    def setUp(self):
+        self.client = mock.Mock()
+        self.client.get_json.return_value = {"fields": [{"__self__": "/f/LEN", "unitOfMeasure": "mm"}]}
+        self.resolver = PicklistResolver(self.client, "units-workspace")
+
+    def test_a_number_is_given_in_the_unit_the_field_is_set_to(self):
+        self.assertEqual(self.resolver.convert_unit("LEN", "2", "cm"), ("20", "mm"))
+
+    def test_a_field_with_no_unit_and_text_that_is_no_finite_number_are_left_alone(self):
+        self.assertIsNone(self.resolver.convert_unit("OTHER", "2", "cm"))
+        for text in ("abc", "nan", "inf", ""):
+            with self.subTest(text=text):
+                self.assertIsNone(self.resolver.convert_unit("LEN", text, "cm"))
 
 
 class OptionsPageTests(unittest.TestCase):

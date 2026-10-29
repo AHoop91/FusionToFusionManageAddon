@@ -26,6 +26,15 @@ class ChangeLogTests(unittest.TestCase):
         self.assertEqual(page["next"], 100)
         self.assertIsNone(parse_change_log({"totalCount": 187, "items": [ENTRY] * 87}, 100)["next"])
 
+    def test_a_change_to_or_from_zero_is_kept(self):
+        entry = {"details": [{"fieldName": "Qty", "oldValue": 0, "newValue": False}]}
+        (row,) = parse_change_log({"totalCount": 1, "items": [entry]}, 0)["rows"]
+        self.assertEqual(row["changes"], [{"field": "Qty", "old": "0", "new": "False"}])
+
+    def test_a_total_that_is_not_a_number_ends_the_paging(self):
+        page = parse_change_log({"totalCount": "many", "items": [ENTRY]}, 0)
+        self.assertEqual((page["total"], page["next"]), (0, None))
+
     def test_nothing_logged(self):
         self.assertEqual(parse_change_log(None, 0), {"rows": [], "total": 0, "next": None})
 

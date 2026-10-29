@@ -36,6 +36,14 @@ class QueryTests(unittest.TestCase):
         groups = [{"join": "AND", "filters": [row("A", "1")]}]
         self.assertEqual(build_query("57", "bag", groups), "(bag AND ITEM_DETAILS:A=1) AND workspaceId=57")
 
+    def test_a_value_of_zero_is_a_value(self):
+        groups = [{"join": "AND", "filters": [row("QTY", 0)]}]
+        self.assertEqual(build_query("57", "", groups), "(ITEM_DETAILS:QTY=0) AND workspaceId=57")
+
+    def test_a_workspace_that_is_not_a_number_is_refused(self):
+        with self.assertRaises(ValueError):
+            build_query("57 OR workspaceId=1")
+
     def test_a_value_cannot_add_operators(self):
         self.assertEqual(clean_value('x) OR workspaceId=1 ("'), "x OR workspaceId1")
         groups = [{"join": "AND", "filters": [row("A", "1) OR (workspaceId=9")]}]

@@ -12,16 +12,18 @@ from .client import WORKSPACES, FmApiError, FmClient
 PERMISSION_PREFIX = "permission.shortname."
 VIEW_ITEMS = "view_items"   # without it nothing of the workspace can be seen
 ATTACH_PERMISSIONS = (VIEW_ITEMS, "add_attachments", "edit_attachments")   # to find the record, attach a file, and give a file a new version
+REFUSED = (401, 403)   # the statuses of a request the user is not allowed to make
+
+
+def _short(name: str) -> str:
+    """``permission.shortname.add_items`` as ``add_items``; a name without the prefix is as it is."""
+    return name[len(PERMISSION_PREFIX):] if name.startswith(PERMISSION_PREFIX) else name
 
 
 def parse_granted(data: Any) -> Set[str]:
     """Short permission names (``add_items``) in the answer of the permissions request."""
-    names = set()
-    for row in dict_rows(dig(data, "permissions")):
-        name = row.get("name")
-        if isinstance(name, str):
-            names.add(name[len(PERMISSION_PREFIX):] if name.startswith(PERMISSION_PREFIX) else name)
-    return names
+    names = (row.get("name") for row in dict_rows(dig(data, "permissions")))
+    return {_short(name) for name in names if isinstance(name, str)}
 
 
 def granted(client: FmClient, workspace_id: str) -> Set[str]:
@@ -42,12 +44,11 @@ def missing(required: Iterable[str], held: Set[str]) -> List[str]:
 def denial(client: FmClient, workspace_id: str, required: Iterable[str], workspace_title: str, action: str = "publish to") -> str:
     """Why the user may not ``action`` the workspace ("" when their permissions include every one in ``required``).
     Raises ``FmApiError`` when the permissions cannot be read for any reason but being refused."""
+    refusal = f"Insufficient permissions to {action} the {workspace_title} workspace."
     try:
         lacking = missing(required, granted(client, workspace_id))
     except FmApiError as exc:
-        if exc.status in (401, 403):
-            return f"Insufficient permissions to {action} the {workspace_title} workspace."
+        if exc.status in REFUSED:
+            return refusal
         raise
-    if not lacking:
-        return ""
-    return f"Insufficient permissions to {action} the {workspace_title} workspace. Missing: " + ", ".join(title(p) for p in lacking) + "."
+    return f"{refusal} Missing: {', '.join(title(p) for p in lacking)}." if lacking else ""

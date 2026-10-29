@@ -7,7 +7,7 @@ The names are only ever Fusion Manage's own: a tab the workspace does not list i
 
 from typing import Any, Dict, Set
 
-from ..core.shapes import dict_rows, dig
+from ..core.shapes import dict_rows, dig, whole
 from .client import WORKSPACES, FmClient
 from .ttl_cache import TtlCache
 
@@ -25,23 +25,29 @@ def parse_labels(data: Any) -> Dict[str, str]:
     """``{workspaceTabName: label}`` from the workspace's tab list."""
     labels = {}
     for tab in dict_rows(data):
-        if tab.get("workspaceTabName"):
-            label = str(tab.get("name") or tab.get("key") or "")
-            if label:
-                labels[str(tab["workspaceTabName"])] = label
+        label = str(tab.get("name") or tab.get("key") or "")
+        if tab.get("workspaceTabName") and label:
+            labels[str(tab["workspaceTabName"])] = label
     return labels
 
 
 def parse_counts(data: Any) -> Dict[str, int]:
     """``{workspaceTabName: totalCount}`` from the item's tab counts, and ``{"TAB/SECTION": count}`` for each section a tab has."""
-    counts = {}
+    counts: Dict[str, int] = {}
     for tab in dict_rows(dig(data, "tabs")):
-        if tab.get("name"):
-            counts[str(tab["name"])] = int(tab.get("totalCount") or 0)
-            for section in dict_rows(tab.get("sectionCounts")):
-                if section.get("name"):
-                    counts[f"{tab['name']}/{section['name']}"] = int(section.get("totalCount") or 0)
+        if not tab.get("name"):
+            continue
+        counts[str(tab["name"])] = whole(tab.get("totalCount"))
+        for section in dict_rows(tab.get("sectionCounts")):
+            if section.get("name"):
+                counts[f"{tab['name']}/{section['name']}"] = whole(section.get("totalCount"))
     return counts
+
+
+def _count_of(counts: Dict[str, int], name: str) -> int:
+    """How many entries the tab ``name`` lists: what ``COUNTED`` says it lists when the answer has that, else its total, else none."""
+    counted = COUNTED.get(name)
+    return counts[counted] if counted in counts else counts.get(name, 0)
 
 
 class TabService:
@@ -63,9 +69,10 @@ class TabService:
     def counts(self, workspace_id: str, item_id: str) -> Dict[str, int]:
         """``{"files": count, ...}``: how many entries each tab the page shows holds now (read afresh, not kept)."""
         counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
-        return {key: counts.get(COUNTED.get(name, ""), counts.get(name, 0)) for key, name in TABS.items()}
+        return {key: _count_of(counts, name) for key, name in TABS.items()}
 
     def labels(self, workspace_id: str) -> Dict[str, str]:
+        """``{workspaceTabName: label}`` of the workspace's tabs (read once, then kept for a while). Raises ``FmApiError`` when they cannot be read."""
         key = (self._client.tenant, workspace_id)
         cached = self._labels_cache.get(key)
         if cached is not None:

@@ -7,7 +7,7 @@ the request is sent (a new item's id, a BOM line's id); ``{{tenant}}`` and ``{{v
 from typing import Any, Dict, List
 
 from ..fm.client import WORKSPACES
-from ..fm.linkable import linkable_row
+from ..fm.linkable import item_link, item_urn, linkable_row
 
 BOM_ORDER = {"remove": 0, "renumber": 1, "update": 2, "add": 3}   # a line is freed before another takes its number
 
@@ -40,8 +40,7 @@ def _line_body(workspace_id: str, parent: str, op: Dict[str, Any], url: str, **f
     """Body that changes a line, shaped as Fusion Manage's own BOM tab sends it: the line (``__self__``), its item and the changed fields.
     A body of the changed field alone was answered with a 500."""
     item = f"{{{{item:{op['number']}}}}}"
-    return {"__self__": url, "item": {"link": f"{WORKSPACES}/{workspace_id}/items/{item}",
-                                      "urn": f"urn:adsk.plm:tenant.workspace.item:{{{{tenant}}}}.{workspace_id}.{item}",
+    return {"__self__": url, "item": {"link": item_link(workspace_id, item), "urn": item_urn(workspace_id, item),
                                       "title": str(op["number"]), "deleted": False, "version": f"{{{{version:{op['number']}}}}}"},
             **fields, "children": [], "fields": []}
 

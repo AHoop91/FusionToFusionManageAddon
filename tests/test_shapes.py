@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.core.shapes import as_dict, as_list, dict_rows, dig, rows_in
+from src.core.shapes import as_dict, as_list, dict_rows, dig, rows_in, whole
 
 
 class AsDictTests(unittest.TestCase):
@@ -57,3 +57,13 @@ class DigTests(unittest.TestCase):
         for value in ({}, None, "x", [], {"a": None}, {"a": "x"}, {"a": [{"b": 1}]}, {"a": {"b": None}}):
             with self.subTest(value=value):
                 self.assertIsNone(dig(value, "a", "b"))
+
+
+class WholeTests(unittest.TestCase):
+    def test_a_number_or_numeric_text_is_a_whole_number(self):
+        self.assertEqual((whole(3), whole("12"), whole(4.9)), (3, 12, 4))
+
+    def test_anything_else_is_zero(self):
+        for value in (None, "", "abc", [], {}, "1.5"):
+            with self.subTest(value=value):
+                self.assertEqual(whole(value), 0)
