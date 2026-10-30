@@ -9,7 +9,7 @@ from src.config.models import ConnectionSettings
 from src.config.workspace_models import WorkspaceConfig
 from src.core.cancel import Cancelled
 from src.publish import panel_sections
-from src.publish.context import capture_context
+from src.config.hub_context import capture_context
 from src.publish.panel_sections import PublishSections
 
 SUMMARY = {"component_id": "R", "composition": "RELEASED", "item_number": "TOP", "part_number": "TOP", "name": "Top", "description": ""}

@@ -5,7 +5,7 @@ from unittest import mock
 
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
-from src.publish.context import capture_context
+from src.config.hub_context import capture_context
 from tests.without_fusion import fusion_modules_stubbed
 
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.

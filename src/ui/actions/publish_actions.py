@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Tuple
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger
-from ...publish.context import capture_context
+from ...config.hub_context import capture_context
 from ...publish.panel_sections import PublishSections
 from ..message_bridge import MessageBridge
 from .design_ref import model_ref

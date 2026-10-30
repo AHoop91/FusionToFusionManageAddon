@@ -5,7 +5,7 @@ from unittest import mock
 
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEMS_KIND, FieldMapping, StaticValue, WorkspaceConfig
-from src.publish.context import capture_context
+from src.config.hub_context import capture_context
 
 
 def config_of(hub="hub1", tenant="acme", workspace="242"):

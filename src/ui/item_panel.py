@@ -23,6 +23,7 @@ import adsk.fusion
 from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
+from ..config.hub_context import capture_context
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.cancel import ADDIN, Cancelled, CancelToken, TokenSlot
 from ..core.constants import ITEM_COMMAND_NAME
@@ -597,6 +598,11 @@ class ItemPanel:
         number, _problem = self.export_target()
         if not number:
             return
+        try:
+            context = capture_context(self._config)
+        except Exception:  # noqa: BLE001 - only an optimisation: the export reports the settings it cannot read
+            log.info("Component not found ahead: the settings cannot be read", exc_info=True)
+            return
         ref = self._export_ref(number)
         cancel = self._export.token
 
@@ -618,7 +624,7 @@ class ItemPanel:
             except Exception as exc:  # noqa: BLE001 - the title does without a picture
                 log.info("Thumbnail of %s not read: %s", number, exc)
                 thumbnail(number, "")
-            self._uploads.warm_component(subject.item_number, cancel)
+            self._uploads.warm_component(subject.item_number, context, cancel)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -644,6 +650,12 @@ class ItemPanel:
         if not number:
             done({"state": "unavailable", "message": "Nothing to export yet."})
             return
+        try:
+            context = capture_context(self._config)
+        except Exception as exc:  # noqa: BLE001 - shown in the Export window
+            log.info("Files for the export of %s not read: %s", number, exc)
+            done({"state": "unavailable", "message": str(exc)})
+            return
         source = self._export_state(number)
         ref = self._export_ref(number)
         extension = FORMATS[key].extension
@@ -652,7 +664,7 @@ class ItemPanel:
         def work() -> None:
             try:
                 item_number = self._numbers.resolve(ref, number, cancel).item_number
-                done(self._uploads.preview(destination, item_number, f"{safe_name(item_number)}{extension}", source, cancel))
+                done(self._uploads.preview(destination, item_number, f"{safe_name(item_number)}{extension}", source, context, cancel))
             except Cancelled:   # the window was closed: nobody waits for the answer
                 log.info("The look at the files for the export of %s was cancelled", number)
             except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches
@@ -671,11 +683,12 @@ class ItemPanel:
             if not number:
                 raise ValueError(problem)
         job = export_job(key)
-        if not self._uploads.begin_in_window(job):
+        context = self._uploads.begin_in_window(job)
+        if context is None:
             raise ValueError("A file is already being uploaded.")
         began = time.monotonic()
         pick(_active_selection())
-        self._find(number, lambda subject: self._uploads.continue_in_window(job, subject, destination), fail=self._uploads.fail_in_window,
+        self._find(number, lambda subject: self._uploads.continue_in_window(job, context, subject, destination), fail=self._uploads.fail_in_window,
                    ref=self._export_ref(number))
         log.info("Export began its search after %.2fs on Fusion's thread", time.monotonic() - began)
 

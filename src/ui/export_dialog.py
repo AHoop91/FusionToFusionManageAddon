@@ -4,14 +4,15 @@ The page (``web/export``) asks what is on offer (``export_context``), then says 
 out again at each call, since the open document can change while the window is open.
 
 A destination is off when it is not set up (the Items workspace not being configured in Preferences, or no connection), and also when the
-user may not attach files to its workspace. The permissions are read from Fusion Manage once when the window opens, on a worker thread so
-Fusion is not held up, and the page is told the result (``export_access``); until then the destinations say they are being checked.
+user may not attach files to its workspace. The permissions are read from Fusion Manage when the window opens, on a worker thread so
+Fusion is not held up, and the page is told the result (``export_access``); until then the destinations say they are being checked. They
+are read under one ``HubContext``, and again when the hub or the settings have changed since.
 """
 
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import adsk.core
 import adsk.fusion
@@ -20,6 +21,7 @@ from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
+from ..config.hub_context import HubContext, capture_context
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.cancel import Cancelled
 from ..core.logging_setup import get_logger
@@ -57,6 +59,7 @@ class ExportDialog:
         self._auth = auth
         self._panel = panel
         self._access: Dict[str, str] = {}   # for each destination, why the user may not attach to it ("" when they may); empty until read
+        self._access_stamp = ""   # the stamp of the context ``_access`` was read under: read again when it is no longer the active one
         self._checking = False
         bridge.register("export_context", self._context)
         bridge.register("export_files", self._files)
@@ -72,18 +75,21 @@ class ExportDialog:
 
     # ---- What can be attached to ----------------------------------------------------
 
-    def _setup_reasons(self) -> Dict[str, str]:
-        """For each destination, why it cannot be used until something is set up ("" when nothing is missing). Needs no call to Fusion Manage."""
+    def _setup(self) -> Tuple[Dict[str, str], Optional[HubContext]]:
+        """For each destination, why it cannot be used until something is set up ("" when nothing is missing), and the context that says so.
+        Settings that cannot be read (Shared Configuration) are the reason of both, with no context. Needs no call to Fusion Manage. UI thread."""
         try:
-            connection = " ".join(self._config.effective_settings().validate())
-        except Exception as exc:  # noqa: BLE001 - e.g. shared settings that cannot be read: the reason is shown
-            connection = str(exc)
-        return {ITEM: ITEM_NOT_CONFIGURED if self._config.items_setup_problem() else "",
-                COMPONENT: f"{connection} Complete it in Preferences." if connection else ""}
+            context = capture_context(self._config)
+        except Exception as exc:  # noqa: BLE001 - the reason is shown
+            return {key: str(exc) or type(exc).__name__ for key in (ITEM, COMPONENT)}, None
+        connection = " ".join(context.settings.validate())
+        return {ITEM: ITEM_NOT_CONFIGURED if context.items_problem else "",
+                COMPONENT: f"{connection} Complete it in Preferences." if connection else ""}, context
 
-    def _item_denial(self, client: FmClient) -> str:
+    @staticmethod
+    def _item_denial(client: FmClient, context: HubContext) -> str:
         kind = KINDS_BY_ID[ITEMS_KIND]
-        return denial(client, self._config.config.workspaces.get(ITEMS_KIND).workspace_id, ATTACH_PERMISSIONS, kind.title, "attach files to")
+        return denial(client, context.cfg.workspace_id, ATTACH_PERMISSIONS, kind.title, "attach files to")
 
     def _component_denial(self, client: FmClient) -> str:
         workspace_id = ComponentService(client).workspace_id()
@@ -104,13 +110,14 @@ class ExportDialog:
             log.exception("Could not check the permissions")
             return f"Permissions could not be checked: {exc}"
 
-    def _check_access(self, setup: Dict[str, str]) -> None:
+    def _check_access(self, setup: Dict[str, str], context: HubContext) -> None:
         """Read the user's permissions in the workspaces that are set up (a worker thread), then tell the page. A destination that is not set
         up keeps its setup reason and is not asked about."""
         reasons = dict(setup)
         try:
-            client = FmClient(self._config.effective_settings(), self._auth, self._panel.export_token)
-            checks = {key: check for key, check in ((ITEM, self._item_denial), (COMPONENT, self._component_denial)) if not setup[key]}
+            client = FmClient(context.settings, self._auth, self._panel.export_token)
+            checks = {key: check for key, check in ((ITEM, lambda c: self._item_denial(c, context)), (COMPONENT, self._component_denial))
+                      if not setup[key]}
             with ThreadPoolExecutor(max_workers=2) as pool:   # one workspace does not wait for the other
                 asked = {key: pool.submit(self._asked, check, client) for key, check in checks.items()}
                 for key, future in asked.items():
@@ -123,11 +130,11 @@ class ExportDialog:
             for key in reasons:
                 reasons[key] = reasons[key] or f"Permissions could not be checked: {exc}"
         log.info("Export permissions: %s", reasons)
-        self._tasks.post(lambda: self._checked(reasons))
+        self._tasks.post(lambda: self._checked(reasons, context.stamp))
 
-    def _checked(self, reasons: Dict[str, str]) -> None:
-        """Keep what the permission check found and tell the page. UI thread."""
-        self._access, self._checking = reasons, False
+    def _checked(self, reasons: Dict[str, str], stamp: str) -> None:
+        """Keep what the permission check found, made under the context of ``stamp``, and tell the page. UI thread."""
+        self._access, self._access_stamp, self._checking = reasons, stamp, False
         self._host.send("export_access", json.dumps({"ok": True, "result": {"reasons": reasons}, "error": None}))
 
     # ---- The page's calls -----------------------------------------------------------
@@ -137,10 +144,12 @@ class ExportDialog:
         what is exported."""
         document = _document()
         number, problem = self._panel.export_target() if document else ("", "Open a design or a drawing to export.")
-        setup = self._setup_reasons()
-        if not self._access and not self._checking:
+        setup, context = self._setup()
+        if context and self._access and self._access_stamp != context.stamp:   # read under other settings than those now active: not to be shown
+            self._access = {}
+        if context and not self._access and not self._checking:
             self._checking = True
-            threading.Thread(target=self._check_access, args=(setup,), daemon=True).start()
+            threading.Thread(target=self._check_access, args=(setup, context), daemon=True).start()
             if document and not problem:
                 self._panel.warm_export_target(self._item_found, self._thumbnail_found)   # while the user chooses, so Find item has nothing left to read
         destinations = []
@@ -188,7 +197,10 @@ class ExportDialog:
             raise ValueError("That format cannot be made from the open document. It may have changed: open the window again.")
         if destination not in (ITEM, COMPONENT):
             raise ValueError("Choose where to attach the file.")
-        reason = self._setup_reasons()[destination] or self._access.get(destination)
+        setup, context = self._setup()
+        if context and self._access and self._access_stamp != context.stamp:
+            raise ValueError("Your settings changed. Open the window again.")
+        reason = setup[destination] or self._access.get(destination)
         if reason is None:
             raise ValueError("Your permissions are still being checked. Try again in a moment.")
         if reason:

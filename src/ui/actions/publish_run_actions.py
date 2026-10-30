@@ -14,7 +14,7 @@ from ...core.logging_setup import get_logger
 from ...core.shapes import dig
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
-from ...publish.context import PublishContext, capture_context
+from ...config.hub_context import HubContext, capture_context
 from ...publish.job_queue import JobQueue
 from ...publish.job_state import JobState
 from ...publish.panel_sections import publish_denial
@@ -147,7 +147,7 @@ class PublishRuns:
         self.queue.clear_finished()
         return self.jobs()
 
-    def _begin(self, payload: Dict[str, Any], context: PublishContext, model_id: str, time: str) -> None:
+    def _begin(self, payload: Dict[str, Any], context: HubContext, model_id: str, time: str) -> None:
         """Check the permissions, then queue the publish (a worker thread), and tell the panel how it went: ``error`` or ``queued``."""
         try:
             answer = self._check_and_queue(payload, context, model_id, time)
@@ -156,7 +156,7 @@ class PublishRuns:
             answer = {"error": why(exc)}
         self._bridge.push(RESULT_ACTION, answer)
 
-    def _check_and_queue(self, payload: Dict[str, Any], context: PublishContext, model_id: str, time: str) -> Dict[str, Any]:
+    def _check_and_queue(self, payload: Dict[str, Any], context: HubContext, model_id: str, time: str) -> Dict[str, Any]:
         """Everything here reads ``context``, never the live settings: the hub may have changed since the publish was asked for."""
         try:   # the panel is blocked without these permissions; this covers a page that was open when they changed
             denied = publish_denial(FmClient(context.settings, self._auth), context.cfg)

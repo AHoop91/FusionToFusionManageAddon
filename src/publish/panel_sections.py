@@ -26,7 +26,7 @@ from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_sec
 from ..sync.bom_levels import compare_design_bom, compare_level, search_design
 from ..sync.item_compare import read_and_compare
 from ..sync.item_number import item_number_of
-from .context import PublishContext, capture_context
+from ..config.hub_context import HubContext, capture_context
 
 log = get_logger("panel_sections")
 
@@ -55,7 +55,7 @@ def entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     state: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": "",
                              "progress": 0,   # while pending: how many relations of the structure are read so far (of a structure of several pages)
                              "stage": "",     # while pending: "comparing" once the structure is read and Fusion Manage is being asked
-                             "stamp": ""}     # what it was read under (``PublishContext.stamp``): a publish made from it, or a reuse of it, needs it unchanged
+                             "stamp": ""}     # what it was read under (``HubContext.stamp``): a publish made from it, or a reuse of it, needs it unchanged
     state.update(changes)
     return state
 
@@ -71,7 +71,7 @@ class _Load:
     model_id: str
     timestamp: str
     component: Dict[str, str]
-    context: Optional[PublishContext] = None
+    context: Optional[HubContext] = None
     client: Optional[FusionGraphQlClient] = None
     fm: Optional[FmClient] = None
 
