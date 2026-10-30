@@ -96,10 +96,10 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
 class BomService:
     """Reads BOMs of a workspace through an ``FmClient``.
 
-    ``bias`` is the revision of each line that is read (``RELEASED_BIAS``, the default, or ``WORKING_BIAS``). The ids of the lines belong to
-    one revision of a parent, so a BOM read to change the working version has to be read with the working bias."""
+    ``bias`` is the revision of each line that is read (``WORKING_BIAS``, the default, or ``RELEASED_BIAS``). The ids of the lines belong to
+    one revision of a parent, so a BOM read to change or compare with the working version has to be read with the working bias."""
 
-    def __init__(self, client: FmClient, bias: str = RELEASED_BIAS) -> None:
+    def __init__(self, client: FmClient, bias: str = WORKING_BIAS) -> None:
         self._client, self._bias = client, bias
 
     def read(self, workspace_id: str, item_id: str, depth: int) -> Dict[str, List[Dict[str, str]]]:

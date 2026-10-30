@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ..fm.bom import RELEASED_BIAS, BomService
+from ..fm.bom import WORKING_BIAS, BomService
 from ..fm.client import FmClient
 from .item_number import item_number_of
 
@@ -183,7 +183,7 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str, fm_bom: Dict[str, 
 
 
 def read_and_compare_bom(rows: List[Dict[str, Any]], root_number: str, fm: FmClient, workspace_id: str, item_id: str,
-                         bias: str = RELEASED_BIAS) -> List[Dict[str, Any]]:
+                         bias: str = WORKING_BIAS) -> List[Dict[str, Any]]:
     """``compare_bom`` of the design's ``rows`` with the Fusion Manage BOM of the item ``item_id``, read deep enough for the whole tree in one
     call, with the revision of each line ``bias`` names (see ``BomService``). Runs on a worker thread; the publish panel and the item panel's
     up-to-date check both use it."""

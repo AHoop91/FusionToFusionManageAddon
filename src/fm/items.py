@@ -16,7 +16,7 @@ from ..core.logging_setup import get_logger
 from ..core.shapes import dict_rows, dig, whole
 from .client import WORKSPACES, FmClient
 from .pages import FIELD_ID, LINK_KEYS
-from .search_query import LATEST, encode
+from .search_query import WORKING, encode
 
 log = get_logger("fm.items")
 
@@ -145,10 +145,11 @@ class ItemChoices:
 class ItemService:
     """Finds and reads items of a workspace through an ``FmClient``.
 
-    ``revision`` is the version of each item that searches list: ``LATEST`` (the default) or ``WORKING`` (see ``search_query``). Whatever
-    changes an item (the publish, an export's attachment) searches for ``WORKING``: a released version cannot be changed."""
+    ``revision`` is the version of each item that searches list: ``WORKING`` (the default) or ``LATEST`` (see ``search_query``). The add-in
+    works on the working version throughout: what a publish or an export changes, and what the panels show and compare, is the one
+    version a change can reach (a released version cannot be changed)."""
 
-    def __init__(self, client: FmClient, revision: int = LATEST) -> None:
+    def __init__(self, client: FmClient, revision: int = WORKING) -> None:
         self._client, self._revision = client, revision
 
     def search(self, workspace_id: str, item_number: str) -> List[Hit]:

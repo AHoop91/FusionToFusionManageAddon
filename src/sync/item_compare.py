@@ -9,7 +9,7 @@ from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.items import ItemService, display_values
 from ..fm.picklists import PicklistResolver
-from ..fm.search_query import LATEST
+from ..fm.search_query import WORKING
 from .item_number import item_number_of
 from .property_compare import FOUND, MULTIPLE, NEW, UNCHECKED, UNKNOWN, ConvertUnit, FitNumber, compare_properties
 
@@ -45,7 +45,7 @@ def _unreadable(info: ItemInfo, exc: Exception) -> ItemLookup:
 
 
 def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, found: Optional[List[Dict[str, Any]]] = None,
-                revision: int = LATEST) -> ItemLookup:
+                revision: int = WORKING) -> ItemLookup:
     """Find the component's item in Fusion Manage. Runs on a worker thread.
 
     ``found`` is what an earlier search already found for the number (hits, each with the item's ``values`` when the search gave them):

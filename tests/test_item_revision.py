@@ -3,7 +3,7 @@ import unittest
 from src.fm.bom import RELEASED_BIAS, WORKING_BIAS, BomService
 from src.fm.item_search import ItemSearchService
 from src.fm.items import ItemService
-from src.fm.search_query import WORKING
+from src.fm.search_query import LATEST, WORKING
 
 
 class _Client:
@@ -16,14 +16,19 @@ class _Client:
 
 
 class ItemRevisionTests(unittest.TestCase):
-    def test_a_search_asks_for_the_latest_version_unless_told_otherwise(self):
+    def test_a_search_asks_for_the_working_version_unless_told_otherwise(self):
         client = _Client()
         ItemService(client).search("242", "PN-000701")
+        self.assertIn("&revision=3", client.paths[0])
+
+    def test_a_search_can_ask_for_the_latest_version(self):
+        client = _Client()
+        ItemService(client, LATEST).search("242", "PN-000701")
         self.assertIn("&revision=1", client.paths[0])
 
-    def test_a_publish_can_ask_for_the_working_version(self):
+    def test_the_items_found_ahead_of_a_publish_are_the_working_versions(self):
         client = _Client()
-        service = ItemService(client, WORKING)
+        service = ItemService(client)
         service.search("242", "PN-000701")
         service.find_many("242", ["PN-000701"])
         self.assertTrue(all("&revision=3" in path for path in client.paths))
@@ -37,13 +42,13 @@ class BomBiasTests(unittest.TestCase):
         service.read("242", "17073", 1)
         return client.paths[0]
 
-    def test_a_bom_is_read_with_the_released_revision_unless_told_otherwise(self):
+    def test_a_bom_is_read_with_the_working_revision_unless_told_otherwise(self):
         client = _Client(self.NODE)
-        self.assertIn("&revisionBias=release&rootId=17073", self.read(BomService(client)))
+        self.assertIn("&revisionBias=working&rootId=17073", self.read(BomService(client)))
 
-    def test_a_bom_for_a_publish_is_read_with_the_working_revision(self):
+    def test_a_bom_can_be_read_with_the_released_revision(self):
         client = _Client(self.NODE)
-        self.assertIn("&revisionBias=working&rootId=17073", self.read(BomService(client, WORKING_BIAS)))
+        self.assertIn("&revisionBias=release&rootId=17073", self.read(BomService(client, RELEASED_BIAS)))
 
 
 class AddItemsPickerTests(unittest.TestCase):
