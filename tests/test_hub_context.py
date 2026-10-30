@@ -1,18 +1,11 @@
 """The snapshot a publish is made under: hub, connection and Items workspace, taken together and kept apart from later changes."""
 
 import unittest
-from unittest import mock
 
 from src.config.models import ConnectionSettings
-from src.config.workspace_models import ITEMS_KIND, FieldMapping, StaticValue, WorkspaceConfig
+from src.config.workspace_models import ITEMS_KIND, FieldMapping, StaticValue
 from src.config.hub_context import capture_context
-
-
-def config_of(hub="hub1", tenant="acme", workspace="242"):
-    config = mock.Mock(hub_id=hub)
-    config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant=tenant)
-    config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id=workspace)}
-    return config
+from tests.hub_fixtures import config_of
 
 
 class ContextTests(unittest.TestCase):

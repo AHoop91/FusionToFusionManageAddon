@@ -10,6 +10,7 @@ import hashlib
 import json
 from copy import deepcopy
 from dataclasses import dataclass, replace
+from functools import cached_property
 from typing import Any, Dict, Optional
 
 from .config_service import ConfigService
@@ -35,10 +36,11 @@ class HubContext:
         title = KINDS_BY_ID[ITEMS_KIND].title
         return self.cfg.setup_problem(title) if self.cfg else f"The {title} workspace ID is not set."
 
-    @property
+    @cached_property
     def stamp(self) -> str:
         """Identifies what a read of the design, and the comparison with Fusion Manage that goes with it, depends on: the hub, the tenant and
-        the whole Items workspace configuration (its id, mappings, default values and Component field). Never empty."""
+        the whole Items workspace configuration (its id, mappings, default values and Component field). Never empty. Worked out once: a load
+        asks for it with every report of its progress."""
         basis = {"hub": self.hub_id, "tenant": self.tenant, "workspace": self.cfg.to_dict() if self.cfg else None}
         return hashlib.sha256(json.dumps(basis, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 

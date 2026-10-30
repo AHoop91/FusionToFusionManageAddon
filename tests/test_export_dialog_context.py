@@ -5,7 +5,8 @@ from unittest import mock
 
 from src.config.hub_context import capture_context
 from src.config.models import ConnectionSettings
-from src.config.workspace_models import ITEM_NUMBER_SOURCE, LEGACY_NUMBER_FIELD, FieldMapping, WorkspaceConfig
+from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
+from tests.hub_fixtures import config_of
 from tests.without_fusion import fusion_modules_stubbed
 
 with fusion_modules_stubbed():
@@ -13,17 +14,9 @@ with fusion_modules_stubbed():
     from src.ui.export_dialog import ExportDialog
 
 
-def _config(tenant="acme", workspace="242", hub="hub1"):
-    config = mock.Mock(hub_id=hub)
-    config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant=tenant)
-    config.config.workspaces.get.return_value = WorkspaceConfig(
-        workspace_id=workspace, mappings=[FieldMapping(ITEM_NUMBER_SOURCE, LEGACY_NUMBER_FIELD)])
-    return config
-
-
 class Setup(unittest.TestCase):
     def setUp(self):
-        self.config = _config()
+        self.config = config_of()
         self.panel = mock.Mock()
         self.dialog = ExportDialog(mock.Mock(), mock.Mock(), mock.Mock(), self.config, mock.Mock(), self.panel)
         for patch in (mock.patch.object(export_dialog, "_document", return_value=""),
@@ -83,7 +76,7 @@ class ReadAgainTests(Setup):
     def test_the_item_permission_is_asked_about_the_workspace_of_the_context(self):
         context = capture_context(self.config)
         with mock.patch.object(export_dialog, "denial", return_value="") as denial:
-            self.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")   # changed since
+            self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="999")}   # changed since
             self.dialog._item_denial(mock.Mock(), context)
         self.assertEqual(denial.call_args[0][1], "242")
 
