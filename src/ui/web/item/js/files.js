@@ -86,7 +86,7 @@
   function render(target, view, open, tools) {
     const mine = ++current;
     tree.loading(target, CLASS, 'Reading the files...');
-    tree.load('files_load', 'files_result', { workspace_id: view.workspace_id, item_id: view.item_id, item_urn: view.item_urn }, function (error, files) {
+    tree.load('files_load', 'files_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, item_urn: view.item_urn }, function (error, files) {
       if (mine !== current) return;
       if (error) { tree.centred(target, CLASS, 'Could not read the files: ' + error, true); return; }
       const mark = draw(target, files, open, tools);

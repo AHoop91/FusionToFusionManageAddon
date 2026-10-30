@@ -56,7 +56,7 @@
     const mine = ++current;
     tree.loading(target, CLASS, 'Reading the change log...');
     function read(offset, done) {
-      tree.load('changelog_load', 'changelog_result', { workspace_id: view.workspace_id, item_id: view.item_id, offset: offset }, function (error, page) {
+      tree.load('changelog_load', 'changelog_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, offset: offset }, function (error, page) {
         if (mine !== current) return;
         done(error, page);
       });

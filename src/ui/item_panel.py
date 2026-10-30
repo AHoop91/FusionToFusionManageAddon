@@ -23,7 +23,7 @@ import adsk.fusion
 from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
-from ..config.hub_context import capture_context
+from ..config.hub_context import HubContext, capture_context
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.cancel import ADDIN, Cancelled, CancelToken, TokenSlot
 from ..core.constants import ITEM_COMMAND_NAME
@@ -87,8 +87,10 @@ class NoAccess(Exception):
 
 def _answer(**changes: Any) -> Dict[str, Any]:
     """An answer of the page's poll: nothing found yet, with ``changes`` (``missing`` is an item number with no item, ``denied`` a message,
-    ``choose`` the items to pick from when several share the item number ``choose_number``)."""
-    return {"pending": False, "ok": False, "message": "", "view": None, "missing": "", "denied": "", "choose": [], "choose_number": "", "choose_capped": False, **changes}
+    ``choose`` the items to pick from when several share the item number ``choose_number``). ``stamp`` is that of the hub context the
+    answer was read under: the page sends it back with what it asks of what it shows (see ``ItemPanel._context_of``)."""
+    return {"pending": False, "ok": False, "message": "", "view": None, "missing": "", "denied": "", "choose": [], "choose_number": "", "choose_capped": False,
+            "stamp": "", **changes}
 
 
 def _component_of(entity: Any) -> Optional[adsk.fusion.Component]:
@@ -243,6 +245,38 @@ class ItemPanel:
         self._export = TokenSlot(lambda: ADDIN, "the Export window's look at the attached files")
         self._tokens: Dict[str, CancelToken] = {}   # request id -> the token of a look-up still running
         bridge.register("lookup_cancel", self._cancel_lookups)
+        config.on_change(lambda: tasks.post(self._settings_changed))   # from whichever thread saved them: the panel is read on Fusion's
+
+    def _context_of(self, payload: Dict[str, Any]) -> HubContext:
+        """The context a request of the page is made under: the hub and settings active now, provided they are those the item shown was read
+        under (the page sends the ``stamp`` of what it shows). Raises when they are not, or cannot be read: ids read under one tenant are
+        never paired with another's. UI thread."""
+        context = capture_context(self._config)
+        wrong = context.mismatch(payload)
+        if wrong:
+            raise ValueError(wrong)
+        return context
+
+    def _context_or_none(self) -> Optional[HubContext]:
+        """The context for work that is only an optimisation, ahead of what is asked for: None when the settings cannot be read. UI thread."""
+        try:
+            return capture_context(self._config)
+        except Exception:  # noqa: BLE001 - what is asked for reports the settings it cannot read
+            log.info("Settings not read ahead", exc_info=True)
+            return None
+
+    def _settings_changed(self) -> None:
+        """The hub or the settings changed: read the item shown again if it was read under others. UI thread."""
+        if not (self._number and self._host.visible):
+            return
+        try:
+            stamp = capture_context(self._config).stamp
+        except Exception:  # noqa: BLE001 - the read says why it cannot be done
+            stamp = ""
+        with self._lock:
+            shown = self._state["stamp"]
+        if stamp != shown:
+            self._reload()
 
     def _new_session(self) -> None:
         """Another item is shown: end what was being read for the last one."""
@@ -291,6 +325,9 @@ class ItemPanel:
     def _design_check(self, payload: Dict[str, Any], check: Callable[[ShownItem], Dict[str, Any]], result_action: str) -> Dict[str, Any]:
         """Run ``check`` (``sync.up_to_date``) of the item shown against the open design on a worker thread, as a look-up whose answer is pushed to the page. UI thread."""
         self._workspace_id(payload)   # checks the page said which item
+        context = self._lookup_context(payload, result_action)
+        if context is None:
+            return {"started": True}
         item_id = str(payload.get("item_id") or "")
         ref, number = _active_ref(), self._number
 
@@ -300,9 +337,8 @@ class ItemPanel:
             except NoItemNumber:   # no saved design is open
                 return {"state": UNAVAILABLE}
             mfg = FusionGraphQlClient(fm.cancel)
-            cfg = self._config.config.workspaces.get(ITEMS_KIND)
-            return check(ShownItem(self._numbers.reads, mfg, fm, cfg, ref_found.model_id, ref_found.time, number, item_id))
-        return self._lookup(payload, work, result_action)
+            return check(ShownItem(self._numbers.reads, mfg, fm, context.cfg, ref_found.model_id, ref_found.time, number, item_id))
+        return self._lookup(payload, work, result_action, context)
 
     @staticmethod
     def _workspace_id(payload: Dict[str, Any]) -> str:
@@ -312,9 +348,27 @@ class ItemPanel:
             raise ValueError("Which item to look up was not given.")
         return workspace_id
 
-    def _lookup(self, payload: Dict[str, Any], work: Callable[[FmClient], Any], result_action: str) -> Dict[str, Any]:
-        """Run ``work`` on a worker thread. The answer is pushed to the page as ``result_action`` when it is done; the page also asks for it
-        (by the request id it gave) every so often, in case the push is missed."""
+    def _lookup_context(self, payload: Dict[str, Any], result_action: str) -> Optional[HubContext]:
+        """The context of a look-up (``_context_of``), or None when it cannot be taken: the look-up is then answered with why. UI thread."""
+        try:
+            return self._context_of(payload)
+        except Exception as exc:  # noqa: BLE001 - the page is waiting for an answer to this look-up
+            log.warning("Look-up refused: %s", exc)
+            request = str(payload["request"])
+            state = {"pending": False, "ok": False, "message": str(exc) or type(exc).__name__, "result": None}
+            with self._lock:
+                self._lookups[request] = state
+            self._tell_page(result_action, {**state, "request": request})
+            return None
+
+    def _lookup(self, payload: Dict[str, Any], work: Callable[[FmClient], Any], result_action: str,
+                context: Optional[HubContext] = None) -> Dict[str, Any]:
+        """Run ``work`` on a worker thread, under ``context`` (that of the page's ``stamp``, taken here when not given). The answer is pushed
+        to the page as ``result_action`` when it is done; the page also asks for it (by the request id it gave) every so often, in case the
+        push is missed."""
+        context = context or self._lookup_context(payload, result_action)
+        if context is None:
+            return {"started": True}
         request = str(payload["request"])
         with self._lock:
             if len(self._lookups) > LOOKUPS_KEPT:   # the page has long read the old answers
@@ -322,7 +376,7 @@ class ItemPanel:
                     del self._lookups[key]
             self._lookups[request] = {"pending": True, "ok": False, "message": "", "result": None}
             token = self._tokens[request] = self._session.token.child(f"look-up {request}")
-        threading.Thread(target=self._run_lookup, args=(request, work, token, result_action), daemon=True).start()
+        threading.Thread(target=self._run_lookup, args=(request, work, token, result_action, context), daemon=True).start()
         return {"started": True}
 
     def _lookup_result(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -331,9 +385,9 @@ class ItemPanel:
             state = self._lookups.get(request) or {"pending": False, "ok": False, "message": "That look-up is no longer known.", "result": None}
             return {**state, "request": request}
 
-    def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken, result_action: str) -> None:
+    def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken, result_action: str, context: HubContext) -> None:
         try:
-            client = FmClient(self._config.effective_settings(), self._auth, token)
+            client = FmClient(context.settings, self._auth, token)
             state = {"pending": False, "ok": True, "message": "", "result": work(client)}
             token.check()   # cancelled just as it finished: the page has moved on
         except Cancelled:   # not a failure: the tab or the item was left, and the page no longer waits for this
@@ -385,9 +439,10 @@ class ItemPanel:
         if not self._has_number(part_number, quiet):
             return
         ref = ref or _part_ref(part_number)
+        context = self._context_or_none()
 
         def work() -> None:
-            self._warm()   # the workspace's layouts are read while the Data Model answers
+            self._warm(context)   # the workspace's layouts are read while the Data Model answers
             try:
                 subject = self._numbers.resolve(ref, part_number, cancel)
             except Cancelled:   # a newer selection replaced this one
@@ -426,13 +481,12 @@ class ItemPanel:
             self._host.show()
         self._host.send("item_changed", json.dumps({"item_tab": show}))   # an open page starts polling again; a panel just opened starts on the Item tab
 
-    def _warm(self) -> None:
-        """Read what the Items workspace shares between its items, ahead of the item (best effort: ``_read`` reports a real failure)."""
+    def _warm(self, context: Optional[HubContext]) -> None:
+        """Read what the Items workspace of ``context`` shares between its items, ahead of the item (best effort: ``_read`` reports a real failure)."""
         try:
-            cfg = self._config.config.workspaces.get(ITEMS_KIND)
-            if cfg and cfg.workspace_id and not self._config.items_setup_problem():
-                threading.Thread(target=ItemViewService(FmClient(self._config.effective_settings(), self._auth)).prepare,
-                                 args=(cfg.workspace_id,), daemon=True).start()   # on the add-in's token: what the next item reads too
+            if context is not None and context.cfg and context.cfg.workspace_id and not context.items_problem:
+                threading.Thread(target=ItemViewService(FmClient(context.settings, self._auth)).prepare,
+                                 args=(context.cfg.workspace_id,), daemon=True).start()   # on the add-in's token: what the next item reads too
         except Exception:  # noqa: BLE001 - only an optimisation
             log.debug("Could not prepare the Items workspace", exc_info=True)
 
@@ -444,7 +498,7 @@ class ItemPanel:
 
     def _choose_item(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Remember which of the items that share the number is meant (``item_id``; empty to be asked again), and read the item. UI thread."""
-        cfg = self._config.config.workspaces.get(ITEMS_KIND)
+        cfg = self._context_of(payload).cfg
         if not (self._number and cfg and cfg.workspace_id):
             raise ValueError("No item is shown.")
         self._choices.set(cfg.workspace_id, self._number, str(payload.get("item_id") or ""))
@@ -518,8 +572,9 @@ class ItemPanel:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         if not self._number:
             raise ValueError("No item is shown.")
+        context = self._context_of(payload)   # the item shown was read under the settings that are active still
         pick(_active_selection())
-        return self._uploads.from_panel(job, workspace_id, item_id, Subject(self._number, self._part))
+        return self._uploads.from_panel(job, context, workspace_id, item_id, Subject(self._number, self._part))
 
     def _upload_context(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """What the Actions menu uploads for the open document, as ``actions``: the STEP file of a design, the PDF, DWG and DXF of a
@@ -598,10 +653,8 @@ class ItemPanel:
         number, _problem = self.export_target()
         if not number:
             return
-        try:
-            context = capture_context(self._config)
-        except Exception:  # noqa: BLE001 - only an optimisation: the export reports the settings it cannot read
-            log.info("Component not found ahead: the settings cannot be read", exc_info=True)
+        context = self._context_or_none()
+        if context is None:
             return
         ref = self._export_ref(number)
         cancel = self._export.token
@@ -699,15 +752,24 @@ class ItemPanel:
             self._host.send("item_changed")
 
     def _start(self) -> None:
+        """Read the item shown, under the hub and settings active now. UI thread."""
         with self._lock:
             seq = self._state["seq"] + 1
             self._state = _answer(seq=seq, pending=True)
         token = self._item_read.replace()   # the read of the item before this one, if it is still going, is not wanted
-        threading.Thread(target=self._load, args=(seq, self._number, token), daemon=True).start()
-
-    def _load(self, seq: int, number: str, token: CancelToken) -> None:
         try:
-            state = _answer(ok=True, view=self._read(number, token))
+            context = capture_context(self._config)
+        except Exception as exc:  # noqa: BLE001 - e.g. Shared Configuration that cannot be read: the panel says so
+            log.exception("Could not read the settings for the item")
+            self._settle(seq, _answer(message=str(exc) or type(exc).__name__))
+            return
+        threading.Thread(target=self._load, args=(seq, self._number, token, context), daemon=True).start()
+
+    def _load(self, seq: int, number: str, token: CancelToken, context: HubContext) -> None:
+        try:
+            view = self._read(number, token, context)
+            view["stamp"] = context.stamp   # the page sends it with each look-up and upload for this item
+            state = _answer(ok=True, view=view)
         except Cancelled:   # a newer read (or another item, or the add-in stopping) replaced this one: it has nothing to say
             log.info("The read of item %s was cancelled", number)
             return
@@ -723,6 +785,11 @@ class ItemPanel:
         except Exception as exc:  # shown in the panel, never raised into a thread nobody watches
             log.exception("Could not read the Fusion Manage item")
             state = _answer(message=str(exc) or type(exc).__name__)
+        state["stamp"] = context.stamp
+        self._settle(seq, state)
+
+    def _settle(self, seq: int, state: Dict[str, Any]) -> None:
+        """Keep ``state`` as the answer of read number ``seq`` and tell the page (unless a newer read has replaced it)."""
         with self._lock:
             if self._state["seq"] != seq:   # a newer open replaces this one
                 return
@@ -730,12 +797,12 @@ class ItemPanel:
             answer = dict(self._state)
         self._tell_page("get_item_view", answer)
 
-    def _read(self, number: str, cancel: CancelToken) -> Dict[str, Any]:
-        problem = self._config.items_setup_problem()   # the ribbon greys the command out too; this covers the other ways in
+    def _read(self, number: str, cancel: CancelToken, context: HubContext) -> Dict[str, Any]:
+        problem = context.items_problem   # the ribbon greys the command out too; this covers the other ways in
         if problem:
             raise ValueError(f"{problem} Complete it in Preferences.")
-        cfg = self._config.config.workspaces.get(ITEMS_KIND)
-        client = FmClient(self._config.effective_settings(), self._auth, cancel)
+        cfg = context.cfg
+        client = FmClient(context.settings, self._auth, cancel)
         with ThreadPoolExecutor(max_workers=1) as pool:
             searching = pool.submit(ItemService(client).search, cfg.workspace_id, number)   # asked while the permissions are checked
             try:

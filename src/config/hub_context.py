@@ -48,7 +48,7 @@ class HubContext:
         """Why the request does not belong to this context ("" when it does): the panel names the stamp of what it read the design under."""
         if str(payload.get("stamp") or "") == self.stamp:
             return ""
-        return "The Fusion hub or its settings changed since this was read. Refresh the panel and publish again."
+        return "The Fusion hub or its settings changed since this was read. Refresh the panel and try again."
 
 
 def capture_context(config: ConfigService) -> HubContext:

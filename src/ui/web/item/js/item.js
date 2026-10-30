@@ -73,7 +73,7 @@
       button.type = 'button';
       button.appendChild(el('span', 'item-choice-name', candidate.descriptor));
       button.appendChild(el('span', 'item-choice-id', (many ? 'ID ' : 'Item ID ') + candidate.id));
-      button.addEventListener('click', function () { bridge.send('choose_item', { item_id: candidate.id }); });
+      button.addEventListener('click', function () { bridge.send('choose_item', { item_id: candidate.id, stamp: entry.stamp }); });
       row.appendChild(button);
       list.appendChild(row);
       return { row: row, text: (candidate.descriptor + ' ' + candidate.id).toLowerCase() };
@@ -162,7 +162,7 @@
     leaveReads(name);   // what this tab was still reading from the last click is not wanted
     runCheck(name, currentView);   // a tab is read again on every click, and so checked again
     const view = currentView;
-    ns.itemTree.load('tab_counts_load', 'tab_counts_result', { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, counts) {
+    ns.itemTree.load('tab_counts_load', 'tab_counts_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp }, function (error, counts) {
       if (view !== currentView) return;   // another item has been opened meanwhile
       if (error) { ns.toast.show('Could not refresh the counts: ' + error, { tone: 'error' }); return; }
       Object.keys(counts).forEach(function (key) { if (view.tabs[key]) view.tabs[key].count = counts[key]; });
@@ -392,7 +392,7 @@
       if (!currentView) return;
       following = true;
       showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
-      bridge.send(action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, request: action });
+      bridge.send(action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, stamp: currentView.stamp, request: action });
     }
     uploadTool.run = startUpload;
     uploads.forEach(function (entry) { entry.addEventListener('click', function () { startUpload(entry.dataset.action); }); });
@@ -476,7 +476,7 @@
     const check = CHECKS[name];
     if (!check) return;
     setCheck(name, { state: 'checking', text: 'Checking Fusion Manage...' });
-    ns.itemTree.load(check.start, check.result, { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, found) {
+    ns.itemTree.load(check.start, check.result, { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp }, function (error, found) {
       if (!currentView || currentView.item_id !== view.item_id) return;   // another item is shown now
       setCheck(name, error ? { state: 'error', text: 'Could not check: ' + error + ' Click for details.', message: error } : describe(check, found));
     });
@@ -586,7 +586,7 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
     $('item-check-label').addEventListener('click', openDiff);
     $('item-refresh').addEventListener('click', function () { bridge.send('refresh_item_view'); });
-    $('item-switch').addEventListener('click', function () { bridge.send('choose_item', { item_id: '' }); });   // forget the choice: the list is shown again
+    $('item-switch').addEventListener('click', function () { bridge.send('choose_item', { item_id: '', stamp: currentView ? currentView.stamp : '' }); });   // forget the choice: the list is shown again
     $('item-open').addEventListener('click', function () { if (itemUrl) bridge.send('open_url', { url: itemUrl }); });
     $('item-empty-publish').addEventListener('click', function () { bridge.send('open_publish'); });
     bridge.on('open_publish', function (r) {

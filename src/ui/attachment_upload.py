@@ -84,11 +84,10 @@ class AttachmentUpload:
 
     # ---- Starting -------------------------------------------------------------------
 
-    def from_panel(self, job: UploadJob, workspace_id: str, item_id: str, subject: Subject) -> Dict[str, Any]:
-        """Upload for the item shown. UI thread. ``started`` is False when declined or one is under way."""
+    def from_panel(self, job: UploadJob, context: HubContext, workspace_id: str, item_id: str, subject: Subject) -> Dict[str, Any]:
+        """Upload for the item shown, which was read under ``context``. UI thread. ``started`` is False when declined or one is under way."""
         if not job.confirm(self._ui, subject):
             return {"started": False}
-        context = capture_context(self._config)   # raises, shown by the page, when the settings cannot be read
         if not self._begin(job, MAKE):
             return {"started": False, "busy": True}
         self._tasks.post(lambda: self._make(job, context, workspace_id, item_id, subject))   # after this call returns, so the page is not left waiting

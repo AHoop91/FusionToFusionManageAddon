@@ -27,7 +27,7 @@
   function render(target, view) {
     const mine = ++current;
     tree.loading(target, CLASS, 'Reading the associated workflows...');
-    tree.load('workflows_load', 'workflows_result', { workspace_id: view.workspace_id, item_id: view.item_id }, function (error, rows) {
+    tree.load('workflows_load', 'workflows_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp }, function (error, rows) {
       if (mine !== current) return;
       if (error) { tree.centred(target, CLASS, 'Could not read the associated workflows: ' + error, true); return; }
       draw(target, rows);

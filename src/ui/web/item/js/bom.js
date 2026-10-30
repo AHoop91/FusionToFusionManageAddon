@@ -49,7 +49,7 @@
     const mine = ++current;
     function read(first) {
       if (!first) { tree.loading(target, CLASS, 'Reading the Bill of Materials...'); }
-      tree.load('bom_load', 'bom_result', { workspace_id: view.workspace_id, item_id: view.item_id, view_id: chosen[view.workspace_id] || '', flat: flat }, function (error, result) {
+      tree.load('bom_load', 'bom_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, view_id: chosen[view.workspace_id] || '', flat: flat }, function (error, result) {
         if (mine !== current) return;
         if (error) { tree.centred(target, CLASS, 'Could not read the Bill of Materials: ' + error, true); return; }
         draw(target, result, function (id) { if (id) chosen[view.workspace_id] = id; read(false); }, view);

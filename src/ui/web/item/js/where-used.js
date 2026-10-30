@@ -18,7 +18,7 @@
 
   /** Read one level: ``up`` is the link of an earlier answer, or empty for the item itself. */
   function load(view, up, done) {
-    tree.load('where_used_load', 'where_used_result', { workspace_id: view.workspace_id, item_id: view.item_id, up: up }, done);
+    tree.load('where_used_load', 'where_used_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, up: up }, done);
   }
 
   function titleOf(key) { return key.charAt(0) + key.slice(1).toLowerCase(); }   // QUANTITY -> Quantity

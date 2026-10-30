@@ -366,14 +366,13 @@ class ContextTests(unittest.TestCase):
         context = thread.call_args.kwargs["args"][1]
         self.assertEqual((context.hub_id, context.tenant, context.cfg.workspace_id), ("hub1", "acme", "242"))
 
-    def test_a_panel_upload_makes_under_the_context_taken_when_it_was_asked_for(self):
+    def test_a_panel_upload_makes_under_the_context_the_item_was_read_under(self):
         job = _job()
         with mock.patch.object(self.upload, "_make") as make:
-            self.upload.from_panel(job, "7", "9", self.subject)
+            self.upload.from_panel(job, CONTEXT, "7", "9", self.subject)
             self._change_hub()   # before the UI thread gets to the file
             self.tasks.run()
-        context = make.call_args.args[1]
-        self.assertEqual((context.hub_id, context.tenant, context.cfg.workspace_id), ("hub1", "acme", "242"))
+        self.assertIs(make.call_args.args[1], CONTEXT)
 
     def test_the_export_window_is_given_the_context_to_go_on_with(self):
         context = self.upload.begin_in_window(_job())
