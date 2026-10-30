@@ -52,7 +52,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
 
     def get_publish_model_key(_payload: Dict[str, Any]) -> Dict[str, Any]:
         """Cheap check of which design is open, so the panel reloads only on a change."""
-        return {"key": model_key(*open_model_ref())}
+        return {"key": model_key(*open_model_ref()), "hub": str(config.hub_id or "")}
 
     bridge.register("load_publish_section", sections.request)
     bridge.register("load_publish_section_status", sections.status)

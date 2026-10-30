@@ -10,11 +10,11 @@ from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
-from ...config.workspace_models import ITEMS_KIND, WorkspaceConfig
 from ...core.logging_setup import get_logger
 from ...core.shapes import dig
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
+from ...publish.context import PublishContext, capture_context
 from ...publish.job_queue import JobQueue
 from ...publish.job_state import JobState
 from ...publish.panel_sections import publish_denial
@@ -96,14 +96,22 @@ class PublishRuns:
 
     def start(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Ask for a publish. Answers at once whether it is being checked or why it cannot start; ``start_publish_result`` follows."""
-        cfg = self._config.config.workspaces.get(ITEMS_KIND)
-        if not cfg or not cfg.workspace_id:
+        try:   # the hub, tenant, connection and workspace are taken together, here on Fusion's thread, and used for the whole publish
+            context = capture_context(self._config)
+        except Exception as exc:  # noqa: BLE001 - the panel is waiting for an answer
+            log.exception("Could not read the settings for the publish")
+            return {"error": why(exc)}
+        if not context.cfg or not context.cfg.workspace_id:
             return {"error": "Set the Items workspace ID in Settings first."}
+        wrong = context.mismatch(payload)
+        if wrong:
+            log.warning("Publish refused: it was read under hub %r, the active hub is %r", payload.get("hub_id"), context.hub_id)
+            return {"error": wrong}
         model_id, time = self._open_model_ref()
         if not model_id:
             return {"error": "Could not find the Data Model id of the open design."}
         # The permission check asks Fusion Manage, which can take seconds: not on Fusion's thread, or Fusion freezes. The answer is pushed.
-        self._run(partial(self._begin, payload, cfg, model_id, time))
+        self._run(partial(self._begin, payload, context, model_id, time))
         return {"checking": True}
 
     def retry(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -139,27 +147,27 @@ class PublishRuns:
         self.queue.clear_finished()
         return self.jobs()
 
-    def _begin(self, payload: Dict[str, Any], cfg: WorkspaceConfig, model_id: str, time: str) -> None:
+    def _begin(self, payload: Dict[str, Any], context: PublishContext, model_id: str, time: str) -> None:
         """Check the permissions, then queue the publish (a worker thread), and tell the panel how it went: ``error`` or ``queued``."""
         try:
-            answer = self._check_and_queue(payload, cfg, model_id, time)
+            answer = self._check_and_queue(payload, context, model_id, time)
         except Exception as exc:  # noqa: BLE001 - the panel is waiting for an answer
             log.exception("Could not start the publish")
             answer = {"error": why(exc)}
         self._bridge.push(RESULT_ACTION, answer)
 
-    def _check_and_queue(self, payload: Dict[str, Any], cfg: WorkspaceConfig, model_id: str, time: str) -> Dict[str, Any]:
-        settings = self._config.effective_settings()
+    def _check_and_queue(self, payload: Dict[str, Any], context: PublishContext, model_id: str, time: str) -> Dict[str, Any]:
+        """Everything here reads ``context``, never the live settings: the hub may have changed since the publish was asked for."""
         try:   # the panel is blocked without these permissions; this covers a page that was open when they changed
-            denied = publish_denial(FmClient(settings, self._auth), cfg)
+            denied = publish_denial(FmClient(context.settings, self._auth), context.cfg)
         except FmApiError as exc:
             return {"error": f"Could not check your permissions in Fusion Manage: {exc}"}
         if denied:
             return {"error": denied}
         job = _job_of(payload)
-        fm, mfg = FmClient(settings, self._auth), FusionGraphQlClient()
+        fm, mfg = FmClient(context.settings, self._auth), FusionGraphQlClient()
         folder = PublishFolder(self._files_root, job["root_number"])   # last of the setup: it makes the folder, and its files are kept until the run ends clean or is cleared
-        run = PublishRun(folder, job, cfg, mfg, fm, model_id, time, send=True)
+        run = PublishRun(folder, job, context.cfg, mfg, fm, model_id, time, send=True)
         self._watched.touch(run.id)   # the panel opens its progress dialog on this run
         self.queue.add(run)
         log.info("Publish queued into %s: %d item(s), %d BOM operation(s)", folder.path, len(job["items"]), len(job["operations"]))

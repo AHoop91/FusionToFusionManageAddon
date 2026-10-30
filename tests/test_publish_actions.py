@@ -45,7 +45,8 @@ class RegisteredActionsTests(unittest.TestCase):
         patch = mock.patch.object(publish_actions, "PublishSections")
         self.sections = patch.start().return_value
         self.addCleanup(patch.stop)
-        register_publish_actions(self.bridge, mock.Mock(), mock.Mock(), self.ref, self.browser)
+        self.config = mock.Mock(hub_id="hub1")
+        register_publish_actions(self.bridge, self.config, mock.Mock(), self.ref, self.browser)
 
     def test_the_sections_are_given_the_open_design_reader(self):
         self.assertIs(publish_actions.PublishSections.call_args[0][2], self.ref)
@@ -58,9 +59,9 @@ class RegisteredActionsTests(unittest.TestCase):
         self.sections.request.assert_called_once_with({"name": "summary"})
 
     def test_the_model_key_is_that_of_the_open_design(self):
-        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "m1|t1"})
+        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "m1|t1", "hub": "hub1"})
         self.ref.return_value = ("", "")
-        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": ""})
+        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "", "hub": "hub1"})
 
     def test_a_link_that_may_be_opened_is_opened(self):
         reply = self.bridge.dispatch("open_url", '{"url": "https://example.com/x"}')

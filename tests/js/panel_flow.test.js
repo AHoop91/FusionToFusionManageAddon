@@ -33,7 +33,7 @@ function openPanel() {
   ns.auth = { init() {}, refresh() {}, onChange: (fn) => { panel.authChanged = fn; } };
   panel.reading = [];   // what the progress dialog was told about the read that Publish waits for
   ns.pubJobs = {
-    init() {}, start: (job) => panel.started.push(job),
+    init() {}, start: (job) => panel.started.push(job), setHub: (hub) => { panel.hub = hub; },
     reading: (step) => panel.reading.push(step.done ? 'done' : step.status), stopReading: () => panel.reading.push('stopped'),
   };
   ns.pubAddItems = { open() {} };

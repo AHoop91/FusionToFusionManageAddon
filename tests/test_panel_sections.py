@@ -5,6 +5,8 @@ import time
 import unittest
 from unittest import mock
 
+from src.config.models import ConnectionSettings
+from src.config.workspace_models import WorkspaceConfig
 from src.core.cancel import Cancelled
 from src.publish import panel_sections
 from src.publish.panel_sections import PublishSections
@@ -20,8 +22,9 @@ class Fixture:
         self.reads = []
         self.summary = SUMMARY if summary is None else summary
         self.gate = None   # a threading.Event a read waits for, so a test can look at a load that is still going
-        config = mock.Mock()
-        config.config.workspaces.get.return_value = mock.Mock(workspace_id="242", maps_physical=lambda: False)
+        self.config = config = mock.Mock(hub_id="hub1")
+        config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
+        config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="242")
         self.patches = [
             mock.patch.object(panel_sections, "FusionGraphQlClient"), mock.patch.object(panel_sections, "FmClient"),
             mock.patch.object(panel_sections, "ADDIN"),
@@ -77,6 +80,28 @@ class SectionTests(unittest.TestCase):
         done = self.fx.wait("summary")
         self.assertTrue(done["ok"])
         self.assertEqual(done["data"]["item_number"], "TOP")
+
+    def test_a_section_says_which_hub_it_was_read_under(self):
+        self.assertEqual(self.fx.ask("summary")["hub"], "hub1")
+        self.assertEqual(self.fx.wait("summary")["hub"], "hub1")
+
+    def test_a_load_reads_under_the_hub_it_was_asked_for_under_even_if_another_opens_meanwhile(self):
+        self.fx.gate = threading.Event()
+        self.fx.ask("summary")
+        self.fx.config.hub_id = "hub2"   # another hub is active before the load's thread has made its clients
+        self.fx.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="other")
+        self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")
+        self.fx.gate.set()
+        done = self.fx.wait("summary")
+        self.assertEqual(done["hub"], "hub1")
+        self.assertEqual(panel_sections.FmClient.call_args[0][0].tenant, "acme")
+        self.assertEqual(panel_sections.publish_denial.call_args[0][1].workspace_id, "242")
+
+    def test_settings_that_cannot_be_read_are_the_answer_and_nothing_is_loaded(self):
+        self.fx.config.effective_settings.side_effect = RuntimeError("share is down")
+        answer = self.fx.ask("summary")
+        self.assertEqual((answer["pending"], answer["message"]), (False, "share is down"))
+        self.assertEqual(self.fx.reads, [])
 
     def test_asking_again_for_a_loaded_section_reads_nothing_unless_forced(self):
         self.fx.ask("summary")

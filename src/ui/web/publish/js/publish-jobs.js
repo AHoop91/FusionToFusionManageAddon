@@ -551,6 +551,7 @@
     if (list || following || waiting) schedule();
   }
 
+  let hub = '';   // the hub the design on the panel was read under (see ``setHub``)
   let release = null;   // gives the Publish button back while Python checks the permissions and queues the run (it says it is starting meanwhile)
 
   function handleStart(r) {
@@ -600,7 +601,12 @@
   /** Queue a publish of ``payload`` (summary, items, operations); Python asks for the folder first. */
   function start(payload) {
     release = ui.busy($('pub-publish'), 'Starting...');
-    bridge.send('start_publish', payload);
+    bridge.send('start_publish', Object.assign({ hub_id: hub }, payload));
+  }
+
+  /** The hub the design on the panel was read under: ``start`` sends it, and Python refuses a publish when another hub is active. */
+  function setHub(hubId) {
+    hub = hubId || '';
   }
 
   function init(options) {
@@ -635,5 +641,5 @@
     }
   }
 
-  ns.pubJobs = { init: init, start: start, reading: reading, stopReading: stopReading, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
+  ns.pubJobs = { init: init, start: start, setHub: setHub, reading: reading, stopReading: stopReading, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
 })(window.MfgUi);

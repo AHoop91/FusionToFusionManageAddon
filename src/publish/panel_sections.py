@@ -26,6 +26,7 @@ from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_sec
 from ..sync.bom_levels import compare_design_bom, compare_level, search_design
 from ..sync.item_compare import read_and_compare
 from ..sync.item_number import item_number_of
+from .context import PublishContext, capture_context
 
 log = get_logger("panel_sections")
 
@@ -53,15 +54,16 @@ def entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     """A section's state: loading (``pending``), done (``ok`` with ``data``) or failed (``message``)."""
     state: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": "",
                              "progress": 0,   # while pending: how many relations of the structure are read so far (of a structure of several pages)
-                             "stage": ""}     # while pending: "comparing" once the structure is read and Fusion Manage is being asked
+                             "stage": "",     # while pending: "comparing" once the structure is read and Fusion Manage is being asked
+                             "hub": ""}       # the Fusion hub it was read under: a publish made from it must find that hub still active
     state.update(changes)
     return state
 
 
 @dataclass
 class _Load:
-    """One load of one slot: what it reads, for which design, and under which token. ``client``, ``fm`` and ``cfg`` are made by the worker
-    thread (see ``_prepare``)."""
+    """One load of one slot: what it reads, for which design, under which token, and under which hub, connection and workspace (``context``,
+    taken when it was asked for). ``client`` and ``fm`` are made by the worker thread (see ``_prepare``)."""
     slot: str
     name: str
     key: str
@@ -69,9 +71,17 @@ class _Load:
     model_id: str
     timestamp: str
     component: Dict[str, str]
+    context: Optional[PublishContext] = None
     client: Optional[FusionGraphQlClient] = None
     fm: Optional[FmClient] = None
-    cfg: Optional[WorkspaceConfig] = None
+
+    @property
+    def hub(self) -> str:
+        return self.context.hub_id if self.context else ""
+
+    @property
+    def cfg(self) -> Optional[WorkspaceConfig]:
+        return self.context.cfg if self.context else None
 
 
 class PublishSections:
@@ -100,6 +110,11 @@ class PublishSections:
         if not model_id:
             return entry(slot, message="Could not find the Data Model id of the open design.")
         key = f"{model_id}|{timestamp}"
+        try:   # the hub, connection and workspace this load reads under are taken now, on Fusion's thread: a hub opened meanwhile is not mixed in
+            context = capture_context(self._config)
+        except Exception as exc:
+            log.exception("Could not read the settings for %s", slot)
+            return entry(slot, message=str(exc) or type(exc).__name__)
         with self._lock:
             self._forget_other_designs(key)
             current = self._slots.get(slot) or entry(slot)
@@ -110,9 +125,9 @@ class PublishSections:
             if slot in self._tokens:
                 self._tokens[slot].cancel()   # what the slot was still reading for an earlier design (or the last try) is not wanted
             token = self._tokens[slot] = ADDIN.child(f"loading {slot} for the Publish panel")
-            self._slots[slot] = entry(slot, pending=True, key=key)
+            self._slots[slot] = entry(slot, pending=True, key=key, hub=context.hub_id)
             snapshot = dict(self._slots[slot])
-        threading.Thread(target=self._run, args=(_Load(slot, name, key, token, model_id, timestamp, component),), daemon=True).start()
+        threading.Thread(target=self._run, args=(_Load(slot, name, key, token, model_id, timestamp, component, context),), daemon=True).start()
         return snapshot
 
     def status(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -135,8 +150,7 @@ class PublishSections:
     def _prepare(self, load: _Load) -> None:
         """Make the clients of a load: they share its token, so replacing the load ends what they are reading."""
         load.client = FusionGraphQlClient(load.token)
-        load.fm = FmClient(self._config.effective_settings(), self._auth, load.token)
-        load.cfg = self._config.config.workspaces.get(ITEMS_KIND)
+        load.fm = FmClient(load.context.settings, self._auth, load.token)
 
     def _run(self, load: _Load) -> None:
         try:
@@ -151,7 +165,7 @@ class PublishSections:
             data = self._load(load)
             log.info("Loaded %s of %s", load.slot, load.model_id)
             log.debug("TIMING %s: %.2fs in all", load.slot, overall.lap())
-            outcome = entry(load.slot, ok=True, data=data, key=load.key)
+            outcome = entry(load.slot, ok=True, data=data, key=load.key, hub=load.hub)
         except Cancelled:   # a newer load replaced this one (another design, or a reload): the slot is left for that to fill
             log.info("Loading %s was cancelled", load.slot)
             return

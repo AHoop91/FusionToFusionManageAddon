@@ -6,6 +6,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from src.config.models import ConnectionSettings
+from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
 from src.fm.client import FmApiError
 from src.publish.sender import FolderError
 from tests.without_fusion import fusion_modules_stubbed
@@ -87,8 +89,10 @@ class Setup(unittest.TestCase):
                                 self.queued.append, self.root.name)
         self.runs.queue = mock.Mock()
         self.runs.queue.snapshots.return_value = [{"id": "r0"}]
-        self.items_kind = publish_run_actions.ITEMS_KIND
-        self.config.config.workspaces = {self.items_kind: SimpleNamespace(workspace_id="242")}
+        self.items_kind = ITEMS_KIND
+        self.config.hub_id = "hub1"
+        self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
+        self.config.config.workspaces = {self.items_kind: WorkspaceConfig(workspace_id="242")}
         self.run = SimpleNamespace(id="r1")
         self.denial = mock.Mock(return_value="")
         for patch in (mock.patch.object(publish_run_actions, "FmClient"),
@@ -106,23 +110,23 @@ class Setup(unittest.TestCase):
 class StartTests(Setup):
     def test_without_the_items_workspace_it_says_so_and_checks_nothing(self):
         self.config.config.workspaces = {}
-        self.assertEqual(self.runs.start({}), {"error": "Set the Items workspace ID in Settings first."})
-        self.config.config.workspaces = {self.items_kind: SimpleNamespace(workspace_id="")}
-        self.assertIn("error", self.runs.start({}))
+        self.assertEqual(self.runs.start({"hub_id": "hub1"}), {"error": "Set the Items workspace ID in Settings first."})
+        self.config.config.workspaces = {self.items_kind: WorkspaceConfig(workspace_id="")}
+        self.assertIn("error", self.runs.start({"hub_id": "hub1"}))
         self.assertEqual(self.queued, [])
 
     def test_without_a_saved_design_it_says_so_and_checks_nothing(self):
         self.ref.return_value = ("", "")
-        self.assertEqual(self.runs.start({}), {"error": "Could not find the Data Model id of the open design."})
+        self.assertEqual(self.runs.start({"hub_id": "hub1"}), {"error": "Could not find the Data Model id of the open design."})
         self.assertEqual(self.queued, [])
 
     def test_it_answers_at_once_that_it_is_checking_and_the_check_runs_apart(self):
-        self.assertEqual(self.runs.start({"root_number": "TOP"}), {"checking": True})
+        self.assertEqual(self.runs.start({"hub_id": "hub1", "root_number": "TOP"}), {"checking": True})
         self.denial.assert_not_called()
         self.assertEqual(len(self.queued), 1)
 
     def test_a_publish_that_may_go_ahead_is_queued_and_the_panel_told(self):
-        payload = {"summary": {"a": 1}, "items": [{"n": 1}], "operations": [], "root_number": "TOP"}
+        payload = {"hub_id": "hub1", "summary": {"a": 1}, "items": [{"n": 1}], "operations": [], "root_number": "TOP"}
         self.runs.start(payload)
         self.finish_checks()
         self.runs.queue.add.assert_called_once_with(self.run)
@@ -136,7 +140,7 @@ class StartTests(Setup):
 
     def test_a_denied_publish_is_told_and_leaves_no_folder(self):
         self.denial.return_value = "You may not publish."
-        self.runs.start({"root_number": "TOP"})
+        self.runs.start({"hub_id": "hub1", "root_number": "TOP"})
         self.finish_checks()
         self.bridge.push.assert_called_once_with("start_publish_result", {"error": "You may not publish."})
         self.runs.queue.add.assert_not_called()
@@ -144,13 +148,13 @@ class StartTests(Setup):
 
     def test_permissions_that_could_not_be_checked_are_told_with_why(self):
         self.denial.side_effect = FmApiError("down", 503)
-        self.runs.start({})
+        self.runs.start({"hub_id": "hub1"})
         self.finish_checks()
         self.assertEqual(self.bridge.push.call_args[0][1], {"error": "Could not check your permissions in Fusion Manage: down"})
 
     def test_a_failure_before_the_folder_is_made_leaves_no_folder(self):
         publish_run_actions.FusionGraphQlClient.side_effect = RuntimeError("no Data Model")
-        self.runs.start({"root_number": "TOP"})
+        self.runs.start({"hub_id": "hub1", "root_number": "TOP"})
         self.finish_checks()
         self.assertEqual(self.bridge.push.call_args[0][1], {"error": "no Data Model"})
         self.assertEqual(os.listdir(self.root.name), [])
@@ -158,9 +162,25 @@ class StartTests(Setup):
 
     def test_a_failure_is_told_by_its_kind_when_it_has_no_message(self):
         self.config.effective_settings.side_effect = RuntimeError()
-        self.runs.start({})
+        self.assertEqual(self.runs.start({"hub_id": "hub1"}), {"error": "RuntimeError"})
+        self.assertEqual(self.queued, [])
+
+    def test_a_publish_read_under_another_hub_is_refused_and_checks_nothing(self):
+        for payload in ({"hub_id": "other"}, {}):
+            answer = self.runs.start(payload)
+            self.assertIn("hub changed", answer["error"])
+        self.assertEqual(self.queued, [])
+
+    def test_the_settings_are_taken_when_the_publish_is_asked_for_not_when_its_check_runs(self):
+        self.runs.start({"hub_id": "hub1", "root_number": "TOP"})
+        self.config.hub_id = "hub2"   # another hub opens, and its settings are the live ones, before the check gets to run
+        self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="other")
+        self.config.config.workspaces = {self.items_kind: WorkspaceConfig(workspace_id="999")}
         self.finish_checks()
-        self.assertEqual(self.bridge.push.call_args[0][1], {"error": "RuntimeError"})
+        clients = [call[0][0] for call in publish_run_actions.FmClient.call_args_list]
+        self.assertEqual([c.tenant for c in clients], ["acme", "acme"])
+        self.assertEqual(self.denial.call_args[0][1].workspace_id, "242")
+        self.assertEqual(publish_run_actions.PublishRun.call_args[0][2].workspace_id, "242")
 
 
 class RetryTests(Setup):
