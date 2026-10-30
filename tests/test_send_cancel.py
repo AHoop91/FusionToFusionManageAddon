@@ -64,7 +64,47 @@ class NoAnswerTests(unittest.TestCase):
     def test_a_create_that_was_refused_is_not_in_doubt(self):
         with self.assertRaises(FmApiError):
             Dispatcher(self.path, Cutting(answers={("POST", "/api/v3/workspaces/57/items"): FmApiError("refused", 400)}), "57").send_item("A", create("A"))
-        self.assertFalse(os.path.exists(os.path.join(self.path, SEND_LOG)))
+        self.assertEqual(logged(self.path), {})   # the intent logged before sending was taken back
+
+    def test_a_create_is_logged_as_in_doubt_before_it_is_sent(self):
+        seen = []
+
+        class Watching(FakeFm):
+            def send_json(inner, method, path, body=None):
+                seen.append(logged(self.path))
+                return super().send_json(method, path, body)
+
+        Dispatcher(self.path, Watching(), "57").send_item("A", create("A"))
+        self.assertEqual(seen, [{"item:A": {"in_doubt": True}}])
+        self.assertNotIn("in_doubt", logged(self.path)["item:A"])
+
+    def test_a_create_cut_short_by_a_crash_is_looked_for_before_it_is_sent_again(self):
+        class Crash(BaseException):
+            """Fusion ends: nothing in the add-in gets to log what came of the request."""
+
+        class Dying(FakeFm):
+            def send_json(self, method, path, body=None):
+                raise Crash()
+
+        with self.assertRaises(Crash):
+            Dispatcher(self.path, Dying(), "57").send_item("A", create("A"))
+        self.assertEqual(logged(self.path), {"item:A": {"in_doubt": True}})
+        fm = Cutting()
+        again = Dispatcher(self.path, fm, "57")
+        again._search.search = hits("77")   # the server had made it
+        self.assertIn("Already created", again.send_item("A", create("A")))
+        self.assertEqual(fm.sent, [])
+        self.assertEqual(logged(self.path), {"item:A": {"id": "77"}})
+
+    def test_a_crashed_create_the_server_never_made_is_sent_again(self):
+        Dispatcher(self.path, Cutting(cut=["/items"]), "57")   # a fresh dispatcher on a folder holding an intent
+        with open(os.path.join(self.path, SEND_LOG), "w", encoding="utf-8") as handle:
+            json.dump({"item:A": {"in_doubt": True}}, handle)
+        fm = Cutting()
+        again = Dispatcher(self.path, fm, "57")
+        again._search.search = hits()
+        again.send_item("A", create("A"))
+        self.assertEqual(len(fm.sent), 1)
 
     def test_a_bom_request_that_got_no_answer_is_in_doubt_and_a_removal_that_is_gone_is_not_an_error_then(self):
         remove = {"method": "DELETE", "url": BOM + "/9", "body": None}

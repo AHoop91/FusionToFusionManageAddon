@@ -76,6 +76,20 @@ class SendLog:
         log.warning("%s %s: it may or may not have been done", key, why)
         self.accept(key, dict(IN_DOUBT))
 
+    def intend(self, key: str) -> None:
+        """Log on disk, before the request under ``key`` is sent, that it is about to be: a crash after the server made something but before
+        ``accept`` leaves this, which is read as in doubt, so a resend finds out whether it was done before sending it again."""
+        self.accept(key, dict(IN_DOUBT))
+
+    def forget(self, key: str) -> None:
+        """Take back what ``intend`` logged, for a request that was refused (so it was not done). If the log cannot be written the entry stays
+        on disk as in doubt, which only costs the next send a look in Fusion Manage."""
+        self._entries.pop(key, None)
+        try:
+            self._write()
+        except LogWriteError as exc:
+            log.warning("%s was refused but the log still holds it as in doubt: %s", key, exc)
+
     def _write(self) -> None:
         """Write the entries to the log file, whole, so a crash leaves the old log or the new one and never half of one. A log that cannot be
         written is raised as ``LogWriteError``: a request accepted since the last write would be sent again by the next send."""

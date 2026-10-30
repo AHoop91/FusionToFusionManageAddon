@@ -88,11 +88,12 @@ class DispatcherParallelTests(unittest.TestCase):
         while fm.under_way == 0:
             time.sleep(0.005)
         dispatcher.send_item("B", create("B"))   # goes through while A is still being answered
-        self.assertIn("item:B", logged(self.path))
-        self.assertNotIn("item:A", logged(self.path))
+        self.assertNotIn("in_doubt", logged(self.path)["item:B"])
+        self.assertEqual(logged(self.path)["item:A"], {"in_doubt": True})   # still being answered: logged as about to be sent, not as done
         hold.set()
         slow.join()
         self.assertEqual(sorted(logged(self.path)), ["item:A", "item:B"])
+        self.assertNotIn("in_doubt", logged(self.path)["item:A"])
 
     def test_an_item_that_is_refused_does_not_stop_the_ones_sent_with_it(self):
         fm = Slow(refuse="?bad")

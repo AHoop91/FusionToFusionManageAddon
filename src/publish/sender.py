@@ -171,6 +171,10 @@ class Dispatcher:
                     self.learn(number, existing)
                     self._sent.accept(key, {"id": existing})
                 return "Already created: found in Fusion Manage after a cancelled send."
+        intended = method == "POST" and not doubtful   # an entry of its own is logged first: a crash while the create is under way leaves it in doubt
+        if intended:
+            with self._lock:
+                self._sent.intend(key)
         log.debug("Sending item %s: %s %s", number, method, request["url"])
         try:   # outside the lock, so the items go out at the same time
             with self._slots:
@@ -186,6 +190,8 @@ class Dispatcher:
             with self._lock:
                 if isinstance(exc, FmApiError) and exc.status == NO_RESPONSE:   # sent, perhaps, and done, perhaps: a resend finds out first
                     self._sent.doubt(key, "got no answer")
+                elif intended:   # refused: not done, so nothing to find out
+                    self._sent.forget(key)
                 if method == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
                     self._failed.add(number.casefold())
             raise
