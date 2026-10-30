@@ -66,6 +66,32 @@ class NoAnswerTests(unittest.TestCase):
             Dispatcher(self.path, Cutting(answers={("POST", "/api/v3/workspaces/57/items"): FmApiError("refused", 400)}), "57").send_item("A", create("A"))
         self.assertEqual(logged(self.path), {})   # the intent logged before sending was taken back
 
+    def test_a_create_refused_for_good_takes_its_intent_back_whatever_the_client_error(self):
+        for status in (400, 401, 403, 404, 409, 422, 429):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as path:
+                with self.assertRaises(FmApiError):
+                    Dispatcher(path, Cutting(answers={("POST", "/api/v3/workspaces/57/items"): FmApiError("refused", status)}), "57").send_item("A", create("A"))
+                self.assertEqual(logged(path), {})
+
+    def test_a_create_that_got_a_server_or_gateway_error_keeps_its_intent_so_a_resend_looks_for_the_item(self):
+        for status in (500, 502, 503, 504):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as path:
+                error = FmApiError("Fusion Manage returned %d" % status, status)
+                with self.assertRaises(FmApiError):
+                    Dispatcher(path, Cutting(answers={("POST", "/api/v3/workspaces/57/items"): error}), "57").send_item("A", create("A"))
+                self.assertEqual(logged(path), {"item:A": {"in_doubt": True}})
+                fm = Cutting()
+                again = Dispatcher(path, fm, "57")
+                again._search.search = hits("77")   # the server had made it before it failed
+                self.assertIn("Already created", again.send_item("A", create("A")))
+                self.assertEqual(fm.sent, [])
+
+    def test_a_bom_request_that_got_a_server_error_is_in_doubt(self):
+        add = {"method": "POST", "url": BOM, "body": {}}
+        with self.assertRaises(FmApiError):
+            Dispatcher(self.path, Cutting(answers={("POST", BOM): FmApiError("bad gateway", 502)}), "57").send_bom("A", [add])
+        self.assertEqual(logged(self.path), {"bom:A:0": {"in_doubt": True}})
+
     def test_a_create_is_logged_as_in_doubt_before_it_is_sent(self):
         seen = []
 

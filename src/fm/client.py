@@ -48,6 +48,12 @@ class FmApiError(Exception):
         super().__init__(message)
         self.status = status   # HTTP status, or ``NO_RESPONSE`` when there was none
 
+    @property
+    def outcome_unknown(self) -> bool:
+        """Whether a write that failed this way may still have been done: it got no answer, or a server or gateway error (500, 502, 504 ...)
+        that can come after the server made the change. Any other refusal (400, 403, 404, 409 ...) is definitive: nothing was done."""
+        return self.status == NO_RESPONSE or self.status >= 500
+
 
 def _clip(data: bytes) -> str:
     """The start of a request or answer, for a verbose log."""

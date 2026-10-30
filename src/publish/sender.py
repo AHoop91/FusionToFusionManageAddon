@@ -25,7 +25,7 @@ from ..auth.errors import AuthError
 from ..core.cancel import Cancelled
 from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict, as_list
-from ..fm.client import NO_RESPONSE, FmApiError, FmClient, SendResult
+from ..fm.client import FmApiError, FmClient, SendResult
 from ..fm.items import ItemService
 from ..fm.search_query import WORKING
 from .job_state import JobState
@@ -188,9 +188,9 @@ class Dispatcher:
             if method == "PATCH" and isinstance(exc, FmApiError) and exc.status == 400:
                 self._diagnose(request["url"])
             with self._lock:
-                if isinstance(exc, FmApiError) and exc.status == NO_RESPONSE:   # sent, perhaps, and done, perhaps: a resend finds out first
-                    self._sent.doubt(key, "got no answer")
-                elif intended:   # refused: not done, so nothing to find out
+                if isinstance(exc, FmApiError) and exc.outcome_unknown:   # sent, perhaps, and done, perhaps: a resend finds out first
+                    self._sent.doubt(key, "got no answer or a server error")
+                elif intended:   # refused for good: not done, so nothing to find out
                     self._sent.forget(key)
                 if method == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
                     self._failed.add(number.casefold())
@@ -277,9 +277,9 @@ class Dispatcher:
                 elif doubtful and final["method"] == "DELETE" and exc.status == 404:
                     log.info("BOM line already gone, nothing to remove: %s", final["url"])   # the cancelled send removed it
                 else:
-                    if exc.status == NO_RESPONSE:   # a resend finds out whether it was done
+                    if exc.outcome_unknown:   # a resend finds out whether it was done
                         with self._lock:
-                            self._sent.doubt(key, "got no answer")
+                            self._sent.doubt(key, "got no answer or a server error")
                     raise
         except (FmApiError, AuthError, Unresolved) as exc:
             failed.set()
