@@ -21,6 +21,7 @@ from ctypes import wintypes
 from typing import Any, Dict, Optional
 
 from ..core.constants import ADDIN_NAME
+from ..core.paths import data_dir
 
 _KEYCHAIN_SERVICE = f"{ADDIN_NAME}.tokens"
 
@@ -56,8 +57,7 @@ class _DpapiBackend:
     """One DPAPI-encrypted file per client id under the user profile."""
 
     def __init__(self) -> None:
-        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-        self._dir = os.path.join(base, ADDIN_NAME)
+        self._dir = data_dir()   # raises when %LOCALAPPDATA% is not usable: the tokens are never kept anywhere else
 
     def _file(self, client_id: str) -> str:
         os.makedirs(self._dir, exist_ok=True)

@@ -94,7 +94,7 @@ For support, you can turn on verbose logging by setting the environment variable
 ## Limitations
 
 - **One workspace.** Only the **Items** workspace is supported. BOMs are those of items; other workspaces are not yet handled.
-- **Shared Configuration** reads a file from a path, not a web address. The path must be reachable from each machine (on a Mac, a mounted share).
+- **Shared Configuration** reads a file from a path, not a web address. The path must be reachable from each machine (on a Mac, a mounted share). Give it as a full path, such as `C:\Share\config.json` or `\\server\share\config.json`: `~` and `%VARIABLES%` are not expanded.
 - **Matching is by item number only**, taken from the component's Item Number. Components with no item number cannot be published or opened.
 - **A drawing is not published.** Publishing starts from a design. A drawing can only have its PDF attached to the item of its design's top-level component.
 - **STEP uploads one component at a time**, and the selection decides which. Large assemblies can take a while to find and export.

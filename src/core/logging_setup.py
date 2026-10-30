@@ -12,10 +12,11 @@ import os
 import re
 
 from .constants import ADDIN_NAME
+from .paths import DataDirError, inside_temp, log_dir, temp_dir
 
 _CONFIGURED = False
 
-LOG_DIR_ENV = "MFGTOFM_LOG_DIR"   # puts the logs in this folder instead of the user profile (the tests use it)
+LOG_DIR_ENV = "MFGTOFM_LOG_DIR"   # puts the logs in this folder of the temporary folder instead of the user profile (the tests use it)
 DEBUG_ENV = "MFGTOFM_DEBUG"
 DEBUG_FLAG_FILE = "debug.flag"   # an empty file of this name in the log directory switches verbose logging on
 
@@ -59,9 +60,14 @@ class RedactingFormatter(logging.Formatter):
 
 
 def log_directory() -> str:
-    """Return (and create) the log directory: ``MFGTOFM_LOG_DIR`` when set, else the per-user one."""
-    path = os.environ.get(LOG_DIR_ENV) or os.path.join(
-        os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/Library/Logs"), ADDIN_NAME, "logs")
+    """Return (and create) the log directory: ``MFGTOFM_LOG_DIR`` when it is a folder in the system's temporary folder, else the per-user one
+    (the add-in's own folder in the temporary folder when the user's is not usable)."""
+    path = os.environ.get(LOG_DIR_ENV, "")
+    if not inside_temp(path):   # the variable is for the tests: it cannot send the logs anywhere else
+        try:
+            path = log_dir()
+        except DataDirError:
+            path = os.path.join(temp_dir(), "logs")
     os.makedirs(path, exist_ok=True)
     return path
 

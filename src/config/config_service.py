@@ -16,8 +16,8 @@ import time
 from dataclasses import dataclass, replace
 from typing import Callable, Dict, List, Optional
 
-from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
+from ..core.paths import data_dir
 from .config_envelope import ConfigTransferError
 from .export_models import ExportSettings
 from .hub import tenant_code
@@ -54,9 +54,8 @@ class SharedStatus:
 
 
 def config_path() -> str:
-    """Per-user config file location."""
-    base = os.environ.get("APPDATA") or os.path.expanduser("~/Library/Application Support")
-    folder = os.path.join(base, ADDIN_NAME)
+    """Per-user config file location. Raises ``DataDirError`` when ``%APPDATA%`` is not usable: the settings are never kept anywhere else."""
+    folder = data_dir(roaming=True)
     os.makedirs(folder, exist_ok=True)
     return os.path.join(folder, "config.json")
 

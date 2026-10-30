@@ -16,8 +16,8 @@ import adsk.core
 import adsk.fusion
 
 from ..core.cancel import CancelToken
-from ..core.constants import ADDIN_NAME
 from ..core.logging_setup import get_logger
+from ..core.paths import DataDirError, data_dir, temp_dir
 from ..core.shapes import as_dict, dig
 from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
@@ -140,8 +140,11 @@ class _Remembered:
 
 
 def _remembered_path() -> str:
-    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/Library/Application Support")
-    return os.path.join(base, ADDIN_NAME, "item_numbers.json")
+    try:
+        folder = data_dir()
+    except DataDirError:   # what is remembered is only a shortcut: the add-in's folder in the temporary folder will do
+        folder = temp_dir()
+    return os.path.join(folder, "item_numbers.json")
 
 
 class ItemNumbers:

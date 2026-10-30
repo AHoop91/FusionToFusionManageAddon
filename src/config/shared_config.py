@@ -13,6 +13,7 @@ from .config_envelope import ConfigTransferError, read_envelope
 from .models import AppConfig
 
 NO_SOURCE = "No shared configuration file is set."
+NOT_ABSOLUTE = "The shared configuration file must be given as a full path, such as C:\\Share\\config.json or \\\\server\\share\\config.json."
 
 
 def read_shared(source: str) -> AppConfig:
@@ -20,6 +21,8 @@ def read_shared(source: str) -> AppConfig:
     source = clean_source(source)
     if not source:
         raise ConfigTransferError(NO_SOURCE)
+    if not os.path.isabs(source):   # a relative path would be read from wherever Fusion happens to be running
+        raise ConfigTransferError(NOT_ABSOLUTE)
     shared = AppConfig.from_dict(read_envelope(source)["config"])
     # The tenant may be left out, as for a saved local setup: it is found on the first sign-in.
     problems = shared.local.validate(require_tenant=False) + shared.workspaces.validate() + shared.exports.validate()
@@ -29,8 +32,9 @@ def read_shared(source: str) -> AppConfig:
 
 
 def clean_source(source: str) -> str:
-    """The path as typed, without the quotes Windows adds when copying a path, and with ~ and %VARIABLES% expanded."""
-    return os.path.expandvars(os.path.expanduser(source.strip().strip('"')))
+    """The path as typed, without the quotes Windows adds when copying a path. Nothing is expanded: ``~`` and ``%VARIABLES%`` are not read, so
+    the file read is the one the user can see in the box, whatever Fusion's environment holds."""
+    return source.strip().strip('"')
 
 
 def write_cache(path: str, source: str, shared: AppConfig) -> None:
