@@ -17,10 +17,11 @@ from src.ui import item_numbers
 @mock.patch.object(paths.sys, "platform", "win32")
 class DataDirTests(unittest.TestCase):
     def test_local_and_roaming_come_from_their_own_variables(self):
-        with mock.patch.dict(os.environ, {"LOCALAPPDATA": r"C:\L", "APPDATA": r"C:\R"}):
-            self.assertEqual(paths.data_dir(), os.path.join(r"C:\L", "MfgToFm"))
-            self.assertEqual(paths.data_dir(roaming=True), os.path.join(r"C:\R", "MfgToFm"))
-            self.assertEqual(paths.log_dir(), os.path.join(r"C:\L", "MfgToFm", "logs"))
+        local, roaming = os.path.join(tempfile.gettempdir(), "L"), os.path.join(tempfile.gettempdir(), "R")   # full paths on whichever system the test runs
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": local, "APPDATA": roaming}):
+            self.assertEqual(paths.data_dir(), os.path.join(local, "MfgToFm"))
+            self.assertEqual(paths.data_dir(roaming=True), os.path.join(roaming, "MfgToFm"))
+            self.assertEqual(paths.log_dir(), os.path.join(local, "MfgToFm", "logs"))
 
     def test_a_missing_or_relative_variable_is_an_error_not_the_home_folder(self):
         for env in ({}, {"LOCALAPPDATA": "", "APPDATA": ""}, {"LOCALAPPDATA": "  ", "APPDATA": "  "},
