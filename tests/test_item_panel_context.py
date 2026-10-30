@@ -4,10 +4,9 @@ import types
 import unittest
 from unittest import mock
 
-from src.config.hub_context import capture_context
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEMS_KIND
-from tests.hub_fixtures import config_of, items_workspace
+from tests.hub_fixtures import auth_of, capture, config_of, items_workspace
 from tests.without_fusion import fusion_modules_stubbed
 
 with fusion_modules_stubbed():
@@ -24,13 +23,13 @@ class Setup(unittest.TestCase):
         patch = mock.patch.object(item_panel, "_SelectionHandler")   # a subclass of Fusion's handler, which is not here
         patch.start()
         self.addCleanup(patch.stop)
-        self.panel = ItemPanel(mock.MagicMock(), self.tasks, self.host, mock.Mock(), self.config, mock.Mock(), mock.Mock(), mock.Mock())
+        self.panel = ItemPanel(mock.MagicMock(), self.tasks, self.host, mock.Mock(), self.config, auth_of(), mock.Mock(), mock.Mock())
         self.started = []   # the worker threads: run by the test when it wants them to
         patch = mock.patch("threading.Thread", side_effect=lambda target, args=(), daemon=None: types.SimpleNamespace(
             start=lambda: self.started.append(lambda: target(*args))))
         patch.start()
         self.addCleanup(patch.stop)
-        self.stamp = capture_context(self.config).stamp
+        self.stamp = capture(self.config).stamp
 
     def run_threads(self):
         while self.started:
@@ -86,9 +85,9 @@ class RequestTests(Setup):
 
     def test_a_request_made_before_the_hub_or_workspace_changed_is_refused(self):
         self.change_settings()
-        with self.assertRaisesRegex(ValueError, "settings changed"):
+        with self.assertRaisesRegex(ValueError, "changed since this was read"):
             self.panel._context_of(self.ask())
-        with self.assertRaisesRegex(ValueError, "settings changed"):
+        with self.assertRaisesRegex(ValueError, "changed since this was read"):
             self.panel._context_of({})
 
     def test_a_refused_look_up_is_answered_with_why_and_reads_nothing(self):
@@ -99,7 +98,7 @@ class RequestTests(Setup):
         service.assert_not_called()
         answer = self.panel._lookup_result({"request": "r1"})
         self.assertFalse(answer["ok"] or answer["pending"])
-        self.assertIn("settings changed", answer["message"])
+        self.assertIn("changed since this was read", answer["message"])
         self.assertEqual(self.host.send.call_args[0][0], "where_used_result")   # pushed, not left for the page to ask
 
     def test_a_look_up_reads_under_the_context_taken_when_it_was_asked_for(self):
@@ -129,10 +128,10 @@ class RequestTests(Setup):
         self.assertEqual(self.panel._choices.resolve("242", "PN-1", hits)[0]["id"], "9")   # kept for the workspace the item was read in
         self.assertIsNone(self.panel._choices.resolve("999", "PN-1", hits)[0])
 
-    def test_a_choice_made_before_the_settings_changed_is_refused(self):
+    def test_a_choice_made_before_the_context_changed_is_refused(self):
         self.panel._number = "PN-1"
         self.change_settings()
-        with mock.patch.object(self.panel, "_start") as start, self.assertRaisesRegex(ValueError, "settings changed"):
+        with mock.patch.object(self.panel, "_start") as start, self.assertRaisesRegex(ValueError, "changed since this was read"):
             self.panel._choose_item(self.ask(item_id="9"))
         start.assert_not_called()
 
@@ -144,11 +143,11 @@ class RequestTests(Setup):
         context = self.panel._uploads.from_panel.call_args.args[1]
         self.assertEqual((context.tenant, context.cfg.workspace_id), ("acme", "242"))
 
-    def test_an_upload_asked_for_after_the_settings_changed_is_refused(self):
+    def test_an_upload_asked_for_after_the_context_changed_is_refused(self):
         self.panel._number = "PN-1"
         self.panel._uploads = mock.Mock()
         self.change_settings()
-        with self.assertRaisesRegex(ValueError, "settings changed"):
+        with self.assertRaisesRegex(ValueError, "changed since this was read"):
             self.panel._upload_for_item(mock.Mock(), self.ask())
         self.panel._uploads.from_panel.assert_not_called()
 
@@ -162,37 +161,53 @@ class SettingsChangedTests(Setup):
         self.shown()
         self.change_settings()
         with mock.patch.object(self.panel, "_reload") as reload:
-            self.panel._settings_changed()
+            self.panel._context_changed()
         reload.assert_called_once()
+
+    def test_an_item_read_for_another_user_is_read_again(self):
+        self.shown()
+        self.panel._auth.session.return_value = 2
+        with mock.patch.object(self.panel, "_reload") as reload:
+            self.panel._context_changed()
+        reload.assert_called_once()
+
+    def test_the_panel_is_told_when_the_settings_change_or_a_user_signs_in_or_out(self):
+        self.shown()
+        for registered in (self.config.on_change, self.panel._auth.on_session_change):
+            callback = registered.call_args.args[0]
+            self.change_settings(hub="hub%d" % id(registered))   # each time another stamp than the one shown
+            with mock.patch.object(self.panel, "_reload") as reload:
+                callback()
+            reload.assert_called_once()
 
     def test_an_item_read_under_the_settings_still_active_is_left_alone(self):
         self.shown()
         with mock.patch.object(self.panel, "_reload") as reload:
-            self.panel._settings_changed()
+            self.panel._context_changed()
         reload.assert_not_called()
 
     def test_a_panel_that_shows_nothing_or_is_hidden_is_left_alone(self):
         self.change_settings()
         with mock.patch.object(self.panel, "_reload") as reload:
-            self.panel._settings_changed()   # shows no item
+            self.panel._context_changed()   # shows no item
             self.shown()
             self.host.visible = False
-            self.panel._settings_changed()
+            self.panel._context_changed()
         reload.assert_not_called()
 
     def test_settings_that_cannot_be_read_do_not_make_it_read_again_for_ever(self):
         self.shown()
         self.config.effective_settings.side_effect = RuntimeError("unreadable")
         with mock.patch.object(self.panel, "_reload") as reload:
-            self.panel._settings_changed()
+            self.panel._context_changed()
             self.panel._state["stamp"] = ""   # what a read that could not take the settings leaves
-            self.panel._settings_changed()
+            self.panel._context_changed()
         reload.assert_called_once()
 
 
 class WarmTests(Setup):
     def test_the_workspace_that_is_prepared_is_that_of_the_context(self):
-        context = capture_context(self.config)
+        context = capture(self.config)
         self.change_settings()
         with mock.patch.object(item_panel, "ItemViewService") as service, mock.patch.object(item_panel, "FmClient") as client:
             self.panel._warm(context)
@@ -203,7 +218,7 @@ class WarmTests(Setup):
     def test_nothing_is_prepared_without_a_context_or_an_items_workspace(self):
         self.panel._warm(None)
         self.config.config.workspaces = {ITEMS_KIND: items_workspace("")}
-        self.panel._warm(capture_context(self.config))
+        self.panel._warm(capture(self.config))
         self.assertEqual(self.started, [])
 
 

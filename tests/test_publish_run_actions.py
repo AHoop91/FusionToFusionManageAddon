@@ -9,8 +9,8 @@ from unittest import mock
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
 from src.fm.client import FmApiError
-from src.config.hub_context import capture_context
 from src.publish.sender import FolderError
+from tests.hub_fixtures import auth_of, capture
 from tests.without_fusion import fusion_modules_stubbed
 
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
@@ -86,7 +86,7 @@ class Setup(unittest.TestCase):
         self.dialogs, self.alerts = mock.Mock(), mock.Mock()
         self.ref = mock.Mock(return_value=("m1", "t1"))
         self.queued = []   # permission checks, run by the test when it wants them to
-        self.runs = PublishRuns(self.bridge, self.config, mock.Mock(), self.dialogs, mock.Mock(), self.alerts, self.ref,
+        self.runs = PublishRuns(self.bridge, self.config, auth_of(), self.dialogs, mock.Mock(), self.alerts, self.ref,
                                 self.queued.append, self.root.name)
         self.runs.queue = mock.Mock()
         self.runs.queue.snapshots.return_value = [{"id": "r0"}]
@@ -94,7 +94,7 @@ class Setup(unittest.TestCase):
         self.config.hub_id = "hub1"
         self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
         self.config.config.workspaces = {self.items_kind: WorkspaceConfig(workspace_id="242")}
-        self.stamp = capture_context(self.config).stamp   # what the panel read the design under
+        self.stamp = capture(self.config).stamp   # what the panel read the design under
         self.run = SimpleNamespace(id="r1")
         self.denial = mock.Mock(return_value="")
         for patch in (mock.patch.object(publish_run_actions, "FmClient"),
@@ -170,15 +170,20 @@ class StartTests(Setup):
     def test_a_publish_read_under_other_settings_is_refused_and_checks_nothing(self):
         for payload in ({"stamp": "other"}, {}):
             answer = self.runs.start(payload)
-            self.assertIn("settings changed", answer["error"])
+            self.assertIn("changed since this was read", answer["error"])
         self.assertEqual(self.queued, [])
 
     def test_a_publish_read_before_the_tenant_or_workspace_changed_within_the_hub_is_refused(self):
         self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="other")
-        self.assertIn("settings changed", self.runs.start({"stamp": self.stamp})["error"])
+        self.assertIn("changed since this was read", self.runs.start({"stamp": self.stamp})["error"])
         self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
         self.config.config.workspaces = {self.items_kind: WorkspaceConfig(workspace_id="999")}
-        self.assertIn("settings changed", self.runs.start({"stamp": self.stamp})["error"])
+        self.assertIn("changed since this was read", self.runs.start({"stamp": self.stamp})["error"])
+        self.assertEqual(self.queued, [])
+
+    def test_a_publish_read_before_another_user_signed_in_is_refused(self):
+        self.runs._auth.session.return_value = 2
+        self.assertIn("changed since this was read", self.runs.start({"stamp": self.stamp})["error"])
         self.assertEqual(self.queued, [])
 
     def test_the_settings_are_taken_when_the_publish_is_asked_for_not_when_its_check_runs(self):

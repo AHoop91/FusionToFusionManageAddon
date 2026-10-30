@@ -11,7 +11,7 @@ the session back.
 import threading
 import time
 import webbrowser
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..config.models import ConnectionSettings
 from ..core.logging_setup import get_logger
@@ -52,6 +52,24 @@ class AuthService:
         self._cancel = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._on_login_done: Optional[Callable[[], None]] = None
+        self._session_listeners: List[Callable[[], None]] = []
+
+    def session(self, settings: ConnectionSettings) -> int:
+        """Which sign-in of this Client ID is current: every sign-out and every new sign-in raises it, so what was read under another (as
+        another user, perhaps) can be told from what is read under this one. A token refresh does not change it."""
+        with self._lock:
+            return self._generations.get(settings.client_id, 0)
+
+    def on_session_change(self, callback: Callable[[], None]) -> None:
+        """Call ``callback`` (from whichever thread signed in or out) after a sign-out or a new sign-in raised ``session``."""
+        self._session_listeners.append(callback)
+
+    def _session_changed(self) -> None:
+        for callback in self._session_listeners:
+            try:
+                callback()
+            except Exception:  # noqa: BLE001 - a listener must not undo a sign-in or a sign-out
+                log.exception("A session listener failed")
 
     def set_on_login_done(self, callback: Optional[Callable[[], None]]) -> None:
         """Call ``callback`` (on the sign-in's thread) when a sign-in ends, however it ends, so the panel need not ask how it went."""
@@ -115,6 +133,7 @@ class AuthService:
                 self._generations[settings.client_id] = generation + 1   # a new session: a refresh of the one before it cannot save over it
                 self._state = STATE_SIGNED_IN
             log.info("Signed in")
+            self._session_changed()
         except AuthError as exc:
             self._fail(str(exc), settings.client_id, generation)
         except Exception as exc:  # noqa: BLE001 - background thread must not die silently
@@ -155,6 +174,7 @@ class AuthService:
             if self._state == STATE_SIGNING_IN and self._client_id == client_id:
                 self._cancel.set()   # the browser wait ends, and frees the callback port
             self._state, self._error = STATE_SIGNED_OUT, ""
+        self._session_changed()
         return True
 
     # ---- Token access ------------------------------------------------------

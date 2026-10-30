@@ -21,7 +21,7 @@ import adsk.core
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
-from ..config.hub_context import HubContext, capture_context
+from ..config.hub_context import HubContext, HubContexts
 from ..core.cancel import Cancelled, CancelToken
 from ..core.constants import ITEM_COMMAND_NAME
 from ..core.logging_setup import get_logger
@@ -71,7 +71,7 @@ class AttachmentUpload:
         self._tasks = tasks
         self._host = host   # the Item panel: it shows the green tick, and the progress of an upload started in it
         self._window = window   # the small progress window of an upload started elsewhere
-        self._config = config
+        self._contexts = HubContexts(config, auth.session)
         self._auth = auth
         self._reload = reload   # read the item shown again (its tab counts change)
         self._choices = choices or ItemChoices()   # which item is meant where several share a number: the Item panel's choice
@@ -96,11 +96,9 @@ class AttachmentUpload:
     def from_number(self, job: UploadJob, subject: Subject, destination: str = ITEM) -> None:
         """Upload for the item of ``subject`` (``destination`` ITEM), or for its component in the Components workspace (COMPONENT), asking
         nothing and showing the progress window. UI thread."""
-        try:
-            context = capture_context(self._config)
-        except Exception as exc:  # noqa: BLE001 - e.g. Shared Configuration that cannot be read: the user is told
-            log.exception("Could not read the settings to attach a %s", job.label)
-            self._ui.messageBox(f"Could not attach a {job.label}:\n{exc}", ITEM_COMMAND_NAME)
+        context, reason = self._contexts.attempt()
+        if context is None:
+            self._ui.messageBox(f"Could not attach a {job.label}:\n{reason}", ITEM_COMMAND_NAME)
             return
         if not self._begin(job, FIND):
             self._ui.messageBox("A file is already being uploaded.", ITEM_COMMAND_NAME)
@@ -117,7 +115,7 @@ class AttachmentUpload:
     def begin_in_window(self, job: UploadJob) -> Optional[HubContext]:
         """Start the status of an upload that the Export window follows (it shows the progress, and the end, itself): the context it is made
         under, to give ``continue_in_window``; None when one is already under way. Raises when the settings cannot be read. UI thread."""
-        context = capture_context(self._config)
+        context = self._contexts.capture()
         if not self._begin(job, FIND, in_window=True):
             return None
         self._in_window = True

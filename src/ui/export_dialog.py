@@ -21,7 +21,7 @@ from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
-from ..config.hub_context import HubContext, capture_context
+from ..config.hub_context import HubContext, HubContexts
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.cancel import Cancelled
 from ..core.logging_setup import get_logger
@@ -56,6 +56,7 @@ class ExportDialog:
         self._host = host
         self._tasks = tasks
         self._config = config
+        self._contexts = HubContexts(config, auth.session)
         self._auth = auth
         self._panel = panel
         self._access: Dict[str, str] = {}   # for each destination, why the user may not attach to it ("" when they may); empty until read
@@ -78,10 +79,9 @@ class ExportDialog:
     def _setup(self) -> Tuple[Dict[str, str], Optional[HubContext]]:
         """For each destination, why it cannot be used until something is set up ("" when nothing is missing), and the context that says so.
         Settings that cannot be read (Shared Configuration) are the reason of both, with no context. Needs no call to Fusion Manage. UI thread."""
-        try:
-            context = capture_context(self._config)
-        except Exception as exc:  # noqa: BLE001 - the reason is shown
-            return {key: str(exc) or type(exc).__name__ for key in (ITEM, COMPONENT)}, None
+        context, reason = self._contexts.attempt()
+        if context is None:
+            return {key: reason for key in (ITEM, COMPONENT)}, None
         connection = " ".join(context.settings.validate())
         return {ITEM: ITEM_NOT_CONFIGURED if context.items_problem else "",
                 COMPONENT: f"{connection} Complete it in Preferences." if connection else ""}, context

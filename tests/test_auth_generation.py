@@ -141,5 +141,73 @@ class LoginTests(unittest.TestCase):
         self.assertEqual([t["access_token"] for t in store.saved], ["a"])
 
 
+class SessionTests(unittest.TestCase):
+    """``session`` tells one sign-in from the next: what was read under one is not what the next user sees."""
+
+    def sign_in(self, service):
+        server = mock.Mock()
+        server.wait.return_value = {"code": "x", "error": ""}
+        with service._lock:
+            service._state, service._client_id = STATE_SIGNING_IN, "c"
+        with mock.patch.object(auth_service, "exchange_code", return_value={"access_token": "a", "expires_at": 9e12}):
+            service._run_login(SETTINGS, "v", server, service.session(SETTINGS))
+
+    def test_a_sign_in_and_a_sign_out_each_make_another_session(self):
+        service = AuthService(Store())
+        seen = [service.session(SETTINGS)]
+        self.sign_in(service)
+        seen.append(service.session(SETTINGS))
+        service.sign_out(SETTINGS)
+        seen.append(service.session(SETTINGS))
+        self.assertEqual(len(set(seen)), 3)
+
+    def test_a_token_refresh_does_not_make_another_session(self):
+        service = AuthService(Store(expired()))
+        before = service.session(SETTINGS)
+        with mock.patch.object(auth_service, "refresh_tokens", return_value={"access_token": "new", "expires_at": 9e12}):
+            service.get_access_token(SETTINGS)
+        self.assertEqual(service.session(SETTINGS), before)
+
+    def test_the_session_is_that_of_the_client_id(self):
+        service = AuthService(Store())
+        service.sign_out(ConnectionSettings(client_id="other"))
+        self.assertEqual(service.session(SETTINGS), 0)
+
+    def test_a_sign_out_that_was_refused_does_not_make_another_session(self):
+        service = AuthService(Store())
+        before = service.session(SETTINGS)
+        self.assertFalse(service.sign_out(SETTINGS, generation=before + 1))
+        self.assertEqual(service.session(SETTINGS), before)
+
+    def test_the_listeners_are_told_of_a_sign_in_and_of_a_sign_out(self):
+        service = AuthService(Store())
+        told = []
+        service.on_session_change(lambda: told.append(service.session(SETTINGS)))   # it already sees the new session
+        self.sign_in(service)
+        service.sign_out(SETTINGS)
+        self.assertEqual(told, [1, 2])
+
+    def test_a_sign_in_that_failed_or_was_dropped_tells_nobody(self):
+        service = AuthService(Store())
+        told = []
+        service.on_session_change(lambda: told.append(1))
+        server = mock.Mock()
+        server.wait.return_value = {"code": "", "error": "Sign-in was cancelled."}
+        service._run_login(SETTINGS, "v", server, service.session(SETTINGS))
+        self.assertEqual(told, [])
+
+    def test_a_listener_that_fails_does_not_stop_the_others_or_the_sign_out(self):
+        service = AuthService(Store())
+        told = []
+
+        def broken():
+            raise RuntimeError("no")
+
+        service.on_session_change(broken)
+        service.on_session_change(lambda: told.append(1))
+        self.assertTrue(service.sign_out(SETTINGS))
+        self.assertEqual(told, [1])
+
+
 if __name__ == "__main__":
     unittest.main()

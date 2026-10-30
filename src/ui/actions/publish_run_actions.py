@@ -14,7 +14,7 @@ from ...core.logging_setup import get_logger
 from ...core.shapes import dig
 from ...fm.client import FmApiError, FmClient
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
-from ...config.hub_context import HubContext, capture_context
+from ...config.hub_context import HubContext, HubContexts
 from ...publish.job_queue import JobQueue
 from ...publish.job_state import JobState
 from ...publish.panel_sections import publish_denial
@@ -85,6 +85,7 @@ class PublishRuns:
                  alerts: JobAlerts, open_model_ref: Callable[[], Tuple[str, str]] = model_ref, run: Runner = in_thread,
                  files_root: Optional[str] = None) -> None:
         self._bridge, self._config, self._auth, self._dialogs, self._alerts = bridge, config, auth, dialogs, alerts
+        self._contexts = HubContexts(config, auth.session)
         self._open_model_ref, self._run = open_model_ref, run
         self._files_root = files_root or temp_root()
         self._watched = Watched()   # the runs the Publish panel's progress dialog is following
@@ -96,11 +97,9 @@ class PublishRuns:
 
     def start(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Ask for a publish. Answers at once whether it is being checked or why it cannot start; ``start_publish_result`` follows."""
-        try:   # the hub, tenant, connection and workspace are taken together, here on Fusion's thread, and used for the whole publish
-            context = capture_context(self._config)
-        except Exception as exc:  # noqa: BLE001 - the panel is waiting for an answer
-            log.exception("Could not read the settings for the publish")
-            return {"error": why(exc)}
+        context, reason = self._contexts.attempt()   # the hub, tenant, connection, workspace and sign-in, together, here on Fusion's thread
+        if context is None:
+            return {"error": reason}
         if not context.cfg or not context.cfg.workspace_id:
             return {"error": "Set the Items workspace ID in Settings first."}
         wrong = context.mismatch(payload)

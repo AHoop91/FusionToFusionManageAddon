@@ -7,13 +7,12 @@ import types
 import unittest
 from unittest import mock
 
-from src.config.hub_context import capture_context
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEMS_KIND
-from tests.hub_fixtures import config_of, items_workspace
+from tests.hub_fixtures import auth_of, capture, config_of, items_workspace
 
 
-CONTEXT = capture_context(config_of())
+CONTEXT = capture(config_of())
 
 
 class _Stub(types.ModuleType):
@@ -79,7 +78,7 @@ class UploadEndTests(unittest.TestCase):
     def setUp(self):
         self.ui = _Ui()
         self.reloads = []
-        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Host(), config_of(), None, lambda: self.reloads.append(1))
+        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Host(), config_of(), auth_of(), lambda: self.reloads.append(1))
         self.job = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), lambda *a: None, lambda *a: True)
 
     def test_one_upload_at_a_time(self):
@@ -117,7 +116,7 @@ class UploadEndTests(unittest.TestCase):
 class UploadAnnounceTests(unittest.TestCase):
     def setUp(self):
         self.told = []
-        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Host(), config_of(), None, lambda: None, self.told.append)
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Host(), config_of(), auth_of(), lambda: None, self.told.append)
         self.job = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), lambda *a: None, lambda *a: True)
 
     def test_each_change_is_pushed_and_a_repeat_is_not(self):
@@ -170,7 +169,7 @@ class MakeTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.ui = _Ui()
-        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
         self.subject = types.SimpleNamespace(item_number="PN/1")
 
     def test_the_file_is_read_then_its_folder_is_removed_and_the_upload_goes_on_at_the_send_stage(self):
@@ -222,7 +221,7 @@ class MakeTests(unittest.TestCase):
 
     def test_the_window_that_cannot_be_shown_does_not_leave_the_upload_under_way(self):
         window = _Window(RuntimeError("no window"))
-        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), window, config_of(), None, lambda: None)
+        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), window, config_of(), auth_of(), lambda: None)
         with mock.patch("threading.Thread") as thread:
             upload.from_number(_job(), self.subject)
         self.assertEqual(upload.status(), {"active": False})
@@ -240,7 +239,7 @@ class MakeTests(unittest.TestCase):
 
     def test_a_late_report_of_an_upload_that_ended_is_dropped(self):
         told = []
-        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), None, lambda: None, told.append)
+        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, told.append)
         upload._begin(_job(), 1)
         upload._end()
         upload._stage(_job(), 2, 80)
@@ -252,7 +251,7 @@ class FindItemTests(unittest.TestCase):
     def setUp(self):
         from src.ui import attachment_upload
         self.module = attachment_upload
-        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
         self.addCleanup(mock.patch.stopall)
 
     def _search(self, hits):
@@ -263,7 +262,7 @@ class FindItemTests(unittest.TestCase):
 
     def test_an_items_workspace_that_is_not_set_up_says_so(self):
         with self.assertRaisesRegex(ValueError, "not set.*Complete it in Preferences"):
-            self.upload._find_item("PN-1", capture_context(config_of(workspace="")))
+            self.upload._find_item("PN-1", capture(config_of(workspace="")))
 
     def test_no_item_for_the_number_is_said(self):
         self._search([])
@@ -292,7 +291,7 @@ class PreviewTests(unittest.TestCase):
     def setUp(self):
         from src.ui import attachment_upload
         self.module = attachment_upload
-        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
         for name in ("FmClient", "AttachmentService"):
             mock.patch.object(attachment_upload, name).start()
         self.addCleanup(mock.patch.stopall)
@@ -351,7 +350,7 @@ class ContextTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks = _Ui(), _Queue()
         self.config = config_of()
-        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), self.config, None, lambda: None)
+        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), self.config, auth_of(), lambda: None)
         self.subject = types.SimpleNamespace(item_number="PN-1")
 
     def _change_hub(self):
@@ -396,7 +395,7 @@ class ContextTests(unittest.TestCase):
 class WindowTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks, self.window = _Ui(), _Queue(), _Window()
-        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), self.window, config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), self.window, config_of(), auth_of(), lambda: None)
         self.subject = types.SimpleNamespace(item_number="PN-1")
 
     def _from_number(self):
@@ -430,7 +429,7 @@ class WindowTests(unittest.TestCase):
 class FindThenMakeTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks = _Ui(), _Queue()
-        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), config_of(), auth_of(), lambda: None)
         self.subject = types.SimpleNamespace(item_number="PN-1")
         self.job = _job()
         self.upload._begin(self.job, 0)
@@ -472,7 +471,7 @@ class SendAndDoneTests(unittest.TestCase):
         self.sent, self.reloads = [], []
         self.host.send = lambda *args: self.sent.append(args)
         self.window = _Window()
-        self.upload = AttachmentUpload(self.ui, self.tasks, self.host, self.window, config_of(), None, lambda: self.reloads.append(1))
+        self.upload = AttachmentUpload(self.ui, self.tasks, self.host, self.window, config_of(), auth_of(), lambda: self.reloads.append(1))
         self.job = _job()
         self.upload._begin(self.job, 2)
         patcher = mock.patch.object(attachment_upload, "FmClient")
@@ -544,7 +543,7 @@ class SendAndDoneTests(unittest.TestCase):
 
 class WarmComponentTests(unittest.TestCase):
     def setUp(self):
-        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
 
     def test_a_failure_is_left_for_the_export_to_report(self):
         with mock.patch.object(self.upload, "_find_component", side_effect=LookupError("none")):
@@ -560,7 +559,7 @@ class FindComponentTests(unittest.TestCase):
     def setUp(self):
         from src.ui import attachment_upload
         self.module = attachment_upload
-        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), None, lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
         mock.patch.object(attachment_upload, "FmClient").start()
         self.service = mock.patch.object(attachment_upload, "ComponentService").start()
         self.addCleanup(mock.patch.stopall)
@@ -574,7 +573,7 @@ class FindComponentTests(unittest.TestCase):
     def test_what_was_found_under_one_tenant_is_not_reused_under_another(self):
         self.service.return_value.find_working.side_effect = [("/api/v3/workspaces/176/items/5", ""), ("/api/v3/workspaces/176/items/8", "")]
         self.assertEqual(self.upload._find_component("PN-1", CONTEXT), ("176", "5"))
-        self.assertEqual(self.upload._find_component("PN-1", capture_context(config_of(tenant="other"))), ("176", "8"))
+        self.assertEqual(self.upload._find_component("PN-1", capture(config_of(tenant="other"))), ("176", "8"))
         self.assertEqual(self.upload._find_component("PN-1", CONTEXT), ("176", "5"))   # each tenant keeps its own
 
     def test_a_component_that_is_not_there_says_why_and_is_not_kept(self):

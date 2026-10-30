@@ -9,8 +9,8 @@ from src.config.models import ConnectionSettings
 from src.config.workspace_models import WorkspaceConfig
 from src.core.cancel import Cancelled
 from src.publish import panel_sections
-from src.config.hub_context import capture_context
 from src.publish.panel_sections import PublishSections
+from tests.hub_fixtures import auth_of, capture
 
 SUMMARY = {"component_id": "R", "composition": "RELEASED", "item_number": "TOP", "part_number": "TOP", "name": "Top", "description": ""}
 
@@ -37,7 +37,8 @@ class Fixture:
         ]
         for p in self.patches:
             p.start()
-        self.sections = PublishSections(config, mock.Mock(), lambda: self.model)
+        self.auth = auth_of()
+        self.sections = PublishSections(config, self.auth, lambda: self.model)
 
     def read(self, _client, section, _model_id, _time, summary, component_id="", _physical=False, _progress=None):
         self.reads.append((section, component_id, dict(summary or {})))
@@ -83,7 +84,7 @@ class SectionTests(unittest.TestCase):
         self.assertEqual(done["data"]["item_number"], "TOP")
 
     def test_a_section_says_which_settings_it_was_read_under(self):
-        stamp = capture_context(self.fx.config).stamp
+        stamp = capture(self.fx.config).stamp
         self.assertEqual(self.fx.ask("summary")["stamp"], stamp)
         self.assertEqual(self.fx.wait("summary")["stamp"], stamp)
 
@@ -92,7 +93,15 @@ class SectionTests(unittest.TestCase):
         self.fx.wait("summary")
         self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")   # same hub and design, other workspace
         self.assertTrue(self.fx.ask("summary")["pending"])
-        self.assertEqual(self.fx.wait("summary")["stamp"], capture_context(self.fx.config).stamp)
+        self.assertEqual(self.fx.wait("summary")["stamp"], capture(self.fx.config).stamp)
+        self.assertEqual([r[0] for r in self.fx.reads].count("summary"), 2)
+
+    def test_a_loaded_section_is_read_again_when_another_user_has_signed_in(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.auth.session.return_value = 2   # the same hub, tenant and workspace: a different sign-in
+        self.assertTrue(self.fx.ask("summary")["pending"])
+        self.fx.wait("summary")
         self.assertEqual([r[0] for r in self.fx.reads].count("summary"), 2)
 
     def test_a_loaded_section_is_kept_while_the_settings_are_unchanged(self):
@@ -108,11 +117,11 @@ class SectionTests(unittest.TestCase):
         self.fx.ask("summary")   # replaces the first load, which is still reading
         self.fx.gate.set()
         done = self.fx.wait("summary")
-        self.assertEqual(done["stamp"], capture_context(self.fx.config).stamp)
+        self.assertEqual(done["stamp"], capture(self.fx.config).stamp)
 
     def test_a_load_reads_under_the_hub_it_was_asked_for_under_even_if_another_opens_meanwhile(self):
         self.fx.gate = threading.Event()
-        stamp = capture_context(self.fx.config).stamp
+        stamp = capture(self.fx.config).stamp
         self.fx.ask("summary")
         self.fx.config.hub_id = "hub2"   # another hub is active before the load's thread has made its clients
         self.fx.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="other")

@@ -23,7 +23,7 @@ import adsk.fusion
 from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
-from ..config.hub_context import HubContext, capture_context
+from ..config.hub_context import HubContext, HubContexts
 from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
 from ..core.cancel import ADDIN, Cancelled, CancelToken, TokenSlot
 from ..core.constants import ITEM_COMMAND_NAME
@@ -198,7 +198,7 @@ class ItemPanel:
                                          lambda status: bridge.push("upload_status", status), self._choices)   # the pages are told how far it has got
         self._tasks = tasks
         self._host = host
-        self._config = config
+        self._contexts = HubContexts(config, auth.session)
         self._auth = auth
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
@@ -245,34 +245,27 @@ class ItemPanel:
         self._export = TokenSlot(lambda: ADDIN, "the Export window's look at the attached files")
         self._tokens: Dict[str, CancelToken] = {}   # request id -> the token of a look-up still running
         bridge.register("lookup_cancel", self._cancel_lookups)
-        config.on_change(lambda: tasks.post(self._settings_changed))   # from whichever thread saved them: the panel is read on Fusion's
+        config.on_change(lambda: tasks.post(self._context_changed))   # from whichever thread changed them: the panel is read on Fusion's
+        auth.on_session_change(lambda: tasks.post(self._context_changed))   # likewise a sign-in or a sign-out
 
     def _context_of(self, payload: Dict[str, Any]) -> HubContext:
         """The context a request of the page is made under: the hub and settings active now, provided they are those the item shown was read
         under (the page sends the ``stamp`` of what it shows). Raises when they are not, or cannot be read: ids read under one tenant are
         never paired with another's. UI thread."""
-        context = capture_context(self._config)
+        context, reason = self._contexts.attempt()
+        if context is None:
+            raise ValueError(reason)
         wrong = context.mismatch(payload)
         if wrong:
             raise ValueError(wrong)
         return context
 
-    def _context_or_none(self) -> Optional[HubContext]:
-        """The context for work that is only an optimisation, ahead of what is asked for: None when the settings cannot be read. UI thread."""
-        try:
-            return capture_context(self._config)
-        except Exception:  # noqa: BLE001 - what is asked for reports the settings it cannot read
-            log.info("Settings not read ahead", exc_info=True)
-            return None
-
-    def _settings_changed(self) -> None:
-        """The hub or the settings changed: read the item shown again if it was read under others. UI thread."""
+    def _context_changed(self) -> None:
+        """The hub, the settings or the signed-in user changed: read the item shown again if it was read under others. UI thread."""
         if not (self._number and self._host.visible):
             return
-        try:
-            stamp = capture_context(self._config).stamp
-        except Exception:  # noqa: BLE001 - the read says why it cannot be done
-            stamp = ""
+        context, _reason = self._contexts.attempt()   # settings that cannot be read: the read says why
+        stamp = context.stamp if context else ""
         with self._lock:
             shown = self._state["stamp"]
         if stamp != shown:
@@ -439,7 +432,7 @@ class ItemPanel:
         if not self._has_number(part_number, quiet):
             return
         ref = ref or _part_ref(part_number)
-        context = self._context_or_none()
+        context, _reason = self._contexts.attempt()   # only an optimisation: what is asked for reports the settings it cannot read
 
         def work() -> None:
             self._warm(context)   # the workspace's layouts are read while the Data Model answers
@@ -653,7 +646,7 @@ class ItemPanel:
         number, _problem = self.export_target()
         if not number:
             return
-        context = self._context_or_none()
+        context, _reason = self._contexts.attempt()   # only an optimisation: the export reports the settings it cannot read
         if context is None:
             return
         ref = self._export_ref(number)
@@ -703,11 +696,9 @@ class ItemPanel:
         if not number:
             done({"state": "unavailable", "message": "Nothing to export yet."})
             return
-        try:
-            context = capture_context(self._config)
-        except Exception as exc:  # noqa: BLE001 - shown in the Export window
-            log.info("Files for the export of %s not read: %s", number, exc)
-            done({"state": "unavailable", "message": str(exc)})
+        context, reason = self._contexts.attempt()
+        if context is None:
+            done({"state": "unavailable", "message": reason})
             return
         source = self._export_state(number)
         ref = self._export_ref(number)
@@ -757,11 +748,9 @@ class ItemPanel:
             seq = self._state["seq"] + 1
             self._state = _answer(seq=seq, pending=True)
         token = self._item_read.replace()   # the read of the item before this one, if it is still going, is not wanted
-        try:
-            context = capture_context(self._config)
-        except Exception as exc:  # noqa: BLE001 - e.g. Shared Configuration that cannot be read: the panel says so
-            log.exception("Could not read the settings for the item")
-            self._settle(seq, _answer(message=str(exc) or type(exc).__name__))
+        context, reason = self._contexts.attempt()
+        if context is None:   # e.g. Shared Configuration that cannot be read: the panel says so
+            self._settle(seq, _answer(message=reason))
             return
         threading.Thread(target=self._load, args=(seq, self._number, token, context), daemon=True).start()
 

@@ -5,7 +5,7 @@ from unittest import mock
 
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
-from src.config.hub_context import capture_context
+from tests.hub_fixtures import auth_of, capture
 from tests.without_fusion import fusion_modules_stubbed
 
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
@@ -51,7 +51,8 @@ class RegisteredActionsTests(unittest.TestCase):
         self.config = mock.Mock(hub_id="hub1")
         self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
         self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="242")}
-        register_publish_actions(self.bridge, self.config, mock.Mock(), self.ref, self.browser)
+        self.auth = auth_of()
+        register_publish_actions(self.bridge, self.config, self.auth, self.ref, self.browser)
 
     def test_the_sections_are_given_the_open_design_reader(self):
         self.assertIs(publish_actions.PublishSections.call_args[0][2], self.ref)
@@ -64,7 +65,7 @@ class RegisteredActionsTests(unittest.TestCase):
         self.sections.request.assert_called_once_with({"name": "summary"})
 
     def test_the_model_key_is_that_of_the_open_design(self):
-        stamp = capture_context(self.config).stamp
+        stamp = capture(self.config).stamp
         self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "m1|t1", "stamp": stamp})
         self.ref.return_value = ("", "")
         self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "", "stamp": stamp})
@@ -72,6 +73,11 @@ class RegisteredActionsTests(unittest.TestCase):
     def test_the_stamp_follows_the_settings(self):
         before = self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"]
         self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="999")}
+        self.assertNotEqual(self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"], before)
+
+    def test_the_stamp_follows_the_sign_in(self):
+        before = self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"]
+        self.auth.session.return_value = 2
         self.assertNotEqual(self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"], before)
 
     def test_settings_that_cannot_be_read_give_an_empty_stamp_so_the_panel_reads_again(self):

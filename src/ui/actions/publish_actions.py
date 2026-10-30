@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Tuple
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger
-from ...config.hub_context import capture_context
+from ...config.hub_context import HubContexts
 from ...publish.panel_sections import PublishSections
 from ..message_bridge import MessageBridge
 from .design_ref import model_ref
@@ -31,14 +31,11 @@ def model_key(model_id: str, time: str) -> str:
     return f"{model_id}|{time}" if model_id else ""
 
 
-def current_stamp(config: ConfigService) -> str:
-    """The stamp of the hub and settings now active ("" when they cannot be read, which differs from every stamp a read was made under, so
-    the panel reads again and shows why)."""
-    try:
-        return capture_context(config).stamp
-    except Exception:  # noqa: BLE001 - Shared Configuration that cannot be read: the load that follows says so
-        log.debug("Could not take the stamp of the settings", exc_info=True)
-        return ""
+def current_stamp(contexts: HubContexts) -> str:
+    """The stamp of the hub, settings and sign-in now active ("" when they cannot be read, which differs from every stamp a read was made
+    under, so the panel reads again and shows why)."""
+    context, _reason = contexts.attempt()
+    return context.stamp if context else ""
 
 
 def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
@@ -51,6 +48,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
     and ``open_browser`` opens a link; both are Fusion's and the system's, so a test gives its own.
     """
     sections = PublishSections(config, auth, open_model_ref)
+    contexts = HubContexts(config, auth.session)
 
     def open_url(payload: Dict[str, Any]) -> Dict[str, Any]:
         """Open a link in the system browser (a palette cannot open one itself)."""
@@ -63,7 +61,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
 
     def get_publish_model_key(_payload: Dict[str, Any]) -> Dict[str, Any]:
         """Cheap check of which design is open, and under which settings, so the panel reloads only on a change."""
-        return {"key": model_key(*open_model_ref()), "stamp": current_stamp(config)}
+        return {"key": model_key(*open_model_ref()), "stamp": current_stamp(contexts)}
 
     bridge.register("load_publish_section", sections.request)
     bridge.register("load_publish_section_status", sections.status)

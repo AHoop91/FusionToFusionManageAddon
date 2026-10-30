@@ -26,7 +26,7 @@ from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_sec
 from ..sync.bom_levels import compare_design_bom, compare_level, search_design
 from ..sync.item_compare import read_and_compare
 from ..sync.item_number import item_number_of
-from ..config.hub_context import HubContext, capture_context
+from ..config.hub_context import HubContext, HubContexts
 
 log = get_logger("panel_sections")
 
@@ -88,7 +88,7 @@ class PublishSections:
     """The slots of the sections loaded for the open design. ``model_ref`` gives ``(model id, timestamp)`` of the open design."""
 
     def __init__(self, config: ConfigService, auth: AuthService, model_ref: Callable[[], Tuple[str, str]]) -> None:
-        self._config, self._auth, self._model_ref = config, auth, model_ref
+        self._contexts, self._auth, self._model_ref = HubContexts(config, auth.session), auth, model_ref
         self._slots: Dict[str, Dict[str, Any]] = {name: entry(name) for name in SECTION_NAMES}   # a component's sections get a slot each ("component:<id>"), for the open design
         self._lock = threading.Lock()
         self._tokens: Dict[str, CancelToken] = {}   # slot -> the token of the load that fills it, ended when a newer load replaces it
@@ -110,11 +110,9 @@ class PublishSections:
         if not model_id:
             return entry(slot, message="Could not find the Data Model id of the open design.")
         key = f"{model_id}|{timestamp}"
-        try:   # the hub, connection and workspace this load reads under are taken now, on Fusion's thread: a hub opened meanwhile is not mixed in
-            context = capture_context(self._config)
-        except Exception as exc:
-            log.exception("Could not read the settings for %s", slot)
-            return entry(slot, message=str(exc) or type(exc).__name__)
+        context, reason = self._contexts.attempt()   # taken now, on Fusion's thread: a hub opened or a user signed in meanwhile is not mixed in
+        if context is None:
+            return entry(slot, message=reason)
         with self._lock:
             self._forget_other_designs(key)
             current = self._slots.get(slot) or entry(slot)
