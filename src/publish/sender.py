@@ -119,8 +119,9 @@ class Dispatcher:
     """Sends item and Bill of Materials requests, remembering the ids of the items and what was accepted.
 
     Safe to call from several threads, which is how it is used: items and Bill of Materials requests go out together, at most ``WRITES`` at
-    once. The lock is held only to look up ids and to log what was accepted, never while a request is made. (It is re-entrant, and what
-    changes the ids is taken with it.)
+    once. The lock is held only to look up and change ids, never while a request is made or the log is written: the log goes to disk
+    before a send goes on, so a write made under the lock would hold up every other item. (It is re-entrant, and what changes the ids is
+    taken with it.)
     """
 
     def __init__(self, path: str, fm: FmClient, workspace_id: str, known: Optional[Dict[str, str]] = None) -> None:
@@ -169,37 +170,35 @@ class Dispatcher:
             if existing:
                 with self._lock:
                     self.learn(number, existing)
-                    self._sent.accept(key, {"id": existing})
+                self._sent.accept(key, {"id": existing})
                 return "Already created: found in Fusion Manage after a cancelled send."
         intended = method == "POST" and not doubtful   # an entry of its own is logged first: a crash while the create is under way leaves it in doubt
         if intended:
-            with self._lock:
-                self._sent.intend(key)
+            self._sent.intend(key)
         log.debug("Sending item %s: %s %s", number, method, request["url"])
         try:   # outside the lock, so the items go out at the same time
             with self._slots:
                 result = self._fm.send_json(method, request["url"], request.get("body"))
         except Cancelled:
-            with self._lock:
-                self._sent.doubt(key, "was cancelled while it was being sent")
+            self._sent.doubt(key, "was cancelled while it was being sent")
             raise
         except (FmApiError, AuthError) as exc:
             log.warning("Sending item %s failed: %s", number, exc)
             if method == "PATCH" and isinstance(exc, FmApiError) and exc.status == 400:
                 self._diagnose(request["url"])
-            with self._lock:
-                if isinstance(exc, FmApiError) and exc.outcome_unknown:   # sent, perhaps, and done, perhaps: a resend finds out first
-                    self._sent.doubt(key, "got no answer or a server error")
-                elif intended:   # refused for good: not done, so nothing to find out
-                    self._sent.forget(key)
-                if method == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
+            if method == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
+                with self._lock:
                     self._failed.add(number.casefold())
+            if isinstance(exc, FmApiError) and exc.outcome_unknown:   # sent, perhaps, and done, perhaps: a resend finds out first
+                self._sent.doubt(key, "got no answer or a server error")
+            elif intended:   # refused for good: not done, so nothing to find out
+                self._sent.forget(key)
             raise
         match = _ITEM_ID.search(request["url"])
         new_id = created_id(result) if method == "POST" else (match.group(1) if match else "")
         with self._lock:
             self.learn(number, new_id)
-            self._sent.accept(key, {"id": new_id})
+        self._sent.accept(key, {"id": new_id})
         return f"{method} {result.status}" + ("" if new_id else "; the answer did not give the new id")
 
     def _diagnose(self, url: str) -> None:
@@ -268,8 +267,7 @@ class Dispatcher:
                 with self._slots:
                     self._fm.send_json(final["method"], final["url"], final.get("body"))
             except Cancelled:
-                with self._lock:
-                    self._sent.doubt(key, "was cancelled while it was being sent")
+                self._sent.doubt(key, "was cancelled while it was being sent")
                 raise
             except FmApiError as exc:
                 if final["method"] == "POST" and DUPLICATE_LINE in str(exc):
@@ -278,8 +276,7 @@ class Dispatcher:
                     log.info("BOM line already gone, nothing to remove: %s", final["url"])   # the cancelled send removed it
                 else:
                     if exc.outcome_unknown:   # a resend finds out whether it was done
-                        with self._lock:
-                            self._sent.doubt(key, "got no answer or a server error")
+                        self._sent.doubt(key, "got no answer or a server error")
                     raise
         except (FmApiError, AuthError, Unresolved) as exc:
             failed.set()
@@ -287,8 +284,7 @@ class Dispatcher:
             if isinstance(exc, FmApiError):   # which request, and the status it was refused with
                 raise FmApiError(f"Request {index + 1} of {count}: {exc}", exc.status) from exc
             raise
-        with self._lock:
-            self._sent.accept(key, {})
+        self._sent.accept(key, {})
         progress()
         return True
 
