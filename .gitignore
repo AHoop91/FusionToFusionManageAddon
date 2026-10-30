@@ -7,3 +7,6 @@ __pycache__/
 # MkDocs build output
 site/
 dist/
+
+# Editor settings
+.vscode/
