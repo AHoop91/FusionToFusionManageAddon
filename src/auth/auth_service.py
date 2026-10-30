@@ -2,6 +2,10 @@
 
 Login runs on a background thread so Fusion's UI never blocks; the panel polls
 ``status()``. Only one sign-in can run at a time.
+
+Each Client ID has a session generation, which a sign-out and a new sign-in raise. A sign-in or a token refresh notes it when it starts and may save its
+tokens (or change the state) only while it is still the one it noted, so one that was under way when the user signed out cannot bring
+the session back.
 """
 
 import threading
@@ -44,6 +48,7 @@ class AuthService:
         self._state = STATE_SIGNED_OUT
         self._error = ""
         self._client_id = ""   # the Client ID the last sign-in was started for
+        self._generations: Dict[str, int] = {}   # client id -> session generation, raised by a sign-out (read and changed with ``_lock`` held)
         self._cancel = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._on_login_done: Optional[Callable[[], None]] = None
@@ -76,6 +81,7 @@ class AuthService:
             if self._state == STATE_SIGNING_IN:
                 raise AuthError("Sign-in already in progress.")
             self._state, self._error, self._client_id = STATE_SIGNING_IN, "", settings.client_id
+            generation = self._generations.get(settings.client_id, 0)
             self._cancel.clear()
         pkce = generate_pkce()
         try:
@@ -86,29 +92,34 @@ class AuthService:
         url = build_authorize_url(settings.client_id, settings.callback_url,
                                   settings.scopes, pkce["challenge"], pkce["state"])
         self._thread = threading.Thread(
-            target=self._run_login, args=(settings, pkce["verifier"], server),
+            target=self._run_login, args=(settings, pkce["verifier"], server, generation),
             name="MfgToFm-login", daemon=True,
         )
         self._thread.start()
         webbrowser.open(url)
 
-    def _run_login(self, settings: ConnectionSettings, verifier: str, server: CallbackServer) -> None:
-        """Background thread: wait for the redirect, then swap the code for tokens."""
+    def _run_login(self, settings: ConnectionSettings, verifier: str, server: CallbackServer, generation: int) -> None:
+        """Background thread: wait for the redirect, then swap the code for tokens. ``generation`` is the session's when the sign-in began:
+        a sign-out since then ends it without a trace (no tokens kept, no state changed)."""
         try:
             result = server.wait(LOGIN_TIMEOUT_SECONDS, self._cancel)
             if not result["code"]:
                 raise AuthError(result["error"] or "Sign-in failed.")
             tokens = exchange_code(settings.client_id, result["code"],
                                    settings.callback_url, verifier)
-            self._store.save(settings.client_id, tokens)
-            with self._lock:
+            with self._lock:   # the check and the save are one step: a sign-out cannot come between them
+                if self._generations.get(settings.client_id, 0) != generation:
+                    log.info("Sign-in dropped: the user signed out while it was under way")
+                    return
+                self._store.save(settings.client_id, tokens)
+                self._generations[settings.client_id] = generation + 1   # a new session: a refresh of the one before it cannot save over it
                 self._state = STATE_SIGNED_IN
             log.info("Signed in")
         except AuthError as exc:
-            self._fail(str(exc))
+            self._fail(str(exc), settings.client_id, generation)
         except Exception as exc:  # noqa: BLE001 - background thread must not die silently
             log.exception("Unexpected sign-in failure")
-            self._fail(f"Unexpected error: {exc}")
+            self._fail(f"Unexpected error: {exc}", settings.client_id, generation)
         finally:
             callback = self._on_login_done
             if callback is not None:
@@ -117,8 +128,12 @@ class AuthService:
                 except Exception:  # noqa: BLE001 - telling the panel is a courtesy
                     log.exception("Could not report the end of the sign-in")
 
-    def _fail(self, message: str) -> None:
+    def _fail(self, message: str, client_id: str = "", generation: Optional[int] = None) -> None:
+        """Report a failed sign-in, unless the user signed out since it began (``generation``): it is over, not failed."""
         with self._lock:
+            if generation is not None and self._generations.get(client_id, 0) != generation:
+                log.info("Sign-in ended after a sign-out: %s", message)
+                return
             self._state, self._error = STATE_ERROR, message
         log.warning("Sign-in failed: %s", message)
 
@@ -126,12 +141,21 @@ class AuthService:
         """Abort a pending browser sign-in."""
         self._cancel.set()
 
-    def sign_out(self, settings: ConnectionSettings) -> None:
-        """Forget the stored session for this client id."""
-        if settings.client_id:
-            self._store.clear(settings.client_id)
+    def sign_out(self, settings: ConnectionSettings, generation: Optional[int] = None) -> bool:
+        """Forget the stored session for this client id, and end every sign-in and refresh under way for it (they would save tokens again).
+        With ``generation``, only when the session is still that one (False when it is not): a refresh the server refused must not sign
+        out a session that began after it did. True when it signed out."""
+        client_id = settings.client_id
         with self._lock:
+            if generation is not None and self._generations.get(client_id, 0) != generation:
+                return False
+            self._generations[client_id] = self._generations.get(client_id, 0) + 1
+            if client_id:
+                self._store.clear(client_id)
+            if self._state == STATE_SIGNING_IN and self._client_id == client_id:
+                self._cancel.set()   # the browser wait ends, and frees the callback port
             self._state, self._error = STATE_SIGNED_OUT, ""
+        return True
 
     # ---- Token access ------------------------------------------------------
 
@@ -140,6 +164,8 @@ class AuthService:
 
         Calls from several threads wait while one of them refreshes, then use its new token.
         """
+        with self._lock:
+            generation = self._generations.get(settings.client_id, 0)   # the session this call belongs to
         tokens = self._store.load(settings.client_id)
         if not tokens:
             raise AuthError("Not signed in.")
@@ -158,11 +184,14 @@ class AuthService:
                 fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
             except AuthError as exc:
                 if exc.rejected:   # the refresh token is dead; a network or server failure keeps the session for the next try
-                    self.sign_out(settings)
+                    self.sign_out(settings, generation)
                 raise
             # Refresh tokens rotate; keep the old one if none is returned.
             fresh.setdefault("refresh_token", refresh)
-            self._store.save(settings.client_id, fresh)
+            with self._lock:   # the check and the save are one step: a sign-out during the refresh must not be undone by it
+                if self._generations.get(settings.client_id, 0) != generation:
+                    raise AuthError("Not signed in.")
+                self._store.save(settings.client_id, fresh)
             return fresh["access_token"]
 
     @staticmethod
