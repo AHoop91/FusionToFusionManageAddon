@@ -105,7 +105,7 @@ class PublishRuns:
             return {"error": "Set the Items workspace ID in Settings first."}
         wrong = context.mismatch(payload)
         if wrong:
-            log.warning("Publish refused: it was read under hub %r, the active hub is %r", payload.get("hub_id"), context.hub_id)
+            log.warning("Publish refused: it was read under other settings than those now active (hub %r)", context.hub_id)
             return {"error": wrong}
         model_id, time = self._open_model_ref()
         if not model_id:

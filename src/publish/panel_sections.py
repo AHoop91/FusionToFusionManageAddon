@@ -55,7 +55,7 @@ def entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     state: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": "",
                              "progress": 0,   # while pending: how many relations of the structure are read so far (of a structure of several pages)
                              "stage": "",     # while pending: "comparing" once the structure is read and Fusion Manage is being asked
-                             "hub": ""}       # the Fusion hub it was read under: a publish made from it must find that hub still active
+                             "stamp": ""}     # what it was read under (``PublishContext.stamp``): a publish made from it, or a reuse of it, needs it unchanged
     state.update(changes)
     return state
 
@@ -76,8 +76,8 @@ class _Load:
     fm: Optional[FmClient] = None
 
     @property
-    def hub(self) -> str:
-        return self.context.hub_id if self.context else ""
+    def stamp(self) -> str:
+        return self.context.stamp if self.context else ""
 
     @property
     def cfg(self) -> Optional[WorkspaceConfig]:
@@ -118,14 +118,14 @@ class PublishSections:
         with self._lock:
             self._forget_other_designs(key)
             current = self._slots.get(slot) or entry(slot)
-            if not payload.get("force") and current["key"] == key and (current["pending"] or current["ok"]):
+            if not payload.get("force") and self._holds(current, key, context.stamp) and (current["pending"] or current["ok"]):
                 log.debug("%s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
                 return dict(current)
             log.debug("%s requested: starting", slot)
             if slot in self._tokens:
                 self._tokens[slot].cancel()   # what the slot was still reading for an earlier design (or the last try) is not wanted
             token = self._tokens[slot] = ADDIN.child(f"loading {slot} for the Publish panel")
-            self._slots[slot] = entry(slot, pending=True, key=key, hub=context.hub_id)
+            self._slots[slot] = entry(slot, pending=True, key=key, stamp=context.stamp)
             snapshot = dict(self._slots[slot])
         threading.Thread(target=self._run, args=(_Load(slot, name, key, token, model_id, timestamp, component, context),), daemon=True).start()
         return snapshot
@@ -135,6 +135,12 @@ class PublishSections:
         slot = str(payload.get("section", ""))
         with self._lock:
             return dict(self._slots.get(slot) or entry(slot, message=f"Unknown section: {slot}"))
+
+    @staticmethod
+    def _holds(state: Dict[str, Any], key: str, stamp: str) -> bool:
+        """Whether a slot was filled, or is being filled, for this design under these settings (a changed hub, tenant or workspace setting
+        makes what was read, and compared with Fusion Manage, no longer right)."""
+        return state["key"] == key and state["stamp"] == stamp
 
     def _forget_other_designs(self, key: str) -> None:
         """Drop the slots of components made for another design, and end what they were still reading (called with the lock held): they are
@@ -165,7 +171,7 @@ class PublishSections:
             data = self._load(load)
             log.info("Loaded %s of %s", load.slot, load.model_id)
             log.debug("TIMING %s: %.2fs in all", load.slot, overall.lap())
-            outcome = entry(load.slot, ok=True, data=data, key=load.key, hub=load.hub)
+            outcome = entry(load.slot, ok=True, data=data, key=load.key, stamp=load.stamp)
         except Cancelled:   # a newer load replaced this one (another design, or a reload): the slot is left for that to fill
             log.info("Loading %s was cancelled", load.slot)
             return
@@ -182,7 +188,7 @@ class PublishSections:
     def _waits_for(self, load: _Load) -> bool:
         """Whether the slot of ``load`` is still waiting for it, not for a newer load or another design (called with the lock held)."""
         slot = self._slots.get(load.slot)
-        return slot is not None and slot["key"] == load.key and slot["pending"]
+        return slot is not None and self._holds(slot, load.key, load.stamp) and slot["pending"]
 
     def _note(self, load: _Load, **changes: Any) -> None:
         """Say how far a load is (while it is still the one the slot waits for)."""
@@ -194,7 +200,7 @@ class PublishSections:
         """The summary read for this design: the sections after it need the design's component id, composition and item number."""
         with self._lock:
             summary = self._slots[SUMMARY]
-            return dict(summary["data"] or {}) if summary["key"] == load.key else {}
+            return dict(summary["data"] or {}) if self._holds(summary, load.key, load.stamp) else {}
 
     def _load(self, load: _Load) -> Any:
         """What the section holds: read from the Data Model, and compared with Fusion Manage where the panel shows the comparison."""

@@ -9,6 +9,7 @@ from src.config.models import ConnectionSettings
 from src.config.workspace_models import WorkspaceConfig
 from src.core.cancel import Cancelled
 from src.publish import panel_sections
+from src.publish.context import capture_context
 from src.publish.panel_sections import PublishSections
 
 SUMMARY = {"component_id": "R", "composition": "RELEASED", "item_number": "TOP", "part_number": "TOP", "name": "Top", "description": ""}
@@ -81,19 +82,44 @@ class SectionTests(unittest.TestCase):
         self.assertTrue(done["ok"])
         self.assertEqual(done["data"]["item_number"], "TOP")
 
-    def test_a_section_says_which_hub_it_was_read_under(self):
-        self.assertEqual(self.fx.ask("summary")["hub"], "hub1")
-        self.assertEqual(self.fx.wait("summary")["hub"], "hub1")
+    def test_a_section_says_which_settings_it_was_read_under(self):
+        stamp = capture_context(self.fx.config).stamp
+        self.assertEqual(self.fx.ask("summary")["stamp"], stamp)
+        self.assertEqual(self.fx.wait("summary")["stamp"], stamp)
+
+    def test_a_loaded_section_is_read_again_when_the_tenant_or_workspace_changed_within_the_hub(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")   # same hub and design, other workspace
+        self.assertTrue(self.fx.ask("summary")["pending"])
+        self.assertEqual(self.fx.wait("summary")["stamp"], capture_context(self.fx.config).stamp)
+        self.assertEqual([r[0] for r in self.fx.reads].count("summary"), 2)
+
+    def test_a_loaded_section_is_kept_while_the_settings_are_unchanged(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.assertTrue(self.fx.ask("summary")["ok"])
+        self.assertEqual([r[0] for r in self.fx.reads].count("summary"), 1)
+
+    def test_what_a_load_read_under_old_settings_is_not_kept_when_a_newer_load_has_taken_its_slot(self):
+        self.fx.gate = threading.Event()
+        self.fx.ask("summary")
+        self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")
+        self.fx.ask("summary")   # replaces the first load, which is still reading
+        self.fx.gate.set()
+        done = self.fx.wait("summary")
+        self.assertEqual(done["stamp"], capture_context(self.fx.config).stamp)
 
     def test_a_load_reads_under_the_hub_it_was_asked_for_under_even_if_another_opens_meanwhile(self):
         self.fx.gate = threading.Event()
+        stamp = capture_context(self.fx.config).stamp
         self.fx.ask("summary")
         self.fx.config.hub_id = "hub2"   # another hub is active before the load's thread has made its clients
         self.fx.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="other")
         self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")
         self.fx.gate.set()
         done = self.fx.wait("summary")
-        self.assertEqual(done["hub"], "hub1")
+        self.assertEqual(done["stamp"], stamp)
         self.assertEqual(panel_sections.FmClient.call_args[0][0].tenant, "acme")
         self.assertEqual(panel_sections.publish_denial.call_args[0][1].workspace_id, "242")
 

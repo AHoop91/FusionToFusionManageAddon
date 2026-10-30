@@ -20,7 +20,7 @@
 
   let currentSummary = null;   // summary of the open design
   let loadedKey = null;        // design the panel currently shows
-  let loadedHub = '';          // hub it was read under
+  let loadedStamp = '';        // the hub and settings it was read under
   let lastLoad = 0;
   let generation = 0;          // counts reloads of the design
   const loaded = {};           // section -> true once shown for the current design
@@ -121,8 +121,8 @@
     if (entry.denied) { showDenied(entry.denied); return; }
     if (!entry.ok) { setThumbnail('', false); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
     loadedKey = entry.key;
-    loadedHub = entry.hub || '';
-    jobs.setHub(loadedHub);   // a publish names the hub the design was read under, and is refused if another is active
+    loadedStamp = entry.stamp || '';
+    jobs.setStamp(loadedStamp);   // a publish names what the design was read under, and is refused if the hub or settings are no longer those
     loaded.summary = true;
     renderSummary(entry.data);
     ensureSections();
@@ -223,7 +223,7 @@
     // The palette stays open while the user switches designs. Clicking into it also fires focus,
     // so reload only when a different design is open; the same design is read again only by the refresh button.
     bridge.on('get_publish_model_key', function (r) {
-      if (r.ok && (r.result.key !== loadedKey || (r.result.hub || '') !== loadedHub)) refresh(false);   // another design, or another hub
+      if (r.ok && (r.result.key !== loadedKey || (r.result.stamp || '') !== loadedStamp)) refresh(false);   // another design, or other settings (another hub, tenant or workspace)
     });
     function checkDesign() {
       if (!$('view-app').hidden && !inflight.summary) bridge.send('get_publish_model_key');

@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Tuple
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger
+from ...publish.context import capture_context
 from ...publish.panel_sections import PublishSections
 from ..message_bridge import MessageBridge
 from .design_ref import model_ref
@@ -28,6 +29,16 @@ def is_openable(url: str) -> bool:
 def model_key(model_id: str, time: str) -> str:
     """What the panel compares to tell whether another design, or another version of it, is open ("" when none is saved)."""
     return f"{model_id}|{time}" if model_id else ""
+
+
+def current_stamp(config: ConfigService) -> str:
+    """The stamp of the hub and settings now active ("" when they cannot be read, which differs from every stamp a read was made under, so
+    the panel reads again and shows why)."""
+    try:
+        return capture_context(config).stamp
+    except Exception:  # noqa: BLE001 - Shared Configuration that cannot be read: the load that follows says so
+        log.debug("Could not take the stamp of the settings", exc_info=True)
+        return ""
 
 
 def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
@@ -51,8 +62,8 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
         return {}
 
     def get_publish_model_key(_payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Cheap check of which design is open, so the panel reloads only on a change."""
-        return {"key": model_key(*open_model_ref()), "hub": str(config.hub_id or "")}
+        """Cheap check of which design is open, and under which settings, so the panel reloads only on a change."""
+        return {"key": model_key(*open_model_ref()), "stamp": current_stamp(config)}
 
     bridge.register("load_publish_section", sections.request)
     bridge.register("load_publish_section_status", sections.status)

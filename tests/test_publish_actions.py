@@ -3,6 +3,9 @@
 import unittest
 from unittest import mock
 
+from src.config.models import ConnectionSettings
+from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
+from src.publish.context import capture_context
 from tests.without_fusion import fusion_modules_stubbed
 
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
@@ -46,6 +49,8 @@ class RegisteredActionsTests(unittest.TestCase):
         self.sections = patch.start().return_value
         self.addCleanup(patch.stop)
         self.config = mock.Mock(hub_id="hub1")
+        self.config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
+        self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="242")}
         register_publish_actions(self.bridge, self.config, mock.Mock(), self.ref, self.browser)
 
     def test_the_sections_are_given_the_open_design_reader(self):
@@ -59,9 +64,19 @@ class RegisteredActionsTests(unittest.TestCase):
         self.sections.request.assert_called_once_with({"name": "summary"})
 
     def test_the_model_key_is_that_of_the_open_design(self):
-        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "m1|t1", "hub": "hub1"})
+        stamp = capture_context(self.config).stamp
+        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "m1|t1", "stamp": stamp})
         self.ref.return_value = ("", "")
-        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "", "hub": "hub1"})
+        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"], {"key": "", "stamp": stamp})
+
+    def test_the_stamp_follows_the_settings(self):
+        before = self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"]
+        self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="999")}
+        self.assertNotEqual(self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"], before)
+
+    def test_settings_that_cannot_be_read_give_an_empty_stamp_so_the_panel_reads_again(self):
+        self.config.effective_settings.side_effect = RuntimeError("unreadable")
+        self.assertEqual(self.bridge.dispatch("get_publish_model_key", "")["result"]["stamp"], "")
 
     def test_a_link_that_may_be_opened_is_opened(self):
         reply = self.bridge.dispatch("open_url", '{"url": "https://example.com/x"}')
