@@ -164,6 +164,33 @@ class StartTests(Setup):
 
 
 class RetryTests(Setup):
+    def retry_with(self, recorded, active="acme"):
+        """Retry a failed run whose manifest records ``recorded`` while ``active`` is the active tenant."""
+        publish_run_actions.FmClient.return_value.tenant = active
+        self.runs.queue.get.return_value = finished("send", "error")
+        plan = {"manifest": {"tenant": recorded}}
+        with mock.patch.object(publish_run_actions, "load_plan", return_value=plan), \
+                mock.patch.object(publish_run_actions, "SendRun") as send:
+            self.runs.retry({"id": "r1"})
+        return send
+
+    def test_a_run_made_for_another_tenant_is_not_retried(self):
+        send = self.retry_with("other", active="acme")
+        send.assert_not_called()
+        self.runs.queue.replace.assert_not_called()
+        self.assertEqual(self.dialogs.notify.call_args[0][0], "Retry")
+        self.assertIn("other", self.dialogs.notify.call_args[0][1])
+
+    def test_a_run_that_records_no_tenant_is_not_retried(self):
+        for recorded in ("", None):
+            self.retry_with(recorded)
+        self.runs.queue.replace.assert_not_called()
+        self.assertEqual(self.dialogs.notify.call_count, 2)
+
+    def test_a_run_made_for_the_active_tenant_is_retried(self):
+        self.retry_with("acme").assert_called_once()
+        self.runs.queue.replace.assert_called_once()
+
     def test_a_run_that_is_not_listed_or_not_ended_is_left_alone(self):
         self.runs.queue.get.return_value = None
         self.assertEqual(self.runs.retry({"id": "x"}), {"jobs": [{"id": "r0"}]})
@@ -174,11 +201,13 @@ class RetryTests(Setup):
     def test_a_failed_run_is_queued_again_in_its_place(self):
         failed = finished("send", "error")
         self.runs.queue.get.return_value = failed
-        with mock.patch.object(publish_run_actions, "load_plan", return_value="plan"), \
+        plan = {"manifest": {"tenant": "acme"}}
+        publish_run_actions.FmClient.return_value.tenant = "acme"
+        with mock.patch.object(publish_run_actions, "load_plan", return_value=plan), \
                 mock.patch.object(publish_run_actions, "SendRun") as send:
             self.runs.retry({"id": "r1"})
         send.assert_called_once()
-        self.assertEqual(send.call_args[0][:2], ("/runs/r1", "plan"))
+        self.assertEqual(send.call_args[0][:2], ("/runs/r1", plan))
         self.runs.queue.replace.assert_called_once_with(failed, send.return_value)
 
     def test_a_folder_that_cannot_be_sent_is_told_to_the_user_and_not_queued(self):

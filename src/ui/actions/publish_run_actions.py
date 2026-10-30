@@ -66,6 +66,14 @@ def _job_of(payload: Dict[str, Any]) -> Dict[str, Any]:
             "operations": list(payload.get("operations") or []), "root_number": str(payload.get("root_number") or "")}
 
 
+def _wrong_tenant(recorded: str, active: str) -> str:
+    """Why a run cannot be retried: it was made for another Fusion Manage tenant than the one now active."""
+    if not recorded:
+        return "This run does not record which Fusion Manage tenant it was made for, so it cannot be retried safely. Publish again."
+    return (f"This run was made for the Fusion Manage tenant '{recorded}', but the active tenant is '{active or 'none'}'. "
+            f"Open the Fusion hub of '{recorded}' to retry it.")
+
+
 class PublishRuns:
     """The publish runs of the add-in: the queue that works through them and what the panels may do with it. Lives as long as the add-in.
 
@@ -109,7 +117,13 @@ class PublishRuns:
             log.warning("Retry: %s cannot be sent: %s", run.path, exc)
             self._dialogs.notify("Retry", str(exc))
             return self.jobs()
-        self.queue.replace(run, SendRun(run.path, plan, FmClient(self._config.effective_settings(), self._auth)))
+        fm = FmClient(self._config.effective_settings(), self._auth)
+        recorded = str(plan["manifest"].get("tenant") or "").strip()
+        if not recorded or recorded != fm.tenant:   # the active hub may have changed since: its items and workspaces are not this run's
+            log.warning("Retry: %s was made for tenant %r, the active tenant is %r", run.path, recorded, fm.tenant)
+            self._dialogs.notify("Retry", _wrong_tenant(recorded, fm.tenant))
+            return self.jobs()
+        self.queue.replace(run, SendRun(run.path, plan, fm))
         log.info("Retry queued for %s", run.path)
         return self.jobs()
 
