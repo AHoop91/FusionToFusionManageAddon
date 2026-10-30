@@ -1,0 +1,2609 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.">
+      
+      
+      
+        <link rel="canonical" href="https://ahoop91.github.io/FusionToFusionManageAddon/publishing/">
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+        <link rel="next" href="../item-panel/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Publishing - Fusion Manage - Item Management</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <script>
+    /* Apply the saved menu state before the page is drawn, so nothing moves on load. */
+    (function () {
+      try {
+        var root = document.documentElement;
+        if (localStorage.getItem("fm-docs-nav-collapsed") === "1") root.classList.add("nav-collapsed");
+        var font = localStorage.getItem("fm-docs-font");
+        if (font) root.setAttribute("data-fm-font", font);
+        var nav = localStorage.getItem("fm-docs-nav-width");
+        if (nav) root.style.setProperty("--nav-width", nav + "px");
+      } catch (e) {}
+    })();
+  </script>
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#publishing" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Fusion Manage - Item Management" class="md-header__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Fusion Manage - Item Management
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Publishing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Fusion Manage - Item Management" class="md-nav__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    Fusion Manage - Item Management
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-End Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Set up
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Set up
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation and Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Publishing
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Publishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-this-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In this page
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-the-publish-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open the Publish panel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Open the Publish panel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status-in-the-details-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status in the Details Panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publish
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Publish">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-run-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run does
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-representations-are-manual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical representations are manual
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-and-is-not-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is and is not sent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#item-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Item Creation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Item Creation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-an-item-is-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When an item is created
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-new-item-receives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a new item receives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#order-of-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Order of creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permission-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission needed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-does-not-happen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What does not happen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#item-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Item Update
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Item Update">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-an-item-is-updated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When an item is updated
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-an-update-sends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an update sends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-never-overwritten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is never overwritten
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#item-numbers-that-several-items-carry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Item numbers that several items carry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permission-needed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission needed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-the-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After the update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bill-of-materials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bill of Materials
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bill of Materials">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#large-designs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Large designs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-lines-are-compared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How lines are compared
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Filters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#duplicates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#paired-rows-a-replaced-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paired rows: a replaced item
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#editing-quantities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Editing quantities
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-existing-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add Existing Items
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-gets-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What gets sent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-export-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Export Window
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        STEP File
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="STEP File">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#find-the-right-click-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Find the right-click entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upload-a-step-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload a STEP file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upload a STEP file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-versions-not-duplicates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New versions, not duplicates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#which-geometry-is-exported" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which geometry is exported
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#messages-you-may-see" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Messages you may see
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeing-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeing the result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drawing-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drawing Representation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Drawing Representation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#upload-a-drawing-pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload a drawing PDF
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upload a drawing PDF">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-versions-not-duplicates_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New versions, not duplicates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-drawing-must-be-loaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The drawing must be loaded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-the-pdf-is-empty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If the PDF is empty
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeing-the-result_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeing the result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../item-panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Item Panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../job-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Additional Information
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Additional Information
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/manufacturing-data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manufacturing Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-this-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In this page
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-the-publish-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open the Publish panel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Open the Publish panel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status-in-the-details-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status in the Details Panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publish
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Publish">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-run-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run does
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-representations-are-manual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical representations are manual
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-and-is-not-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is and is not sent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#item-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Item Creation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Item Creation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-an-item-is-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When an item is created
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-new-item-receives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a new item receives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#order-of-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Order of creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permission-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission needed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-does-not-happen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What does not happen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#item-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Item Update
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Item Update">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-an-item-is-updated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When an item is updated
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-an-update-sends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an update sends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-never-overwritten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is never overwritten
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#item-numbers-that-several-items-carry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Item numbers that several items carry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permission-needed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission needed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-the-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After the update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bill-of-materials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bill of Materials
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bill of Materials">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#large-designs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Large designs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-lines-are-compared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How lines are compared
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Filters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#duplicates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#paired-rows-a-replaced-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paired rows: a replaced item
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#editing-quantities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Editing quantities
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-existing-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add Existing Items
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-gets-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What gets sent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-export-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Export Window
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        STEP File
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="STEP File">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#find-the-right-click-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Find the right-click entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upload-a-step-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload a STEP file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upload a STEP file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-versions-not-duplicates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New versions, not duplicates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#which-geometry-is-exported" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which geometry is exported
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#messages-you-may-see" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Messages you may see
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeing-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeing the result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drawing-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drawing Representation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Drawing Representation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#upload-a-drawing-pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload a drawing PDF
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upload a drawing PDF">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-versions-not-duplicates_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New versions, not duplicates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-drawing-must-be-loaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The drawing must be loaded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-the-pdf-is-empty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If the PDF is empty
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeing-the-result_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeing the result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="publishing">Publishing<a class="headerlink" href="#publishing" title="Permanent link">&para;</a></h1>
+<p><strong>What you'll do here:</strong> turn a released design into manufacturing items in Fusion Manage, then attach STEP files and drawings.</p>
+<p>Items and BOMs are sent by <strong>Publish</strong>. STEP files and drawing PDFs are different: they are <strong>never sent by a publish</strong> and are uploaded one at a time by you. See <a href="#technical-representations-are-manual">Technical representations are manual</a>.</p>
+<h2 id="quick-steps">Quick steps<a class="headerlink" href="#quick-steps" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Open the saved design.</li>
+<li>Right-click the top-level component and choose <strong>Publish Fusion Manage Item</strong>.</li>
+<li>Check the BOM and the <strong>New</strong> or <strong>Update</strong> marks in the Details Panel.</li>
+<li>Click <strong>Publish</strong>, and follow it in the <a href="../job-queue/">Job Queue</a>.</li>
+<li>Optional: attach a <a href="#step-file">STEP file</a> or <a href="#drawing-representation">drawing PDF</a>.</li>
+</ol>
+<p>Review the result in the <a href="../item-panel/">Item Panel</a>.</p>
+<h2 id="in-this-page">In this page<a class="headerlink" href="#in-this-page" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Read it when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#open-the-publish-panel">Open the Publish panel</a> and <a href="#publish">Publish</a></td>
+<td>You are publishing for the first time.</td>
+</tr>
+<tr>
+<td><a href="#item-creation">Item Creation</a> and <a href="#item-update">Item Update</a></td>
+<td>You want to know what is created, changed or never overwritten.</td>
+</tr>
+<tr>
+<td><a href="#bill-of-materials">Bill of Materials</a></td>
+<td>You are comparing or editing the BOM.</td>
+</tr>
+<tr>
+<td><a href="#step-file">STEP File</a> and <a href="#drawing-representation">Drawing Representation</a></td>
+<td>You are attaching files.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
+<ul>
+<li>You are signed in and the Items workspace is configured (<a href="../getting-started/installation/">Installation and Authentication</a>, <a href="../configuration/#item-workspace">Item Workspace</a>).</li>
+<li>The design is saved and its components have item numbers. Items in Fusion Manage are matched by item number.</li>
+<li>Your Fusion Manage user holds the permissions listed in the Items workspace: View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM. Otherwise the panel shows a "no access" message naming what is missing.</li>
+</ul>
+<h2 id="open-the-publish-panel">Open the Publish panel<a class="headerlink" href="#open-the-publish-panel" title="Permanent link">&para;</a></h2>
+<p>Publishing always starts from the top of the design, so open the design first (a drawing cannot be published). There is no Publish button on the ribbon. Use either of these:</p>
+<ol>
+<li><strong>From the design.</strong> Right-click the top-level component in the browser and choose <strong>Publish Fusion Manage Item</strong>. The entry is offered on the top-level component only.</li>
+<li>
+<p><strong>From the Item panel.</strong> Select the component and choose <strong>Open Fusion Manage Item</strong>, then do one of the following:</p>
+<ul>
+<li>If the item is not in Fusion Manage yet, click <strong>Publish to Fusion Manage</strong>.</li>
+<li>Open the <strong>Actions</strong> (<strong>...</strong>) menu and choose <strong>Republish</strong>. It is offered whenever a design is open.</li>
+<li>If the tab's pill shows <strong>Out of date</strong>, click it to open the report, then click <strong>Republish</strong>.</li>
+</ul>
+<p>The Item panel closes as the Publish panel opens.</p>
+</li>
+</ol>
+<p>The panel shows the design's thumbnail and summary, and below it the <strong>Bill of Materials</strong> of the design compared with Fusion Manage. The thumbnail arrives a moment after the rest, so you can start on the BOM while it loads. Click a row to open the <strong>Details Panel</strong> beside it, which shows the item, a status pill at its top right, and a table of its properties with the value in Fusion, the value in Fusion Manage and a status dot for each. Hover a dot to see what publishing will do for that property. A row's details are read when you open it, and the design's own row reads its properties the first time you open it.</p>
+<p><img alt="The Publish panel: the design's thumbnail and numbers, the Bill of Materials with its Fusion and Manage ticks and quantities, and the pills and Publish button at the bottom" height="465" src="../images/publish-panel.png" width="900" /></p>
+<h3 id="status-in-the-details-panel">Status in the Details Panel<a class="headerlink" href="#status-in-the-details-panel" title="Permanent link">&para;</a></h3>
+<p>The pill at the top right of the Details Panel shows what publishing will do for the component:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>New</strong></td>
+<td>No item exists in Fusion Manage yet; publishing creates it. See <a href="#item-creation">Item Creation</a>.</td>
+</tr>
+<tr>
+<td><strong>Update</strong></td>
+<td>The Fusion Manage value differs; publishing changes it. See <a href="#item-update">Item Update</a>.</td>
+</tr>
+<tr>
+<td><strong>Up to date</strong></td>
+<td>The mapped property values already match. A default value to send again, or a missing component link, is not shown here but is still sent with a publish.</td>
+</tr>
+<tr>
+<td><strong>Shared number</strong></td>
+<td>Several Fusion Manage items have this number. Fix it in Fusion Manage: publishing fails until then.</td>
+</tr>
+<tr>
+<td><strong>Error</strong></td>
+<td>Fusion Manage could not be read for this item.</td>
+</tr>
+</tbody>
+</table>
+<p>Properties with no mapping are listed as not published. Mapped properties are listed first so you see what will change.</p>
+<p><img alt="The Details Panel beside the Bill of Materials: the Up to date pill, and each property with its value in Fusion, its value in Fusion Manage and a status dot" height="466" src="../images/details-panel.png" width="900" /></p>
+<h2 id="publish">Publish<a class="headerlink" href="#publish" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Review the BOM and details. <strong>Refresh</strong> reads the design and Fusion Manage again.</li>
+<li>Optionally use <strong>Add Existing Items</strong> to include existing Fusion Manage items in the BOM (see <a href="#add-existing-items">Bill of Materials</a>).</li>
+<li>Click <strong>Publish</strong>. The button is enabled once the BOM has loaded. It stays disabled while a line still needs a choice (<strong>Review</strong>), while <strong>Expand all</strong> is reading the tree, and when the design's own item number is shared.</li>
+</ol>
+<p>A progress dialog appears with up to three bars, one after the other, each with a percentage. <strong>Reading</strong> shows only when the Bill of Materials has levels that are not read yet: <strong>Publish</strong> reads and compares them first, counting the lines so far, and the bar turns green with the number of items found when it is done. <strong>Validating</strong> looks up every item number in Fusion Manage. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see <a href="#item-numbers-that-several-items-carry">Item numbers that several items carry</a>). Once validation is complete and green, <strong>Publishing</strong> fills as the items are created or updated and then as the requests of the Bill of Materials are sent (each add, update, removal or renumber counts as one). You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Closing it while <strong>Reading</strong> is still going drops the publish. Use <strong>Cancel publish</strong> to stop: items already processed are kept in the run's folder, the rest are not published.</p>
+<p>Under the bars the dialog shows the time elapsed and a tally of <strong>Successful</strong>, <strong>Failed</strong> and <strong>Pending</strong> items. A <strong>Skipped</strong> box is added when items were left out on purpose.</p>
+<p><img alt="The progress dialog over the Publish panel: the Reading bar complete, the Validating bar at 48% and the Publishing bar at 0%, with the Cancel publish and Close buttons" height="465" src="../images/publish-progress.png" width="900" /></p>
+<h3 id="what-a-run-does">What a run does<a class="headerlink" href="#what-a-run-does" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Reads each item's properties from the Data Model and compares them with Fusion Manage (up to five items at once).</li>
+<li>Downloads the thumbnail, for each item that is created or updated. It is attached only when a thumbnail is mapped to an image field; otherwise nothing is downloaded.</li>
+<li>Writes a request file for each item, then sends it: a <code>POST</code> creates an item, a <code>PATCH</code> updates one.</li>
+<li>Once <strong>every</strong> item exists, sends the BOM changes of each parent assembly. BOMs go last so that new parents and children already have IDs. Removals, updates and renumbers go first, up to five requests at a time; once they are all done, the adds follow, also up to five at a time. A line is therefore freed before another takes its position.</li>
+</ol>
+<p>When the run ends, the progress dialog turns into the result. It reads <strong>Publish complete</strong> when every item went through, <strong>Completed with errors</strong> when some failed (see the <a href="../job-queue/">Job Queue</a> for the reasons), <strong>Publish cancelled</strong> after <strong>Cancel publish</strong>, <strong>Validation failed</strong> when the item numbers could not be checked or several items carry one (Publishing shows <em>Not started</em>), or <strong>Publish failed</strong> when the run could not finish after validation.</p>
+<p><img alt="The Publish complete dialog: the Reading, Validating and Publishing bars all at 100%, 42 Successful, 0 Failed and 0 Pending" height="465" src="../images/publish-complete.png" width="900" /></p>
+<p>If you closed the dialog, Fusion shows a message box instead when the run completes or completes with errors (titled <strong>Publish completed with errors</strong>; nothing is shown for a cancelled run), with <strong>Total Items Processed</strong>, <strong>Total Items Created</strong> and <strong>Total Items Updated</strong>, and, for any failure, the item and the reason.</p>
+<p>The run itself is shown in the <a href="../job-queue/">Job Queue</a>, and if something fails you can send it again with <a href="../job-queue/#request-files-and-retry">Request Files and Retry</a>.</p>
+<h2 id="technical-representations-are-manual">Technical representations are manual<a class="headerlink" href="#technical-representations-are-manual" title="Permanent link">&para;</a></h2>
+<p>A publish sends item data, the BOM and the thumbnail. It does <strong>not</strong> attach a STEP file or a drawing PDF. Those are uploaded manually, so you decide what goes to the supply chain, for which items, and when. See <a href="#step-file">STEP File</a> and <a href="#drawing-representation">Drawing Representation</a>.</p>
+<h2 id="what-is-and-is-not-sent">What is and is not sent<a class="headerlink" href="#what-is-and-is-not-sent" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Mapped properties with no value in the Data Model are never sent. On a create the run records "No value in the Data Model, not sent" with the field names. On an update, a value Fusion Manage already holds is kept: Fusion having none never clears it. Only a real difference, such as Steel in Fusion and Plastic in Fusion Manage, is pushed.</li>
+<li>Properties are only ever added or changed. The add-in does not delete items, and removes a BOM line only when you choose <strong>Remove</strong> on it.</li>
+<li>A component whose item number is shared with another component is not published. See <a href="#shared-item-numbers">Shared item numbers</a>.</li>
+</ul>
+<h2 id="item-creation">Item Creation<a class="headerlink" href="#item-creation" title="Permanent link">&para;</a></h2>
+<p>When a component has no item in Fusion Manage yet, publishing <strong>creates</strong> one.</p>
+<h3 id="when-an-item-is-created">When an item is created<a class="headerlink" href="#when-an-item-is-created" title="Permanent link">&para;</a></h3>
+<p>For each component in the Publish panel, the add-in searches the Items workspace for an item with the component's <strong>item number</strong>. If nothing is found, the <strong>Details Panel</strong> shows <strong>New</strong> for it and a publish creates it. A design that is not in Fusion Manage at all has no status on its BOM lines, because there is nothing to compare them with. If an item is found, see <a href="#item-update">Item Update</a>.</p>
+<p>The search is by item number only. Make sure your workspace maps <strong>Item Number</strong> to the Fusion Manage field that holds it (<code>NUMBER</code> in the default mapping). In Fusion Manage, that field must also be part of the Items workspace's item descriptor, or existing items are not found. See <a href="../configuration/#the-item-number">The item number</a>.</p>
+<h3 id="what-a-new-item-receives">What a new item receives<a class="headerlink" href="#what-a-new-item-receives" title="Permanent link">&para;</a></h3>
+<p>A new item is created with:</p>
+<table>
+<thead>
+<tr>
+<th>Content</th>
+<th>Where it comes from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every <strong>mapped property</strong> that has a value</td>
+<td>The Manufacturing Data Model, through your <a href="../configuration/#item-workspace">field mapping</a></td>
+</tr>
+<tr>
+<td>Every <strong>default value</strong></td>
+<td>Your workspace settings. Default values are set on every new item</td>
+</tr>
+<tr>
+<td>The <strong>thumbnail</strong></td>
+<td>The Data Model, when the thumbnail is mapped to an image field</td>
+</tr>
+<tr>
+<td>The <strong>component link</strong></td>
+<td>The Fusion Manage component for the part, when a linking field is chosen</td>
+</tr>
+</tbody>
+</table>
+<p>How values are prepared:</p>
+<ul>
+<li><strong>Picklist fields</strong> receive the matching option. A value that matches no option is left out and recorded, and the rest of the item is still created. See <a href="../configuration/#picklists">Picklists</a>.</li>
+<li><strong>Number fields</strong> are rounded to the precision the Fusion Manage field takes.</li>
+<li><strong>Empty values</strong> are not sent. The run records <em>No value in the Data Model, not sent</em>, with the field names.</li>
+</ul>
+<h3 id="order-of-creation">Order of creation<a class="headerlink" href="#order-of-creation" title="Permanent link">&para;</a></h3>
+<p>Every component is created or updated first, <strong>then</strong> the BOM lines are sent. A BOM line needs both the parent and the child to exist, so BOMs always go last. See <a href="#bill-of-materials">Bill of Materials</a>.</p>
+<p>If an item fails to be created, the other items carry on. The failed item's BOM is skipped, because the item is not there for it. You can retry from the <a href="../job-queue/#request-files-and-retry">Job Queue</a>: what Fusion Manage already accepted is skipped, so nothing is created twice.</p>
+<h3 id="permission-needed">Permission needed<a class="headerlink" href="#permission-needed" title="Permanent link">&para;</a></h3>
+<p>Creating an item needs <strong>Add Items</strong> in the Items workspace.</p>
+<h3 id="what-does-not-happen">What does not happen<a class="headerlink" href="#what-does-not-happen" title="Permanent link">&para;</a></h3>
+<p>Creating an item does not attach a STEP file or a drawing PDF. Those are uploaded by you afterwards, only for the items you choose. See <a href="#step-file">STEP File</a> and <a href="#drawing-representation">Drawing Representation</a>.</p>
+<h3 id="after-creation">After creation<a class="headerlink" href="#after-creation" title="Permanent link">&para;</a></h3>
+<p>The run reports <strong>Total Items Created</strong>. Open the new item in the <a href="../item-panel/">Item Panel</a> to check it.</p>
+<h2 id="item-update">Item Update<a class="headerlink" href="#item-update" title="Permanent link">&para;</a></h2>
+<p>When a component already has an item in Fusion Manage, publishing <strong>updates</strong> it, and only where something differs. Publishing the same design twice is safe.</p>
+<h3 id="when-an-item-is-updated">When an item is updated<a class="headerlink" href="#when-an-item-is-updated" title="Permanent link">&para;</a></h3>
+<p>The add-in searches the Items workspace for the component's item number.</p>
+<table>
+<thead>
+<tr>
+<th>Result of the search</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One item found</td>
+<td>The item is compared with the design and updated where needed</td>
+</tr>
+<tr>
+<td>No item found</td>
+<td>The item is created. See <a href="#item-creation">Item Creation</a></td>
+</tr>
+<tr>
+<td>Several items found</td>
+<td>The status is <strong>Shared number</strong>. The run fails before it writes anything: fix the number in Fusion Manage (see <a href="#item-numbers-that-several-items-carry">Item numbers that several items carry</a>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-an-update-sends">What an update sends<a class="headerlink" href="#what-an-update-sends" title="Permanent link">&para;</a></h3>
+<p>An update sends only what has changed:</p>
+<ul>
+<li><strong>Mapped properties whose values differ.</strong> These are the ones marked <strong>Update</strong> in the Details Panel.</li>
+<li><strong>Default values the item does not hold.</strong> A default value is sent again when the item's field does not hold it, so a value someone changed in Fusion Manage is set back to the default. A field already holding the default is left alone.</li>
+<li><strong>The component link, if the item lacks it.</strong></li>
+<li><strong>The thumbnail.</strong> Images cannot be compared, so the thumbnail is sent with every update, even when nothing else differs. An item with a mapped thumbnail is therefore updated by every publish.</li>
+</ul>
+<p>If nothing differs and no thumbnail is mapped (or the component has none yet), <strong>no request is sent</strong> and the run records <em>Fusion Manage already has the same values</em>. Such an item is not counted as updated.</p>
+<p>Numbers are compared at the precision of the Fusion Manage field. If the field already holds the number at its precision, it is not sent again.</p>
+<h3 id="what-is-never-overwritten">What is never overwritten<a class="headerlink" href="#what-is-never-overwritten" title="Permanent link">&para;</a></h3>
+<p>An update never changes:</p>
+<ul>
+<li><strong>A value Fusion Manage holds where Fusion has none.</strong> Publishing never blanks a field.</li>
+<li><strong>Fields you have not mapped.</strong> Anything entered in Fusion Manage that is not part of the mapping is untouched. This is how the manufacturing information added after publishing survives a later publish.</li>
+<li><strong>The item's lifecycle state and workflow.</strong> Fusion Manage owns them.</li>
+<li><strong>BOM lines that only Fusion Manage has.</strong> They are kept unless you choose to remove them. See <a href="#bill-of-materials">Bill of Materials</a>.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">Engineering changes</p>
+<p>When a design changes after it was published, publish again. Items that still match are skipped, items that differ are updated, and what Manufacturing added in Fusion Manage is preserved.</p>
+</div>
+<h3 id="item-numbers-that-several-items-carry">Item numbers that several items carry<a class="headerlink" href="#item-numbers-that-several-items-carry" title="Permanent link">&para;</a></h3>
+<p>The add-in asks Fusion Manage for items whose descriptor matches the component's item number, and uses the item when exactly one comes back. When more than one comes back it does not guess, and nothing can be published until the number belongs to one item. This happens when two items in the workspace carry the same item number. Fusion Manage does not stop that, for example when items were created by hand or imported. The fix is in Fusion Manage: renumber or remove the extra items, then refresh the panel.</p>
+<ul>
+<li><strong>In the panel.</strong> Open the component's details. The status is <strong>Shared number</strong>, and the Details Panel lists the Fusion Manage items that carry the number. A design whose own number is shared is not compared: the Bill of Materials says so, and <strong>Publish</strong> and <strong>Add Existing Items</strong> stay disabled.</li>
+<li><strong>When you publish.</strong> Before anything is written, the run looks up every item number in Fusion Manage. If any number is carried by several items, the whole run fails and nothing is published. The progress dialog shows the Validating bar failed and Publishing not started. While the numbers are looked up, each row of the Bill of Materials shows a spinner, then a green tick, or a red cross when several items carry its number. The crosses stay after the failure, and the panel does not refresh, so you can find the items to fix. The run does not appear in the Job Queue. Nothing is partly published, so after you have fixed Fusion Manage you publish again.</li>
+<li><strong>If the look-up fails.</strong> If Fusion Manage cannot be searched, the run fails the same way, because the numbers cannot be known to be unique.</li>
+</ul>
+<p>The <a href="../item-panel/#when-several-items-share-the-number">Item Panel</a> asks which item you mean, and remembers the item you pick. The right-click STEP upload, the drawing upload and the Export window use the Item panel's choice; when several items match and none was chosen they stop with a message and attach nothing.</p>
+<p>A BOM line of an assembly that matches several items is left without a status for the same reason. Fix it by removing the duplicate in Fusion Manage.</p>
+<h3 id="permission-needed_1">Permission needed<a class="headerlink" href="#permission-needed_1" title="Permanent link">&para;</a></h3>
+<p>Updating an item needs <strong>Edit Items</strong> in the Items workspace.</p>
+<h3 id="after-the-update">After the update<a class="headerlink" href="#after-the-update" title="Permanent link">&para;</a></h3>
+<p>The run reports <strong>Total Items Updated</strong>. Open the item in the <a href="../item-panel/">Item Panel</a> to check the result.</p>
+<h2 id="bill-of-materials">Bill of Materials<a class="headerlink" href="#bill-of-materials" title="Permanent link">&para;</a></h2>
+<p>The Publish panel compares the design's BOM with the BOM already in Fusion Manage, line by line, and sends only the differences. You decide how to handle anything that is in Fusion Manage but not in the design.</p>
+<h3 id="large-designs">Large designs<a class="headerlink" href="#large-designs" title="Permanent link">&para;</a></h3>
+<p>The panel reads the BOM one level at a time, so a large assembly opens quickly. At first it shows the design and the lines directly under it. Click an assembly's chevron to read the lines under it: a spinner replaces the chevron and grey rows hold the place until they arrive. If one assembly cannot be read, its rows show <strong>Could not read this level</strong> with a <strong>Retry</strong> button, and the rest of the table stays.</p>
+<p><strong>Expand all</strong> reads every level that is not read yet and opens everything; <strong>Collapse all</strong> closes every assembly except the design itself.</p>
+<p><strong>Publish covers the whole design.</strong> If some levels are not read yet, <strong>Publish</strong> first reads and compares every one of them (as <strong>Expand all</strong> does), then goes on to validate the item numbers and publish. If that read shows lines that need a choice (<strong>Review</strong>), they are opened for you and the publish waits; choose, then click <strong>Publish</strong> again. If the read fails, nothing is published. The pills at the bottom left count what is covered:</p>
+<table>
+<thead>
+<tr>
+<th>Pill</th>
+<th>Counts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Items</strong></td>
+<td>The design and every component of it: each is checked against Fusion Manage when you publish, and created or updated where it differs.</td>
+</tr>
+<tr>
+<td><strong>Lines Skipped</strong></td>
+<td>Lines with no item number (and what is below them): nothing is published for them.</td>
+</tr>
+<tr>
+<td><strong>Shared Item Numbers</strong></td>
+<td>Lines whose item number another component also carries (and what is below them): see <a href="#shared-item-numbers">Shared item numbers</a>.</td>
+</tr>
+</tbody>
+</table>
+<p>A line that needs a choice (<strong>Review</strong>) holds <strong>Publish</strong> back, whether its assembly is open or closed.</p>
+<p>Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a read is bigger than the add-in can handle, the panel says so instead of showing a table when the first level fails, and shows a message and keeps the table when <strong>Expand all</strong> fails:</p>
+<ul>
+<li>More than <strong>25,000 lines</strong> in one read (a level, or the whole tree for <strong>Expand all</strong>).</li>
+<li>Nested <strong>50 levels deep or more</strong> (checked on the whole-tree read).</li>
+<li>A component that contains itself.</li>
+</ul>
+<h3 id="how-lines-are-compared">How lines are compared<a class="headerlink" href="#how-lines-are-compared" title="Permanent link">&para;</a></h3>
+<p>For each parent assembly, the lines of the design are matched to the Fusion Manage lines under that same parent by item number. Repeated item numbers pair one to one in order. Each line gets a status:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+<th>Publishing does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>New</strong></td>
+<td>The design has the line; Fusion Manage does not.</td>
+<td>Adds the line.</td>
+</tr>
+<tr>
+<td><strong>Update</strong></td>
+<td>Same item, different quantity.</td>
+<td>Updates the quantity in Fusion Manage.</td>
+</tr>
+<tr>
+<td><em>(no chip)</em></td>
+<td>Same item and quantity.</td>
+<td>Nothing.</td>
+</tr>
+<tr>
+<td><strong>Fusion Manage Only</strong></td>
+<td>Fusion Manage has a line the design does not. It has no chip of its own; use the <strong>Fusion Manage Only</strong> filter to find it.</td>
+<td><strong>Keeps it</strong> unless you choose <strong>Remove</strong>.</td>
+</tr>
+<tr>
+<td><strong>Review</strong></td>
+<td>A <strong>New</strong> line and a <strong>Fusion Manage Only</strong> line sit under the same parent and need your choice (see <a href="#paired-rows-a-replaced-item">Paired rows</a>).</td>
+<td>Holds <strong>Publish</strong> back.</td>
+</tr>
+<tr>
+<td><strong>Keep</strong> / <strong>Remove</strong></td>
+<td>Your choice on a Fusion Manage Only line or a pair.</td>
+<td>Keeps the line, or deletes it.</td>
+</tr>
+<tr>
+<td><strong>Added</strong></td>
+<td>You picked the item with <a href="#add-existing-items">Add Existing Items</a>.</td>
+<td>Adds the line to the end of the Fusion Manage BOM.</td>
+</tr>
+<tr>
+<td><strong>Skipped</strong></td>
+<td>The component has no item number, shares one with another component, or sits below such a line.</td>
+<td>Nothing: no item is created and no BOM line is added.</td>
+</tr>
+</tbody>
+</table>
+<p>If an assembly inside the design does not exist in Fusion Manage yet, every child of it is <strong>New</strong>. If the design itself is not in Fusion Manage, its lines show no status: the panel says publishing creates the design, and does not look up every component. When you publish, each component is searched for by item number, an item that exists is used, and one that does not is created.</p>
+<p>Fusion Manage often extends the design BOM with manufacturing lines such as oil or panels. For that reason lines found only in Fusion Manage are never deleted automatically.</p>
+<p>Each line reads <strong>Item Number - Part Name</strong>. A component with no item number is <strong>Skipped</strong>: no item can be created for it. Its quantity box is greyed out and cannot be edited, and the <strong>i</strong> on its chip explains why when you hover it. Everything below a skipped assembly is skipped too, because it has no item to join in the Fusion Manage BOM.</p>
+<p><img alt="The Bill of Materials with status chips: a New line, a Review pair, and three Skipped lines under the 24mm Bearing assembly, with the 3 Lines Skipped pill at the bottom and the Filters drop-down and the collapse and expand buttons above the table" src="../images/bom-statuses.png" width="900" /></p>
+<h3 id="filters">Filters<a class="headerlink" href="#filters" title="Permanent link">&para;</a></h3>
+<p>The <strong>Filters</strong> drop-down above the table (top left) narrows it to rows of one status. Tick any number at once.</p>
+<ul>
+<li><strong>Statuses you can filter by:</strong> <strong>Review</strong>, <strong>New</strong>, <strong>Added</strong>, <strong>Update</strong>, <strong>Fusion Manage Only</strong>, <strong>Skipped</strong> and <strong>Duplicates</strong>.</li>
+<li><strong>Counts and tooltips.</strong> Each filter shows how many lines it holds, and its tooltip explains what it shows.</li>
+<li><strong>Show Hidden Components</strong> is separate. It adds the components that are hidden in the Fusion component tree, marked with a crossed eye.</li>
+<li><strong>Clear filters</strong> unticks them all.</li>
+<li><strong>Collapse all</strong> and <strong>Expand all</strong>, next to it at the right, fold the whole tree.</li>
+</ul>
+<h4 id="duplicates">Duplicates<a class="headerlink" href="#duplicates" title="Permanent link">&para;</a></h4>
+<p><strong>Duplicates</strong> holds the lines whose item number several Fusion Manage items carry, so you can go straight to the items to fix.</p>
+<ul>
+<li><strong>When it fills.</strong> Only when you click <strong>Publish</strong>. The Validating step looks up every item number in Fusion Manage, and any number that comes back with several items is added to the filter. Opening the panel or a component's details does not fill it.</li>
+<li><strong>What you see.</strong> The lines appear under the filter, and the same red crosses show on their rows.</li>
+<li><strong>How long it lasts.</strong> Until you refresh the panel, or the next publish checks the numbers again.</li>
+<li><strong>What to do.</strong> Renumber or remove the extra items in Fusion Manage, then publish again.</li>
+</ul>
+<h3 id="paired-rows-a-replaced-item">Paired rows: a replaced item<a class="headerlink" href="#paired-rows-a-replaced-item" title="Permanent link">&para;</a></h3>
+<p>When a <strong>New</strong> design line and a <strong>Fusion Manage Only</strong> line sit under the same parent <strong>at the same position in the BOM</strong>, they are shown <strong>paired</strong>, one above the other, each carrying the other's item number. The item number differs at that position, which may mean an item was replaced, so the add-in asks you to decide rather than guessing.</p>
+<p>Lines at different positions are not paired. For example, if line 11 was removed in Fusion Manage and a line 12 (oil) was added there, the design's line 11 is simply <strong>New</strong> and the oil line is <strong>Fusion Manage Only</strong>, kept unless you choose <strong>Remove</strong>. Nothing needs a choice.</p>
+<p><img alt="Paired rows: the design's New line PN-001274 - Gasket at position 11 with the Fusion Manage Only line 00000001 - Oil, also at position 11, marked Review" src="../images/bom-paired-rows.png" width="900" /></p>
+<p>For a pair you can choose:</p>
+<ul>
+<li><strong>Keep</strong> the Fusion Manage line, which is renumbered to the end of the BOM, and add the new design line.</li>
+<li><strong>Remove</strong> the Fusion Manage line from Fusion Manage and add the design's line.</li>
+</ul>
+<p>A Fusion Manage Only line with no partner shows a single <strong>Remove</strong> button; click it again to go back to keeping the line. A line marked for removal is highlighted so you cannot miss it.</p>
+<h3 id="editing-quantities">Editing quantities<a class="headerlink" href="#editing-quantities" title="Permanent link">&para;</a></h3>
+<p>A quantity can be edited in the table. An edited cell shows a revert button that restores the original value.</p>
+<h3 id="add-existing-items">Add Existing Items<a class="headerlink" href="#add-existing-items" title="Permanent link">&para;</a></h3>
+<p><strong>Add Existing Items</strong> (top right of the BOM) opens a picker that searches the Items workspace so you can add items that are not in the design.</p>
+<p><img alt="The Add Existing Items picker: the search box, the version drop-down and Search, the Filter pane with Add Row and Add Group, the results with their checkboxes, and Show only selected, Cancel, Clear and Add to BOM at the bottom" src="../images/add-items.png" width="900" /></p>
+<ul>
+<li>With nothing typed the picker lists every item of the workspace; <strong>Search</strong> applies the search box and the filters.</li>
+<li>The search box matches the item descriptor. The <strong>Filter</strong> pane on the left narrows the results by property: choose a property and a value (a drop-down for properties with a fixed list). <strong>Add Row</strong> adds another property to the group and <strong>Add Group</strong> starts a new group. Rows of a group, and groups, are joined by <strong>AND</strong> or <strong>OR</strong>; the Items workspace is always applied on top.</li>
+<li>Results load 25 at a time as you scroll. When some of them are hidden (see below), the picker reads on until it has 25 to show, or the matches run out. The count above the list is of the items it shows, so it ends as, for example, "61 of 61". Tick the items to add; selections survive searching and paging, and <strong>Clear</strong> unticks them all.</li>
+<li>The bar under the list shows how many items are selected. <strong>Show only selected</strong> narrows the list to the ticked items, so you can review them before adding. <strong>Cancel</strong> closes the picker without adding anything.</li>
+<li>Items the Bill of Materials already holds, or that you have already added in the panel, are hidden. Turn on <strong>Show hidden items</strong> to see them ticked, greyed out and locked.</li>
+<li>Next to <strong>Search</strong> a version picker chooses the latest or the working version of the items. <strong>Add to BOM</strong> in the footer adds the ticked items; <strong>Show only selected</strong> is disabled until something is ticked.</li>
+<li>Added lines appear in the BOM as <strong>Added</strong> and can be taken out again with their own <strong>Remove</strong> button before publishing.</li>
+</ul>
+<h3 id="what-gets-sent">What gets sent<a class="headerlink" href="#what-gets-sent" title="Permanent link">&para;</a></h3>
+<p>Each change becomes one request against the parent item's BOM:</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Request</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Add a line</td>
+<td><code>POST</code> to the parent's <code>bom-items</code></td>
+</tr>
+<tr>
+<td>Change a quantity</td>
+<td><code>PATCH</code> with the new quantity</td>
+</tr>
+<tr>
+<td>Renumber a kept line</td>
+<td><code>PATCH</code> with the new BOM item number</td>
+</tr>
+<tr>
+<td>Remove a line</td>
+<td><code>DELETE</code></td>
+</tr>
+</tbody>
+</table>
+<p>They are ordered so a line is freed before another takes its number: remove, renumber, update, add.</p>
+<p>All BOM requests are sent <strong>after</strong> every item exists, one parent at a time. A failure stops only that parent; the others carry on. Adding a line the BOM already has is reported by Fusion Manage as a duplicate; the add-in logs it and treats it as done, so no failure is recorded. See <a href="../job-queue/#request-files-and-retry">Request Files and Retry</a> for sending it again.</p>
+<h2 id="the-export-window">The Export Window<a class="headerlink" href="#the-export-window" title="Permanent link">&para;</a></h2>
+<p><strong>Export</strong> (in the <strong>Export</strong> panel of the <strong>Manage</strong> tab) opens one small window for every file the add-in can attach. You choose two things:</p>
+<ol>
+<li><strong>Attach to.</strong> Two cards, at the top. <strong>Item</strong> attaches the file to the item of the part in the Items workspace. <strong>Component</strong> attaches it to the part's record in the Components workspace: its <strong>working version</strong>, when the part has several revisions. When the window opens it checks, in Fusion Manage, that you may attach files to each workspace (<strong>View Items</strong>, <strong>Add Attachments</strong> and <strong>Edit Attachments</strong>; the last is for a new version of a file already there). A card you may not use is greyed out and says why. If the Items workspace is not set up in Preferences, <strong>Item</strong> says <em>Item is not configured. Complete it in Preferences.</em> and a usable card is chosen for you: the default for that format in <strong>Preferences ▸ Export</strong> if it can be used, otherwise the first usable one. <strong>Component</strong> is also greyed out when the connection is invalid or there is no Components workspace.</li>
+<li><strong>File format.</strong> What the open document can be exported as: a <strong>design</strong> makes a <strong>STEP</strong> file; a <strong>drawing</strong> makes a <strong>PDF</strong>, <strong>DWG</strong> or <strong>DXF</strong>. The window names what is being exported: the selected component of a design (else the whole design), or the top of a drawing.</li>
+</ol>
+<p>The window starts with what is being exported: its item number (a grey bar stands there while it is read from Fusion Manage), and under it the description of the design. The attachment card shows whether the file already in Fusion Manage is <strong>Up to date</strong>, with the date the component was last modified, the file's version, size and who changed it.</p>
+<p>Choose <strong>Export</strong> and the window stays open and shows the progress: <strong>Find item</strong>, the file being made, and <strong>Upload</strong>, with a percentage where one can be measured. It then says how it went. On success it reads <em>Export complete</em> with where the file went, and <strong>Done</strong> closes it. On a failure it reads <em>Export failed</em> with the reason; <strong>Try again</strong> takes you back to the choices, and <strong>Close</strong> closes the window. <strong>Cancel</strong> closes the window before an export starts. The file is named after the item number and a file of the same name is replaced by a new version. See <a href="#step-file">STEP File</a> and <a href="#drawing-representation">Drawing Representation</a>.</p>
+<p>The <strong>Actions</strong> menu of the <a href="../item-panel/">Item Panel</a> and the right-click entries do not open this window: they export in one step and always attach to the item.</p>
+<h2 id="step-file">STEP File<a class="headerlink" href="#step-file" title="Permanent link">&para;</a></h2>
+<p>The add-in can attach a <strong>STEP file</strong> of a component to its Fusion Manage item, so the wider supply chain has a neutral 3D representation to work from.</p>
+<div class="admonition important">
+<p class="admonition-title">Uploaded by you, never automatic</p>
+<p>Publishing an item does not attach a STEP file. STEP files are uploaded manually, one component at a time, so you stay in control of what is released, for which items, and when. If you never upload one, none is sent.</p>
+</div>
+<p>The item must already exist. Publish it first (<a href="#item-creation">Item Creation</a>).</p>
+<h3 id="find-the-right-click-entry">Find the right-click entry<a class="headerlink" href="#find-the-right-click-entry" title="Permanent link">&para;</a></h3>
+<p><strong>Export STEP File</strong> is in the right-click menu of a component. It is the quickest way to upload, with no window to fill in.</p>
+<ol>
+<li>Open the saved design in the Design workspace. The entry is not offered in a drawing.</li>
+<li>Right-click the component you want, in the browser or on the canvas. Any component works, not only the top one. With nothing selected, the design's top-level component is used.</li>
+<li>Choose <strong>Export STEP File</strong>.</li>
+</ol>
+<p>The entry appears only once the add-in is set up. The upload then runs as described below: the item is found by its item number, a STEP file of the selected component is made and attached to that item, and a file already attached with the same name becomes a new version. See <a href="#new-versions-not-duplicates">New versions, not duplicates</a>.</p>
+<p>You can also click <strong>Export</strong> in the <strong>Export</strong> panel of the <strong>Manage</strong> tab on the ribbon. This opens the <a href="#the-export-window">Export window</a>, where you choose whether to attach to the item or the component, and the file format (STEP for a design). The upload is also in the <strong>Actions</strong> menu of the <a href="../item-panel/">Item Panel</a>. The right-click entry and the Actions menu always attach to the item. Only the Export window lets you attach to the component record instead.</p>
+<h3 id="upload-a-step-file">Upload a STEP file<a class="headerlink" href="#upload-a-step-file" title="Permanent link">&para;</a></h3>
+<p>The file is named after the item number, for example <code>PN-1001.step</code>.</p>
+<ol>
+<li>In the Design workspace, select a component in the browser or canvas. With nothing selected, the open design's top-level component is used.</li>
+<li>Do one of the following:<ul>
+<li>Right-click and choose <strong>Export STEP File</strong> (offered on any component, not only the top).</li>
+<li>Open the item in the <a href="../item-panel/">Item Panel</a> and choose <strong>Actions ▸ Export STEP File</strong>.</li>
+</ul>
+</li>
+<li>A small <strong>Uploading STEP File</strong> window shows three stages: <strong>Find item</strong>, <strong>Create STEP</strong> and <strong>Upload</strong>, with a percentage where one can be measured.</li>
+<li>When it finishes you see a confirmation: <code>&lt;name&gt; was attached to the item in Fusion Manage.</code> or <code>A new version of &lt;name&gt; was uploaded to the item in Fusion Manage.</code> It appears as a message box, or as a toast when the Item panel is open.</li>
+</ol>
+<h4 id="new-versions-not-duplicates">New versions, not duplicates<a class="headerlink" href="#new-versions-not-duplicates" title="Permanent link">&para;</a></h4>
+<p>If a file of the same name is already attached, the upload creates <strong>a new version</strong> of it instead of a duplicate, and the confirmation says so. You can refresh a STEP file as the design changes without cluttering the item.</p>
+<p><img alt="The Export window after an upload: the Export complete message &quot;A new version of PN-001276.step was uploaded to the item in Fusion Manage&quot;, with the attachment card behind it showing Up to date" src="../images/step-uploaded.png" width="450" /></p>
+<h3 id="which-geometry-is-exported">Which geometry is exported<a class="headerlink" href="#which-geometry-is-exported" title="Permanent link">&para;</a></h3>
+<p>The STEP file contains the <strong>selected component</strong>, not the whole design.</p>
+<ul>
+<li>If the selected component is the design's <strong>top-level component</strong>, the whole design is exported.</li>
+<li>Otherwise the add-in finds the component in the open design by its <strong>part number</strong> (the one you selected is tried first) and exports just that.</li>
+<li>If Fusion cannot export it directly from the open design, the add-in falls back to the component's own document.</li>
+</ul>
+<p>The part number only locates the component in Fusion. The item it is attached to is found by the component's <strong>item number</strong>, read from the Data Model. Finding a component by part number can take a while in large designs. The progress window stays responsive and you will see the percentage move.</p>
+<p><img alt="The Uploading STEP File progress window over the Export window, with the Find item, Create STEP and Upload stages and the percentage" src="../images/step-progress.png" width="450" /></p>
+<h3 id="messages-you-may-see">Messages you may see<a class="headerlink" href="#messages-you-may-see" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Open the design to publish as a STEP file first.</strong> No design is open.</li>
+<li><strong>Select a component that has a part number, or open a design that has one.</strong> The selected component has no part number.</li>
+<li><strong>No component with part number … in the open design.</strong> The selected component's part number is not found in the open design.</li>
+<li><strong>… has no item number, so it has not been published to Fusion Manage.</strong> and <strong>The design has not been saved, so it has no item number.</strong> The item number cannot be read.</li>
+<li><strong>No item exists for …</strong> No item in Fusion Manage has that item number. Publish the item first.</li>
+<li><strong>… Fusion Manage items match … Open the item in the Item panel and choose one first.</strong> Several items share the item number. Open the item from the Item panel, pick one from the list, and try again.</li>
+<li><strong>Fusion could not export the STEP file.</strong> Fusion refused the export; the message lists each method that was tried (open design, component, own document).</li>
+</ul>
+<p>Messages after the item search start with <em>Could not attach a STEP file:</em> or <em>Could not create PN.step:</em>.</p>
+<p>Only one upload runs at a time. Starting another reports that a file is already being uploaded.</p>
+<h3 id="seeing-the-result">Seeing the result<a class="headerlink" href="#seeing-the-result" title="Permanent link">&para;</a></h3>
+<p>The file appears on the <strong>Files</strong> tab of the item in the <a href="../item-panel/#files">Item Panel</a>. If the panel is open it shows a success toast and re-reads the item, so the file count updates.</p>
+<h2 id="drawing-representation">Drawing Representation<a class="headerlink" href="#drawing-representation" title="Permanent link">&para;</a></h2>
+<p>The add-in can attach a <strong>PDF of a drawing</strong> to the Fusion Manage item of the design the drawing shows, so the supply chain has the released drawing alongside the item.</p>
+<div class="admonition important">
+<p class="admonition-title">Uploaded by you, never automatic</p>
+<p>Publishing an item does not attach a drawing PDF. Drawing PDFs are uploaded manually, so you decide which drawings go to the supply chain, and when.</p>
+</div>
+<p>A drawing is <strong>not an item of its own</strong>. Its PDF is attached to the item of the design's top-level component. That item must already exist; publish it first (<a href="#item-creation">Item Creation</a>).</p>
+<p><img alt="The Export window for an open drawing: the PDF, DWG and DXF formats, the Item and Component cards, and the attachment card for PN-000701.pdf showing Up to date" src="../images/ribbon-drawing.png" width="450" /></p>
+<h3 id="upload-a-drawing-pdf">Upload a drawing PDF<a class="headerlink" href="#upload-a-drawing-pdf" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Open the drawing. The add-in works out which item it belongs to from the design the drawing references: the part number of that design's <strong>top-level component</strong> is read, then its item number from the Data Model, and the item with that number is the one used.</li>
+<li>Choose <strong>Manage ▸ Export ▸ Export</strong> and pick PDF, or right-click the top of the drawing's component tree and choose <strong>Export PDF</strong>. In a drawing, the <a href="../item-panel/">Item Panel</a> <strong>Actions</strong> menu offers the same upload.</li>
+<li>A PDF of every sheet of the drawing is created, named after the item number (for example <code>PN-1001.pdf</code>), and uploaded in a window with the stages <strong>Find item</strong>, <strong>Create PDF</strong> and <strong>Upload</strong>.</li>
+</ol>
+<p>The Export window and the Item Panel's <strong>Actions</strong> menu can also make a <strong>DWG</strong> or a <strong>DXF</strong> of the drawing, attached the same way, as <code>PN-1001.dwg</code> or <code>PN-1001.dxf</code>. The right-click entry makes the PDF only. A Fusion that cannot export those formats says so.</p>
+<p>The right-click entry is meant for the top of the tree. It is not offered on an occurrence or on a component other than the design's top-level one, but it can appear for other kinds of selection.</p>
+<h4 id="new-versions-not-duplicates_1">New versions, not duplicates<a class="headerlink" href="#new-versions-not-duplicates_1" title="Permanent link">&para;</a></h4>
+<p>If a file of the same name is already attached, the upload creates <strong>a new version</strong> of it instead of a duplicate.</p>
+<h3 id="the-drawing-must-be-loaded">The drawing must be loaded<a class="headerlink" href="#the-drawing-must-be-loaded" title="Permanent link">&para;</a></h3>
+<p>A drawing takes a moment to load. Until its design reference has loaded and the top-level component's part number can be read, the right-click entry is greyed out and its tooltip says what it is waiting for (<em>Not available:</em> followed by a reason such as <em>The drawing has no references yet.</em> or <em>The top-level component of … has no part number.</em>). The add-in checks again when Fusion reports a document or workspace change, or after 15 seconds without one, and gives up after 60 seconds. In the Item panel's <strong>Actions</strong> menu the entry is disabled with <em>The drawing is still loading</em> and updates when you open the menu or return to the window. The Export window shows <em>The drawing is not ready yet</em> and asks again every 2 seconds.</p>
+<h3 id="if-the-pdf-is-empty">If the PDF is empty<a class="headerlink" href="#if-the-pdf-is-empty" title="Permanent link">&para;</a></h3>
+<p>Fusion can report an export as successful straight after a drawing opens while writing nothing. The add-in detects this and asks you to wait for the drawing to finish loading and try again.</p>
+<h3 id="seeing-the-result_1">Seeing the result<a class="headerlink" href="#seeing-the-result_1" title="Permanent link">&para;</a></h3>
+<p>The PDF appears on the <strong>Files</strong> tab of the item in the <a href="../item-panel/#files">Item Panel</a>. If the panel is open it shows a success toast and re-reads the item, so the file count updates.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Configuration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../item-panel/" class="md-footer__link md-footer__link--next" aria-label="Next: Item Panel">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Item Panel
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "content.code.copy", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/sidebar-toggle.js"></script>
+      
+        <script src="../javascripts/sidebar-resize.js"></script>
+      
+        <script src="../javascripts/font-size.js"></script>
+      
+    
+  </body>
+</html>

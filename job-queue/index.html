@@ -1,0 +1,1384 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.">
+      
+      
+      
+        <link rel="canonical" href="https://ahoop91.github.io/FusionToFusionManageAddon/job-queue/">
+      
+      
+        <link rel="prev" href="../item-panel/">
+      
+      
+        <link rel="next" href="../reference/manufacturing-data-model/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Job Queue - Fusion Manage - Item Management</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <script>
+    /* Apply the saved menu state before the page is drawn, so nothing moves on load. */
+    (function () {
+      try {
+        var root = document.documentElement;
+        if (localStorage.getItem("fm-docs-nav-collapsed") === "1") root.classList.add("nav-collapsed");
+        var font = localStorage.getItem("fm-docs-font");
+        if (font) root.setAttribute("data-fm-font", font);
+        var nav = localStorage.getItem("fm-docs-nav-width");
+        if (nav) root.style.setProperty("--nav-width", nav + "px");
+      } catch (e) {}
+    })();
+  </script>
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#job-queue" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Fusion Manage - Item Management" class="md-header__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Fusion Manage - Item Management
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Job Queue
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Fusion Manage - Item Management" class="md-nav__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    Fusion Manage - Item Management
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-End Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Set up
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Set up
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation and Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Publishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../item-panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Item Panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Queue
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-jobs-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How jobs run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the queue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowing-when-something-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowing when something ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-failed-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A failed job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-files-and-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request Files and Retry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Request Files and Retry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-run-keeps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run keeps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retry-a-failed-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retry a failed run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retry a failed run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nothing-is-sent-twice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nothing is sent twice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#folders-it-will-not-send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folders it will not send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Additional Information
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Additional Information
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/manufacturing-data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manufacturing Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-jobs-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How jobs run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the queue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowing-when-something-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowing when something ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-failed-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A failed job
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-files-and-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request Files and Retry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Request Files and Retry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-run-keeps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run keeps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retry-a-failed-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retry a failed run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retry a failed run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nothing-is-sent-twice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nothing is sent twice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#folders-it-will-not-send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folders it will not send
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="job-queue">Job Queue<a class="headerlink" href="#job-queue" title="Permanent link">&para;</a></h1>
+<p><strong>What you'll do here:</strong> see whether a publish worked, and retry it if it did not.</p>
+<p>Every publish is a <strong>job</strong>. The Job Queue shows the jobs that are waiting, running and finished, so you can see what the add-in is doing without keeping the Publish panel open.</p>
+<p><strong>Quick steps:</strong> open it with <strong>Manage ▸ Item Management ▸ Administration ▸ Job Queue</strong>. Click a job to see the reason for a failure. To send a failed job again, see <a href="#retry-a-failed-run">Retry a failed run</a>.</p>
+<h2 id="how-jobs-run">How jobs run<a class="headerlink" href="#how-jobs-run" title="Permanent link">&para;</a></h2>
+<p>Jobs go through a <strong>single queue, one after another</strong>. A publish returns at once, and the work happens in the background, so Fusion stays responsive and you can keep working, even in another design. A job that is waiting shows its place, for example <em>Waiting, number 2 in the queue</em>.</p>
+<h2 id="reading-the-queue">Reading the queue<a class="headerlink" href="#reading-the-queue" title="Permanent link">&para;</a></h2>
+<p>The panel is a table of every job that is waiting, running, failed or cancelled, newest first, <strong>one row per job</strong>. A job that went through leaves the list.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td>A pill with an icon and the status in words, the same width for every job</td>
+</tr>
+<tr>
+<td><strong>Job</strong></td>
+<td>The name of the job, the design it publishes</td>
+</tr>
+<tr>
+<td><strong>Progress</strong></td>
+<td>A sentence on where it stands, for example <em>Checking item numbers.</em>, <em>Publishing 4 of 5 items.</em>, <em>Updating the Bill of Materials, 12 of 40 requests.</em>, <em>Cancelled. Nothing was published.</em> or <em>Failed. 2 of 12 items failed.</em></td>
+</tr>
+<tr>
+<td><strong>Time</strong></td>
+<td>How long the job has taken, counting up while it runs. A dash while it waits</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Cancel</strong> while it is waiting or running, <strong>Retry</strong> once it has failed</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="The Job Queue with one running job: a table with the columns Status, Job, Progress and Time, and a row for PN-000701 with the blue Running pill, the progress &quot;Checking item numbers.&quot;, the time 0:03 and a Cancel button. The Clear finished button is at the bottom" src="../images/job-queue-panel.png" width="1000" /></p>
+<p><strong>Click a row for its details.</strong> A window opens over the Job Queue with the result in words, the time it took, and a table of the job's items:</p>
+<ul>
+<li><strong>Filters</strong> above the table show all items, or only the failed, skipped, cancelled, running, waiting or done ones, with how many there are of each. A job with failures opens on the failed items. <strong>Find an item</strong> narrows the table by item number or description.</li>
+<li><strong>Click an item</strong> to see its details beside the table: its number, description, status and publish, and under them the reason in full when it failed, was skipped or was cancelled.</li>
+<li><strong>Retry</strong> and <strong>Cancel publish</strong> are in the window too. Close it with <strong>Close</strong>, <strong>Esc</strong>, or by clicking outside it.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Queued</strong></td>
+<td>Waiting for earlier jobs to finish</td>
+</tr>
+<tr>
+<td><strong>Running</strong></td>
+<td>Being prepared or sent</td>
+</tr>
+<tr>
+<td><strong>Failed</strong></td>
+<td>Failed, or finished with failed rows. The full reason is in the job's details</td>
+</tr>
+<tr>
+<td><strong>Cancelled</strong></td>
+<td>Stopped before it finished</td>
+</tr>
+</tbody>
+</table>
+<p>In a job's details, each BOM sent for a parent assembly also has its own line, after the items.</p>
+<h2 id="actions">Actions<a class="headerlink" href="#actions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Cancel</strong> stops a job that is waiting or running. Items already processed are kept in the run's folder, and the rest are not published. The job stays listed as <strong>Cancelled</strong>, and the message at the top of the Job Queue says how many cancelled publishes are waiting to be cleared.</li>
+<li><strong>Clear finished</strong> removes finished jobs from the list, and their files with them: a cleared job can no longer be retried. A job that finished with every row done removes itself.</li>
+<li><strong>Retry</strong> appears on a job that failed or has failed rows. It sends the failed requests again. See <a href="#request-files-and-retry">Request Files and Retry</a>.</li>
+</ul>
+<h2 id="knowing-when-something-ends">Knowing when something ends<a class="headerlink" href="#knowing-when-something-ends" title="Permanent link">&para;</a></h2>
+<p><img alt="The Item Management panel on the ribbon, with the Job Queue button in the middle showing a green dot while a publish is running" src="../images/job-queue-button.png" width="250" /></p>
+<p>You do not have to watch the panel.</p>
+<ul>
+<li>The <strong>Job Queue</strong> button on the ribbon changes its icon. A <strong>green dot</strong> means a publish is waiting or running, a <strong>red dot</strong> means a listed job has failed, and the plain clock means nothing is running. The tooltip says which.</li>
+<li>When a job ends, a message box reports the result. A publish that completed shows <strong>Total Items Processed</strong>, <strong>Total Items Created</strong> and <strong>Total Items Updated</strong>. A failure lists the items that failed and why. This appears even if the Publish and Job Queue panels are closed.</li>
+</ul>
+<h2 id="a-failed-job">A failed job<a class="headerlink" href="#a-failed-job" title="Permanent link">&para;</a></h2>
+<p>A failed job stays in the Job Queue, marked <strong>Failed</strong>, until you clear it. <strong>Click it to open its details</strong>, which show what happened to every item in the job.</p>
+<ol>
+<li>Open the <a href="#reading-the-queue">Job Queue</a> and click the failed job. The details open on the <strong>Failed</strong> items.</li>
+<li>Click an item in the table. Its <strong>Reason</strong> shows beside the table, in full.</li>
+<li>Fix the cause in Fusion or Fusion Manage.</li>
+<li>Click <strong>Retry</strong>, on the job's row or in its details. What Fusion Manage already accepted is skipped.</li>
+</ol>
+<p>Choose <strong>All</strong> above the table to see the items that went through too. For common causes, see <a href="../reference/troubleshooting/#publishing">Troubleshooting and Limitations</a>.</p>
+<h2 id="request-files-and-retry">Request Files and Retry<a class="headerlink" href="#request-files-and-retry" title="Permanent link">&para;</a></h2>
+<h3 id="what-a-run-keeps">What a run keeps<a class="headerlink" href="#what-a-run-keeps" title="Permanent link">&para;</a></h3>
+<p>Every publish writes its files to a temporary folder (<code>MfgToFm</code> under the system temp folder) while it runs. The add-in removes only folders inside it, and nothing else.</p>
+<ul>
+<li><strong>A run that goes through</strong> is removed when it ends, because everything was sent and there is nothing left to retry.</li>
+<li><strong>A run that fails, has failed rows or is cancelled</strong> keeps its folder, so you can read it and use Retry.</li>
+<li><strong>Clear finished</strong> removes those folders along with the jobs.</li>
+</ul>
+<p>The path is listed in <a href="../reference/troubleshooting/#where-files-are-kept">Troubleshooting and Limitations</a>. Each run has its own folder, containing:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Per-item request JSON</td>
+<td>The exact request written for each item, a create or an update</td>
+</tr>
+<tr>
+<td>Thumbnails</td>
+<td>The images downloaded for the items</td>
+</tr>
+<tr>
+<td><code>bom/</code></td>
+<td>The BOM requests for each parent assembly</td>
+</tr>
+<tr>
+<td><code>manifest.json</code></td>
+<td>A summary of the run</td>
+</tr>
+<tr>
+<td><code>send-log.json</code></td>
+<td>A record of every request Fusion Manage accepted</td>
+</tr>
+</tbody>
+</table>
+<p>The files are what the retry below works from, and a record of what was sent for a run that did not go through.</p>
+<h3 id="retry-a-failed-run">Retry a failed run<a class="headerlink" href="#retry-a-failed-run" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Open the <a href="#job-queue">Job Queue</a>.</li>
+<li>Click <strong>Retry</strong> on the failed job.</li>
+</ol>
+<p>The retry replaces the failed job in the list and sends the run's folder again, as a new job. It does not ask for confirmation, because it sends the same requests the run already wrote.</p>
+<h4 id="nothing-is-sent-twice">Nothing is sent twice<a class="headerlink" href="#nothing-is-sent-twice" title="Permanent link">&para;</a></h4>
+<p><strong>What Fusion Manage already accepted is skipped.</strong> The <code>send-log.json</code> in the folder records each accepted request, so sending a folder again carries on from where it stopped instead of creating items twice.</p>
+<p>An item whose creation failed is not there for its BOM, so that BOM fails too. The other items carry on. After you fix the cause and click <strong>Retry</strong>, the item and then its BOM go through.</p>
+<h4 id="folders-it-will-not-send">Folders it will not send<a class="headerlink" href="#folders-it-will-not-send" title="Permanent link">&para;</a></h4>
+<p>If the run's folder is missing or cannot be read (for example the run failed before it wrote its files), Retry says why in a message box. In that case, publish again.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../item-panel/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Item Panel">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Item Panel
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../reference/manufacturing-data-model/" class="md-footer__link md-footer__link--next" aria-label="Next: Manufacturing Data Model">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Manufacturing Data Model
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "content.code.copy", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/sidebar-toggle.js"></script>
+      
+        <script src="../javascripts/sidebar-resize.js"></script>
+      
+        <script src="../javascripts/font-size.js"></script>
+      
+    
+  </body>
+</html>

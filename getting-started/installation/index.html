@@ -1,0 +1,1943 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.">
+      
+      
+      
+        <link rel="canonical" href="https://ahoop91.github.io/FusionToFusionManageAddon/getting-started/installation/">
+      
+      
+        <link rel="prev" href="../workflow/">
+      
+      
+        <link rel="next" href="../../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../images/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Installation and Authentication - Fusion Manage - Item Management</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <script>
+    /* Apply the saved menu state before the page is drawn, so nothing moves on load. */
+    (function () {
+      try {
+        var root = document.documentElement;
+        if (localStorage.getItem("fm-docs-nav-collapsed") === "1") root.classList.add("nav-collapsed");
+        var font = localStorage.getItem("fm-docs-font");
+        if (font) root.setAttribute("data-fm-font", font);
+        var nav = localStorage.getItem("fm-docs-nav-width");
+        if (nav) root.style.setProperty("--nav-width", nav + "px");
+      } catch (e) {}
+    })();
+  </script>
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#installation-and-authentication" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Fusion Manage - Item Management" class="md-header__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../../images/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Fusion Manage - Item Management
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Installation and Authentication
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Fusion Manage - Item Management" class="md-nav__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../../images/logo.svg" alt="logo">
+
+    </a>
+    Fusion Manage - Item Management
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-End Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Set up
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Set up
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation and Authentication
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation and Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-install-the-add-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Install the add-in
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Install the add-in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choose-your-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choose your route
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-get-a-client-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Get a Client ID
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Get a Client ID">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-create-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Create the application
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-copy-the-client-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Copy the Client ID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#administrator-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Administrator setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configure-the-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Configure the connection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Configure the connection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-set-up-fusion-manage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Set up Fusion Manage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-connect-your-tenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Connect your tenant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-change-the-connection-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Change the connection later
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#save-to-fusion-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Save to Fusion Hub
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Save to Fusion Hub">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#give-your-members-access-to-the-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Give your members access to the file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#members-connect-with-the-hubs-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Members: connect with the hub's Configuration File
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Members: connect with the hub&#39;s Configuration File">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The route
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-sign-in-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How sign-in works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How sign-in works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-sign-in-stays-secure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How sign-in stays secure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permissions-in-fusion-manage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions in Fusion Manage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next step
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Publishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../item-panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Item Panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../job-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Additional Information
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Additional Information
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/manufacturing-data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manufacturing Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-install-the-add-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Install the add-in
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Install the add-in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choose-your-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choose your route
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-get-a-client-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Get a Client ID
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Get a Client ID">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-create-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Create the application
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-copy-the-client-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Copy the Client ID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#administrator-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Administrator setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configure-the-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Configure the connection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Configure the connection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-set-up-fusion-manage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Set up Fusion Manage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-connect-your-tenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Connect your tenant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-change-the-connection-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Change the connection later
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#save-to-fusion-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Save to Fusion Hub
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Save to Fusion Hub">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#give-your-members-access-to-the-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Give your members access to the file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#members-connect-with-the-hubs-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Members: connect with the hub's Configuration File
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Members: connect with the hub&#39;s Configuration File">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The route
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-sign-in-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How sign-in works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How sign-in works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-sign-in-stays-secure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How sign-in stays secure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permissions-in-fusion-manage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions in Fusion Manage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next step
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="installation-and-authentication">Installation and Authentication<a class="headerlink" href="#installation-and-authentication" title="Permanent link">&para;</a></h1>
+<p><strong>What you'll do here:</strong> install the add-in in Fusion and sign in to Fusion Manage. Install it first, then choose your route: <strong>Admin Route</strong> for the Hub Admin who sets it up, <strong>Member Route</strong> for everyone else.</p>
+<hr />
+<h2 id="1-install-the-add-in">1. Install the add-in<a class="headerlink" href="#1-install-the-add-in" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Download the latest zip from the <a href="https://github.com/AHoop91/FusionToFusionManageAddon/releases/latest">Releases page</a> and unzip it. You get a folder named <strong>Fusion Manage Item Management</strong>, which holds <code>Fusion Manage Item Management.py</code> and <code>Fusion Manage Item Management.manifest</code>.</li>
+<li>In Fusion open <strong>Utilities ▸ Add-Ins ▸ Scripts and Add-Ins</strong>, switch to the <strong>Add-Ins</strong> tab, click <strong>+</strong> (add existing add-in) and browse to the folder.</li>
+<li>Select <strong>Fusion Manage Item Management</strong> in the list and click <strong>Run</strong>. Tick <strong>Run on Startup</strong> if you want it to load with Fusion.</li>
+</ol>
+<p>The add-in supports Windows and macOS. Once it is running, an <strong>Export</strong> panel and an <strong>Item Management</strong> panel appear in the <strong>Manage</strong> tab of the Design and Drawing workspaces. Most buttons stay greyed out until setup is complete.</p>
+<p><img alt="Scripts and Add-Ins dialog with the add-in running" height="515" src="../../images/scripts-and-addins.png" width="800" /></p>
+<h3 id="choose-your-route">Choose your route<a class="headerlink" href="#choose-your-route" title="Permanent link">&para;</a></h3>
+<p><a class="md-button md-button--primary" href="#2-get-a-client-id">Admin Route</a>
+<a class="md-button" href="#members-connect-with-the-hubs-configuration-file">Member Route</a></p>
+<p><strong>Admin Route</strong> is for the Hub Admin who sets the add-in up for the hub, once. <strong>Member Route</strong> is for everyone else in the hub, once a Hub Admin has published the setup.</p>
+<div class="admonition important">
+<p class="admonition-title">Has another Hub Admin already set this up?</p>
+<p>Then do the <strong>Member Route</strong>, even if you are a Hub Admin yourself. The hub only needs one setup, and the Configuration File already holds it, so you do not need your own APS app or tenant. If the setup wizard opens, choose <strong>Already set up</strong>, then click <strong>Find Configuration File</strong> and pick the file. You can still change the settings afterwards as a Hub Admin, and publish them again with <strong>Save &amp; Publish</strong>.</p>
+</div>
+<hr />
+<h2 id="2-get-a-client-id">2. Get a Client ID<a class="headerlink" href="#2-get-a-client-id" title="Permanent link">&para;</a></h2>
+<p><em>Admin Route. Members skip to <a href="#members-connect-with-the-hubs-configuration-file">the Member Route</a>.</em></p>
+<p>The add-in signs in through Autodesk Platform Services (APS), so it needs an APS application. The application's <strong>Client ID</strong> identifies the add-in when you sign in. This is done on the APS website, not in Fusion.</p>
+<div class="admonition info">
+<p class="admonition-title">You may already have one</p>
+<p>If your organisation has already created an application for this add-in, ask for its <strong>Client ID</strong> and skip to <a href="#3-configure-the-connection">stage 3</a>. One application can be shared by everyone; each person still signs in with their own Autodesk account.</p>
+</div>
+<p><strong>What you need first:</strong></p>
+<ul>
+<li>An Autodesk account that can sign in at <a href="https://aps.autodesk.com">aps.autodesk.com</a>.</li>
+<li>An APS subscription (Free or Paid tier) assigned to a team.</li>
+<li>A <strong>Team Administrator</strong> to set up the APS Developer Hub, if your organisation does not have one yet. See <a href="#administrator-setup">Administrator setup</a>.</li>
+</ul>
+<h3 id="21-create-the-application">2.1 Create the application<a class="headerlink" href="#21-create-the-application" title="Permanent link">&para;</a></h3>
+<p><img alt="APS: choosing the application type" height="615" src="../../images/aps-create-application.png" width="668" /></p>
+<ol>
+<li>Sign in at <a href="https://aps.autodesk.com">aps.autodesk.com</a> and open <strong>My Applications</strong>.</li>
+<li>Click <strong>Create application</strong>.</li>
+<li>
+<p>When asked for the application type, choose <strong>Desktop, Mobile, Single-Page App</strong>.</p>
+<div class="admonition important">
+<p class="admonition-title">Choose this type</p>
+<p>The add-in signs in with PKCE and never holds a client secret. This is the type APS recommends for applications that cannot protect their credentials. Do not choose <strong>Traditional Web App</strong> or <strong>Server-to-Server App</strong>.</p>
+</div>
+</li>
+<li>
+<p>Enter an application name and description, for example <em>Fusion Manage Add-in</em>.</p>
+</li>
+<li>Select the APIs the add-in uses: the <strong>Manufacturing Data Model API</strong> (to read designs) and the <strong>Identity API</strong> (for your profile picture). Select the matching entries your portal offers.</li>
+<li>
+<p>Set the <strong>Callback URL</strong> to exactly:</p>
+<div class="highlight"><pre><span></span><code>http://localhost:8765/callback
+</code></pre></div>
+<p>If you will use a different callback port in the add-in, use that port here instead. The two must match exactly.</p>
+</li>
+<li>
+<p>Save the application.</p>
+</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Labels can change</p>
+<p>The APS portal is updated from time to time, so button names and field order may differ slightly from this list. The application type, the APIs and the callback URL are what matter.</p>
+</div>
+<h3 id="22-copy-the-client-id">2.2 Copy the Client ID<a class="headerlink" href="#22-copy-the-client-id" title="Permanent link">&para;</a></h3>
+<p>Open the application under <strong>My Applications</strong>. Its details page shows the <strong>Client ID</strong>, a 32-character string. Copy it. You will paste it into the add-in in the next stage.</p>
+<p><img alt="APS application details with the Client ID" height="987" src="../../images/aps-client-id.png" width="1032" /></p>
+<p>An application of this type has no client secret that you need. Never type one into the add-in.</p>
+<h3 id="administrator-setup">Administrator setup<a class="headerlink" href="#administrator-setup" title="Permanent link">&para;</a></h3>
+<details class="note">
+<summary>Team Administrators only: APS subscription and Developer Hub</summary>
+<p><strong>A1. Get an APS subscription (Team Administrator)</strong></p>
+<p>Skip this if your organisation already has an APS offering assigned to a team.</p>
+<ol>
+<li>Go to <a href="https://aps.autodesk.com">aps.autodesk.com</a> and sign in or sign up. Click <strong>View options</strong>.</li>
+<li>On the APS overview page, use the <strong>Site Selector</strong> (top right) to choose your country before signing in.</li>
+<li>Click <strong>Pricing</strong> in the left-hand menu, then <strong>Add to Cart</strong> under the offering you want, then <strong>Checkout</strong> and complete the customer details.<ul>
+<li>A <strong>Free</strong> plan is not charged, but checkout still asks for a payment method.</li>
+<li>A <strong>Paid</strong> plan needs a valid payment method.</li>
+</ul>
+</li>
+<li>Click <strong>Access Account</strong>, which opens the <a href="https://manage.autodesk.com/home">Autodesk Account portal</a>.</li>
+<li>If you administer more than one team, go to <strong>Billing and Orders ▸ Subscriptions and Contracts</strong> and confirm the APS offering is assigned to the right team.</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If your region is not offered in the Autodesk Store, contact <code>aps.orders@autodesk.com</code>.</p>
+</div>
+<p><strong>A2. Create the APS Developer Hub (Team Administrator)</strong></p>
+<p>The Developer Hub is where your organisation's APS applications live, and where you control who can create them.</p>
+<ol>
+<li>Open <a href="https://manage.autodesk.com/">manage.autodesk.com</a>.</li>
+<li>Go to <strong>Products and Services ▸ Hubs</strong>.</li>
+<li>Choose the <strong>team</strong> the APS offering is assigned to.</li>
+<li>Click <strong>Create Hub</strong> and select <strong>APS Developer Hub</strong>.</li>
+<li>Enter a <strong>Hub Name</strong> and click <strong>Create &amp; Activate</strong>.</li>
+<li>Under <strong>Cloud Product</strong>, click the <strong>APS Developer Hub</strong> link. This opens <a href="https://aps.autodesk.com/hubs/">aps.autodesk.com/hubs</a>.</li>
+</ol>
+<div class="admonition warning">
+<p class="admonition-title">No “APS Developer Hub” option?</p>
+<p>The team has no APS offering assigned to it. Complete step A1 first.</p>
+</div>
+<p><strong>A3. Add developers to the hub (Team Administrator)</strong></p>
+<ol>
+<li>In the hub, open <strong>Roles and Access</strong>.</li>
+<li>Click <strong>Add Member</strong> and enter the person's <strong>email address</strong>.</li>
+<li>Choose an access level, <strong>Admin</strong> or <strong>Developer</strong>, and click <strong>Add</strong>.</li>
+</ol>
+<p>Anyone who needs to create the application must be a member of the hub.</p>
+<p><strong>A4. Moving an existing application into the hub</strong></p>
+<p>If you already created the application before your organisation had a Developer Hub, move it in:</p>
+<ol>
+<li>Sign in at <a href="https://aps.autodesk.com">aps.autodesk.com</a> and open <strong>My Applications</strong>.</li>
+<li>Select the application.</li>
+<li>Click <strong>Move apps to Developer Hub</strong>.</li>
+<li>Select the hub name and click <strong>Next</strong>.</li>
+</ol>
+<p>You must already be a member of the hub (see A3).</p>
+<div class="admonition tip">
+<p class="admonition-title">More reading</p>
+<p>This section follows Autodesk's own guide, <a href="https://aps.autodesk.com/blog/aps-developer-hub-setup-and-app-migration">APS Developer Hub Setup and App Migration</a>, and the post <a href="https://aps.autodesk.com/blog/new-application-types">New application types</a>. Refer to them if your portal looks different.</p>
+</div>
+</details>
+<hr />
+<h2 id="3-configure-the-connection">3. Configure the connection<a class="headerlink" href="#3-configure-the-connection" title="Permanent link">&para;</a></h2>
+<p><em>Admin Route.</em></p>
+<p>Open <strong>Manage ▸ Item Management ▸ Administration ▸ Preferences</strong>. Until a Client ID is saved, the panel shows a setup wizard instead of the sign-in card. It walks you through the connection in two parts: the app and Client ID, then your tenant.</p>
+<h3 id="31-set-up-fusion-manage">3.1 Set up Fusion Manage<a class="headerlink" href="#31-set-up-fusion-manage" title="Permanent link">&para;</a></h3>
+<p>The first screen, <strong>Set up Fusion Manage</strong>, asks how to start:</p>
+<ul>
+<li><strong>New setup</strong> shows the four steps below. Use it when nobody has set this hub up yet.</li>
+<li><strong>Already set up</strong> is for a hub another Hub Admin has already set up and published. Click <strong>Find Configuration File</strong> and choose the file (<a href="#members-connect-with-the-hubs-configuration-file">Member Route</a>). You skip the steps below and the tenant step.</li>
+</ul>
+<p>The steps for a new setup:</p>
+<p><img alt="Preferences, Set up Fusion Manage wizard" height="849" src="../../images/setup-wizard.png" width="640" /></p>
+<ol>
+<li><strong>Create an APS app.</strong> If you have not done so, follow <a href="#2-get-a-client-id">stage 2</a>. The wizard lists the settings the app needs: <strong>Desktop, Mobile, Single-Page Web App</strong>, grant type <strong>Authorization Code with PKCE</strong>, and the <strong>Manufacturing Data Model API</strong> and <strong>Identity API</strong>. <strong>Open the setup guide</strong> opens Autodesk's guide to creating an app.</li>
+<li>
+<p><strong>Add the callback URL.</strong> On your app's page in the APS portal, add the callback URL the wizard shows and save the app. <strong>Copy</strong> puts it on your clipboard. With the default port it is:</p>
+<div class="highlight"><pre><span></span><code>http://localhost:8765/callback
+</code></pre></div>
+</li>
+<li>
+<p><strong>Enter the Client ID.</strong> Paste the Client ID from <a href="#22-copy-the-client-id">step 2.2</a>.</p>
+</li>
+<li><strong>Sign in.</strong> Click <strong>Save and sign in</strong>. The button stays disabled until a Client ID is entered. It saves the Client ID and opens the Autodesk sign-in in your browser. Approve access there and return to Fusion (<a href="#how-sign-in-works">how sign-in works</a>).</li>
+</ol>
+<h3 id="32-connect-your-tenant">3.2 Connect your tenant<a class="headerlink" href="#32-connect-your-tenant" title="Permanent link">&para;</a></h3>
+<p>Once you are signed in, a Hub Admin sees <strong>Connect your Tenant</strong>. It is required, and the tabs stay hidden until a tenant is saved.</p>
+<p><img alt="Preferences, Connect your Tenant" height="894" src="../../images/tenant-step.png" width="640" /></p>
+<div class="admonition tip">
+<p class="admonition-title">Click Find to fill in the tenant automatically</p>
+<p>Open a design linked to a Fusion Manage item, then click <strong>Find</strong>. The add-in reads the tenant from that item's address and fills in the field, so you do not have to type it.</p>
+<p><strong>Find only works when:</strong></p>
+<ul>
+<li>You are signed in, because it reads the design through your Autodesk account.</li>
+<li>A design is open in Fusion and is the active document. A drawing, or a document with no design, gives nothing to read.</li>
+<li>The design is saved to your hub, so the Manufacturing Data Model knows it.</li>
+<li>The design is linked to a Fusion Manage item. If it is not, the panel says so; open one that is, or enter the tenant yourself.</li>
+</ul>
+<p>It reads only the open design, and gives up if there is no answer after a minute.</p>
+</div>
+<p>Or enter the <strong>Tenant</strong> yourself:</p>
+<ol>
+<li>
+<p>Open Fusion Manage in your browser and look at the address bar. It looks like this:</p>
+<div class="highlight"><pre><span></span><code>https://acme.autodeskplm360.net/plm/...
+</code></pre></div>
+</li>
+<li>
+<p>Copy only the first part of the host name, the bit before <code>.autodeskplm360.net</code>. Here that is <code>acme</code>. Do not copy <code>https://</code>, <code>.autodeskplm360.net</code> or anything after it.</p>
+</li>
+<li>Paste it into the <strong>Tenant</strong> field, so the field holds just <code>acme</code>.</li>
+</ol>
+<p>The tenant can only be letters, digits and hyphens, never a whole address. The hub's name is not the tenant, so the add-in does not guess it.</p>
+<p>Whichever way you filled it in, click <strong>Save and finish</strong> to keep it. <strong>Find</strong> only fills in the field; it does not save.</p>
+<p>Anyone who is not a Hub Admin does not see this step. They are asked to find the hub's Configuration File instead (<a href="#members-connect-with-the-hubs-configuration-file">below</a>).</p>
+<h3 id="33-change-the-connection-later">3.3 Change the connection later<a class="headerlink" href="#33-change-the-connection-later" title="Permanent link">&para;</a></h3>
+<p>After setup, the same settings are on the <strong>Connection</strong> tab of <strong>Preferences</strong>.</p>
+<div class="admonition important">
+<p class="admonition-title">Only a Hub Admin can change them</p>
+<p>Settings belong to the Fusion hub that is active. When Preferences opens, the add-in checks your role in that hub, and checks again when you return to the panel. A <strong>Hub Admin</strong> can edit the Connection tab. Anyone else sees the fields greyed out, with the note "These settings come from the hub's Configuration File. Only a Hub Admin can change them." If the add-in cannot check your role, the tab is left usable, so a failed check does not lock out an admin.</p>
+</div>
+<p>To change a setting, as a Hub Admin:</p>
+<ol>
+<li>Open <strong>Preferences</strong> and go to the <strong>Connection</strong> tab.</li>
+<li>Edit the field. If you change the <strong>Callback port</strong>, the callback URL shown under it updates as you type.</li>
+<li>Click <strong>Save</strong> to keep the change on this computer, or <strong>Save &amp; Publish</strong> to also share it with the hub, so your colleagues get the change (<a href="#save-to-fusion-hub">how it works</a>). The settings are checked first, and a problem is shown instead of saving. A <strong>Save successful</strong> window confirms a save.</li>
+</ol>
+<p>Two changes need a follow-up:</p>
+<ul>
+<li><strong>Client ID:</strong> sign-in is kept per Client ID, so after changing it you sign in again with the new one.</li>
+<li><strong>Callback port:</strong> the callback URL on your APS app must match the new port, or sign-in fails.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Client ID</strong></td>
+<td>The Client ID from <a href="#22-copy-the-client-id">step 2.2</a>.</td>
+</tr>
+<tr>
+<td><strong>Callback port</strong></td>
+<td>The port in your callback URL. Default <code>8765</code>; allowed range 1024–65535. If you change it, change the callback URL on your APS app to match.</td>
+</tr>
+<tr>
+<td><strong>Scopes</strong></td>
+<td>Leave as <code>data:read data:write data:search user-profile:read</code>.</td>
+</tr>
+<tr>
+<td><strong>Tenant</strong></td>
+<td>The tenant from <a href="#32-connect-your-tenant">step 3.2</a>.</td>
+</tr>
+</tbody>
+</table>
+<p>The tab shows the callback URL it will use. It must be registered on your APS application exactly as shown. A Client ID, a valid port and at least one scope are required before you can sign in.</p>
+<h3 id="save-to-fusion-hub">Save to Fusion Hub<a class="headerlink" href="#save-to-fusion-hub" title="Permanent link">&para;</a></h3>
+<p><strong>Save</strong> puts the settings on your own computer only. <strong>Save &amp; Publish</strong> saves them and also stores them in the hub, as a Configuration File, so the other people in the hub can use the same setup without entering it themselves. Only a Hub Admin sees <strong>Save &amp; Publish</strong>.</p>
+<ol>
+<li>Click <strong>Save &amp; Publish</strong>. Once the settings pass validation and are saved on this computer, a <strong>Save to Fusion Hub</strong> window opens, showing the hub's projects and folders.</li>
+<li>Open a project, then a folder in it, where the hub's members can read files. <strong>New project</strong> (at the top of the hub) and <strong>New folder</strong> (inside a project) make one if you need it. A project of its own is best (<a href="#give-your-members-access-to-the-file">see below</a>).</li>
+<li>Click <strong>Save here</strong>. The add-in uploads <code>Fusion-Manage-Item-Management-config.json</code> to that folder and tells you which folder it went to.</li>
+</ol>
+<p><img alt="Save to Fusion Hub window" height="855" src="../../images/save-to-hub.png" width="640" /></p>
+<h4 id="give-your-members-access-to-the-file">Give your members access to the file<a class="headerlink" href="#give-your-members-access-to-the-file" title="Permanent link">&para;</a></h4>
+<p>It is recommended to <strong>create a new project</strong> for the Configuration File, with <strong>New project</strong>, and save it there. A project of its own keeps the file out of the way of design data, and lets you control who can see it in one place. Saving the file does not give anyone access to it. Members can only find it, read it and download it if they have access, so set that up once, straight after the first <strong>Save &amp; Publish</strong>:</p>
+<ol>
+<li>In Fusion, open the project (or the folder) the file is in, and go to its <strong>Members and Permissions</strong> tab.</li>
+<li>Make sure everyone who needs the add-in is there with <strong>Reader</strong> access. <strong>Reader</strong> is enough to view and download the file, and members never need to change it. Use <strong>Add member</strong> to add people by email, or a group to add several at once. A group that already holds your members, such as <strong>Everyone (System Group)</strong>, is the quickest way, if it suits who may see the file.</li>
+<li>Check the <strong>Permission level</strong> of each person or group. Anyone not listed, or with no access, will not see the file when they look for it.</li>
+</ol>
+<p><img alt="Members and Permissions of the project holding the Configuration File, with Everyone as a Reader" height="251" src="../../images/hub-permissions.png" width="1000" /></p>
+<div class="admonition tip">
+<p class="admonition-title">Keep editing for Hub Admins</p>
+<p>Only the Hub Admins who publish need to be able to add files to the folder. Everyone else can be a <strong>Reader</strong>.</p>
+</div>
+<p>What to know:</p>
+<ul>
+<li><strong>It holds your setup, not anyone's sign-in.</strong> The file has the tenant, workspaces, field mappings, exports, and the Client ID with its callback port and scopes, so members can sign in without making an APS app. It never holds sign-in tokens or a client secret.</li>
+<li><strong>The upload uses your Fusion session.</strong> It needs no extra permission, but you must be allowed to add files to the folder you pick. If not, the add-in says so.</li>
+<li><strong>It is for the active hub.</strong> A file saved from one hub is refused by another.</li>
+<li><strong>Publish again after a change.</strong> Each Save &amp; Publish uploads the file again to the folder you choose. Choose the folder your colleagues already use, so they keep reading the same file.</li>
+<li><strong>Members find it once.</strong> After that, their add-in reads it again each time Preferences opens, so a change you publish reaches them without them doing anything (<a href="#members-connect-with-the-hubs-configuration-file">what members do</a>).</li>
+</ul>
+<h3 id="members-connect-with-the-hubs-configuration-file">Members: connect with the hub's Configuration File<a class="headerlink" href="#members-connect-with-the-hubs-configuration-file" title="Permanent link">&para;</a></h3>
+<p><em>Member Route.</em></p>
+<p>Each Fusion hub has its own settings, so switching hubs in Fusion switches the settings too. Only a <strong>Hub Admin</strong> of the hub can change them. When you open <strong>Preferences</strong> the add-in checks your role in the active hub. If you are a member, not a Hub Admin, you do not create an APS app, copy a Client ID or enter a tenant. A Hub Admin has done that once and published the result, and you use it.</p>
+<p><strong>Before you start:</strong> a Hub Admin must have used <strong>Save &amp; Publish</strong> (<a href="#save-to-fusion-hub">above</a>) so the file is in the hub, and given you <strong>Reader</strong> access to the project it is in (<a href="#give-your-members-access-to-the-file">how</a>). If you cannot find the file, ask a Hub Admin where it is and whether you have access.</p>
+<h4 id="the-route">The route<a class="headerlink" href="#the-route" title="Permanent link">&para;</a></h4>
+<ol>
+<li><strong>Install the add-in.</strong> Follow <a href="#1-install-the-add-in">stage 1</a>. It is the same for everyone.</li>
+<li><strong>Make the right hub active.</strong> In Fusion, open the hub the setup was published for. A file from another hub is refused.</li>
+<li><strong>Open Preferences.</strong> Choose <strong>Manage ▸ Item Management ▸ Administration ▸ Preferences</strong>. The panel shows <strong>Find your Configuration File</strong>, with the hub's name. Click <strong>Find Configuration File</strong>.</li>
+<li>
+<p><strong>Open the folder.</strong> The <strong>Find the Configuration File</strong> window lists the hub's projects. Open the project and folders the Hub Admin saved the file in. <strong>Use this file</strong> stays greyed out until you choose a file.</p>
+<p><img alt="Find the Configuration File window, showing the hub's projects" height="842" src="../../images/member-find-file.png" width="640" /></p>
+</li>
+<li>
+<p><strong>Choose the file.</strong> Click <code>Fusion-Manage-Item-Management-config.json</code>. The window names it at the bottom (<strong>Selected …</strong>). Click <strong>Use this file</strong>.</p>
+<p><img alt="The Configuration File chosen in a project folder" height="853" src="../../images/member-select-file.png" width="640" /></p>
+</li>
+<li>
+<p><strong>Sign in.</strong> The add-in reads the file and the panel changes to <strong>Sign in to Fusion Manage</strong>, with the hub's name. Click <strong>Sign in</strong>, approve access in your browser and return to Fusion. You sign in with your own Autodesk account (<a href="#how-sign-in-works">how sign-in works</a>).</p>
+<p><img alt="Sign in to Fusion Manage, shown once the file has been read" height="844" src="../../images/member-sign-in.png" width="640" /></p>
+</li>
+<li>
+<p><strong>Check the Configuration tab.</strong> Once you are signed in, the panel opens on the <strong>Configuration</strong> tab. It shows the file you are using and whether it is up to date. Your role shows as <strong>Member</strong>.</p>
+<p><img alt="The Configuration tab of a member, showing the file in use" height="847" src="../../images/member-configuration.png" width="640" /></p>
+</li>
+</ol>
+<p>You are ready to use the add-in. There is nothing else to set up.</p>
+<h4 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>The file is the setup.</strong> It holds the tenant, workspaces, field mappings, exports, and the Client ID with its callback port and scopes. The add-in takes these from it, so you do not enter them. It never holds sign-in tokens, so you still sign in yourself.</li>
+<li><strong>Your settings are read-only.</strong> The <strong>Connection</strong>, <strong>Item Workspace</strong> and <strong>Export</strong> tabs show what the file defines, with fields greyed out and the note "These settings come from the hub's Configuration File. Only a Hub Admin can change them." Members do not see <strong>Save &amp; Publish</strong>.</li>
+<li>
+<p><strong>It stays up to date.</strong> The file is read again each time <strong>Preferences</strong> opens, so a change a Hub Admin publishes reaches you without you doing anything. The status at the top of the <strong>Configuration</strong> tab says where you stand:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Up to date</strong></td>
+<td>You are using the latest file in the hub. It shows when it was read or checked.</td>
+</tr>
+<tr>
+<td><strong>Checking for updates…</strong></td>
+<td>The add-in is asking the hub if the file has changed.</td>
+</tr>
+<tr>
+<td><strong>Updated to the latest version</strong></td>
+<td>The file had changed, and you now use the new one. It names who changed it.</td>
+</tr>
+<tr>
+<td><strong>Could not check for updates</strong></td>
+<td>The check got no answer. The add-in keeps the file you have, so try again in a moment.</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p><strong>Check for updates</strong> asks the hub at once, without closing Preferences. <strong>Change file</strong> lets you pick a different file, for example if the Hub Admin moved it to another folder.</p>
+</li>
+<li><strong>The file's details.</strong> The card shows the file's name and project, <strong>Last updated in the hub</strong>, <strong>Updated by</strong>, its <strong>Version</strong> in the hub, and <strong>Last read by you</strong>.</li>
+<li><strong>Your own Client ID is kept.</strong> If you already had a Client ID, the add-in keeps it, and your sign-in, and takes only the setup from the file.</li>
+<li><strong>Files that are refused:</strong> one saved from another hub, one over 1 MB, or one that is not a Fusion Manage Item Management configuration. A file with no Client ID is also refused, so ask the Hub Admin to publish again.</li>
+</ul>
+<hr />
+<h2 id="how-sign-in-works">How sign-in works<a class="headerlink" href="#how-sign-in-works" title="Permanent link">&para;</a></h2>
+<p>The wizard's <strong>Save and sign in</strong> button starts sign-in for you. Your browser opens the Autodesk sign-in page; sign in and approve access, and the browser shows <strong>Authorization received</strong>. Return to Fusion and the panel unlocks its tabs. Sign-in waits up to 180 seconds, and <strong>Cancel</strong> ends it sooner. Later, if you have signed out or your session has expired, <strong>Sign in</strong> on the Preferences panel does the same. To sign out, use the account menu in the panel header, which removes the stored tokens for the current Client ID.</p>
+<p>This section explains what happens behind that. The add-in uses the OAuth 2.0 authorization-code flow with PKCE. Your password is only ever entered on the Autodesk sign-in page, never in Fusion or the add-in.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor User
+    participant Addin as Fusion Manage add-in
+    participant Browser as Web browser
+    participant APS as Autodesk sign-in (APS)
+    participant Store as Secure token store
+    participant Svc as Data Model and Fusion Manage
+
+    User-&gt;&gt;Addin: Click Sign in
+    Note over Addin: Create PKCE code verifier,&lt;br/&gt;code challenge and state
+    Addin-&gt;&gt;Addin: Listen on 127.0.0.1 at the callback port
+    Addin-&gt;&gt;Browser: Open the authorize URL&lt;br/&gt;(client ID, scopes, challenge, state)
+    Browser-&gt;&gt;APS: Request sign-in
+    User-&gt;&gt;APS: Sign in and approve access
+    APS--&gt;&gt;Browser: Redirect to localhost callback&lt;br/&gt;with code and state
+    Browser-&gt;&gt;Addin: GET /callback?code=...&amp;state=...
+    Note over Addin: Check state matches,&lt;br/&gt;otherwise reject the sign-in
+    Addin--&gt;&gt;Browser: "Authorization received. Return to Fusion."
+    Addin-&gt;&gt;APS: Exchange code and code verifier for tokens&lt;br/&gt;(no client secret)
+    APS--&gt;&gt;Addin: Access token and refresh token
+    Addin-&gt;&gt;Store: Save tokens, encrypted&lt;br/&gt;(Windows DPAPI or macOS Keychain)
+    Addin--&gt;&gt;User: Panels unlock
+
+    rect rgb(238, 242, 255)
+    Note over Addin,Svc: Every later request
+    Addin-&gt;&gt;Store: Load tokens
+    alt Access token still valid
+        Addin-&gt;&gt;Svc: Request with access token
+    else Expires within 60 seconds
+        Addin-&gt;&gt;APS: Refresh with refresh token
+        APS--&gt;&gt;Addin: New tokens
+        Addin-&gt;&gt;Store: Save new tokens
+        Addin-&gt;&gt;Svc: Request with new access token
+    end
+    end</code></pre>
+<p>If sign-in is cancelled, rejected or times out after 180 seconds, nothing is stored. If a refresh fails, the stored tokens are cleared and you are asked to sign in again.</p>
+<h3 id="how-sign-in-stays-secure">How sign-in stays secure<a class="headerlink" href="#how-sign-in-stays-secure" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The add-in listens on <code>127.0.0.1</code> only, for that one redirect, and checks the <code>state</code> value to reject forged redirects.</li>
+<li>It uses PKCE and sends no client secret.</li>
+<li>Tokens are never written to the configuration file or to logs.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Where tokens are stored</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Windows</td>
+<td>Encrypted with Windows DPAPI for your user account, in a file under <code>%LOCALAPPDATA%\MfgToFm</code>.</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td>Your login Keychain.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="permissions-in-fusion-manage">Permissions in Fusion Manage<a class="headerlink" href="#permissions-in-fusion-manage" title="Permanent link">&para;</a></h3>
+<p>Signing in proves who you are. It does not give you access to anything in Fusion Manage. What you can do is decided by the permissions your Fusion Manage user holds in the <strong>Items workspace</strong>, which are set by your Fusion Manage administrator through your role. The add-in reads them from Fusion Manage each time it needs them, and never changes them.</p>
+<div class="admonition important">
+<p class="admonition-title">Ask your Fusion Manage administrator, not the add-in</p>
+<p>If something is refused, the add-in cannot grant the permission. Send your administrator the permission names from the message, and ask for them on the Items workspace.</p>
+</div>
+<p><strong>What each task needs</strong></p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Permissions required in the Items workspace</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Choose the Items workspace in Preferences</td>
+<td>View Items, Add Items, Edit Items, View BOM, Add To BOM and Edit BOM</td>
+</tr>
+<tr>
+<td>Publish a design as new and updated items, and their BOMs</td>
+<td>The same six</td>
+</tr>
+<tr>
+<td>Open an item in the Item Panel</td>
+<td>View Items</td>
+</tr>
+<tr>
+<td>Attach a STEP file or a drawing PDF</td>
+<td>View Items, Add Attachments and Edit Attachments, in the workspace the file goes to (the Items workspace, or the Components workspace for a component)</td>
+</tr>
+</tbody>
+</table>
+<p>The first two rows ask for all six, whether or not a given publish adds or changes anything. This is because the BOM is always published. Within that, creating an item needs <strong>Add Items</strong>, updating one needs <strong>Edit Items</strong>, and BOM lines need <strong>Add To BOM</strong> and <strong>Edit BOM</strong>. See <a href="../../publishing/">Publishing</a>.</p>
+<p><strong>Tabs in the Item Panel</strong></p>
+<p>A tab you lack the permission for is greyed out, rather than hidden. Hover over it to see "Insufficient permissions".</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Permission</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Item</td>
+<td>View Items</td>
+</tr>
+<tr>
+<td>Files</td>
+<td>View Attachments</td>
+</tr>
+<tr>
+<td>BOM</td>
+<td>View BOM</td>
+</tr>
+<tr>
+<td>Where Used</td>
+<td>View Where Used</td>
+</tr>
+<tr>
+<td>Workflows</td>
+<td>View Associated Workflow</td>
+</tr>
+<tr>
+<td>Changelog</td>
+<td>View Change Log</td>
+</tr>
+</tbody>
+</table>
+<p><strong>If a permission is missing</strong></p>
+<p>The message names what is missing, for example:</p>
+<blockquote>
+<p>Insufficient permissions to publish to the Items workspace. Missing: Add Items, Edit BOM.</p>
+</blockquote>
+<p>In Preferences, choosing a workspace you lack permissions on says "You need these permissions on <em>workspace</em>: ...". If Fusion Manage refuses the check outright, the message says "Insufficient permissions" without a list. Either way, ask your administrator to add the permissions to your role, then try again.</p>
+<h3 id="next-step">Next step<a class="headerlink" href="#next-step" title="Permanent link">&para;</a></h3>
+<p>Continue to <a href="../../configuration/">Configuration</a>, where you choose the Items workspace, map fields to it and set where exported files are attached. To see what the add-in reads from your design first, read <a href="../../reference/manufacturing-data-model/">Manufacturing Data Model</a>.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../workflow/" class="md-footer__link md-footer__link--prev" aria-label="Previous: End-to-End Workflow">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                End-to-End Workflow
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Configuration">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../javascripts/sidebar-toggle.js"></script>
+      
+        <script src="../../javascripts/sidebar-resize.js"></script>
+      
+        <script src="../../javascripts/font-size.js"></script>
+      
+    
+  </body>
+</html>

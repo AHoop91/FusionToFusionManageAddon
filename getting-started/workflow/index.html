@@ -1,0 +1,1589 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Publish Manufacturing Data Model items, BOMs and files from Fusion into Fusion Manage.">
+      
+      
+      
+        <link rel="canonical" href="https://ahoop91.github.io/FusionToFusionManageAddon/getting-started/workflow/">
+      
+      
+        <link rel="prev" href="../overview/">
+      
+      
+        <link rel="next" href="../installation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../images/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>End-to-End Workflow - Fusion Manage - Item Management</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <script>
+    /* Apply the saved menu state before the page is drawn, so nothing moves on load. */
+    (function () {
+      try {
+        var root = document.documentElement;
+        if (localStorage.getItem("fm-docs-nav-collapsed") === "1") root.classList.add("nav-collapsed");
+        var font = localStorage.getItem("fm-docs-font");
+        if (font) root.setAttribute("data-fm-font", font);
+        var nav = localStorage.getItem("fm-docs-nav-width");
+        if (nav) root.style.setProperty("--nav-width", nav + "px");
+      } catch (e) {}
+    })();
+  </script>
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#end-to-end-workflow" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Fusion Manage - Item Management" class="md-header__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../../images/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Fusion Manage - Item Management
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              End-to-End Workflow
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Fusion Manage - Item Management" class="md-nav__button md-logo" aria-label="Fusion Manage - Item Management" data-md-component="logo">
+      
+  <img src="../../images/logo.svg" alt="logo">
+
+    </a>
+    Fusion Manage - Item Management
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-End Workflow
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-End Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-problem-it-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem it solves
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-solution-two-separate-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The solution: two separate records
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The benefits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-flow-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The flow at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-engineering-releases-the-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Engineering releases the design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-publish-the-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Publish the item
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-extend-the-manufacturing-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Extend the manufacturing item
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-manufacturing-releases-the-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Manufacturing releases the item
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-the-design-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the design changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Set up
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Set up
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation and Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Publishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../item-panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Item Panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../job-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Job Queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Additional Information
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Additional Information
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/manufacturing-data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manufacturing Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-problem-it-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem it solves
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-solution-two-separate-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The solution: two separate records
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The benefits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-flow-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The flow at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-engineering-releases-the-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Engineering releases the design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-publish-the-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Publish the item
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-extend-the-manufacturing-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Extend the manufacturing item
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-manufacturing-releases-the-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Manufacturing releases the item
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-the-design-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the design changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="end-to-end-workflow">End-to-End Workflow<a class="headerlink" href="#end-to-end-workflow" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<h3 id="the-problem-it-solves">The problem it solves<a class="headerlink" href="#the-problem-it-solves" title="Permanent link">&para;</a></h3>
+<p>Engineering and manufacturing both work on the same product, but they work in different ways.</p>
+<ul>
+<li><strong>Engineers</strong> change designs often. They try ideas, revise parts and release new versions.</li>
+<li><strong>Manufacturing</strong> needs a steady record of what to build. It cannot build from a design that may change tomorrow.</li>
+</ul>
+<p>When both teams share one record, each is slowed down by the other. Engineers wait on manufacturing approvals, or manufacturing builds from something that has moved on.</p>
+<h3 id="the-solution-two-separate-records">The solution: two separate records<a class="headerlink" href="#the-solution-two-separate-records" title="Permanent link">&para;</a></h3>
+<p>The add-in keeps the two apart and joins them only when someone chooses to.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Engineering</strong></th>
+<th><strong>Manufacturing</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lives in</strong></td>
+<td>Fusion</td>
+<td>Fusion Manage</td>
+</tr>
+<tr>
+<td><strong>Record</strong></td>
+<td>The design: component and drawing</td>
+<td>The item: a manufacturing record with its own BOM</td>
+</tr>
+<tr>
+<td><strong>Owned by</strong></td>
+<td>Engineers</td>
+<td>Manufacturing</td>
+</tr>
+<tr>
+<td><strong>Responsible for</strong></td>
+<td>Design changes and the design's own lifecycle</td>
+<td>Saying "we are ready to build this now"</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Engineering</strong> is only responsible for the design and its lifecycle. Engineers design, revise and release in Fusion, and nobody waits on them.</p>
+<p><strong>Manufacturing</strong> takes a released design and creates an item from it. The item is Manufacturing's signal that <em>we are ready to build this now</em>. Manufacturing can then extend the item's bill of materials (BOM) with what production needs, such as packaging, fasteners and consumables, and release it through its own workflow.</p>
+<p>The add-in is the bridge. A component's item number in Fusion is the item number in Fusion Manage. If an item with that number exists it is updated. Otherwise it is created.</p>
+<h3 id="the-benefits">The benefits<a class="headerlink" href="#the-benefits" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Engineers are never blocked.</strong> They release and revise without waiting for Manufacturing.</li>
+<li><strong>Manufacturing builds from a stable record.</strong> The item changes only when someone publishes, so it does not move under them.</li>
+<li><strong>Each side keeps its own lifecycle.</strong> A design revision does not force an item revision, and the reverse.</li>
+<li><strong>The BOM can be extended.</strong> Manufacturing adds lines the design does not have, and a later publish keeps them.</li>
+<li><strong>No re-keying.</strong> Data moves across, not through spreadsheets or copy and paste.</li>
+<li><strong>Safe to repeat.</strong> Publishing again sends only the differences, so you can bring the item up to date at any time.</li>
+<li><strong>Ready for the wider business.</strong> A released manufacturing item is the right starting point to pass to ERP for work orders, and then to selling. This add-in does not connect to ERP today. It makes the item that a future connection would use.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">The add-in does not enforce this process</p>
+<p>It will publish any design you open, whatever its state, and it does not release items or start workflows. This is how it is meant to be used. Your organisation's own release rules still apply.</p>
+</div>
+<h2 id="the-flow-at-a-glance">The flow at a glance<a class="headerlink" href="#the-flow-at-a-glance" title="Permanent link">&para;</a></h2>
+<p>Read the diagram left to right. Engineering releases a design in Fusion. The add-in publishes it to Fusion Manage. Manufacturing completes, reviews and releases the item.</p>
+<pre class="mermaid"><code>%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 50, "rankSpacing": 70, "padding": 20, "wrappingWidth": 220}}}%%
+flowchart LR
+    subgraph ENG["&lt;b style='font-size:1.2em;color:#2563eb'&gt;ENGINEERING&lt;/b&gt;"]
+        E1@{ shape: stadium, label: "&lt;b&gt;1 · Release&lt;/b&gt;&lt;br/&gt;Design and drawing" }
+    end
+
+    subgraph ADD["&lt;b style='font-size:1.2em;color:#ea580c'&gt;ADD-IN&lt;/b&gt;"]
+        A1@{ shape: hex, label: "&lt;b&gt;2 · Publish&lt;/b&gt;&lt;br/&gt;Create or update&lt;br/&gt;the item and BOM" }
+    end
+
+    subgraph MFG["&lt;b style='font-size:1.2em;color:#059669'&gt;MANUFACTURING&lt;/b&gt;"]
+        M1@{ shape: rounded, label: "&lt;b&gt;3 · Extend&lt;/b&gt;&lt;br/&gt;Extend the BOM,&lt;br/&gt;attach files" }
+        M2@{ shape: rounded, label: "&lt;b&gt;4 · Review&lt;/b&gt;&lt;br/&gt;Check against&lt;br/&gt;the design" }
+        M3@{ shape: stadium, label: "&lt;b&gt;5 · Release&lt;/b&gt;&lt;br/&gt;Ready to build" }
+    end
+
+    E1 ==&gt; A1
+    A1 ==&gt; M1
+    M1 --&gt; M2 --&gt; M3
+
+    classDef eng fill:#3b82c433,stroke:#3b82c4,stroke-width:2px
+    classDef add fill:#f9731633,stroke:#ea580c,stroke-width:3px
+    classDef mfg fill:#05966933,stroke:#059669,stroke-width:2px
+    class E1 eng
+    class A1 add
+    class M1,M2,M3 mfg
+    style ENG fill:#3b82c40d,stroke:#3b82c480,stroke-width:1px
+    style ADD fill:#f973160d,stroke:#ea580c80,stroke-width:1px
+    style MFG fill:#0596690d,stroke:#05966980,stroke-width:1px
+    linkStyle default stroke:#64748b,stroke-width:2px</code></pre>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Who</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#1-engineering-releases-the-design">1. Engineering releases the design</a></td>
+<td>Engineering</td>
+<td>Fusion</td>
+</tr>
+<tr>
+<td><a href="#2-publish-the-item">2. Publish the item</a></td>
+<td>Design or Manufacturing Engineer</td>
+<td>Fusion, with the add-in</td>
+</tr>
+<tr>
+<td><a href="#3-extend-the-manufacturing-item">3. Extend the manufacturing item</a></td>
+<td>Manufacturing</td>
+<td>Fusion and Fusion Manage</td>
+</tr>
+<tr>
+<td><a href="#4-review">4. Review</a></td>
+<td>Engineering, Quality, Manufacturing</td>
+<td>Fusion or Fusion Manage</td>
+</tr>
+<tr>
+<td><a href="#5-manufacturing-releases-the-item">5. Manufacturing releases the item</a></td>
+<td>Release approvers</td>
+<td>Fusion Manage</td>
+</tr>
+</tbody>
+</table>
+<h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The add-in is installed and you are signed in (<a href="../installation/">Installation and Authentication</a>).</li>
+<li>The Items workspace is configured (<a href="../../configuration/#item-workspace">Configuration</a>).</li>
+<li>Whoever publishes holds the <a href="../installation/#permissions-in-fusion-manage">Fusion Manage permissions</a>.</li>
+</ul>
+<hr />
+<h2 id="1-engineering-releases-the-design">1. Engineering releases the design<a class="headerlink" href="#1-engineering-releases-the-design" title="Permanent link">&para;</a></h2>
+<p><strong>Who:</strong> Engineering. <strong>Where:</strong> Fusion.</p>
+<p>Engineers model the component, make the drawing and release both as they always do. The add-in is not involved and asks nothing more of them.</p>
+<p>Before the next stage, check that:</p>
+<ul>
+<li>The design and drawing are saved and released.</li>
+<li>Every component that should become an item has an <strong>item number</strong>, including the top-level one.</li>
+</ul>
+<p><strong>Outcome:</strong> a released design that is ready to publish.</p>
+<h2 id="2-publish-the-item">2. Publish the item<a class="headerlink" href="#2-publish-the-item" title="Permanent link">&para;</a></h2>
+<p><strong>Who:</strong> the Design Engineer or the Manufacturing Engineer. <strong>Where:</strong> Fusion.</p>
+<p>This is the step that crosses from engineering to manufacturing.</p>
+<ol>
+<li>Open the released design.</li>
+<li>Right-click the top-level component and choose <strong>Publish Fusion Manage Item</strong>.</li>
+<li>Check the BOM. Anything marked <strong>New</strong> or <strong>Update</strong> will change in Fusion Manage.</li>
+<li>Click <strong>Publish</strong>, and follow it in the <strong>Job Queue</strong>.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Sent to the item</th>
+<th>Not sent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The properties you have mapped, and the thumbnail</td>
+<td>Fields you have not mapped, and the item's lifecycle and workflow, which Fusion Manage owns</td>
+</tr>
+<tr>
+<td>The design's BOM structure and quantities</td>
+<td>STEP files and drawing PDFs (you upload these in stage 3)</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition tip">
+<p class="admonition-title">Keep the two lifecycles apart</p>
+<p>You can map Fusion's <strong>Revision</strong> or <strong>Lifecycle state</strong>. If you do, map them to informational fields, such as a text field for the engineering revision. Do not map them to the field that drives the item's own lifecycle.</p>
+</div>
+<p>Full steps are in <a href="../../publishing/">Publishing</a>.</p>
+<p><strong>Outcome:</strong> each component is an item in Fusion Manage, with its properties, thumbnail and BOM.</p>
+<h2 id="3-extend-the-manufacturing-item">3. Extend the manufacturing item<a class="headerlink" href="#3-extend-the-manufacturing-item" title="Permanent link">&para;</a></h2>
+<p><strong>Who:</strong> Manufacturing. <strong>Where:</strong> Fusion and Fusion Manage.</p>
+<p>The published item is the starting point. Manufacturing now adds what it needs to build the product.</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Extend the BOM with items that are not in the design</td>
+<td>Use <strong>Add Existing Items</strong>, then publish again (<a href="../../publishing/#add-existing-items">Bill of Materials</a>).</td>
+</tr>
+<tr>
+<td>Keep or remove lines that only Fusion Manage has</td>
+<td>Review the <strong>Fusion Manage Only</strong> lines. They are kept unless you remove them.</td>
+</tr>
+<tr>
+<td>Attach a STEP file</td>
+<td>Select the component and choose <strong>Export STEP File</strong> (<a href="../../publishing/#step-file">STEP File</a>).</td>
+</tr>
+<tr>
+<td>Attach a drawing PDF</td>
+<td>Open the drawing and choose <strong>Export PDF</strong> (<a href="../../publishing/#drawing-representation">Drawing Representation</a>).</td>
+</tr>
+<tr>
+<td>Add information that engineering does not supply</td>
+<td>Edit it in Fusion Manage.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition important">
+<p class="admonition-title">Files are never added automatically</p>
+<p>A publish does not attach a STEP file or a PDF. You choose which files go to the supply chain, for which items, and when. Uploading a file that is already attached creates a new version.</p>
+</div>
+<p><strong>Outcome:</strong> the item has a complete BOM and the files manufacturing needs.</p>
+<h2 id="4-review">4. Review<a class="headerlink" href="#4-review" title="Permanent link">&para;</a></h2>
+<p><strong>Who:</strong> Engineering, Quality and Manufacturing. <strong>Where:</strong> Fusion or Fusion Manage.</p>
+<p>Each group checks the item against the design. In Fusion, select the component and choose <strong>Open Fusion Manage Item</strong>. Anyone without the add-in can review the same item in Fusion Manage.</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Engineering</td>
+<td>The <strong>Item</strong> tab and <strong>Bill of Materials</strong> tab match the design.</td>
+</tr>
+<tr>
+<td>Quality</td>
+<td>The <strong>Files</strong> tab has the STEP file and drawing PDF.</td>
+</tr>
+<tr>
+<td>Manufacturing</td>
+<td>The BOM is complete, and <strong>Where Used</strong> shows the assemblies that hold the item.</td>
+</tr>
+<tr>
+<td>Everyone</td>
+<td><strong>Associated Workflows</strong> shows any change orders in progress.</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../../item-panel/#tabs">Item Panel</a> for what each tab shows.</p>
+<p>If you find a problem, fix it where it starts. A design problem is fixed in Fusion, released and published again. A manufacturing problem is fixed in Fusion Manage.</p>
+<p><strong>Outcome:</strong> everyone agrees the item is correct and complete.</p>
+<h2 id="5-manufacturing-releases-the-item">5. Manufacturing releases the item<a class="headerlink" href="#5-manufacturing-releases-the-item" title="Permanent link">&para;</a></h2>
+<p><strong>Who:</strong> Release approvers. <strong>Where:</strong> Fusion Manage.</p>
+<p>Releasing the item is Manufacturing's statement that <strong>we are ready to build this now</strong>. It is done through the item's own workflow in Fusion Manage, separate from the engineering release. The add-in does not move an item through its workflow.</p>
+<ol>
+<li>In the Item panel, click <strong>Open in browser</strong>.</li>
+<li>In Fusion Manage, run the workflow action your organisation uses to release the item.</li>
+<li>Back in Fusion, click <strong>Refresh</strong> in the Item panel to see the new state.</li>
+</ol>
+<p><strong>Outcome:</strong> the item is released. A released item is the record that can later pass to ERP for work orders and sales.</p>
+<h2 id="when-the-design-changes">When the design changes<a class="headerlink" href="#when-the-design-changes" title="Permanent link">&para;</a></h2>
+<p>Engineering can keep revising after the item is released, and the item does not change until someone publishes. When Manufacturing needs it brought up to date, <strong>publish again</strong>. Items that already match are left alone, only the differences are sent, and what Manufacturing added in Fusion Manage is kept.</p>
+<h2 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>I want to…</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create or update items from a released design</td>
+<td><strong>Publish Fusion Manage Item</strong></td>
+</tr>
+<tr>
+<td>See whether a publish worked</td>
+<td><strong>Job Queue</strong></td>
+</tr>
+<tr>
+<td>Retry after a failure</td>
+<td><strong>Retry</strong> in the Job Queue</td>
+</tr>
+<tr>
+<td>Attach a STEP file</td>
+<td><strong>Export STEP File</strong></td>
+</tr>
+<tr>
+<td>Attach a drawing PDF</td>
+<td><strong>Export PDF</strong></td>
+</tr>
+<tr>
+<td>Review an item</td>
+<td><strong>Open Fusion Manage Item</strong></td>
+</tr>
+<tr>
+<td>Release an item</td>
+<td>Fusion Manage, through <strong>Open in browser</strong></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../installation/" class="md-footer__link md-footer__link--next" aria-label="Next: Installation and Authentication">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Installation and Authentication
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../javascripts/sidebar-toggle.js"></script>
+      
+        <script src="../../javascripts/sidebar-resize.js"></script>
+      
+        <script src="../../javascripts/font-size.js"></script>
+      
+    
+  </body>
+</html>

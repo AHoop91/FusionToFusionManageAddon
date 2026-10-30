@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>Fusion Manage Item Management</title>
+  <!-- Item: isometric cube -->
+  <g stroke-linejoin="round">
+    <polygon points="58,18 90.9,37 58,56 25.1,37" fill="#ff9548"/>
+    <polygon points="25.1,37 58,56 58,94 25.1,75" fill="#ff6b00"/>
+    <polygon points="90.9,37 90.9,75 58,94 58,56" fill="#933c00"/>
+  </g>
+  <!-- "F" for Fusion Manage, skewed onto the front face (100 x 100 local units) -->
+  <polygon transform="matrix(0.329 0.19 0 0.38 25.1 37)" fill="#fff"
+           points="32,20 72,20 72,34 48,34 48,46 66,46 66,60 48,60 48,82 32,82"/>
+  <!-- Publish badge -->
+  <circle cx="95" cy="95" r="21" fill="#fff"/>
+  <circle cx="95" cy="95" r="17" fill="#1d4f91"/>
+  <path d="M95 105 V87 M87 94.5 L95 86.5 L103 94.5" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
