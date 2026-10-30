@@ -124,7 +124,12 @@ class PublishRuns:
             log.warning("Retry: %s cannot be sent: %s", run.path, exc)
             self._dialogs.notify("Retry", str(exc))
             return self.jobs()
-        fm = FmClient(self._config.effective_settings(), self._auth)
+        context, reason = self._contexts.attempt()
+        if context is None:
+            log.warning("Retry: %s cannot be sent: %s", run.path, reason)
+            self._dialogs.notify("Retry", reason)
+            return self.jobs()
+        fm = FmClient(context.settings, self._auth)
         recorded = str(plan["manifest"].get("tenant") or "").strip()
         if not recorded or recorded != fm.tenant:   # the active hub may have changed since: its items and workspaces are not this run's
             log.warning("Retry: %s was made for tenant %r, the active tenant is %r", run.path, recorded, fm.tenant)

@@ -5,6 +5,7 @@ from typing import Any, Dict, Set, Tuple
 
 from ...auth.auth_service import STATE_ERROR, STATE_SIGNED_OUT, STATE_SIGNING_IN, AuthService
 from ...config.config_service import CompanyModeUnavailable, ConfigService
+from ...config.models import ConnectionSettings
 from ...fm.client import FmClient
 from ...fm.profile import ProfileService
 from ...fm.ttl_cache import TtlCache
@@ -14,7 +15,7 @@ from .background import Runner, in_thread
 PROFILE_SECONDS = 600
 PROFILE_ACTION = "auth_profile"
 
-Key = Tuple[str, str]   # (tenant, client id): the sign-in settings a profile was read under
+Key = Tuple[str, str, int]   # (tenant, client id, session): the sign-in settings and the sign-in a profile was read under
 
 
 class ProfileReads:
@@ -37,7 +38,7 @@ class ProfileReads:
     def get(self) -> Dict[str, Any]:
         """The profile, or ``{"pending": True}`` while it is read."""
         settings = self._config.effective_settings()
-        key = (settings.tenant, settings.client_id)
+        key = self._key(settings)
         profile = self._kept.get(key)
         if profile is not None:
             return profile
@@ -51,6 +52,11 @@ class ProfileReads:
         client = FmClient(settings, self._auth)
         self._run(lambda: self._read(key, client, generation))   # outside the lock: a runner may do the work at once, and the read takes the lock
         return {"pending": True}
+
+    def _key(self, settings: ConnectionSettings) -> Key:
+        """What a profile is read under: another user signing in to the same Client ID (after a sign-out that was not the user's, say, when a
+        refresh was refused) is another session, and the last user's profile is not theirs."""
+        return settings.tenant, settings.client_id, self._auth.session(settings)
 
     def forget(self) -> None:
         """Drop every profile and abandon the reads under way: what they find is not the next user's."""
@@ -74,10 +80,10 @@ class ProfileReads:
             self._done[key] = profile
             self._running.discard(key)
         try:
-            current = self._config.effective_settings()
+            current = self._key(self._config.effective_settings())
         except CompanyModeUnavailable:
             return
-        if (current.tenant, current.client_id) == key:   # not if the sign-in settings changed while it was read
+        if current == key:   # not if the sign-in settings or the sign-in changed while it was read
             self._bridge.push(PROFILE_ACTION, profile)
 
 

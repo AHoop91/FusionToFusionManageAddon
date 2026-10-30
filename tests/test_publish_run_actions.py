@@ -209,6 +209,15 @@ class RetryTests(Setup):
             self.runs.retry({"id": "r1"})
         return send
 
+    def test_settings_that_cannot_be_read_are_told_to_the_user_and_nothing_is_retried(self):
+        self.config.effective_settings.side_effect = RuntimeError("shared file unreadable")
+        self.runs.queue.get.return_value = finished("send", "error")
+        with mock.patch.object(publish_run_actions, "load_plan", return_value={"manifest": {"tenant": "acme"}}), \
+                mock.patch.object(publish_run_actions, "SendRun") as send:
+            self.runs.retry({"id": "r1"})
+        send.assert_not_called()
+        self.assertEqual(self.dialogs.notify.call_args[0], ("Retry", "shared file unreadable"))
+
     def test_a_run_made_for_another_tenant_is_not_retried(self):
         send = self.retry_with("other", active="acme")
         send.assert_not_called()

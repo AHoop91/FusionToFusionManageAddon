@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from src.config.config_service import CompanyModeUnavailable
+from tests.hub_fixtures import auth_of
 from tests.without_fusion import fusion_modules_stubbed
 
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
@@ -28,7 +29,8 @@ class ProfileReadsTests(unittest.TestCase):
         self.config.effective_settings.return_value = settings()
         self.bridge = mock.Mock()
         self.queued = []   # the reads, run by the test when it wants them to finish
-        self.reads = ProfileReads(self.bridge, self.config, mock.Mock(), run=self.queued.append)
+        self.auth = auth_of()
+        self.reads = ProfileReads(self.bridge, self.config, self.auth, run=self.queued.append)
         self.service = mock.Mock()
         self.service.current.return_value = USER
         self.service.empty.return_value = EMPTY
@@ -48,7 +50,7 @@ class ProfileReadsTests(unittest.TestCase):
         self.bridge.push.assert_called_once_with("auth_profile", USER)
 
     def test_a_runner_that_does_the_read_at_once_does_not_deadlock(self):
-        reads = ProfileReads(self.bridge, self.config, mock.Mock(), run=lambda work: work())
+        reads = ProfileReads(self.bridge, self.config, auth_of(), run=lambda work: work())
         done = []
         thread = threading.Thread(target=lambda: done.append(reads.get()), daemon=True)
         thread.start()
@@ -89,6 +91,20 @@ class ProfileReadsTests(unittest.TestCase):
     def test_nothing_is_pushed_when_the_settings_can_no_longer_be_had(self):
         self.reads.get()
         self.config.effective_settings.side_effect = CompanyModeUnavailable("no company mode")
+        self.finish_reads()
+        self.bridge.push.assert_not_called()
+
+    def test_a_profile_read_for_one_user_is_not_handed_to_the_next_to_sign_in(self):
+        self.reads.get()
+        self.finish_reads()
+        self.auth.session.return_value = 2   # the session ended without the user choosing to sign out (a refresh was refused), and another signed in
+        self.assertEqual(self.reads.get(), {"pending": True})
+        self.finish_reads()
+        self.assertEqual(self.bridge.push.call_count, 2)
+
+    def test_nothing_is_pushed_when_another_user_signed_in_while_it_was_read(self):
+        self.reads.get()
+        self.auth.session.return_value = 2
         self.finish_reads()
         self.bridge.push.assert_not_called()
 
