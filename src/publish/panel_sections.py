@@ -15,8 +15,9 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
-from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceConfig
+from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceConfig, kind_texts
 from ..core.cancel import ADDIN, Cancelled, CancelToken
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..fm.client import FmClient
@@ -47,7 +48,7 @@ def publish_denial(fm: FmClient, cfg: WorkspaceConfig) -> str:
     if not cfg or not cfg.workspace_id:
         return ""
     kind = KINDS_BY_ID[ITEMS_KIND]
-    return denial(fm, cfg.workspace_id, kind.required_permissions, kind.title)
+    return denial(fm, cfg.workspace_id, kind.required_permissions, kind_texts(kind)[0])
 
 
 def entry(section: str = "", **changes: Any) -> Dict[str, Any]:
@@ -99,7 +100,7 @@ class PublishSections:
         """Start loading a section (unless it is loading or loaded for this design, and not ``force``d); the snapshot of its slot."""
         name = str(payload.get("section", ""))
         if name not in PANEL_SECTIONS:
-            return entry(name, message=f"Unknown section: {name}")
+            return entry(name, message=t("run.section_unknown", name=name))
         component = {k: str(payload.get(k) or "") for k in COMPONENT_KEYS}
         slot = f"{name}:{component['id']}" if name in PER_COMPONENT and component["id"] else name
         try:
@@ -108,7 +109,7 @@ class PublishSections:
             log.exception("Could not start loading %s", slot)
             return entry(slot, message=str(exc))
         if not model_id:
-            return entry(slot, message="Could not find the Data Model id of the open design.")
+            return entry(slot, message=t("run.section_no_model"))
         key = f"{model_id}|{timestamp}"
         context, reason = self._contexts.attempt()   # taken now, on Fusion's thread: a hub opened or a user signed in meanwhile is not mixed in
         if context is None:
@@ -132,7 +133,7 @@ class PublishSections:
         """The snapshot of a slot, which the panel polls until it is no longer pending."""
         slot = str(payload.get("section", ""))
         with self._lock:
-            return dict(self._slots.get(slot) or entry(slot, message=f"Unknown section: {slot}"))
+            return dict(self._slots.get(slot) or entry(slot, message=t("run.section_unknown", name=slot)))
 
     @staticmethod
     def _holds(state: Dict[str, Any], key: str, stamp: str) -> bool:
@@ -227,5 +228,5 @@ class PublishSections:
             return compare_design_bom(rows, summary, load.cfg, load.fm, hits)
         data = read()
         if load.name == SUMMARY and not item_number_of(data):   # no item number: never published, so nothing here applies
-            raise PublishDenied("This design has no item number, so it has not been published to Fusion Manage.")
+            raise PublishDenied(t("run.section_no_number"))
         return data

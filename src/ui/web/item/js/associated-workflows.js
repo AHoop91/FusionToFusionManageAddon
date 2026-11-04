@@ -7,16 +7,17 @@
 
   const bridge = ns.bridge;
   const el = ns.el;
+  const t = ns.i18n.t;
   const tree = ns.itemTree;
   const CLASS = 'item-workflows';
   // heading, width, and how to read the text of a cell from a row; the title column links to the workflow
   const COLUMNS = [
-    { title: 'Workflow', width: 260, link: true, text: function (r) { return r.title; } },
-    { title: 'Status', width: 110, text: function (r) { return r.state; } },
-    { title: 'Last Action', width: 110, text: function (r) { return r.last.action; } },
-    { title: 'By User', width: 120, text: function (r) { return r.last.user; } },
-    { title: 'Last Updated', width: 190, text: function (r) { return tree.formatDate(r.last.date); } },
-    { title: 'Comments', width: 200, text: function (r) { return r.last.comments; } },
+    { title: function () { return t('item.wf_col_workflow'); }, width: 260, link: true, text: function (r) { return r.title; } },
+    { title: function () { return t('item.col_status'); }, width: 110, text: function (r) { return r.state; } },
+    { title: function () { return t('item.wf_col_last_action'); }, width: 110, text: function (r) { return r.last.action; } },
+    { title: function () { return t('item.col_by_user'); }, width: 120, text: function (r) { return r.last.user; } },
+    { title: function () { return t('item.col_last_updated'); }, width: 190, text: function (r) { return tree.formatDate(r.last.date); } },
+    { title: function () { return t('item.wf_col_comments'); }, width: 200, text: function (r) { return r.last.comments; } },
   ];
   // A page with a tick: a change that is being worked through. Static markup.
   const WORKFLOW_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 14l2 2 4-4"/></svg>';
@@ -26,10 +27,10 @@
   /** Read the associated workflows of the item of ``view`` and fill ``target`` with them. */
   function render(target, view) {
     const mine = ++current;
-    tree.loading(target, CLASS, 'Reading the associated workflows...');
+    tree.loading(target, CLASS, t('item.wf_reading'));
     tree.load('workflows_load', 'workflows_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp }, function (error, rows) {
       if (mine !== current) return;
-      if (error) { tree.centred(target, CLASS, 'Could not read the associated workflows: ' + error, true); return; }
+      if (error) { tree.centred(target, CLASS, t('item.wf_error', { error: error }), true); return; }
       draw(target, rows);
     });
   }
@@ -45,7 +46,7 @@
       const col = el('col');
       col.style.width = column.width + 'px';
       colgroup.appendChild(col);
-      const th = el('th', '', column.title);
+      const th = el('th', '', column.title());
       head.appendChild(th);
       cols.push(col);
       heads.push(th);
@@ -59,7 +60,7 @@
         if (column.link && row.url) {
           const a = el('a', 'item-link', text);
           a.href = '#';
-          a.title = 'Open in Fusion Manage in your browser';
+          a.title = t('item.open_in_fusion_manage');
           a.addEventListener('click', function (event) {
             event.preventDefault();
             bridge.send('open_url', { url: row.url });
@@ -79,7 +80,7 @@
     wrap.appendChild(table);
     target.replaceChildren(wrap);
     if (!rows.length) {   // the columns stay, and the message is centred in the space under them
-      tree.emptyUnder(target, WORKFLOW_ICON, 'No associated workflows', 'Workflows in Fusion Manage that reference this item will be listed here.');
+      tree.emptyUnder(target, WORKFLOW_ICON, t('item.wf_empty'), t('item.wf_empty_hint'));
     }
   }
 

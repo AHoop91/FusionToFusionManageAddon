@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.fm.components import NO_NUMBER, SHOWN, ComponentService, manage_link, parse_workspace_id
+from src.fm.components import SHOWN, ComponentService, manage_link, parse_workspace_id
 
 
 class Client:
@@ -31,7 +31,7 @@ class FindTests(unittest.TestCase):
 
     def test_no_number_is_not_looked_up(self):
         client = Client({})
-        self.assertEqual(ComponentService(client).find("LOOKUP", ""), ("", NO_NUMBER))
+        self.assertEqual(ComponentService(client).find("LOOKUP", ""), ("", "The item has no number to look up."))
         self.assertEqual(client.asked, [])
 
     def test_no_match_says_how_many_options_came_back(self):

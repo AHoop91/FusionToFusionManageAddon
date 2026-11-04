@@ -10,6 +10,7 @@
 
   const $ = ns.$;
   const bridge = ns.bridge;
+  const t = ns.i18n.t;
 
   // ---- Form data ----------------------------------------------------------
 
@@ -40,7 +41,7 @@
 
   /** Show which hub the settings are for. A different hub than before starts its first setup again. */
   function showHub(hub) {
-    const name = hub && hub.name ? hub.name : 'no hub open';
+    const name = hub && hub.name ? hub.name : t('settings.no_hub');
     document.querySelectorAll('[data-hub-name]').forEach(function (el) { el.textContent = name; });
     if (hub && hub.id !== hubId) {
       tenantStepDone = false;
@@ -54,11 +55,15 @@
   // ---- Role in the hub ------------------------------------------------------
 
   const ROLE_WAIT_MS = 45000;   // how long Python is given to push the answer
-  const ROLE_TEXT = {
-    admin: 'You are a Hub Admin of this hub.',
-    member: 'You are a member of this hub, not a Hub Admin.',
-    unknown: 'Your role in this hub could not be checked.',
-  };
+
+  /** What the user's role in the hub is, in a sentence. */
+  function roleText(state) {
+    switch (state) {
+      case 'admin': return t('settings.role_admin');
+      case 'member': return t('settings.role_member');
+      default: return t('settings.role_unknown');
+    }
+  }
   let stopRoleWait = function () {};   // cancels the wait for the role's answer
   let roleAsked = false;   // an answer is awaited: one question at a time
   let roleState = '';      // '', 'pending', 'admin', 'member' or 'unknown' for the active hub
@@ -99,10 +104,11 @@
     if (firstRun) firstRunRole(result.state);
     ns.account.renderRole(result.state);
     updateViews();
+    ns.language.render();   // only a Hub Admin is offered to add a language
     if (roleDialog) {
       roleDialog = false;
-      if (result.state === 'unknown') ns.progress.fail('Could not check your permissions', ROLE_TEXT.unknown + ' Check your connection and try again.');
-      else ns.progress.done('Permissions refreshed', ROLE_TEXT[result.state]);
+      if (result.state === 'unknown') ns.progress.fail(t('settings.role_failed_title'), t('settings.role_failed_text'));
+      else ns.progress.done(t('settings.role_refreshed'), roleText(result.state));
     }
   }
 
@@ -145,13 +151,13 @@
   function renderHubFile() {
     const shown = hubFile || {};
     $('hub-file-name').textContent = shown.name || '';
-    $('hub-file-place').textContent = shown.project_name ? 'In the project ' + shown.project_name : '';
+    $('hub-file-place').textContent = shown.project_name ? t('settings.in_project', { name: shown.project_name }) : '';
     $('hub-file-modified').textContent = whenText(shown.modified) || '-';
     $('hub-file-by').textContent = shown.modified_by || '-';
     $('hub-file-version').textContent = shown.version || '-';
     $('hub-file-read').textContent = whenText(shown.read_at) || '-';
     fill($('cfg-file-icon'), [ns.svg(FILE_ICON, 20)]);
-    if (hubFile && $('cfg-status').dataset.state === 'current' && !$('cfg-status-sub').textContent) setFileStatus('current', 'Up to date', 'Read ' + whenText(hubFile.read_at));
+    if (hubFile && $('cfg-status').dataset.state === 'current' && !$('cfg-status-sub').textContent) setFileStatus('current', t('settings.up_to_date'), t('settings.read_at', { when: whenText(hubFile.read_at) }));
   }
 
   // ---- Keeping up with the Hub Admin's changes -----------------------------------
@@ -165,9 +171,9 @@
     if (checkingFile || !hubFile) return;
     checkingFile = true;
     $('cfg-check').disabled = true;
-    setFileStatus('checking', 'Checking for updates...', '');
+    setFileStatus('checking', t('settings.checking'), '');
     stopCheckWait();
-    stopCheckWait = bridge.expect(CHECK_WAIT_MS, function () { onFileChecked({ ok: false, error: 'The hub did not answer in time.' }); });
+    stopCheckWait = bridge.expect(CHECK_WAIT_MS, function () { onFileChecked({ ok: false, error: t('settings.hub_timeout') }); });
     bridge.send('check_hub_file', {});
   }
 
@@ -181,11 +187,11 @@
     const checked = whenText(result.checked_at);
     if (result.state === 'updated') {
       fillSettings(result.settings);   // the Hub Admin changed the file: these are the settings now
-      setFileStatus('updated', 'Updated to the latest version', (result.by ? result.by + ' changed it. ' : '') + 'Read ' + checked);
+      setFileStatus('updated', t('settings.updated_latest'), result.by ? t('settings.changed_it_read', { name: result.by, when: checked }) : t('settings.read_at', { when: checked }));
     } else if (result.state === 'current') {
-      setFileStatus('current', 'Up to date', 'Checked ' + checked);
+      setFileStatus('current', t('settings.up_to_date'), t('settings.checked_at', { when: checked }));
     } else if (result.state === 'unknown') {
-      setFileStatus('unknown', 'Could not check for updates', result.message || 'Try again in a moment.');
+      setFileStatus('unknown', t('settings.check_failed'), result.message || t('settings.try_again_moment'));
     } else {
       renderHubFile();
     }
@@ -201,9 +207,9 @@
     if (usingFile) return;
     usingFile = true;
     setFileButtons(true);
-    ns.progress.show('Reading the Configuration File', 'Reading ' + (file.name || 'the file') + ' from the hub. This takes a few seconds.');
+    ns.progress.show(t('settings.reading_title'), t('settings.reading_text', { name: file.name || t('settings.the_file') }));
     stopUseWait();
-    stopUseWait = bridge.expect(USE_WAIT_MS, function () { onUseHubConfig({ ok: false, error: 'The hub did not answer in time. Try again.' }); });
+    stopUseWait = bridge.expect(USE_WAIT_MS, function () { onUseHubConfig({ ok: false, error: t('settings.hub_timeout_retry') }); });
     bridge.send('use_hub_config', file);
   }
 
@@ -214,14 +220,14 @@
     usingFile = false;
     setFileButtons(false);
     if (!result.ok) {
-      ns.progress.fail('Could not read the Configuration File', result.message || 'The Configuration File could not be read.');
+      ns.progress.fail(t('settings.read_failed_title'), result.message || t('settings.read_failed_text'));
       if (!hubFile) { readFailed = true; showWizard(wizardNeeded); }
       return;
     }
     readFailed = false;
     fillSettings(result.settings);   // the file is now this hub's settings
-    if (hubFile) setFileStatus('current', 'Up to date', 'Read ' + whenText(hubFile.read_at));
-    ns.progress.done('Settings loaded', (hubFile ? hubFile.name : 'The file') + ' is now the settings of this hub. They are read-only: only a Hub Admin can change them.');
+    if (hubFile) setFileStatus('current', t('settings.up_to_date'), t('settings.read_at', { when: whenText(hubFile.read_at) }));
+    ns.progress.done(t('settings.loaded_title'), t('settings.loaded_text', { name: hubFile ? hubFile.name : t('settings.the_file_cap') }));
   }
 
   function findFile() {
@@ -258,17 +264,18 @@
     }
     const place = hubSavePlace;
     hubSavePlace = '';
-    if (r.ok) ns.progress.done('Saved to Fusion Hub', 'The Configuration File is in ' + place + '. Members of the hub can find it there.');
-    else ns.progress.fail('Could not save to Fusion Hub', r.error);
+    if (r.ok) ns.progress.done(t('settings.saved_hub_title'), t('settings.saved_hub_text', { place: place }));
+    else ns.progress.fail(t('settings.save_hub_failed'), r.error);
+    ns.language.settled();   // a language chosen with Save & Publish is applied once the file is in the hub
   }
 
   /** After a save, ask where in the hub to keep the Configuration File and store it there. */
   function saveToHub() {
     ns.hubPicker.open(document.querySelector('[data-hub-name]').textContent, function (place) {
       hubSavePlace = place.path;
-      ns.progress.show('Saving to Fusion Hub', 'Storing the Configuration File in ' + place.path + '. This takes a few seconds.');
+      ns.progress.show(t('settings.saving_hub_title'), t('settings.saving_hub_text', { path: place.path }));
       bridge.send('save_to_hub', { project_id: place.project_id, folder_id: place.folder_id });
-    }, { folder: true, hubId: hubId, title: 'Save to Fusion Hub', action: 'Save here', fileName: CONFIG_FILE_NAME });
+    }, { folder: true, hubId: hubId, title: t('settings.save_hub_title'), action: t('settings.save_here'), fileName: CONFIG_FILE_NAME });
   }
 
   /** Save the settings. With ``publish`` (Hub Admins only), once they are saved the Configuration File is stored in the hub too. */
@@ -287,7 +294,7 @@
     ns.workspaces.setViewOnly(locked);   // the Item Workspace tab shows what the file defines, and checks nothing
     document.querySelectorAll('.lock-note').forEach(function (note) {
       note.hidden = !locked;
-      if (locked) note.textContent = 'These settings come from the hub\'s Configuration File. Only a Hub Admin can change them.';
+      if (locked) note.textContent = t('settings.lock_member');
     });
   }
 
@@ -327,12 +334,12 @@
     stopTenantWait();
     $('f-tenant-find').disabled = $('wt-find').disabled = false;
     // The Connection tab and the first-setup tenant step share the answer.
-    const failed = result.message || 'The tenant could not be found.';
+    const failed = result.message || t('settings.tenant_not_found');
     $('f-tenant-msg').hidden = false;
-    $('f-tenant-msg').textContent = result.ok ? 'Found ' + result.tenant + '. Save to keep it.' : failed;
+    $('f-tenant-msg').textContent = result.ok ? t('settings.tenant_found', { tenant: result.tenant }) : failed;
     $('wt-msg').hidden = false;
     $('wt-msg').dataset.state = result.ok ? 'ok' : 'error';
-    $('wt-msg').textContent = result.ok ? 'Found tenant "' + result.tenant + '". Select Save and finish to keep it.' : failed + ' You can also enter the tenant yourself.';
+    $('wt-msg').textContent = result.ok ? t('settings.tenant_found_wizard', { tenant: result.tenant }) : t('settings.tenant_failed_wizard', { message: failed });
     if (result.ok) {
       $('f-tenant').value = $('wt-tenant').value = result.tenant;
       $('wt-save').disabled = false;
@@ -345,9 +352,9 @@
     $('f-tenant-msg').hidden = true;
     $('wt-msg').hidden = false;
     $('wt-msg').dataset.state = '';
-    $('wt-msg').textContent = 'Searching the open design...';
+    $('wt-msg').textContent = t('settings.tenant_searching');
     stopTenantWait();
-    stopTenantWait = bridge.expect(TENANT_WAIT_MS, function () { onTenant({ ok: false, error: 'The tenant could not be found in time. Try again.' }); });
+    stopTenantWait = bridge.expect(TENANT_WAIT_MS, function () { onTenant({ ok: false, error: t('settings.tenant_timeout') }); });
     bridge.send('detect_tenant', {});
   }
 
@@ -435,8 +442,8 @@
     $('wiz-client-id').addEventListener('input', updateWizard);
     $('wiz-copy').addEventListener('click', function () {
       copyText($('wiz-callback').textContent);
-      $('wiz-copy').textContent = 'Copied';
-      setTimeout(function () { $('wiz-copy').textContent = 'Copy'; }, 2000);
+      $('wiz-copy').textContent = t('settings.copied');
+      setTimeout(function () { $('wiz-copy').textContent = t('settings.copy'); }, 2000);
     });
     $('wiz-signin').addEventListener('click', function () {
       $('f-client-id').value = $('wiz-client-id').value.trim();
@@ -487,7 +494,7 @@
     ns.account.onRefreshRole(function () {
       ns.account.closeCard();
       roleDialog = true;
-      ns.progress.show('Checking your permissions', 'Reading your role in this hub. This takes a few seconds.');
+      ns.progress.show(t('settings.role_checking_title'), t('settings.role_checking_text'));
       checkRole(true, true);
     });
     ns.auth.onChange(function (signedIn) { signedInNow = signedIn; updateViews(); if (signedIn) checkRole(); });
@@ -533,9 +540,9 @@
       if (problems.length) return;
       fillSettings(r.result);
       if (publish) saveToHub();   // a file in the hub never holds settings that failed validation
-      else if (TAB_SAVES.indexOf(saveSource) >= 0) ns.progress.notify('Save successful', 'The settings are saved on this computer.');
+      else if (TAB_SAVES.indexOf(saveSource) >= 0) ns.progress.notify(t('settings.saved_title'), t('settings.saved_text'));
       else {   // the first-setup steps have no dialog: they say it beside the button
-        msg.textContent = 'Saved';
+        msg.textContent = t('settings.saved');
         setTimeout(function () { msg.textContent = ''; }, 2000);
       }
       // Refresh sign-in state now that the connection details changed (or sign in, from the wizard).
@@ -556,8 +563,8 @@
     // Every tab saves the whole form; `prefix` says where to show the result.
     $('callback-copy').addEventListener('click', function () {
       copyText($('callback-url').textContent);
-      $('callback-copy').textContent = 'Copied';
-      setTimeout(function () { $('callback-copy').textContent = 'Copy'; }, 2000);
+      $('callback-copy').textContent = t('settings.copied');
+      setTimeout(function () { $('callback-copy').textContent = t('settings.copy'); }, 2000);
     });
     TAB_SAVES.forEach(function (prefix) {
       $(prefix + '-btn').addEventListener('click', function () { saveClicked(prefix, false); });
@@ -571,5 +578,7 @@
     init: init,
     apply: fillSettings,
     load: function () { bridge.send('get_settings'); },
+    publish: function () { if (roleState === 'admin') saveToHub(); },   // Save & Publish from the Language tab
+    roleState: function () { return roleState; },   // '', 'pending', 'admin', 'member' or 'unknown'
   };
 })(window.MfgUi);

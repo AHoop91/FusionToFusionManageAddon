@@ -8,12 +8,13 @@
   'use strict';
 
   const el = ns.pubUi.el;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   const NARROW = window.matchMedia('(max-width: 760px)');
   const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84], narrow: [0, 76, 76, 72] };
   const MIN_WIDTHS = [120, 64, 64, 56];
-  const HEADS = [['Item', ''], ['Fusion', 'pub-cmp-center'], ['Manage', 'pub-cmp-center'], ['Qty', 'num']];
-  const LAST = HEADS.length - 1;
+  const LAST = 3;   // the Qty column
+  function heads() { return [[t('publish.col_item'), ''], [t('publish.col_fusion'), 'pub-cmp-center'], [t('publish.col_manage'), 'pub-cmp-center'], [t('publish.col_qty'), 'num']]; }
   const dragged = { wide: {}, narrow: {} };   // layout -> column index -> width the user chose
 
   let watcher = null;   // follows the width of the panel the table is in; one at a time, for the table on screen
@@ -44,7 +45,7 @@
   /** The drag handle on a header's right edge: drag to resize, double-click to reset. */
   function grip(th, index, key, resize) {
     const handle = el('span', 'pub-cmp-grip');
-    handle.title = 'Drag to resize the column (double-click to reset)';
+    handle.title = t('publish.col_resize');
     handle.addEventListener('pointerdown', function (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -70,7 +71,7 @@
   /** The column group and the header row of ``table`` (with a drag handle on each column's right edge but the last, which takes what is left). */
   function head(table) {
     const key = layoutKey();
-    const cols = HEADS.map(function () { return el('col'); });
+    const cols = heads().map(function () { return el('col'); });
     const resize = function () { sizeColumns(table, cols, key); };
     // Once the table is in the page, follow the width of its panel.
     requestAnimationFrame(function () {
@@ -84,7 +85,7 @@
     cols.forEach(function (col) { group.appendChild(col); });
 
     const row = el('tr');
-    HEADS.forEach(function (h, i) {
+    heads().forEach(function (h, i) {
       const th = el('th', h[1], h[0]);
       row.appendChild(th);
       if (i < LAST) th.appendChild(grip(th, i, key, resize));

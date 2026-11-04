@@ -8,6 +8,8 @@
  *      groups(value, wrap) -> [{title, items: [{value, label, detail}]}],
  *      empty(wrap) -> text shown when nothing is listed or matches,
  *      taken(wrap) -> values already used elsewhere, shown greyed out,
+ *      searchFrom -> the search box is shown from this many items on, inlineDetail -> the detail of an item is on its row, not under it,
+ *      required -> there is no "clear" entry, a value is always chosen,
  *      alignRight -> open the list leftwards, tip() -> button tooltip, onOpen(wrap) -> called as the list opens.
  * ``make(cfg, selected)`` builds one; it fires a `pick` event on its wrapper when the value changes.
  */
@@ -15,6 +17,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
 
   function buildMenu(wrap, cfg) {
     const input = wrap.querySelector('.' + cfg.valueClass);
@@ -24,8 +27,8 @@
     list.textContent = '';
     const oldClear = menu.querySelector('.ws-pick-clear');
     if (oldClear) oldClear.remove();
-    if (input.value) {
-      const clear = el('button', 'ws-pick-clear', 'Clear selection');
+    if (input.value && !cfg.required) {
+      const clear = el('button', 'ws-pick-clear', t('settings.pick_clear'));
       clear.type = 'button';
       clear.addEventListener('click', function () {
         input.value = '';
@@ -37,7 +40,7 @@
     }
     cfg.groups(input.value, wrap).forEach(function (group) {
       const section = el('div', 'ws-pick-section');
-      section.appendChild(el('div', 'ws-pick-group', group.title));
+      if (group.title) section.appendChild(el('div', 'ws-pick-group', group.title));   // a list of one kind has no heading
       list.appendChild(section);
       group.items.forEach(function (item) {
         const button = el('button', 'ws-pick-item', item.label);
@@ -47,7 +50,7 @@
           button.classList.add('selected');
         } else if (taken.indexOf(item.value) >= 0) {
           button.disabled = true;
-          button.title = 'Already mapped';
+          button.title = t('settings.pick_taken');
         }
         button.addEventListener('click', function () {
           input.value = item.value;
@@ -59,6 +62,8 @@
       });
     });
     list.appendChild(el('div', 'ws-pick-empty muted', cfg.empty(wrap)));
+    const count = list.querySelectorAll('.ws-pick-item').length;
+    menu.querySelector('.ws-pick-search').hidden = !!cfg.searchFrom && count < cfg.searchFrom;   // a short list needs no search
     filterMenu(menu);
   }
 
@@ -117,6 +122,7 @@
 
   function makePicker(cfg, selected) {
     const wrap = el('div', 'ws-pick-wrap');
+    if (cfg.inlineDetail) wrap.classList.add('inline-detail');
     const input = el('input', cfg.valueClass);
     input.type = 'hidden';
     input.value = selected || '';

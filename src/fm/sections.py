@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Iterator, List
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, rows_in
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .pages import field_id
@@ -90,5 +91,5 @@ class SectionService:
         fields = parse_sections(details)
         if not fields:   # say so now, instead of every item failing with "not in any section"
             log.error("No fields found in the sections of workspace %s: %r", workspace_id, str(details)[:LOG_CHARS])
-            raise FmApiError(f"Could not read the fields of workspace {workspace_id}'s sections ({len(details)} section(s) came back, none with a field).")
+            raise FmApiError(t("data.fm_sections_no_fields", workspace=workspace_id, count=len(details)))
         return fields

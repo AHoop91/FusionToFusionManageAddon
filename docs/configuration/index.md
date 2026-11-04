@@ -22,6 +22,7 @@ If a picklist field is mapped, its values must match in both systems ([Picklists
 |---|---|
 | [Item Workspace](#item-workspace) | You are choosing the workspace, mapping fields, setting default values or linking components. |
 | [Export destinations](#export-destinations) | You want STEP, PDF, DWG or DXF files to attach to an item or a component. |
+| [Language](#language) | You want the add-in in another language, or want to add one and share it with your hub. |
 
 To know what the add-in reads from your design, and what must be true of it first, see [Manufacturing Data Model](../reference/manufacturing-data-model.md).
 
@@ -354,3 +355,62 @@ The window starts on the other destination instead when the one you set cannot b
 - **No workspace called Components is found** in Fusion Manage, so **Component** is off.
 
 The window opens either way, and turns off only the destination that cannot be used, with its reason. For how to export, see [The Export Window](../publishing/index.md#the-export-window).
+
+## Language
+
+The add-in's panels, messages, ribbon buttons and panel titles come from language files. English comes with the add-in. Names, values and messages that come from Fusion Manage and Fusion, such as workspace and field names, picklist values and a server's error text, are shown as they are and are never translated.
+
+### Choose a language
+
+Open **Preferences** and go to the **Language** tab (it is also on the sign-in screen). Choose a language under **Display language** and choose **Save**. The open panels change as soon as you save. The ribbon buttons and panel titles are fixed when Fusion starts, so a banner at the top of Preferences asks you to restart Fusion for the new language to take effect there. The choice is yours alone: it is kept on your computer and is not part of the hub's Configuration File.
+
+The list groups languages by where they come from:
+
+- **Included with the add-in**: the languages that ship with it.
+- **Shared by your hub**: languages your Hub Admin shared in the hub's Configuration File.
+- **Your languages**: files you made yourself.
+
+If two files have the same code, yours is used first, then your hub's, then the one that ships with the add-in.
+
+### Add a language
+
+If your language is not in the list, you can create it:
+
+1. On the **Language** tab, enter a **Language code** (for example `de` or `pt-BR`) and a **Language name**, written in that language (for example `Deutsch`), then choose **Create**. Both are required. This makes a file that starts with the English text.
+2. Choose **Open folder** and open the new file in a text editor. Translate the text on the right of each line. Keep the names on the left and any `{placeholders}` as they are, then save the file.
+3. Choose **Reload**. The language appears under **Your languages**.
+
+The file is kept in `%APPDATA%\MfgToFm\languages` on your computer. Anyone can add a language. It is yours alone until a Hub Admin publishes it to the hub.
+
+### Check a language file
+
+English is the reference. Choose a language that is not included with the add-in and choose **Check language file** to see how its file maps onto English:
+
+- **Translated:** how many texts are translated, and how many are still the same as English.
+- **Missing:** names English has that your file lacks. They show in English.
+- **Placeholders:** a text must keep the same `{placeholders}` as English. A text that does not is not used and shows in English. The check lists both sets.
+- **Not text, or not used:** entries that are not text, or names this version of the add-in does not use, are ignored.
+- **Errors:** a file that is not valid JSON, or has no `strings` object, or no text that matches English, cannot be used. The check says why. You cannot choose such a language, and it cannot be shared.
+
+Files in your languages folder or your hub's folder that cannot be read at all, for example because of a typo in the JSON or a file name that is not a language code, are named at the top of the Language tab with the reason, so they do not just go missing from the list.
+
+### Custom languages and sharing them with your hub
+
+Anyone sees their own languages under **Custom languages**, and can edit or delete them. Only a Hub Admin can share them: every language in a Hub Admin's own languages folder is shared with the hub when they **Save & Publish**, so there is nothing to choose. Other members do not see **Save & Publish** on the Language tab.
+
+1. On the **Language** tab, **Custom languages** shows a full-width tile for each language you made. A tile says where the language is:
+    - **Local**: the file is on your computer. Every tile says this.
+    - **Shared in hub**: the hub's Configuration File has this language, as far as this computer knows (from your last **Save & Publish**, or the last file you read from the hub).
+    - **Shared in hub, changes not published**: the hub has an older version, because you have changed the file since. Publish again to update it.
+    A language whose file the add-in cannot use shows the reason, and is not shared.
+2. As a Hub Admin, choose **Save & Publish** at the bottom of the tab. This saves the Configuration File to the hub, with your languages in it, in a section of their own next to the settings.
+3. Members receive them when they read or update the file. They then appear under **Shared by your hub** in their list, and each member still chooses their own language.
+
+Each tile has two icons:
+
+- **Edit** (pencil) opens the language's file in a text editor. Translate the text and save the file. When you come back to Fusion, the add-in reads the file again by itself.
+- **Delete** (bin) removes the file from your languages folder, after asking you to confirm. This cannot be undone. If it was the language you were using, the panels go back to English.
+
+Only the languages you made yourself have the icons: the ones that come with the add-in, and the ones your hub shares, cannot be edited or deleted here.
+
+To stop sharing a language, delete it, or remove its file from your languages folder, and publish again: members lose it the next time they update. The Configuration File carries the languages in the folder of whoever publishes it, so publish from the computer that holds your language files. A member cannot edit or delete a shared language, but a file of their own with the same code is used instead. English cannot be shared, and a file may carry up to 30 languages. Files from the hub are checked as they are read, so anything that is not a language, or not text, is ignored. Older versions of the add-in ignore the languages in the file.

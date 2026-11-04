@@ -8,6 +8,16 @@ const vm = require('vm');
 const WEB = path.join(__dirname, '..', '..', 'src', 'ui', 'web');
 const PUBLISH_HTML = path.join(WEB, 'publish', 'index.html');
 
+/** A stand-in for shared/js/i18n.js that is already in English: the texts are those of resources/languages/en.json, as the add-in ships them. */
+function englishI18n() {
+  const strings = JSON.parse(fs.readFileSync(path.join(WEB, '..', '..', '..', 'resources', 'languages', 'en.json'), 'utf8')).strings;
+  const t = function (key, params) {
+    const text = Object.prototype.hasOwnProperty.call(strings, key) ? strings[key] : key;
+    return params ? text.replace(/\{(\w+)\}/g, function (all, name) { return params[name] !== undefined ? String(params[name]) : all; }) : text;
+  };
+  return { gate: function () { return true; }, init: function (start) { start(); }, t: t, apply: function () {}, use: function () {}, state: function () { return {}; }, onRefused: function () {} };
+}
+
 /** The scripts of the Publish page, in the order the page loads them, as paths under src/ui/web/publish. */
 function pageScripts() {
   return [...fs.readFileSync(PUBLISH_HTML, 'utf8').matchAll(/<script src="([^"]+)"/g)].map(function (m) { return m[1]; });
@@ -29,4 +39,4 @@ function dataWindow() {
   return window.MfgUi;
 }
 
-module.exports = { WEB: WEB, PUBLISH_HTML: PUBLISH_HTML, pageScripts: pageScripts, run: run, dataWindow: dataWindow };
+module.exports = { englishI18n: englishI18n, WEB: WEB, PUBLISH_HTML: PUBLISH_HTML, pageScripts: pageScripts, run: run, dataWindow: dataWindow };

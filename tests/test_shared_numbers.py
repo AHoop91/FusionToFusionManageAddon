@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.publish.shared_numbers import UNNAMED, shared_key, shared_numbers, shared_reason
+from src.publish.shared_numbers import shared_key, unnamed, shared_numbers, shared_reason
 
 SUMMARY = {"component_id": "root-id"}
 
@@ -40,7 +40,7 @@ class SharedNumbersTests(unittest.TestCase):
     def test_a_component_is_named_by_its_name_then_its_description_then_a_placeholder(self):
         items = [{"item_number": "PN-1", "id": "a", "name": "Bracket"}, {"item_number": "PN-1", "id": "b", "description": "A plate"},
                  {"item_number": "PN-1", "id": "c"}, {"item_number": "PN-1", "id": "d", "name": "  "}]
-        self.assertEqual(shared_numbers(items, SUMMARY), {"pn-1": ["Bracket", "A plate", UNNAMED, UNNAMED]})
+        self.assertEqual(shared_numbers(items, SUMMARY), {"pn-1": ["Bracket", "A plate", unnamed(), unnamed()]})
 
     def test_the_designs_own_component_is_told_by_the_summarys_id(self):
         items = [item("TOP", "", "Top", root=True), item("TOP", "root-id", "Same component")]

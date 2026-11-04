@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
+from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...config.hub_context import HubContexts
 from ...publish.panel_sections import PublishSections
@@ -54,7 +55,7 @@ def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth:
         """Open a link in the system browser (a palette cannot open one itself)."""
         url = str(payload.get("url", ""))
         if not is_openable(url):
-            raise ValueError("Only https links can be opened.")
+            raise ValueError(t("app.only_https"))
         if not open_browser(url):
             log.warning("The system browser did not open %s", url.split("?", 1)[0])   # without the query: it may carry a token
         return {}

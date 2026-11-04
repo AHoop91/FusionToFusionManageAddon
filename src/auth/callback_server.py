@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, Optional
 
 from .errors import AuthError
+from ..core.i18n import t
 
 CALLBACK_PATH = "/callback"
 
@@ -35,23 +36,23 @@ button {{ margin-top: 18px; padding: 9px 22px; font: inherit; color: #fff; backg
 button:hover {{ background: #0579b0; }}
 </style></head><body><div class="card">
 <div class="icon">{icon}</div><h1>{title}</h1><p>{text}</p>{detail}
-<button type="button" onclick="window.close()">Close this tab</button>
+<button type="button" onclick="window.close()">{close}</button>
 </div><script>{script}</script></body></html>"""
 
 
 def _page(ok: bool, error: str = "") -> bytes:
     """The page the browser shows after the redirect. ``error`` is shown as the reason sign-in failed."""
     if ok:
-        title, icon, colour = "Authorization received", "&#10003;", "#2e7d32"
-        text = "Return to Fusion to finish signing in. You can close this tab."
+        title, icon, colour = t("data.auth_page_received"), "&#10003;", "#2e7d32"
+        text = t("data.auth_page_received_text")
         detail = ""
         script = ""
     else:
-        title, icon, colour = "Sign-in failed", "!", "#c62828"
-        text = "Return to Fusion and try again."
+        title, icon, colour = t("data.auth_page_failed"), "!", "#c62828"
+        text = t("data.auth_page_failed_text")
         detail = '<div class="detail">' + html.escape(error) + "</div>" if error else ""
         script = ""
-    return _PAGE.format(title=title, icon=icon, colour=colour, text=text, detail=detail, script=script).encode("utf-8")
+    return _PAGE.format(title=title, icon=icon, colour=colour, text=text, close=t("data.auth_page_close"), detail=detail, script=script).encode("utf-8")
 
 
 class CallbackServer:
@@ -65,7 +66,7 @@ class CallbackServer:
         try:
             self._server = HTTPServer(("127.0.0.1", port), handler)
         except OSError as exc:
-            raise AuthError(f"Callback port {port} is unavailable: {exc}") from exc
+            raise AuthError(t("data.auth_port_unavailable", port=port, reason=exc)) from exc
         # Short timeout so ``wait`` can notice cancel/timeout between requests.
         self._server.timeout = 0.5
 
@@ -92,7 +93,7 @@ class CallbackServer:
                 else:
                     result["code"] = params.get("code", [""])[0] or None
                     if not result["code"]:
-                        result["error"] = "No authorization code returned."
+                        result["error"] = t("data.auth_no_code")
 
                 self.send_response(200 if result["code"] else 400)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -114,5 +115,5 @@ class CallbackServer:
         finally:
             self._server.server_close()
         if not self.result["code"] and not self.result["error"]:
-            self.result["error"] = "Sign-in cancelled." if cancelled.is_set() else "Sign-in timed out."
+            self.result["error"] = t("data.auth_cancelled") if cancelled.is_set() else t("data.auth_timed_out")
         return self.result

@@ -21,6 +21,7 @@ from ctypes import wintypes
 from typing import Any, Dict, Optional
 
 from ..core.constants import ADDIN_NAME
+from ..core.i18n import t
 from ..core.paths import data_dir
 
 _KEYCHAIN_SERVICE = f"{ADDIN_NAME}.tokens"
@@ -103,7 +104,7 @@ class _KeychainBackend:
     def save(self, client_id: str, payload: bytes) -> None:
         # The command goes in on stdin (``security -i``), not on the command line, where any program could read the tokens from the process list.
         if any(ord(c) < 32 for c in client_id):
-            raise ValueError("The Client ID holds a control character.")
+            raise ValueError(t("data.auth_client_id_control"))
         command = (f"add-generic-password -U -s {_quote(_KEYCHAIN_SERVICE)} -a {_quote(client_id)} "
                    f"-w {_quote(base64.b64encode(payload).decode('ascii'))}\n")
         subprocess.run(["security", "-i"], input=command, text=True, check=True, capture_output=True)

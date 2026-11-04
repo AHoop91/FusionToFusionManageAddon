@@ -9,12 +9,14 @@ import threading
 import time
 from datetime import datetime
 from functools import partial
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from ...config.config_envelope import MAX_CONFIG_BYTES, ConfigTransferError
 from ...config.config_service import ConfigService
-from ...config.config_transfer import config_from_hub_file
+from ...config.config_transfer import config_from_hub_file, languages_from_hub_file
+from ...config.hub_languages import HubLanguages
 from ...core.cancel import ADDIN, Cancelled
+from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...fusion_mfg.fusion_hub_files import FusionHubFiles, HubFilesError
 from ..message_bridge import MessageBridge
@@ -26,8 +28,13 @@ log = get_logger("hub_file_actions")
 START_WAIT_SECONDS = 15   # how often, after the add-in starts, it looks for the hub to be open before checking the file
 START_WAIT_TRIES = 20   # and how many times: Fusion may take a while to open the hub
 
-NO_HUB = "No hub is open. Open a hub in Fusion, then try again."
-NO_FILE_CHOSEN = "No Configuration File has been chosen."
+def no_hub() -> str:
+    return t("app.no_hub")
+
+
+def no_file_chosen() -> str:
+    return t("app.no_file_chosen")
+
 
 # How a look at the file in the hub ended (the panel reads these words).
 NONE, CURRENT, UPDATED, UNKNOWN = "none", "current", "updated", "unknown"
@@ -80,8 +87,9 @@ class HubConfigFile:
     """What is done with the hub's Configuration File: browsing the hub for it, reading it as the hub's settings, and looking whether it
     changed. Each method runs on a worker thread, except ``plan_apply``, which reads the settings and runs on the thread of the request."""
 
-    def __init__(self, config: ConfigService, files: HubFilesFactory) -> None:
+    def __init__(self, config: ConfigService, files: HubFilesFactory, languages: Optional[HubLanguages] = None) -> None:
         self._config, self._files = config, files
+        self._languages = languages   # keeps the languages the file shares, for everyone who reads it
         self._check_lock = threading.Lock()   # one look at a time, whether the panel's button or the start-up asked
 
     def browse(self, project_id: str, folder_id: str) -> Dict[str, Any]:
@@ -104,7 +112,7 @@ class HubConfigFile:
         raw = self._files().read_file(item_id, MAX_CONFIG_BYTES)
         imported = config_from_hub_file(raw, hub_id, hub_name)
         if self._config.hub_id != hub_id:   # the user changed hub while the file was being read
-            raise HubFilesError("The active hub changed while the file was being read. Try again.")
+            raise HubFilesError(t("app.hub_changed_reading"))
         ref = {"project_id": project_id, "item_id": item_id, "name": name, "read_at": _now()}
         try:
             ref.update(self._files().file_info(item_id))   # when it was last updated in the hub, and by whom, for the panel
@@ -112,8 +120,14 @@ class HubConfigFile:
             log.info("The details of the Configuration File could not be read")
         problems = self._config.apply_hub_file(imported, ref)
         if problems:
-            raise ConfigTransferError("The file's settings are not valid: " + " ".join(problems))
+            raise ConfigTransferError(t("app.file_settings_invalid", problems=" ".join(problems)))
         log.info("Settings of hub %r read from the Configuration File %r", hub_name, name)
+        if self._languages is not None:
+            try:
+                kept = self._languages.receive(hub_id, languages_from_hub_file(raw))
+                log.info("The hub shares %d language(s)", len(kept))
+            except Exception:  # noqa: BLE001 - the languages are a gift: never fail the settings that were just taken
+                log.exception("The languages of the Configuration File could not be kept")
         return {"settings": settings_payload(self._config)}
 
     def plan_apply(self, chosen: Dict[str, Any]) -> Callable[[], Dict[str, Any]]:
@@ -121,11 +135,11 @@ class HubConfigFile:
         the settings came from last. Raises ``ValueError`` when there is no hub or no file; the hub is the one open now, not when it runs."""
         hub_id, hub_name = self._config.hub_id, self._config.hub_name
         if not hub_id:
-            raise ValueError(NO_HUB)
+            raise ValueError(no_hub())
         kept = self._config.config.hub_file or {}
         project_id, item_id, name = (str(chosen.get(key) or kept.get(key, "")) for key in ("project_id", "item_id", "name"))
         if not project_id or not item_id:
-            raise ValueError(NO_FILE_CHOSEN)
+            raise ValueError(no_file_chosen())
         return partial(self.apply, hub_id, hub_name, project_id, item_id, name)
 
     def check(self) -> Dict[str, Any]:
@@ -151,7 +165,7 @@ class HubConfigFile:
         info = self._files().file_info(kept["item_id"])
         log.info("Configuration File checked in %.0f ms", (time.monotonic() - started) * 1000)
         if not info.get("modified") and not info.get("version"):
-            return {"state": UNKNOWN, "message": "The hub did not say when the file was last updated."}
+            return {"state": UNKNOWN, "message": t("app.hub_no_update_time")}
         if all(info.get(key, "") == kept.get(key, "") for key in ("modified", "version")):
             return {"state": CURRENT}
         applied = self.apply(hub_id, hub_name, kept["project_id"], kept["item_id"], kept.get("name", ""))
@@ -173,20 +187,21 @@ class HubConfigFile:
             return   # the add-in stopped
 
 
-def register_hub_file_actions(bridge: MessageBridge, config: ConfigService, post: Callable[[Callable[[], None]], None]) -> None:
+def register_hub_file_actions(bridge: MessageBridge, config: ConfigService, post: Callable[[Callable[[], None]], None],
+                              languages: Optional[HubLanguages] = None) -> None:
     """Register ``browse_hub_files``, ``use_hub_config``, ``check_hub_file`` and their ``*_status`` actions.
 
     The hub is read by Fusion as the signed-in user, so no sign-in to the add-in (and no Client ID) is needed to find the file; ``post``
     queues work on Fusion's main thread.
     """
-    hub_file = HubConfigFile(config, partial(FusionHubFiles, post))
+    hub_file = HubConfigFile(config, partial(FusionHubFiles, post), languages)
     browsing = _Job(bridge, "browse_hub_files_status")
     applying = _Job(bridge, "use_hub_config_status")
     checking = _Job(bridge, "check_hub_file_status")
 
     def browse(payload: Dict[str, Any]) -> Dict[str, Any]:
         if not config.hub_id:
-            raise ValueError(NO_HUB)
+            raise ValueError(no_hub())
         project_id, folder_id = str(payload.get("project_id", "")), str(payload.get("folder_id", ""))
         return browsing.start(partial(hub_file.browse, project_id, folder_id))
 

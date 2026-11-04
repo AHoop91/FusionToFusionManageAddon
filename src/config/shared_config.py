@@ -8,26 +8,25 @@ import json
 import os
 from datetime import datetime
 from typing import Optional
+from ..core.i18n import t
 
 from .config_envelope import ConfigTransferError, read_envelope
 from .models import AppConfig
 
-NO_SOURCE = "No shared configuration file is set."
-NOT_ABSOLUTE = "The shared configuration file must be given as a full path, such as C:\\Share\\config.json or \\\\server\\share\\config.json."
 
 
 def read_shared(source: str) -> AppConfig:
     """Read and validate the shared configuration at ``source``; raise ConfigTransferError when it cannot be used."""
     source = clean_source(source)
     if not source:
-        raise ConfigTransferError(NO_SOURCE)
+        raise ConfigTransferError(t("data.shared_no_source"))
     if not os.path.isabs(source):   # a relative path would be read from wherever Fusion happens to be running
-        raise ConfigTransferError(NOT_ABSOLUTE)
+        raise ConfigTransferError(t("data.shared_not_absolute"))
     shared = AppConfig.from_dict(read_envelope(source)["config"])
     # The tenant may be left out, as for a saved local setup: it is found on the first sign-in.
     problems = shared.local.validate(require_tenant=False) + shared.workspaces.validate() + shared.exports.validate()
     if problems:
-        raise ConfigTransferError("The shared configuration is invalid: " + " ".join(problems))
+        raise ConfigTransferError(t("data.shared_invalid", problems=" ".join(problems)))
     return shared
 
 

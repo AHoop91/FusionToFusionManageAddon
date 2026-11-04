@@ -11,7 +11,7 @@ from tests.without_fusion import fusion_modules_stubbed
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
 with fusion_modules_stubbed():
     from src.ui.actions import hub_save_actions
-    from src.ui.actions.hub_file_actions import NO_HUB
+    from src.ui.actions.hub_file_actions import no_hub
     from src.ui.actions.hub_save_actions import MAX_NAME_LENGTH, HubSaves, register_hub_save_actions
     from src.ui.message_bridge import MessageBridge
 
@@ -56,7 +56,7 @@ class StartTests(Setup):
 
     def test_no_hub_is_refused(self):
         self.config.hub_id = ""
-        with self.assertRaisesRegex(ValueError, NO_HUB):
+        with self.assertRaisesRegex(ValueError, no_hub()):
             self.saves.start({"project_id": "p1"})
 
     def test_no_project_is_refused(self):

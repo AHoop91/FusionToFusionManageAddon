@@ -24,9 +24,9 @@ from ..auth.auth_service import AuthService
 from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.hub_context import HubContext, HubContexts
-from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
+from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID, kind_texts
 from ..core.cancel import ADDIN, Cancelled, CancelToken, TokenSlot
-from ..core.constants import ITEM_COMMAND_NAME
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.attachments import AttachmentService
 from ..fm.bom_view import BomViewService
@@ -46,13 +46,14 @@ from . import drawing_source
 from .attachment_upload import AttachmentUpload, UploadJob
 from .design_history import saved_state
 from .export_freshness import STALE, UNSAVED, compare as compare_freshness
-from .export_options import FORMATS
+from .export_options import DWG, DXF, FORMATS, PDF
 from .item_numbers import DesignRef, ItemNumbers, NoItemNumber, Subject, active_design_ref, component_ref, design_ref
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ribbon import RibbonCommand, define_command
 from .ui_thread import UiThread
-from .upload_jobs import DRAWING_JOB, DWG_JOB, DXF_JOB, STEP_JOB, export_job, pick
+from .ui_text import item_command_name
+from .upload_jobs import drawing_job, export_job, pick, step_job
 
 log = get_logger("item_panel")
 
@@ -65,7 +66,7 @@ class ItemNotFound(Exception):
     """No item in the workspace has this item number."""
 
     def __init__(self, number: str) -> None:
-        super().__init__(f"No item exists for {number}.")
+        super().__init__(t("app.no_item_for_number", number=number))
         self.number = number
 
 
@@ -73,7 +74,7 @@ class SeveralItems(Exception):
     """Several items share this item number and the user has not said which one is meant. ``candidates`` are ``{"id", "descriptor"}``."""
 
     def __init__(self, number: str, candidates: List[Dict[str, str]]) -> None:
-        super().__init__(f"{len(candidates)} Fusion Manage items match {number}. Choose one.")
+        super().__init__(t("app.items_match_choose", count=len(candidates), number=number))
         self.number = number
         self.candidates = candidates
 
@@ -82,7 +83,7 @@ class NoAccess(Exception):
     """The user may not view the Items workspace."""
 
     def __init__(self) -> None:
-        super().__init__(f"Insufficient permissions to view the {KINDS_BY_ID[ITEMS_KIND].title} workspace.")
+        super().__init__(t("app.no_view_permission", workspace=kind_texts(KINDS_BY_ID[ITEMS_KIND])[0]))
 
 
 def _answer(**changes: Any) -> Dict[str, Any]:
@@ -338,7 +339,7 @@ class ItemPanel:
         """The workspace id of a look-up (the item id is checked with it)."""
         workspace_id, item_id = str(payload.get("workspace_id") or ""), str(payload.get("item_id") or "")
         if not (str(payload.get("request") or "") and workspace_id and item_id):
-            raise ValueError("Which item to look up was not given.")
+            raise ValueError(t("app.lookup_no_item"))
         return workspace_id
 
     def _lookup_context(self, payload: Dict[str, Any], result_action: str) -> Optional[HubContext]:
@@ -375,7 +376,7 @@ class ItemPanel:
     def _lookup_result(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         request = str(payload.get("request") or "")
         with self._lock:
-            state = self._lookups.get(request) or {"pending": False, "ok": False, "message": "That look-up is no longer known.", "result": None}
+            state = self._lookups.get(request) or {"pending": False, "ok": False, "message": t("app.lookup_unknown"), "result": None}
             return {**state, "request": request}
 
     def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken, result_action: str, context: HubContext) -> None:
@@ -447,7 +448,7 @@ class ItemPanel:
                     log.exception("Could not read the item number of %s", part_number)
                 if not quiet:
                     message = str(exc) or type(exc).__name__
-                    self._tasks.post(lambda: fail(message) if fail else self._ui.messageBox(message, ITEM_COMMAND_NAME))
+                    self._tasks.post(lambda: fail(message) if fail else self._ui.messageBox(message, item_command_name()))
                 return
             self._tasks.post(lambda: then(subject))
 
@@ -486,14 +487,14 @@ class ItemPanel:
     def _has_number(self, number: str, quiet: bool = False) -> bool:
         """Whether ``number`` (a part number) names a component to look up; when not, say what to select."""
         if not number and not quiet:
-            self._ui.messageBox("Select a component that has a part number, or open a design that has one.", ITEM_COMMAND_NAME)
+            self._ui.messageBox(t("app.select_component"), item_command_name())
         return bool(number)
 
     def _choose_item(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Remember which of the items that share the number is meant (``item_id``; empty to be asked again), and read the item. UI thread."""
         cfg = self._context_of(payload).cfg
         if not (self._number and cfg and cfg.workspace_id):
-            raise ValueError("No item is shown.")
+            raise ValueError(t("app.no_item_shown"))
         self._choices.set(cfg.workspace_id, self._number, str(payload.get("item_id") or ""))
         self._start()
         self._host.send("item_changed")
@@ -507,25 +508,25 @@ class ItemPanel:
 
     def _add_step_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open design as the STEP file of the item shown (the Actions menu). UI thread."""
-        return self._upload_for_item(STEP_JOB, payload)
+        return self._upload_for_item(step_job(), payload)
 
     def _upload_drawing(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open drawing as the PDF of the item shown (the Actions menu). UI thread."""
-        return self._upload_for_item(DRAWING_JOB, payload)
+        return self._upload_for_item(drawing_job(PDF), payload)
 
     def _upload_dwg(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open drawing as the DWG file of the item shown (the Actions menu). UI thread."""
-        return self._upload_for_item(DWG_JOB, payload)
+        return self._upload_for_item(drawing_job(DWG), payload)
 
     def _upload_dxf(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Upload the open drawing as the DXF file of the item shown (the Actions menu). UI thread."""
-        return self._upload_for_item(DXF_JOB, payload)
+        return self._upload_for_item(drawing_job(DXF), payload)
 
     def _open_publish(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         """Open the Publish panel (Republish, or Publish for an item not yet in Fusion Manage) and close this one. A design is published, not a
         drawing. UI thread."""
         if drawing_source.active_drawing() is not None:
-            return {"opened": False, "message": "Open the design to publish it: a drawing is not published."}
+            return {"opened": False, "message": t("app.drawing_not_published")}
         self._show_publish()
         self._host.hide()
         return {"opened": True}
@@ -564,7 +565,7 @@ class ItemPanel:
     def _upload_for_item(self, job: UploadJob, payload: Dict[str, Any]) -> Dict[str, Any]:
         workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
         if not self._number:
-            raise ValueError("No item is shown.")
+            raise ValueError(t("app.no_item_shown"))
         context = self._context_of(payload)   # the item shown was read under the settings that are active still
         pick(_active_selection())
         return self._uploads.from_panel(job, context, workspace_id, item_id, Subject(self._number, self._part))
@@ -574,11 +575,11 @@ class ItemPanel:
         drawing, else nothing (an empty list). ``publish`` says whether Republish is offered: for a design only."""
         if drawing_source.active_drawing() is not None:
             ready = bool(drawing_source.cached_number())
-            return {"publish": False, "actions": [{"action": "upload_drawing", "label": "Export PDF", "ext": ".pdf", "ready": ready},
-                                {"action": "upload_dwg", "label": "Export DWG", "ext": ".dwg", "ready": ready},
-                                {"action": "upload_dxf", "label": "Export DXF", "ext": ".dxf", "ready": ready}]}
+            return {"publish": False, "actions": [{"action": "upload_drawing", "label": t("app.export_pdf_label"), "ext": ".pdf", "ready": ready},
+                                {"action": "upload_dwg", "label": t("app.export_dwg_label"), "ext": ".dwg", "ready": ready},
+                                {"action": "upload_dxf", "label": t("app.export_dxf_label"), "ext": ".dxf", "ready": ready}]}
         if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
-            return {"publish": True, "actions": [{"action": "add_step_file", "label": "Export STEP File", "ext": ".step", "ready": True}]}
+            return {"publish": True, "actions": [{"action": "add_step_file", "label": t("app.export_step_name"), "ext": ".step", "ready": True}]}
         return {"publish": False, "actions": []}   # neither a design nor a drawing is open: nothing to offer
 
     def upload_selected_step(self) -> None:
@@ -586,24 +587,24 @@ class ItemPanel:
         number = _selected_part_number(from_menu=True)
         if self._has_number(number):
             pick(_menu_selection)
-            self._find(number, lambda subject: self._uploads.from_number(STEP_JOB, subject))
+            self._find(number, lambda subject: self._uploads.from_number(step_job(), subject))
 
     def upload_drawing(self) -> None:
         """Upload the open drawing as the PDF of the item of the design it shows (the right-click entry). UI thread."""
         number, reason = drawing_source.top_level_number()
         if not number:
-            self._ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
+            self._ui.messageBox(t("app.drawing_not_ready_box", reason=reason), item_command_name())
             return
-        self._find(number, lambda subject: self._uploads.from_number(DRAWING_JOB, subject))
+        self._find(number, lambda subject: self._uploads.from_number(drawing_job(PDF), subject))
 
     def export_target(self) -> Tuple[str, str]:
         """``(part number, "")`` of what the Export window exports: the top of the open drawing, or the selected component (else the top) of the
         open design; ``("", why not)`` when there is nothing to export yet. UI thread."""
         if drawing_source.active_drawing() is not None:
             number, reason = drawing_source.top_level_number()
-            return (number, "") if number else ("", f"The drawing is not ready yet: {reason}")
+            return (number, "") if number else ("", t("app.drawing_not_ready", reason=reason))
         number = _selected_part_number()
-        return (number, "") if number else ("", "Select a component that has a part number, or open a design that has one.")
+        return (number, "") if number else ("", t("app.select_component"))
 
     def export_names(self) -> Tuple[str, str]:
         """``(name, description)`` Fusion holds for what Export exports: the selected component of the open design (else the design's top), or
@@ -694,7 +695,7 @@ class ItemPanel:
         """Say what exporting the part ``number`` as the format ``key`` to ``destination`` would do to the files attached in Fusion Manage: add
         one, or make a new version of the one of that name (``AttachmentUpload.preview``). Told to ``done`` from a worker thread. UI thread."""
         if not number:
-            done({"state": "unavailable", "message": "Nothing to export yet."})
+            done({"state": "unavailable", "message": t("app.nothing_to_export")})
             return
         context, reason = self._contexts.attempt()
         if context is None:
@@ -729,7 +730,7 @@ class ItemPanel:
         job = export_job(key)
         context = self._uploads.begin_in_window(job)
         if context is None:
-            raise ValueError("A file is already being uploaded.")
+            raise ValueError(t("app.upload_busy"))
         began = time.monotonic()
         pick(_active_selection())
         self._find(number, lambda subject: self._uploads.continue_in_window(job, context, subject, destination), fail=self._uploads.fail_in_window,
@@ -789,7 +790,7 @@ class ItemPanel:
     def _read(self, number: str, cancel: CancelToken, context: HubContext) -> Dict[str, Any]:
         problem = context.items_problem   # the ribbon greys the command out too; this covers the other ways in
         if problem:
-            raise ValueError(f"{problem} Complete it in Preferences.")
+            raise ValueError(t("app.complete_in_preferences", problem=problem))
         cfg = context.cfg
         client = FmClient(context.settings, self._auth, cancel)
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -799,13 +800,13 @@ class ItemPanel:
             except FmApiError as exc:
                 if exc.status in (401, 403):
                     raise NoAccess() from exc
-                raise ValueError(f"Could not check your permissions in Fusion Manage: {exc}") from exc
+                raise ValueError(t("app.permissions_check_failed", reason=exc)) from exc
             if VIEW_ITEMS not in held:   # nothing else is looked at: no access overrides everything
                 raise NoAccess()
             try:
                 hits = searching.result()
             except (FmApiError, AuthError) as exc:
-                raise ValueError(f"Fusion Manage search failed: {exc}") from exc
+                raise ValueError(t("app.search_failed", reason=exc)) from exc
         if not hits:
             raise ItemNotFound(number)
         picked, competing = self._choices.resolve(cfg.workspace_id, number, hits)

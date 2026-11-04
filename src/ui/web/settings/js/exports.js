@@ -7,23 +7,38 @@
 
   const $ = ns.$;
   const el = ns.el;
+  const t = ns.i18n.t;
 
-  const FORMATS = [   // in the order they are listed
-    { key: 'step', label: 'STEP', desc: 'A 3D model of the open design.' },
-    { key: 'pdf', label: 'PDF', desc: 'The open drawing, to print or share.' },
-    { key: 'dwg', label: 'DWG', desc: 'The open drawing, for AutoCAD.' },
-    { key: 'dxf', label: 'DXF', desc: 'The open drawing, for CAM and laser cutting.' },
+  const FORMATS = [   // in the order they are listed; the labels are the names of the file formats
+    { key: 'step', label: 'STEP' },
+    { key: 'pdf', label: 'PDF' },
+    { key: 'dwg', label: 'DWG' },
+    { key: 'dxf', label: 'DXF' },
   ];
-  const DESTINATIONS = [{ key: 'component', label: 'Component' }, { key: 'item', label: 'Item' }];
+
+  /** What a file format is, in the language in use. */
+  function describe(key) {
+    switch (key) {
+      case 'step': return t('settings.format_step');
+      case 'pdf': return t('settings.format_pdf');
+      case 'dwg': return t('settings.format_dwg');
+      case 'dxf': return t('settings.format_dxf');
+      default: return '';
+    }
+  }
+
+  function destinations() {
+    return [{ key: 'component', label: t('settings.dest_component') }, { key: 'item', label: t('settings.dest_item') }];
+  }
 
   /** One row: the format, what it is, and the radio buttons for where it goes. */
   function row(f, chosen) {
     const wrap = el('div', 'ex-row');
     const name = el('span', 'ex-name', f.label);
-    name.appendChild(el('span', 'ex-desc', f.desc));
+    name.appendChild(el('span', 'ex-desc', describe(f.key)));
     wrap.appendChild(name);
     const choice = el('span', 'ex-choice');
-    DESTINATIONS.forEach(function (d) {
+    destinations().forEach(function (d) {
       const label = el('label', 'ex-opt');
       const input = el('input');
       input.type = 'radio';

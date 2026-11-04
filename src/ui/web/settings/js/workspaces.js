@@ -9,6 +9,7 @@
   'use strict';
 
   const $ = ns.$;
+  const t = ns.i18n.t;
   let catalog = { kinds: [], source_fields: [] };
 
   // ---- Shared helpers -----------------------------------------------------
@@ -54,10 +55,10 @@
   const sourceCfg = {
     valueClass: 'ws-source',
     alignRight: true,
-    placeholder: 'Component property...',
-    search: 'Search fields...',
+    get placeholder() { return t('settings.ws_source_placeholder'); },
+    get search() { return t('settings.ws_search_fields'); },
     tip: function () { return propsTip; },
-    empty: function () { return 'No matching fields'; },
+    empty: function () { return t('settings.ws_no_match_fields'); },
     taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-source'); },
     label: function (value) {
       const field = catalog.source_fields.filter(function (f) { return f.id === value; })[0];
@@ -66,12 +67,12 @@
       return prefix ? value.slice(prefix.length) : value;
     },
     groups: function (current) {
-      const groups = [['Properties', 'property'], ['Files', 'file']].map(function (g) {
+      const groups = [[t('settings.ws_group_properties'), 'property'], [t('settings.ws_group_files'), 'file']].map(function (g) {
         return { title: g[0], items: catalog.source_fields
           .filter(function (f) { return (f.kind || 'property') === g[1]; })
           .map(function (f) { return { value: f.id, label: f.label }; }) };
       });
-      [['base', basePrefix(), 'Base Properties'], ['physical', physicalPrefix(), 'Physical Properties'], ['custom', customPrefix(), 'Custom Properties']].forEach(function (g) {
+      [['base', basePrefix(), t('settings.ws_group_base')], ['physical', physicalPrefix(), t('settings.ws_group_physical')], ['custom', customPrefix(), t('settings.ws_group_custom')]].forEach(function (g) {
         const names = hubProps.filter(function (p) { return p.group === g[0]; })
           .map(function (p) { return p.name; });
         // A saved hub property missing from the list must still be shown.
@@ -94,13 +95,13 @@
 
   const workspaceCfg = {
     valueClass: 'ws-id',
-    placeholder: 'Choose a workspace...',
-    search: 'Search workspaces...',
+    get placeholder() { return t('settings.ws_choose'); },
+    get search() { return t('settings.ws_search'); },
     tip: function () { return workspacesTip; },
     onOpen: function () { if (workspacesState === 'idle' || workspacesState === 'error') loadWorkspaces(); },   // read when the list is opened, not before
     empty: function () {
-      if (workspacesState === 'loading') return 'Loading workspaces...';
-      return workspacesTip || 'No revision controlled workspaces found';
+      if (workspacesState === 'loading') return t('settings.ws_loading');
+      return workspacesTip || t('settings.ws_none');
     },
     label: function (value) {
       const found = workspaceList.filter(function (w) { return w.id === value; })[0];
@@ -112,7 +113,7 @@
       if (current && !workspaceList.some(function (w) { return w.id === current; })) {
         items.push({ value: current, label: current });
       }
-      return items.length ? [{ title: 'Revision Controlled Workspaces', items: items }] : [];
+      return items.length ? [{ title: t('settings.ws_group_revision'), items: items }] : [];
     },
   };
 
@@ -125,7 +126,7 @@
     stopWorkspacesWait();
     workspacesState = result.ok ? 'ready' : 'error';
     workspaceList = result.workspaces || [];
-    workspacesTip = result.ok ? '' : 'Could not load the workspaces: ' + (result.message || 'unknown error');
+    workspacesTip = result.ok ? '' : t('settings.ws_load_failed', { message: result.message || t('settings.unknown_error') });
     document.querySelectorAll('.ws-id').forEach(function (input) {
       refreshPicker(input.parentNode, workspaceCfg);   // shows names for saved ids
       ns.picker.rebuildOpen(input.parentNode, workspaceCfg);   // a list opened while loading
@@ -138,7 +139,7 @@
     if (workspacesState === 'loading') return;
     workspacesState = 'loading';
     stopWorkspacesWait();
-    stopWorkspacesWait = ns.bridge.expect(WAIT_MS, function () { onWorkspaces({ ok: false, error: 'Fusion Manage did not answer in time. Try again.' }); });
+    stopWorkspacesWait = ns.bridge.expect(WAIT_MS, function () { onWorkspaces({ ok: false, error: t('settings.fm_timeout_retry') }); });
     ns.bridge.send('list_workspaces', {});
   }
 
@@ -154,12 +155,12 @@
 
   const fmFieldCfg = {
     valueClass: 'ws-fm-field',
-    placeholder: 'Fusion Manage item field...',
-    search: 'Search fields...',
+    get placeholder() { return t('settings.ws_fm_placeholder'); },
+    get search() { return t('settings.ws_search_fields'); },
     empty: function (wrap) {
       const kind = kindOf(wrap);
-      if ((fmFields[kind] || []).length) return 'No matching fields';
-      return fmFieldsError[kind] || 'No fields loaded. Choose a workspace first.';
+      if ((fmFields[kind] || []).length) return t('settings.ws_no_match_fields');
+      return fmFieldsError[kind] || t('settings.ws_no_fields_loaded');
     },
     taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap)); },
     label: function (value) {
@@ -177,7 +178,7 @@
       if (current && !fields.some(function (f) { return f.id === current; })) {
         items.push({ value: current, label: current });
       }
-      return items.length ? [{ title: 'Fusion Manage Fields', items: items }] : [];
+      return items.length ? [{ title: t('settings.ws_group_fm_fields'), items: items }] : [];
     },
   };
 
@@ -194,9 +195,9 @@
     return {
       valueClass: 'ws-static-value',
       alignRight: true,
-      placeholder: 'Choose a value...',
-      search: 'Search values...',
-      empty: function () { return 'No matching values'; },
+      get placeholder() { return t('settings.ws_value_placeholder'); },
+      get search() { return t('settings.ws_search_values'); },
+      empty: function () { return t('settings.ws_no_match_values'); },
       label: function (value) {
         const option = options.filter(function (o) { return o.value === value; })[0];
         return option ? option.title : value;
@@ -207,7 +208,7 @@
         if (current && !options.some(function (o) { return o.value === current; })) {
           items.push({ value: current, label: current });
         }
-        return [{ title: 'Values', items: items }];
+        return [{ title: t('settings.ws_group_values'), items: items }];
       },
     };
   }
@@ -223,12 +224,12 @@
   const componentCfg = {
     valueClass: 'ws-component-field',
     alignRight: true,
-    placeholder: 'Choose the linking field...',
-    search: 'Search fields...',
+    get placeholder() { return t('settings.ws_link_placeholder'); },
+    get search() { return t('settings.ws_search_fields'); },
     empty: function (wrap) {
       const kind = kindOf(wrap);
-      if ((fmFields[kind] || []).length) return 'No field links to the component picklist';
-      return fmFieldsError[kind] || 'No fields loaded. Choose a workspace first.';
+      if ((fmFields[kind] || []).length) return t('settings.ws_no_link_field');
+      return fmFieldsError[kind] || t('settings.ws_no_fields_loaded');
     },
     taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field'); },
     label: fmFieldCfg.label,
@@ -240,7 +241,7 @@
       if (current && !fields.some(function (f) { return f.id === current; })) {
         items.push({ value: current, label: current });
       }
-      return items.length ? [{ title: 'Component linking fields', items: items }] : [];
+      return items.length ? [{ title: t('settings.ws_group_link'), items: items }] : [];
     },
   };
 
@@ -252,7 +253,7 @@
     stopPropsWait();
     propsState = result.ok ? 'ready' : 'error';
     hubProps = result.properties || [];
-    propsTip = result.ok ? '' : 'Could not load the hub\'s properties: ' + (result.message || 'unknown error');
+    propsTip = result.ok ? '' : t('settings.ws_props_failed', { message: result.message || t('settings.unknown_error') });
     document.querySelectorAll('.ws-source').forEach(function (input) {
       refreshPicker(input.parentNode, sourceCfg);   // lists build on open; this updates the tooltip
     });
@@ -264,7 +265,7 @@
     if (propsState === 'loading') return;
     propsState = 'loading';
     stopPropsWait();
-    stopPropsWait = ns.bridge.expect(WAIT_MS, function () { onProperties({ ok: false, error: 'Fusion Manage did not answer in time. Try again.' }); });
+    stopPropsWait = ns.bridge.expect(WAIT_MS, function () { onProperties({ ok: false, error: t('settings.fm_timeout_retry') }); });
     ns.bridge.send('list_custom_properties', {});
   }
 
@@ -285,7 +286,7 @@
 
     const remove = removeButton();
     remove.type = 'button';
-    remove.title = 'Remove mapping';
+    remove.title = t('settings.ws_remove_mapping');
     remove.addEventListener('click', function () { ns.validation.forget(row); row.remove(); });
     row.appendChild(remove);
     return row;
@@ -310,7 +311,7 @@
       }
       const value = el('input', 'ws-static-value');
       value.type = 'text';
-      value.placeholder = 'Default value';
+      value.placeholder = t('settings.ws_default_value');
       value.autocomplete = 'off';
       value.spellcheck = false;
       value.value = current;
@@ -324,7 +325,7 @@
     buildValue(item.value || '');
     const remove = removeButton();
     remove.type = 'button';
-    remove.title = 'Remove default value';
+    remove.title = t('settings.ws_remove_default');
     remove.addEventListener('click', function () { ns.validation.forget(row); row.remove(); });
     row.appendChild(remove);
     return row;
@@ -390,7 +391,7 @@
     if (waits[kindId]) waits[kindId]();
     waits[kindId] = ns.bridge.expect(WAIT_MS, function () {
       stopBusy(card, kindId);
-      setValid(card, false, 'Fusion Manage did not answer in time. Try again.');
+      setValid(card, false, t('settings.fm_timeout_retry'));
     });
     ns.bridge.send('validate_workspace', { kind: kindId, workspace_id: workspaceId });
   }
@@ -448,21 +449,21 @@
   function describe(text) { return el('p', 'ws-sub muted', text); }
 
   function hint() {
-    return el('p', 'ws-hint muted', 'Choose a workspace to enable these settings.');
+    return el('p', 'ws-hint muted', t('settings.ws_hint'));
   }
 
   /** Workspace picker with its status line. */
   function buildIdSection(kind, config) {
     const section = el('div', 'ws-section');
-    const label = el('label', 'ws-id-label', 'Workspace');
-    label.appendChild(infoTip('The Fusion Manage workspace your published items are created in. Only revision controlled workspaces are listed.'));
+    const label = el('label', 'ws-id-label', t('settings.ws_label'));
+    label.appendChild(infoTip(t('settings.ws_label_tip')));
     section.appendChild(label);
     const idRow = el('div', 'ws-id-row');
     // The picker sits in a wrapper so a green tick can overlay its right edge.
     const wrap = el('div', 'ws-id-wrap');
     wrap.appendChild(makePicker(workspaceCfg, config.workspace_id || ''));
     const tick = el('span', 'ws-tick', '✓');
-    tick.title = 'Workspace validated';
+    tick.title = t('settings.ws_validated');
     tick.hidden = true;
     wrap.appendChild(tick);
     idRow.appendChild(wrap);
@@ -474,7 +475,7 @@
   /** Column titles above a block of rows; the spans line up with the row's grid columns. */
   function columnHeads(titles, className) {
     const row = el('div', 'ws-cols ' + (className || ''));
-    titles.forEach(function (t) { row.appendChild(el('span', '', t)); });
+    titles.forEach(function (title) { row.appendChild(el('span', '', title)); });
     return row;
   }
 
@@ -494,11 +495,11 @@
   /** The Fusion Manage field that links each item to its component. */
   function buildComponentSection(kind, config) {
     const section = el('div', 'ws-section');
-    section.appendChild(heading('Component linking'));
+    section.appendChild(heading(t('settings.ws_component_linking')));
     section.appendChild(hint());
     const block = el('div', 'ws-block');
-    block.appendChild(blockTitle('Component field',
-      'Links each published item to its component in Fusion Manage. It must be a picklist that uses the component workspace list (' + kind.component_lookup + ').'));
+    block.appendChild(blockTitle(t('settings.ws_component_field'),
+      t('settings.ws_component_field_tip', { lookup: kind.component_lookup })));
     block.appendChild(makePicker(componentCfg, config.component_field || ''));
     section.appendChild(lockedSection([block]));
     return section;
@@ -508,22 +509,22 @@
   function buildMappingSection(kind, config) {
     const section = el('div', 'ws-section');
     const head = el('div', 'ws-section-head');   // heading on the left, Add default fields on the right
-    const title = heading('Field mapping');
-    title.appendChild(infoTip('Choose which Fusion data fills which Fusion Manage field on each published item.'));
+    const title = heading(t('settings.ws_field_mapping'));
+    title.appendChild(infoTip(t('settings.ws_field_mapping_tip')));
     head.appendChild(title);
     section.appendChild(head);
     section.appendChild(hint());
 
     const rows = el('div', 'ws-rows');
     config.mappings.forEach(function (m) { rows.appendChild(mappingRow(kind.id, m)); });
-    const add = el('button', 'ws-add-btn', '+ Add field mapping');
+    const add = el('button', 'ws-add-btn', t('settings.ws_add_mapping'));
     add.type = 'button';
     add.addEventListener('click', function () {
       rows.appendChild(mappingRow(kind.id, { source: '', fm_field_id: '' }));
     });
-    const defaults = el('button', 'btn btn-secondary ws-defaults ws-lock-btn', 'Add default fields');
+    const defaults = el('button', 'btn btn-secondary ws-defaults ws-lock-btn', t('settings.ws_add_defaults'));
     defaults.type = 'button';
-    defaults.title = 'Replace the mapped fields with the standard mappings';
+    defaults.title = t('settings.ws_add_defaults_title');
     defaults.addEventListener('click', function () {
       confirmDefaults(kind, function () {
         rows.innerHTML = '';
@@ -537,23 +538,23 @@
     });
     head.appendChild(defaults);
     const mapping = el('div', 'ws-block');
-    mapping.appendChild(blockTitle('Mapped fields'));
-    mapping.appendChild(describe('Each row copies one component property into a Fusion Manage item field. Existing items are found by their item number.'));
-    mapping.appendChild(columnHeads(['Fusion Manage Item Field', '', 'Component Property', ''], 'ws-cols-map'));
+    mapping.appendChild(blockTitle(t('settings.ws_mapped_fields')));
+    mapping.appendChild(describe(t('settings.ws_mapped_desc')));
+    mapping.appendChild(columnHeads([t('settings.ws_col_fm_field'), '', t('settings.ws_col_property'), ''], 'ws-cols-map'));
     mapping.appendChild(rows);
     mapping.appendChild(add);
 
     const statics = el('div', 'ws-rows');
     (config.static_values || []).forEach(function (s) { statics.appendChild(staticRow(kind.id, s)); });
-    const addStatic = el('button', 'ws-add-btn', '+ Add default value');
+    const addStatic = el('button', 'ws-add-btn', t('settings.ws_add_default_value'));
     addStatic.type = 'button';
     addStatic.addEventListener('click', function () {
       statics.appendChild(staticRow(kind.id, { fm_field_id: '', value: '' }));
     });
     const fixed = el('div', 'ws-block');
-    fixed.appendChild(blockTitle('Default Fusion Manage Values'));
-    fixed.appendChild(describe('Sets a Fusion Manage item field to the same fixed value on every published item, regardless of the design.'));
-    fixed.appendChild(columnHeads(['Fusion Manage Item Field', '', 'Value', ''], 'ws-cols-static'));
+    fixed.appendChild(blockTitle(t('settings.ws_default_values')));
+    fixed.appendChild(describe(t('settings.ws_default_values_desc')));
+    fixed.appendChild(columnHeads([t('settings.ws_col_fm_field'), '', t('settings.ws_col_value'), ''], 'ws-cols-static'));
     fixed.appendChild(statics);
     fixed.appendChild(addStatic);
 
@@ -590,7 +591,7 @@
     const card = el('section', 'card ws-card');
     if (kinds.length === 1) {
       const head = el('header', 'ws-card-head');   // styled like the Connection card's title
-      head.appendChild(el('h2', '', kinds[0].title + ' Workspace'));
+      head.appendChild(el('h2', '', t('settings.ws_kind_workspace', { title: kinds[0].title })));
       card.appendChild(head);
     }
     const strip = el('div', 'ws-tabs');

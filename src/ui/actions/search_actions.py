@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
 from ...config.workspace_models import ITEMS_KIND
+from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...core.shapes import whole
 from ...fm.client import WORKSPACES, FmApiError, FmClient
@@ -23,10 +24,16 @@ from .background import Runner, in_thread, why
 log = get_logger("search_actions")
 
 KEPT_ANSWERS = 30   # answers kept for the panel to poll; older tokens are dropped
-NO_ITEM = "The Items workspace is not set up."
 OPTIONS_PAGE = 50   # picklist options per page of a value drop-down
-BAD_SEARCH = "Fusion Manage did not accept this search. Check the filter values and try again."
 BAD_REQUEST = 400   # the status Fusion Manage answers a search it cannot read with
+
+
+def no_item() -> str:
+    return t("app.items_not_set_up")
+
+
+def bad_search() -> str:
+    return t("app.bad_search")
 
 Read = Callable[[FmClient], Any]   # what a request does with the client, on the worker thread
 
@@ -40,7 +47,7 @@ def _token(payload: Dict[str, Any]) -> str:
     """The token the panel names its request by. Raises ``ValueError`` when there is none: an answer with no token cannot be asked for."""
     token = str(payload.get("token") or "")
     if not token:
-        raise ValueError("The request has no token.")
+        raise ValueError(t("app.request_no_token"))
     return token
 
 
@@ -62,7 +69,7 @@ class PickerReads:
         token = _token(payload)
         workspace = self._workspace()
         if not workspace:
-            return _answer(token, message=NO_ITEM)
+            return _answer(token, message=no_item())
         item_id = str(payload.get("item_id") or "")   # no item yet while the design is not in Fusion Manage
         text, groups = str(payload.get("text") or ""), payload.get("groups")
         offset, revision = max(0, whole(payload.get("offset"))), whole(payload.get("revision")) or LATEST
@@ -73,7 +80,7 @@ class PickerReads:
         token = _token(payload)
         workspace = self._workspace()
         if not workspace:
-            return _answer(token, message=NO_ITEM)
+            return _answer(token, message=no_item())
         item_id = str(payload.get("item_id") or "")
         if not item_id:   # the design is not in Fusion Manage: its Bill of Materials holds nothing yet
             return _answer(token, ok=True, result={"ids": [], "numbers": []})
@@ -84,7 +91,7 @@ class PickerReads:
         token = _token(payload)
         workspace = self._workspace()
         if not workspace:
-            return _answer(token, message=NO_ITEM)
+            return _answer(token, message=no_item())
         return self._start(token, lambda client: {"fields": WorkspaceService(client).filterable_fields(f"{WORKSPACES}/{workspace}")})
 
     def options(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,7 +99,7 @@ class PickerReads:
         token = _token(payload)
         lookup = str(payload.get("lookup") or "")
         if not lookup:
-            return _answer(token, message="No picklist was named.")
+            return _answer(token, message=t("app.no_picklist"))
         offset, text = max(0, whole(payload.get("offset"))), str(payload.get("text") or "")
         return self._start(token, lambda client: WorkspaceService(client).options_page(lookup, offset, OPTIONS_PAGE, text))
 
@@ -100,7 +107,7 @@ class PickerReads:
         """How the request with this token stands."""
         token = _token(payload)
         with self._lock:
-            return dict(self._answers.get(token) or _answer(token, message="Unknown request."))
+            return dict(self._answers.get(token) or _answer(token, message=t("app.unknown_request")))
 
     def _workspace(self) -> str:
         cfg = self._config.config.workspaces.get(ITEMS_KIND)
@@ -127,7 +134,7 @@ class PickerReads:
             self._keep(_answer(token, ok=True, result=result))
         except FmApiError as exc:
             log.warning("Picker read failed: %s", exc)
-            self._keep(_answer(token, message=BAD_SEARCH if exc.status == BAD_REQUEST else str(exc)))
+            self._keep(_answer(token, message=bad_search() if exc.status == BAD_REQUEST else str(exc)))
         except Exception as exc:  # noqa: BLE001 - never leave the panel waiting
             log.exception("Picker read failed")
             self._keep(_answer(token, message=why(exc)))

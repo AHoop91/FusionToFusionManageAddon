@@ -12,6 +12,7 @@ from typing import Callable, Dict, Sequence
 
 import adsk.core
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from .ribbon import RibbonCommand
 from .ui_thread import UiThread
@@ -46,7 +47,7 @@ class SetupGate:
             if definition is None:
                 continue
             definition.controlDefinition.isEnabled = not reason
-            definition.tooltip = command.tooltip if not reason else f"{command.tooltip}\nNot available: {reason}"
+            definition.tooltip = command.tooltip if not reason else t("app.not_available", tooltip=command.tooltip, reason=reason)
             self._shown[command.command_id] = reason
             log.info("%s is %s%s", command.name, "disabled: " if reason else "enabled", reason)
 

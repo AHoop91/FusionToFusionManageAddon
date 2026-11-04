@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List
 
 from ..core.shapes import dict_rows
+from ..core.i18n import t
 from .problems import Problem
 
 
@@ -102,7 +103,20 @@ def is_valid_source(source: str) -> bool:
 def _source_label(source: str) -> str:
     """What the panel calls a source field: its label, or the property name for a named hub property."""
     known = _SOURCES_BY_ID.get(source)
-    return known.label if known else data_model_name(source) or source
+    return source_label(known) if known else data_model_name(source) or source
+
+
+def source_label(source_field: SourceField) -> str:
+    """What the panel calls a source field. Always the English name, whatever the language: the names are the component's properties, which
+    are mapped by name, and the lists of properties from the hub are in English too."""
+    return source_field.label
+
+
+def kind_texts(kind: WorkspaceKind) -> tuple:
+    """The title and description of a workspace kind, in the language in use."""
+    if kind.kind_id == ITEMS_KIND:
+        return t("data.ws_kind_items_title"), t("data.ws_kind_items_description")
+    return kind.title, kind.description
 
 
 def data_model_name(source: str) -> str:
@@ -167,7 +181,7 @@ class WorkspaceConfig:
     def setup_problem(self, title: str) -> str:
         """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings."""
         if not self.workspace_id:
-            return f"The {title} workspace ID is not set."
+            return t("data.ws_id_not_set", title=title)
         problems = self.validate()
         return problems[0] if problems else ""
 
@@ -175,42 +189,40 @@ class WorkspaceConfig:
         """Return human-readable problems, each saying which row it is in and what to do."""
         problems: List[str] = []
         if self.workspace_id and not self.workspace_id.isdigit():
-            problems.append(Problem("Workspace: the ID must be a number. Choose a workspace from the list.", area="id"))
+            problems.append(Problem(t("data.ws_id_not_number"), area="id"))
         first_row_of_source: Dict[str, int] = {}
         for index, row in enumerate(self.mappings):
-            name = f"Mapped field {index + 1}"
+            name = t("data.ws_mapped_field", n=index + 1)
             if not is_valid_source(row.source):
-                what = "enter the name of the property" if row.source.strip() else "choose a Component Property"
-                problems.append(Problem(f"{name}: {what}.", area="mapping", row=index, part="source"))
+                what = t("data.ws_enter_property_name") if row.source.strip() else t("data.ws_choose_property")
+                problems.append(Problem(t("data.ws_row_problem", name=name, what=what), area="mapping", row=index, part="source"))
             elif row.source in first_row_of_source:
                 problems.append(Problem(
-                    f"{name}: the Component Property '{_source_label(row.source)}' is already used by mapped field "
-                    f"{first_row_of_source[row.source] + 1}. Each property can be mapped once.", area="mapping", row=index, part="source"))
+                    t("data.ws_property_used_twice", name=name, property=_source_label(row.source), other=first_row_of_source[row.source] + 1),
+                    area="mapping", row=index, part="source"))
             else:
                 first_row_of_source[row.source] = index
             if not row.fm_field_id:
-                problems.append(Problem(f"{name}: choose a Fusion Manage Item Field.", area="mapping", row=index, part="field"))
+                problems.append(Problem(t("data.ws_choose_field", name=name), area="mapping", row=index, part="field"))
         for index, row in enumerate(self.static_values):
             if not row.fm_field_id:
-                problems.append(Problem(f"Default value {index + 1}: choose a Fusion Manage Item Field.", area="static", row=index, part="field"))
+                problems.append(Problem(t("data.ws_choose_field", name=t("data.ws_default_value", n=index + 1)), area="static", row=index, part="field"))
         # A Fusion Manage field can be filled once: by a mapped field, the Component field or a default value.
         filled: Dict[str, str] = {}
-        places = ([("mapping", i, f"Mapped field {i + 1}", r.fm_field_id) for i, r in enumerate(self.mappings)]
-                  + [("component", 0, "The Component field", self.component_field)]
-                  + [("static", i, f"Default value {i + 1}", r.fm_field_id) for i, r in enumerate(self.static_values)])
-        for area, index, name, fm_field_id in places:
+        places = ([("mapping", i, t("data.ws_mapped_field", n=i + 1), t("data.ws_mapped_field_inline", n=i + 1), r.fm_field_id) for i, r in enumerate(self.mappings)]
+                  + [("component", 0, t("data.ws_component_field"), t("data.ws_component_field_inline"), self.component_field)]
+                  + [("static", i, t("data.ws_default_value", n=i + 1), t("data.ws_default_value_inline", n=i + 1), r.fm_field_id)
+                     for i, r in enumerate(self.static_values)])
+        for area, index, name, inline, fm_field_id in places:
             if not fm_field_id:
                 continue
             if fm_field_id in filled:
                 problems.append(Problem(
-                    f"{name}: the Fusion Manage Item Field '{fm_field_id}' is already filled by {filled[fm_field_id].lower()}. "
-                    "Each field can be filled once.", area=area, row=index, part="field"))
+                    t("data.ws_field_filled_twice", name=name, field=fm_field_id, by=filled[fm_field_id]), area=area, row=index, part="field"))
             else:
-                filled[fm_field_id] = name
+                filled[fm_field_id] = inline
         if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE for row in self.mappings):
-            problems.append(Problem(
-                "Item Number is not mapped. Add a mapped field with the Component Property 'Item Number' and the Fusion Manage Item Field "
-                f"'{LEGACY_NUMBER_FIELD}' (Add default fields adds it).", area="mappings"))
+            problems.append(Problem(t("data.ws_item_number_not_mapped", field=LEGACY_NUMBER_FIELD), area="mappings"))
         return problems
 
     def to_dict(self) -> Dict[str, Any]:
@@ -273,10 +285,10 @@ class WorkspaceSettings:
 def catalog() -> Dict[str, Any]:
     """Static lists the panel needs to render workspace cards and mapping rows."""
     return {
-        "kinds": [{"id": k.kind_id, "title": k.title, "description": k.description, "component_lookup": k.component_lookup,
+        "kinds": [{"id": k.kind_id, "title": kind_texts(k)[0], "description": kind_texts(k)[1], "component_lookup": k.component_lookup,
                    "default_mappings": [asdict(m) for m in k.default_mappings]}
                   for k in WORKSPACE_KINDS],
-        "source_fields": [{"id": f.field_id, "label": f.label, "kind": f.kind} for f in SOURCE_FIELDS],
+        "source_fields": [{"id": f.field_id, "label": source_label(f), "kind": f.kind} for f in SOURCE_FIELDS],
         "custom_prefix": CUSTOM_PREFIX,
         "base_prefix": BASE_PREFIX,
         "physical_prefix": PHYSICAL_PREFIX,

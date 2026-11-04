@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Set
 
 from ..core.atomic import write_atomically
+from ..core.i18n import t
 
 OK, SKIPPED, FAILED = "ok", "skipped", "error"
 NAME_CHARS = 80   # of a name made for a file or folder
@@ -53,7 +54,7 @@ class PublishFolder:
                 return path
             except FileExistsError:
                 continue
-        raise FileExistsError(f"There are too many folders called {name} in {parent}.")
+        raise FileExistsError(t("run.folder_too_many", name=name, parent=parent))
 
     def item_dir(self, number: str) -> str:
         """Folder of one item, unique within the run even when two numbers make the same name, or one is named like the other's number."""

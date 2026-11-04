@@ -9,6 +9,7 @@
 
   const $ = ns.$;
   const bridge = ns.bridge;
+  const t = ns.i18n.t;
 
   // Element groups for the two avatars (small header one, larger card one).
   const HEADER_AVATAR = {
@@ -63,7 +64,7 @@
     // The card avatar is bigger, so it prefers the larger image.
     paintAvatar(CARD_AVATAR, profile && (profile.picture_large || profile.picture), initials, active);
 
-    $('card-name').textContent = name || (profile ? 'Signed in' : 'Not signed in');
+    $('card-name').textContent = name || (profile ? t('common.signed_in') : t('common.not_signed_in'));
     $('card-email').textContent = profile ? profile.email || '' : '';
   }
 
@@ -74,20 +75,26 @@
     const state = online ? 'online' : 'offline';
     $('status-dot').className = 'status-dot ' + state;
     $('card-status').className = 'card-status ' + state;
-    $('card-status-text').textContent = online ? 'Online' : 'Offline';
+    $('card-status-text').textContent = online ? t('common.online') : t('common.offline');
     $('card-signout').hidden = !online;
   }
 
   // ---- Role in the hub ------------------------------------------------------
 
-  const ROLE_LABEL = { admin: 'ADMIN', member: 'MEMBER' };
+  /** The pill's text for a hub role; '' for anything else. */
+  function roleLabel(state) {
+    if (state === 'admin') return t('common.role_admin');
+    if (state === 'member') return t('common.role_member');
+    return '';
+  }
 
   /** Show the hub role as a pill beside the avatar. `state` is admin or member; anything else, a read under way included, shows nothing. */
   function renderRole(state) {
     const pill = $('role-pill');
-    pill.hidden = !ROLE_LABEL[state];
+    const label = roleLabel(state);
+    pill.hidden = !label;
     pill.dataset.state = state;
-    pill.textContent = ROLE_LABEL[state] || '';
+    pill.textContent = label;
     const refresh = $('card-role-refresh');
     refresh.disabled = state === 'pending';
   }
@@ -105,7 +112,7 @@
     $('avatar-btn').setAttribute('aria-expanded', String(open));
   }
 
-  /** Wire card open/close (avatar click, outside click, Escape) and sign-out. */
+  /** Wire card open/close (avatar click, outside click, Escape), sign-out and the restart of the add-in. */
   function init() {
     $('avatar-btn').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -117,6 +124,10 @@
     $('card-signout').addEventListener('click', function () {
       setCardOpen(false);
       bridge.send('auth_logout');
+    });
+    $('card-restart').addEventListener('click', function () {   // the add-in starts again: the ribbon, the panel titles and the panels are made anew
+      setCardOpen(false);
+      bridge.send('restart_addin', {});
     });
 
     // Python reads the profile in the background: the answer is `pending` first, and the profile is pushed when it is read.

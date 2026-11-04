@@ -3,6 +3,7 @@
 from typing import Any, Callable, Dict
 
 from ...config.config_service import CompanyModeUnavailable
+from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...fusion_mfg.properties import PropertyService
@@ -46,7 +47,7 @@ def register_property_actions(bridge: MessageBridge, hub_name: Callable[[], str]
             return reads.failure(str(exc))
         except Exception as exc:  # noqa: BLE001 - what Fusion says when no hub is open, or there is no Fusion to ask
             log.exception("Could not start the custom property load")
-            return reads.failure(f"No active hub: {exc}")
+            return reads.failure(t("app.no_active_hub", reason=exc))
 
     bridge.register("list_custom_properties", list_custom_properties)
     bridge.register(ACTION, lambda _payload: reads.status())

@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from src.publish.reports import DETAIL_CHARS, MAX_LISTED, cut_off, publish_report, send_report
-from src.publish.sender import CUT_OFF
+from src.publish.sender import cut_off_text
 
 
 def run(rows=(), phase="done", sends=True, entries=(), details=None, message="boom"):
@@ -53,12 +53,12 @@ class ReportTests(unittest.TestCase):
         self.assertIn("  - PN-0: Failed.", publish_report(run(rows=["error"], details={0: ""})))
 
     def test_a_cancelled_run_says_how_far_it_got_and_names_what_was_cut_off(self):
-        text = publish_report(run(phase="cancelled", rows=["done", "cancelled", "cancelled"], details={1: CUT_OFF}))
+        text = publish_report(run(phase="cancelled", rows=["done", "cancelled", "cancelled"], details={1: cut_off_text()}))
         self.assertTrue(text.startswith("Publish of PN-1 was cancelled.\n\nSteps completed before it stopped: 3 of 3."))
         self.assertIn("  - PN-1\n", text + "\n")
         self.assertNotIn("PN-2", text)   # cancelled before it started: not in doubt
         self.assertIn("Use Retry on the job", text)
-        self.assertEqual(cut_off(run(rows=["done", "cancelled"], details={1: CUT_OFF})), ["PN-1"])
+        self.assertEqual(cut_off(run(rows=["done", "cancelled"], details={1: cut_off_text()})), ["PN-1"])
 
     def test_a_cancelled_run_with_nothing_cut_off_says_only_that_it_was_cancelled(self):
         for report, start in ((publish_report, "Publish of PN-1"), (send_report, "Sending PN-1")):

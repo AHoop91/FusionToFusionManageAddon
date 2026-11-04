@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Sequence
 import adsk.core
 
 from ..core.constants import RIBBON_TAB_ID, RIBBON_TAB_NAME
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 
 log = get_logger("ribbon")
@@ -64,7 +65,7 @@ class _ExecuteHandler(adsk.core.CommandEventHandler):
             self._command.on_click()
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Ribbon action failed: %s", self._command.command_id)
-            self._ui.messageBox(f"{self._command.name} failed:\n{traceback.format_exc()}")
+            self._ui.messageBox(t("app.command_failed", name=self._command.name, details=traceback.format_exc()))
 
 
 class _CreatedHandler(adsk.core.CommandCreatedEventHandler):

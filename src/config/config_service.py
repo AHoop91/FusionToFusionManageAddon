@@ -18,12 +18,13 @@ from typing import Callable, Dict, List, Optional
 
 from ..core.logging_setup import get_logger
 from ..core.paths import data_dir
+from ..core.i18n import t
 from .config_envelope import ConfigTransferError
 from .export_models import ExportSettings
 from .hub import tenant_code
 from .models import MODE_COMPANY, MODE_LOCAL, AppConfig, ConnectionSettings
 from .shared_config import clean_source, read_cache, read_shared, write_cache
-from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceSettings
+from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceSettings, kind_texts
 
 log = get_logger("config")
 
@@ -144,7 +145,7 @@ class ConfigService:
     def items_setup_problem(self) -> str:
         """Why the Items workspace cannot be used yet ("" when its settings are complete)."""
         kind = KINDS_BY_ID[ITEMS_KIND]
-        return self.config.workspaces.get(kind.kind_id).setup_problem(kind.title)
+        return self.config.workspaces.get(kind.kind_id).setup_problem(kind_texts(kind)[0])
 
     def _read(self) -> None:
         """Read config from disk. A missing file is a first run (defaults); an unreadable one is an error, because
@@ -164,7 +165,7 @@ class ConfigService:
                 self._hubs[""] = AppConfig.from_dict(data)
         except (OSError, ValueError, AttributeError) as exc:
             log.exception("Config unreadable")
-            raise ConfigError(f"The settings file {self._path} cannot be read ({exc}). Fix or delete it, then start the add-in again.") from exc
+            raise ConfigError(t("data.config_settings_unreadable", path=self._path, reason=exc)) from exc
 
     def save(self) -> None:
         """Persist atomically so a crash cannot leave a half-written file."""
@@ -188,7 +189,7 @@ class ConfigService:
         as they are when ``exports`` is None.
         """
         if self._hub_aware and not self._hub:
-            return ["No hub is active. Open a hub in Fusion first: the settings are kept for each hub."]
+            return [t("data.config_no_hub")]
         if mode == MODE_COMPANY:
             try:
                 read_shared(company_source)
@@ -215,13 +216,13 @@ class ConfigService:
         A member who has no sign-in details of their own yet (finding the file needs none) takes the file's, Client ID with its port and scopes,
         so that they can sign in without setting up an app."""
         if self._hub_aware and not self._hub:
-            return ["No hub is active. Open a hub in Fusion first: the settings are kept for each hub."]
+            return [t("data.config_no_hub")]
         if self._stored.local.client_id.strip():
             local = replace(self._stored.local, tenant=imported.local.tenant)
         elif imported.local.client_id.strip():
             local = replace(imported.local, tenant=imported.local.tenant)
         else:
-            return ["The Configuration File has no Client ID. Ask a Hub Admin to save it to the hub again."]
+            return [t("data.config_file_no_client_id")]
         problems = local.validate(require_tenant=False) + imported.workspaces.validate() + imported.exports.validate()
         if problems:
             return problems
@@ -265,13 +266,12 @@ class ConfigService:
             cached = read_cache(self._cache_path, source)
             if cached is None:
                 self._shared = None
-                self._shared_status = SharedStatus(SHARED_ERROR, f"Shared Configuration is not available. {exc}")
+                self._shared_status = SharedStatus(SHARED_ERROR, t("data.shared_not_available", reason=exc))
             else:
                 self._shared = cached[0]
-                self._shared_status = SharedStatus(SHARED_CACHED, f"The shared file could not be read ({exc}) "
-                                                   f"so the copy from {cached[1] or 'earlier'} is in use.")
+                self._shared_status = SharedStatus(SHARED_CACHED, t("data.shared_copy_in_use", reason=exc, date=cached[1] or t("data.shared_earlier")))
             return
-        self._shared_status = SharedStatus(SHARED_OK, "Read from the shared file.")
+        self._shared_status = SharedStatus(SHARED_OK, t("data.shared_read_ok"))
         try:
             write_cache(self._cache_path, source, self._shared)
         except OSError:

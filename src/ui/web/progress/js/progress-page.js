@@ -15,6 +15,7 @@
   (function start() {
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
+    if (!ns.i18n.gate(start)) return;   // the language is in before the page is built
     const card = ns.uploadProgress.mount(document.getElementById('upload-card'));
     bridge.on('upload_status', function (r) {
       if (r.ok && r.result && r.result.active) {

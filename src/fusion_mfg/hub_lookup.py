@@ -3,6 +3,7 @@
 from typing import Any, Dict
 
 from ..core.shapes import dict_rows, dig
+from ..core.i18n import t
 from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
 
 # Every hub the user can see.
@@ -23,7 +24,7 @@ def find_hub_id(data: Dict[str, Any], hub_name: str) -> str:
     if named is None and len(hubs) == 1:
         named = hubs[0]
     if named is None:
-        raise MfgApiError(f"Could not find hub '{hub_name}' in the Manufacturing Data Model.")
+        raise MfgApiError(t("data.mfg_hub_not_found", hub=hub_name))
     return str(named.get("id") or "")
 
 

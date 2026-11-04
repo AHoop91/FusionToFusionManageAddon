@@ -13,6 +13,7 @@
   const bridge = ns.bridge;
   const $ = ns.$;
   const el = ns.el;
+  const t = ns.i18n.t;
 
   const CONTEXT_POLL_MS = 2000;   // how often to ask again while there is nothing to export yet
   const UPLOAD_POLL_MS = 2000;    // Python pushes every change of how far the export has got; this only asks now and then, in case a push is missed
@@ -97,9 +98,9 @@
     const box = $('export-destination-note');
     box.replaceChildren();
     context.destinations.filter(function (d) { return d.reason; }).forEach(function (d) {
-      box.appendChild(el('span', 'export-note is-off', d.label + ': ' + d.reason));
+      box.appendChild(el('span', 'export-note is-off', t('export.destination_off', { label: d.label, reason: d.reason })));
     });
-    if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton('Checking permissions'));
+    if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton(t('export.checking_permissions')));
   }
 
   /** What shows in the pill at the top: the destination chosen, or why there is none. */
@@ -107,7 +108,7 @@
     const chosen = context.destinations.filter(function (d) { return d.key === destination; })[0];
     const waiting = context.destinations.some(function (d) { return d.checking; });
     const pill = $('export-destination-summary');
-    pill.textContent = chosen ? chosen.label : waiting ? 'Checking...' : 'None available';
+    pill.textContent = chosen ? chosen.label : waiting ? t('export.checking') : t('export.none_available');
     pill.dataset.kind = chosen ? chosen.key : '';
   }
 
@@ -137,8 +138,8 @@
 
   /** A file size in the unit that reads best. */
   function fileSize(bytes) {
-    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-    return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    if (bytes >= 1048576) return t('export.size_mb', { n: (bytes / 1048576).toFixed(1) });
+    return t('export.size_kb', { n: Math.max(1, Math.round(bytes / 1024)) });
   }
 
   /** Bouncing balls and a line of text, while the attached files are read. */
@@ -146,10 +147,10 @@
     const box = el('div', 'export-files-loading');
     const balls = el('div', 'balls');
     balls.setAttribute('role', 'status');
-    balls.setAttribute('aria-label', 'Reading the attached files');
+    balls.setAttribute('aria-label', t('export.reading_files'));
     for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
     box.appendChild(balls);
-    box.appendChild(el('span', 'export-note', 'Checking what is attached...'));
+    box.appendChild(el('span', 'export-note', t('export.checking_attached')));
     return box;
   }
 
@@ -161,13 +162,16 @@
     return row;
   }
 
-  const FILE_STATES = {   // how the card names each state of the attached file
-    new: 'New file',
-    current: 'Up to date',
-    stale: 'Out of date',
-    unsaved: 'Unsaved changes',
-    unknown: 'Not known',
-  };
+  /** How the card names a state of the attached file. */
+  function stateName(state) {
+    switch (state) {
+      case 'new': return t('export.state_new');
+      case 'current': return t('export.state_current');
+      case 'stale': return t('export.state_stale');
+      case 'unsaved': return t('export.state_unsaved');
+      default: return t('export.state_unknown');
+    }
+  }
 
   /** The card for the file the export affects: its name and whether it is up to date, and what is attached now. */
   function renderFiles() {
@@ -180,7 +184,7 @@
       return;
     }
     if (files.state !== 'ok') {
-      box.appendChild(el('p', 'export-note is-off', files.message || 'The attached files could not be read.'));
+      box.appendChild(el('p', 'export-note is-off', files.message || t('export.files_unreadable')));
       return;
     }
     const old = files.existing;
@@ -188,15 +192,15 @@
     const card = el('div', 'export-file is-' + state);
     const head = el('div', 'export-file-head');
     head.appendChild(el('span', 'export-file-name', files.name));
-    head.appendChild(el('span', 'export-file-badge', FILE_STATES[state]));
+    head.appendChild(el('span', 'export-file-badge', stateName(state)));
     card.appendChild(head);
     if (old) {
       const rows = el('dl', 'export-file-rows');
-      if (old.freshness && old.freshness.modified) rows.appendChild(detail('Component Last Modified', shortDate(old.freshness.modified)));
-      rows.appendChild(detail('Version', old.version || 'Unknown'));
-      if (old.size) rows.appendChild(detail('Size', fileSize(old.size)));
-      rows.appendChild(detail('Last changed', old.updated ? shortDate(old.updated) : 'Unknown'));
-      if (old.user) rows.appendChild(detail('Changed by', old.user));
+      if (old.freshness && old.freshness.modified) rows.appendChild(detail(t('export.row_modified'), shortDate(old.freshness.modified)));
+      rows.appendChild(detail(t('export.row_version'), old.version || t('export.unknown')));
+      if (old.size) rows.appendChild(detail(t('export.row_size'), fileSize(old.size)));
+      rows.appendChild(detail(t('export.row_changed'), old.updated ? shortDate(old.updated) : t('export.unknown')));
+      if (old.user) rows.appendChild(detail(t('export.row_changed_by'), old.user));
       card.appendChild(rows);
     }
     box.appendChild(card);
@@ -220,7 +224,7 @@
     clearTimeout(filesTimer);
     filesTimer = setTimeout(function () {
       if (!files || files.state !== 'loading') return;
-      files = { state: 'unavailable', message: 'Fusion Manage did not answer, so the attached files could not be read.' };
+      files = { state: 'unavailable', message: t('export.files_timeout') };
       renderFiles();
     }, FILES_WAIT_MS);
     clearTimeout(askTimer);
@@ -242,7 +246,7 @@
     const title = $('export-target');
     title.replaceChildren();
     if (!context.target) return;   // nothing to export yet
-    if (itemNumber === null) title.appendChild(skeleton('Reading the item number'));
+    if (itemNumber === null) title.appendChild(skeleton(t('export.reading_item')));
     else title.textContent = itemNumber;
   }
 
@@ -303,7 +307,7 @@
     if (access || !context) return;
     access = {};
     context.destinations.forEach(function (d) {
-      access[d.key] = d.reason || 'Permissions could not be checked: Fusion Manage did not answer.';
+      access[d.key] = d.reason || t('export.access_timeout');
     });
     renderForm();
   }
@@ -325,7 +329,7 @@
   /** The export has been accepted: follow it on the progress card until Python says how it went. */
   function startWorking() {
     setPhase('working');
-    progressCard.show({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });
+    progressCard.show({ active: true, stage: t('export.stage_starting'), step: -1, steps: [], percent: null });
     startedAt = Date.now();
     pollUpload();
   }
@@ -333,9 +337,9 @@
   function showResult(ok, message) {
     setPhase('result');
     $('export-result').classList.toggle('is-failed', !ok);
-    $('export-result-title').textContent = ok ? 'Export complete' : 'Export failed';
+    $('export-result-title').textContent = ok ? t('export.complete') : t('export.failed');
     $('export-result-message').textContent = message;
-    $('export-done').textContent = ok ? 'Done' : 'Close';
+    $('export-done').textContent = ok ? t('export.done') : t('export.close');
     $('export-done').classList.toggle('btn-secondary', !ok);
     $('export-retry').hidden = ok;   // a failure can be tried again
   }
@@ -346,7 +350,7 @@
     const state = r.result;
     if (state.active) progressCard.show(state);
     else if (state.result) { showResult(state.result.ok, state.result.message); return; }
-    else if (Date.now() - startedAt > START_WAIT_MS) { showResult(false, 'The export did not start.'); return; }
+    else if (Date.now() - startedAt > START_WAIT_MS) { showResult(false, t('export.did_not_start')); return; }
     clearTimeout(uploadTimer);
     uploadTimer = setTimeout(pollUpload, UPLOAD_POLL_MS);
   }
@@ -377,6 +381,7 @@
   (function start() {
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
+    if (!ns.i18n.gate(start)) return;   // the language is in before the page is built
     ns.shell.mountHeader();
     ns.account.init();
     ns.auth.init();

@@ -6,6 +6,7 @@ Parsing is defensive: a missing, ``null`` or wrongly shaped branch yields an emp
 from typing import Any, Dict, List
 
 from ..core.shapes import as_dict, as_list, dig
+from ..core.i18n import t
 
 
 def _component(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,7 +82,7 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
             child = relation["toComponent"]
             child_id = _id(child)
             if child_id in ancestors:
-                raise ValueError(f"The Bill of Materials contains a component inside itself ({child.get('id')}).")
+                raise ValueError(t("data.mfg_bom_cycle", id=child.get("id")))
             item_number = _item_number(child)
             result.append({"level": level,
                            "id": child_id,

@@ -7,6 +7,7 @@
 
   const bridge = ns.bridge;
   const el = ns.el;
+  const t = ns.i18n.t;
   const POLL_INTERVAL_MS = 2000;   // Python pushes the answer when it is ready; this only asks now and then, in case a push is missed
   const MIN_COLUMN_PX = 40;
   const ITEM_COLUMN_PX = 380;   // the first column of a tree table
@@ -41,7 +42,7 @@
         if (entry.pending) { poll(resultAction, entry.request); return; }
         delete waiting[entry.request];
         if (entry.cancelled) return;   // it was left: nobody waits for it
-        if (entry.ok) asked.done('', entry.result); else asked.done(entry.message || 'Could not read it from Fusion Manage.', null);
+        if (entry.ok) asked.done('', entry.result); else asked.done(entry.message || t('item.read_failed'), null);
       });
     }
     const id = 'lk' + (++counter);
@@ -115,7 +116,7 @@
     }
     fit();
     heads.slice(0, last).forEach(function (th, i) {
-      th.appendChild(grip(cols[i], { min: MIN_COLUMN_PX, onResize: fit, title: 'Drag to resize the column' }));
+      th.appendChild(grip(cols[i], { min: MIN_COLUMN_PX, onResize: fit, title: t('item.drag_resize') }));
     });
   }
 
@@ -174,7 +175,7 @@
       cell.appendChild(el('span', 'item-tree-toggle'));
     }
     const icon = el('span', 'item-tree-icon' + (opts.kind === 'part' ? ' item-tree-icon-part' : ''));
-    icon.title = opts.kind === 'root' ? 'This item' : opts.kind === 'part' ? 'Part' : 'Assembly';
+    icon.title = opts.kind === 'root' ? t('item.kind_item') : opts.kind === 'part' ? t('item.kind_part') : t('item.kind_assembly');
     icon.innerHTML = opts.kind === 'root' ? ROOT : CUBE;   // static markup
     cell.appendChild(icon);
     cell.appendChild(el('span', 'item-tree-seq', opts.number));
@@ -183,11 +184,11 @@
       label.href = '#';
       label.addEventListener('click', function (event) { event.preventDefault(); bridge.send('open_url', { url: row.url }); });
     }
-    label.title = (row.url ? 'Open in Fusion Manage in your browser: ' : '') + row.title;
+    label.title = row.url ? t('item.open_in_fusion_manage_named', { title: row.title }) : row.title;
     if (row.number) label.appendChild(el('span', 'item-tree-pn', row.number));
     if (row.name) label.appendChild(el('span', 'item-tree-name', row.name));
     cell.appendChild(label);
-    if (opts.loading) cell.appendChild(el('span', 'item-tree-note muted', 'Loading...'));
+    if (opts.loading) cell.appendChild(el('span', 'item-tree-note muted', t('item.loading')));
     if (opts.error) cell.appendChild(el('span', 'item-tree-note error', opts.error));
     td.appendChild(cell);
     return td;

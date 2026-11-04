@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, List, Optional
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 
 log = get_logger("publish_export")
@@ -22,7 +23,7 @@ def _design() -> Any:
     import adsk.fusion
     design = adsk.fusion.Design.cast(_app().activeProduct)
     if design is None:
-        raise RuntimeError("The open document is not a design.")
+        raise RuntimeError(t("run.export_not_design"))
     return design
 
 
@@ -47,7 +48,7 @@ def _export_with(manager: Any, path: str, geometry: Optional[Any] = None) -> Non
     Raises ``RuntimeError`` when Fusion says it could not."""
     options = manager.createSTEPExportOptions(path) if geometry is None else manager.createSTEPExportOptions(path, geometry)
     if not _timed("STEP export", lambda: manager.execute(options)):
-        raise RuntimeError("Fusion could not export the STEP file.")
+        raise RuntimeError(t("run.export_step_failed"))
 
 
 def _data_file_of(occurrence: Any) -> Any:
@@ -65,7 +66,7 @@ def _own_document_design(occurrence: Any) -> Iterator[Any]:
     import adsk.fusion
     data_file = _data_file_of(occurrence)
     if data_file is None:
-        raise LookupError("The component's own document could not be found (it is nested in another component).")
+        raise LookupError(t("run.export_no_own_document"))
     documents = _app().documents
     document = next((d for d in documents if d.dataFile is not None and d.dataFile.id == data_file.id), None)
     opened = document is None
@@ -75,7 +76,7 @@ def _own_document_design(occurrence: Any) -> Iterator[Any]:
         catch_up()
         design = adsk.fusion.Design.cast(document.products.itemByProductType("DesignProductType"))
         if design is None:
-            raise RuntimeError("The component's document has no design.")
+            raise RuntimeError(t("run.export_document_no_design"))
         yield design
     finally:
         if opened:   # one this call opened is not left open: a batch of components would pile them up
@@ -99,9 +100,9 @@ def export_step(path: str, occurrence: Any = None) -> None:
     if occurrence is None:
         _export_with(manager, path)
         return
-    ways = (("occurrence", lambda: _export_with(manager, path, occurrence)),
-            ("component", lambda: _export_with(manager, path, occurrence.component)),
-            ("own document", lambda: _export_from_own_document(path, occurrence)))
+    ways = ((t("run.export_way_occurrence"), lambda: _export_with(manager, path, occurrence)),
+            (t("run.export_way_component"), lambda: _export_with(manager, path, occurrence.component)),
+            (t("run.export_way_own_document"), lambda: _export_from_own_document(path, occurrence)))
     failures: List[str] = []
     for label, way in ways:
         try:

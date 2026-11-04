@@ -9,6 +9,11 @@
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(init, 100); return; }
 
+    // The page is built in the user's language, so it starts once the language has arrived.
+    ns.i18n.init(start);
+  }
+
+  function start() {
     // Shared shell.
     ns.shell.mountHeader();
     ns.tabs.init();
@@ -17,6 +22,7 @@
 
     // Settings-specific.
     ns.settings.init();
+    ns.language.init();
 
     ns.settings.load();
     ns.auth.refresh();

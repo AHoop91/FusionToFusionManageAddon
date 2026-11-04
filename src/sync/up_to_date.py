@@ -9,6 +9,7 @@ a worker thread.
 from typing import Any, Dict, List, NamedTuple
 
 from ..config.workspace_models import WorkspaceConfig
+from ..core.i18n import t
 from ..fm.client import FmClient
 from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
@@ -63,7 +64,7 @@ def check_properties(shown: ShownItem) -> Dict[str, Any]:
 
     _, compared = read_and_compare(read_properties, summary, shown.cfg, shown.fm, known_id=shown.item_id)
     if compared["fm"]["state"] != FOUND:
-        return {"state": ERROR, "message": compared["fm"]["message"] or "Fusion Manage could not be read."}
+        return {"state": ERROR, "message": compared["fm"]["message"] or t("run.compare_not_readable")}
     return _verdict([{"name": r["name"], "design": _text(r.get("shown") or r.get("value")), "item": _text(r.get("fm_value"))}
                      for r in compared["rows"] if r["status"] in PROPERTY_DIFFERING])
 

@@ -22,12 +22,14 @@ for _name in [m for m in sys.modules if m == "src" or m.startswith("src.")]:
     del sys.modules[_name]
 
 from src.auth.auth_service import AuthService  # noqa: E402
+from src.config.hub_languages import HubLanguages  # noqa: E402
 from src.config.config_service import ConfigService  # noqa: E402
 from src.core.cancel import ADDIN  # noqa: E402
 from src.core.logging_setup import get_logger, shutdown_logging  # noqa: E402
 from src.ui import drawing_source  # noqa: E402
 from src.ui import ribbon as ribbon_module  # noqa: E402
 from src.ui.actions import register_actions  # noqa: E402
+from src.ui.actions.language_actions import register_language_actions, start_language  # noqa: E402
 from src.ui.availability import GateWatcher, SetupGate  # noqa: E402
 from src.ui.export_dialog import ExportDialog  # noqa: E402
 from src.ui.file_dialogs import FileDialogs  # noqa: E402
@@ -42,17 +44,14 @@ from src.core.constants import (  # noqa: E402
     EXPORT_COMMAND_ID,
     EXPORT_HEIGHT,
     EXPORT_PALETTE_ID,
-    EXPORT_TITLE,
     EXPORT_WIDTH,
     ITEM_COMMAND_ID,
     ITEM_HEIGHT,
     ITEM_PALETTE_ID,
-    ITEM_TITLE,
     ITEM_WIDTH,
     JOBS_COMMAND_ID,
     JOBS_HEIGHT,
     JOBS_PALETTE_ID,
-    JOBS_TITLE,
     JOBS_WIDTH,
     MENU_OPEN_COMMAND_ID,
     MENU_PUBLISH_COMMAND_ID,
@@ -60,31 +59,44 @@ from src.core.constants import (  # noqa: E402
     MENU_UPLOAD_STEP_COMMAND_ID,
     PUBLISH_HEIGHT,
     PUBLISH_PALETTE_ID,
-    PUBLISH_TITLE,
     PUBLISH_WIDTH,
-    RIBBON_ADMINISTRATION_NAME,
     RIBBON_DESIGN_WORKSPACE,
     RIBBON_DRAWING_WORKSPACE,
     RIBBON_EXPORT_PANEL_ID,
-    RIBBON_EXPORT_PANEL_NAME,
     RIBBON_HOST_TAB_NAME,
     RIBBON_MERGED_PANEL_ID,
-    RIBBON_MERGED_PANEL_NAME,
     SETTINGS_PALETTE_ID,
-    SETTINGS_TITLE,
     UPLOAD_PROGRESS_HEIGHT,
     UPLOAD_PROGRESS_PALETTE_ID,
     UPLOAD_PROGRESS_WIDTH,
 )
 from src.ui.ribbon import Ribbon, RibbonCommand, RibbonGroup, RibbonPanel  # noqa: E402
+from src.ui.ui_text import (  # noqa: E402
+    export_step_name,
+    export_step_tooltip,
+    export_title,
+    item_command_name,
+    item_title,
+    jobs_title,
+    jobs_tooltip,
+    menu_open_tooltip,
+    menu_publish_name,
+    preferences_name,
+    preferences_tooltip,
+    publish_title,
+    publish_tooltip,
+    ribbon_administration_name,
+    ribbon_export_tooltip,
+    ribbon_merged_panel_name,
+    ribbon_open_tooltip,
+    settings_title,
+    start_failed,
+    upload_drawing_name,
+    upload_drawing_tooltip,
+    upload_title,
+)
 
 log = get_logger()
-
-JOBS_TOOLTIP = "Show the job queue: publishes that are waiting, running and finished."
-PUBLISH_TOOLTIP = "Preview what will be published to Fusion Manage for the current item."
-UPLOAD_DRAWING_NAME = "Export PDF"
-UPLOAD_DRAWING_TOOLTIP = "Create a PDF of the open drawing and attach it to the Fusion Manage item of the design it shows."
-
 
 def _icon(folder: str) -> str:
     """The folder of the icons (``16x16.svg``...) named ``folder`` under ``resources``."""
@@ -114,6 +126,7 @@ _bridge = None
 # ---- Active hub ---------------------------------------------------------------
 
 _config = None
+_hub_languages = None   # the languages the active hub shares, found in a folder of that hub
 
 
 def sync_hub() -> None:
@@ -122,7 +135,8 @@ def sync_hub() -> None:
     try:
         hub = adsk.core.Application.get().data.activeHub
         if _config is not None:
-            _config.use_hub(hub.id if hub else "", hub.name if hub else "")
+            if _config.use_hub(hub.id if hub else "", hub.name if hub else "") and _hub_languages is not None:
+                _hub_languages.use(hub.id if hub else "")   # another hub shares other languages
     except Exception:  # noqa: BLE001 - never raise into Fusion
         log.exception("Could not read the active hub")
 
@@ -148,6 +162,61 @@ def _push_to_panels(action: str, data: str) -> None:
 
 # ---- Fusion lifecycle -------------------------------------------------------
 
+REBUILD_EVENT_ID = "MfgToFm_Rebuild"
+_rebuilding = False   # stop() and run() are being done again for a new language: the event that asked for it stays
+_rebuild_handler = None
+
+
+class _RebuildHandler(adsk.core.CustomEventHandler):
+    """Stops the add-in and starts it again, on the main thread after the palette message that asked for it has been answered."""
+
+    def notify(self, args) -> None:
+        global _rebuilding
+        _rebuilding = True
+        try:
+            settings_open = bool(_palette_host and _palette_host.visible)
+            stop(None)
+            run(None)
+            if settings_open and _palette_host:
+                _palette_host.show()   # the Preferences that were open come back, in the language now in use
+        except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
+            log.exception("Could not make the ribbon again in the new language")
+        finally:
+            _rebuilding = False
+
+
+def _rebuild_for_language() -> None:
+    """The ribbon's and the panels' text is fixed once built: make them again, in the language now in use."""
+    try:
+        adsk.core.Application.get().fireCustomEvent(REBUILD_EVENT_ID, "")
+    except Exception:  # noqa: BLE001 - the panels have been told to load again; the ribbon follows after a restart of Fusion
+        log.exception("Could not ask for the ribbon to be made again")
+
+
+def _register_rebuild() -> None:
+    global _rebuild_handler
+    if _rebuild_handler is not None:
+        return   # kept across the stop and run of a rebuild: it is the handler that is running
+    app = adsk.core.Application.get()
+    try:
+        app.unregisterCustomEvent(REBUILD_EVENT_ID)   # left over from a previous run of the add-in
+    except RuntimeError:
+        pass
+    _rebuild_handler = _RebuildHandler()
+    app.registerCustomEvent(REBUILD_EVENT_ID).add(_rebuild_handler)
+
+
+def _unregister_rebuild() -> None:
+    global _rebuild_handler
+    if _rebuilding or _rebuild_handler is None:
+        return
+    try:
+        app = adsk.core.Application.get()
+        app.unregisterCustomEvent(REBUILD_EVENT_ID)
+    except RuntimeError:
+        pass
+    _rebuild_handler = None
+
 def _close_settings(_payload) -> dict:
     """Close the settings panel: a member who does not pick a Configuration File has nothing to set up."""
     if _tasks and _palette_host:
@@ -157,73 +226,77 @@ def _close_settings(_payload) -> dict:
 
 def run(context) -> None:
     """Add-in start: compose services, palette and ribbon."""
-    global _bridge, _config, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
+    global _bridge, _config, _hub_languages, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
     ADDIN.reset()   # work is allowed again (the add-in may be started once more in the same process)
     try:
+        start_language()   # first: every title, name and tooltip below is built in the user's language (fixed once built: a change makes them again)
         _ui = adsk.core.Application.get().userInterface
+        _register_rebuild()
 
         bridge = _bridge = MessageBridge()
         _tasks = UiThread()
-        badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, JOBS_TOOLTIP, os.path.join(_ADDIN_DIR, "resources"))
+        badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, jobs_tooltip(), os.path.join(_ADDIN_DIR, "resources"))
         config, auth = ConfigService(hub_aware=True), AuthService()
         _config = config
         ribbon_module.before_command = sync_hub
-        sync_hub()   # the settings are those of the hub that is open now
-        register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks), _tasks.post)
+        _hub_languages = HubLanguages()
+        sync_hub()   # the settings are those of the hub that is open now, and so are the languages it shares
+        roles = register_actions(bridge, config, auth, FileDialogs(_ui), badge, JobAlerts(_ui, _tasks), _tasks.post, _hub_languages)
+        register_language_actions(bridge, _push_to_panels, _rebuild_for_language)
 
-        _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, SETTINGS_TITLE, "settings")
+        _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, settings_title(), "settings")
         bridge.register("close_settings", _close_settings)
-        _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, PUBLISH_TITLE, "publish", False, PUBLISH_WIDTH, PUBLISH_HEIGHT, fresh=True)
-        _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, JOBS_TITLE, "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
-        _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, ITEM_TITLE, "item", True, ITEM_WIDTH, ITEM_HEIGHT)
-        _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, "Upload", "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
+        _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, publish_title(), "publish", False, PUBLISH_WIDTH, PUBLISH_HEIGHT, fresh=True)
+        _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, jobs_title(), "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
+        _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, item_title(), "item", True, ITEM_WIDTH, ITEM_HEIGHT)
+        _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, upload_title(), "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host, _publish_host.show)
-        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, EXPORT_TITLE, "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
+        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, export_title(), "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
         _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
         bridge.set_pusher(_push_to_panels)   # background work can now tell the panels when it is done, instead of being asked
         menu_commands = [
-            RibbonCommand(MENU_OPEN_COMMAND_ID, "Open Fusion Manage Item",
-                          "Open the Fusion Manage item of the selected component.",
+            RibbonCommand(MENU_OPEN_COMMAND_ID, item_command_name(),
+                          menu_open_tooltip(),
                           _item_panel.open_from_menu,
                           _icon("item"), needs_setup=True),
-            RibbonCommand(MENU_PUBLISH_COMMAND_ID, "Publish Fusion Manage Item",
-                          PUBLISH_TOOLTIP,
+            RibbonCommand(MENU_PUBLISH_COMMAND_ID, menu_publish_name(),
+                          publish_tooltip(),
                           _publish_host.show,
                           _icon("publish"), needs_setup=True, root_only=True, context="design"),
-            RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, "Export STEP File",
-                          "Export the open design as a STEP file and attach it to the Fusion Manage item of the selected component.",
+            RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, export_step_name(),
+                          export_step_tooltip(),
                           _item_panel.upload_selected_step,
                           _icon("upload_step"), needs_setup=True, context="design"),
-            RibbonCommand(MENU_UPLOAD_DRAWING_COMMAND_ID, UPLOAD_DRAWING_NAME,
-                          UPLOAD_DRAWING_TOOLTIP,
+            RibbonCommand(MENU_UPLOAD_DRAWING_COMMAND_ID, upload_drawing_name(),
+                          upload_drawing_tooltip(),
                           _item_panel.upload_drawing,
                           _icon("upload_drawing"), needs_setup=True, needs_drawing=True, root_only=True, context="drawing"),
         ]
         _item_menu = ItemContextMenu(_ui, menu_commands)
-        open_item = RibbonCommand(ITEM_COMMAND_ID, "Open Fusion Manage Item",
-                                  "Open the Fusion Manage item of the selected component, or of the open design or drawing.",
+        open_item = RibbonCommand(ITEM_COMMAND_ID, item_command_name(),
+                                  ribbon_open_tooltip(),
                                   _item_panel.open_selected,
                                   _icon("item"), needs_setup=True)
         # Not held back by the setup or the drawing loading: the Export window says what is missing, and which destination that leaves off.
-        export = RibbonCommand(EXPORT_COMMAND_ID, "Export",
-                               "Export the open design or drawing, and attach the file to its item or component in Fusion Manage.",
+        export = RibbonCommand(EXPORT_COMMAND_ID, export_title(),
+                               ribbon_export_tooltip(),
                                _export_dialog.show,
                                _icon("upload_step"))
         administration = RibbonGroup([
-            RibbonCommand(JOBS_COMMAND_ID, "Job Queue", JOBS_TOOLTIP,
+            RibbonCommand(JOBS_COMMAND_ID, jobs_title(), jobs_tooltip(),
                           _jobs_host.show,
                           _icon("jobs"), needs_setup=True),
-            RibbonCommand(COMMAND_ID, "Preferences",
-                          "Open the Fusion Manage panel: connection and settings.",
+            RibbonCommand(COMMAND_ID, preferences_name(),
+                          preferences_tooltip(),
                           _palette_host.show,
                           _icon("settings")),
-        ], RIBBON_ADMINISTRATION_NAME, _icon("settings"))
+        ], ribbon_administration_name(), _icon("settings"))
         # Panels appear in this order, Export on the left. Publishing is opened from the item panel and the right-click menu, not the ribbon.
-        export_panel = RibbonPanel(RIBBON_EXPORT_PANEL_ID, RIBBON_EXPORT_PANEL_NAME, [RibbonGroup([export])])
+        export_panel = RibbonPanel(RIBBON_EXPORT_PANEL_ID, export_title(), [RibbonGroup([export])])
         panels = {
-            RIBBON_DESIGN_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME,
+            RIBBON_DESIGN_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, ribbon_merged_panel_name(),
                                                                 [RibbonGroup([open_item]), administration])],
-            RIBBON_DRAWING_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, RIBBON_MERGED_PANEL_NAME,
+            RIBBON_DRAWING_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, ribbon_merged_panel_name(),
                                                                  [RibbonGroup([open_item]), administration])],
         }
         _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME)
@@ -238,7 +311,7 @@ def run(context) -> None:
     except Exception:  # noqa: BLE001 - report to the user instead of failing silently
         log.exception("Add-in failed to start")
         if _ui:
-            _ui.messageBox(f"Failed to start:\n{traceback.format_exc()}")
+            _ui.messageBox(start_failed(traceback.format_exc()))
 
 
 def stop(context) -> None:
@@ -269,8 +342,10 @@ def stop(context) -> None:
             _tasks.dispose()
         if _ribbon:
             _ribbon.unregister()
+        _unregister_rebuild()
         log.info("Add-in stopped")
     except Exception:  # noqa: BLE001
         log.exception("Add-in failed to stop cleanly")
     finally:
-        shutdown_logging()
+        if not _rebuilding:
+            shutdown_logging()   # a rebuild goes on logging to the same file

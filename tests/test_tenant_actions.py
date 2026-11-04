@@ -8,7 +8,7 @@ from tests.without_fusion import fusion_modules_stubbed
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
 with fusion_modules_stubbed():
     from src.ui.actions import tenant_actions
-    from src.ui.actions.tenant_actions import NO_DESIGN, NOT_LINKED, register_tenant_actions
+    from src.ui.actions.tenant_actions import no_design, not_linked, register_tenant_actions
     from src.ui.message_bridge import MessageBridge
 
 
@@ -60,12 +60,12 @@ class TenantActionsTests(unittest.TestCase):
         self.call("detect_tenant")
         self.finish_reads()
         status = self.call("detect_tenant_status")["result"]
-        self.assertEqual((status["ok"], status["tenant"], status["message"]), (False, "", NOT_LINKED))
+        self.assertEqual((status["ok"], status["tenant"], status["message"]), (False, "", not_linked()))
 
     def test_no_saved_design_is_told_in_the_reply_and_starts_nothing(self):
         self.ref.return_value = ("", "")
         result = self.call("detect_tenant")["result"]
-        self.assertEqual((result["pending"], result["ok"], result["message"]), (False, False, NO_DESIGN))
+        self.assertEqual((result["pending"], result["ok"], result["message"]), (False, False, no_design()))
         self.assertEqual(self.queued, [])
         self.assertEqual(self.call("detect_tenant_status")["result"]["message"], "")   # and it is not kept as the outcome
 

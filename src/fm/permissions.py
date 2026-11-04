@@ -7,6 +7,7 @@
 from typing import Any, Iterable, List, Set
 
 from ..core.shapes import dict_rows, dig
+from ..core.i18n import t
 from .client import WORKSPACES, FmApiError, FmClient
 
 PERMISSION_PREFIX = "permission.shortname."
@@ -32,8 +33,18 @@ def granted(client: FmClient, workspace_id: str) -> Set[str]:
 
 
 def title(permission: str) -> str:
-    """``add_items`` -> ``Add Items``."""
-    return permission.replace("_", " ").title()
+    """``add_items`` -> ``Add Items``, in the language in use for the ones the add-in knows; the others are made from their name."""
+    known = {
+        "view_items": lambda: t("data.permission_view_items"),
+        "add_items": lambda: t("data.permission_add_items"),
+        "edit_items": lambda: t("data.permission_edit_items"),
+        "view_bom": lambda: t("data.permission_view_bom"),
+        "add_to_bom": lambda: t("data.permission_add_to_bom"),
+        "edit_bom": lambda: t("data.permission_edit_bom"),
+        "add_attachments": lambda: t("data.permission_add_attachments"),
+        "edit_attachments": lambda: t("data.permission_edit_attachments"),
+    }.get(permission)
+    return known() if known else permission.replace("_", " ").title()
 
 
 def missing(required: Iterable[str], held: Set[str]) -> List[str]:
@@ -44,11 +55,14 @@ def missing(required: Iterable[str], held: Set[str]) -> List[str]:
 def denial(client: FmClient, workspace_id: str, required: Iterable[str], workspace_title: str, action: str = "publish to") -> str:
     """Why the user may not ``action`` the workspace ("" when their permissions include every one in ``required``).
     Raises ``FmApiError`` when the permissions cannot be read for any reason but being refused."""
-    refusal = f"Insufficient permissions to {action} the {workspace_title} workspace."
+    refusal = {   # ``action`` is the English phrase callers give; each one the add-in uses has its own sentence
+        "publish to": lambda: t("data.permission_refused_publish", workspace=workspace_title),
+        "attach files to": lambda: t("data.permission_refused_attach", workspace=workspace_title),
+    }.get(action, lambda: t("data.permission_refused_other", action=action, workspace=workspace_title))()
     try:
         lacking = missing(required, granted(client, workspace_id))
     except FmApiError as exc:
         if exc.status in REFUSED:
             return refusal
         raise
-    return f"{refusal} Missing: {', '.join(title(p) for p in lacking)}." if lacking else ""
+    return t("data.permission_missing", refusal=refusal, missing=", ".join(title(p) for p in lacking)) if lacking else ""

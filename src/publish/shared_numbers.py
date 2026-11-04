@@ -7,10 +7,15 @@ cannot publish them either. The two apply one rule, so a change to it is made in
 
 from typing import Any, Dict, List
 
+from ..core.i18n import t
 from ..sync.item_number import item_number_of
 from .read_ahead import component_id_of
 
-UNNAMED = "a component without a name"
+
+
+def unnamed() -> str:
+    """What a component with no name is called in a message."""
+    return t("run.shared_unnamed")
 
 
 def shared_key(number: str) -> str:
@@ -27,11 +32,11 @@ def shared_numbers(items: List[Dict[str, Any]], summary: Dict[str, Any]) -> Dict
     for at, item in enumerate(items):
         number = shared_key(item_number_of(item))
         if number:
-            who = str(item.get("name") or item.get("description") or "").strip() or UNNAMED
+            who = str(item.get("name") or item.get("description") or "").strip() or unnamed()
             holders.setdefault(number, {})[component_id_of(item, summary) or f"line {at}"] = who
     return {number: list(who.values()) for number, who in holders.items() if len(who) > 1}
 
 
 def shared_reason(number: str, holders: List[str]) -> str:
     """What a run says of an item that is left out because its number is shared: the number, and the components that carry it."""
-    return f"Skipped: item number {number} is shared by {len(holders)} components ({', '.join(holders)}). Give each its own item number in Fusion."
+    return t("run.shared_skipped", number=number, count=len(holders), holders=", ".join(holders))

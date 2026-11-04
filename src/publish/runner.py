@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..auth.errors import AuthError
 from ..config.workspace_models import KINDS_BY_ID, WorkspaceConfig
 from ..core.cancel import Cancelled
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..fm.client import LOOKUPS, FmApiError, FmClient
@@ -34,7 +35,7 @@ from .item_requests import item_request
 from .job_state import JobState, JobStopped
 from .placeholders import Unresolved
 from .read_ahead import ReadAhead, component_id_of
-from .sender import CUT_OFF, Dispatcher, was_cancelled
+from .sender import Dispatcher, cut_off_text, was_cancelled
 from .shared_numbers import shared_key, shared_numbers, shared_reason
 from .states import CANCELLED, DONE, ERROR, RUNNING
 from .thumbnail import clear_white_background
@@ -54,6 +55,17 @@ THUMBNAIL = "thumbnail"
 COMPONENT_KEYS = ("id", "item_number", "part_number", "description")   # what the run knows of a component that is not the design's own
 
 
+def artifact_label(artifact: str) -> str:
+    """What the Jobs window calls an artifact the folder recorded (the folder keeps the English name, which ``reports`` and the retry read)."""
+    if artifact.startswith("picklist "):
+        return t("run.artifact_picklist", field=artifact[len("picklist "):])
+    labels = {SENT: lambda: t("run.artifact_sent"), ITEM_REQUEST: lambda: t("run.artifact_item_request"),
+              THUMBNAIL: lambda: t("run.artifact_thumbnail"), "item": lambda: t("run.artifact_item"),
+              "blank fields": lambda: t("run.artifact_blank_fields"), "component link": lambda: t("run.artifact_component_link"),
+              "bom requests": lambda: t("run.artifact_bom_requests")}
+    return labels[artifact]() if artifact in labels else artifact
+
+
 def _needs_matching(row: Dict[str, Any]) -> bool:
     """Whether a row is a text value to be sent to a field, which may need matching to a picklist option or fitting to a number's digits (not a
     row that matches already, has no field, has no value, or already holds an option's link)."""
@@ -67,7 +79,7 @@ class SharedItemNumbers(JobStopped):
 
     def __init__(self, counts: Dict[str, int]) -> None:
         self.counts = counts   # item number -> how many Fusion Manage items carry it
-        super().__init__("Nothing was published. Renumber or remove the extra items in Fusion Manage, then publish again.")
+        super().__init__(t("run.publish_shared_numbers"))
 
 
 class PublishRun(JobState):
@@ -75,7 +87,9 @@ class PublishRun(JobState):
 
     kind = "publish"
     stage = VALIDATING   # then ITEMS, then BOM: the run looks up every item number before it writes anything
-    unreached = "Not published: the run failed."
+    @property
+    def unreached(self) -> str:
+        return t("run.publish_not_published")
 
     def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: FusionGraphQlClient,
                  fm: FmClient, model_id: str, timestamp: str, send: bool = False) -> None:
@@ -91,7 +105,7 @@ class PublishRun(JobState):
         self._row_of = {id(i): row for i, row in zip(job["items"], self.rows)}
         self._bom_requests = bom_requests(cfg.workspace_id, job["operations"])
         # A Bill of Materials is sent after the items, so its rows come last and are not counted in the items processed.
-        self._bom_row_of = {parent: self.row(parent, f"Bill of Materials, {len(lines)} request(s)")
+        self._bom_row_of = {parent: self.row(parent, t("run.bom_row", count=len(lines)))
                             for parent, lines in self._bom_requests.items()} if send else {}
         self.rows.extend(self._bom_row_of.values())
         self._bom_total = sum(len(lines) for lines in self._bom_requests.values()) if send else 0   # requests, not parents: one parent can have many
@@ -183,15 +197,15 @@ class PublishRun(JobState):
         def progress() -> None:   # called from the threads that send the parent's requests together
             with self._lock:
                 sent[0] += 1
-                row["detail"] = f"{sent[0]} of {len(lines)} request(s) sent."
+                row["detail"] = t("run.bom_progress", sent=sent[0], count=len(lines))
                 self._bom_done += 1
 
         try:
             row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled, progress)
             row["status"] = CANCELLED if was_cancelled(row["detail"]) else DONE
         except Cancelled:   # the requests under way were cut off; the others in this parent were not started
-            row["status"], row["detail"] = CANCELLED, CUT_OFF
-            self.folder.record(parent, SENT, FAILED, CUT_OFF)
+            row["status"], row["detail"] = CANCELLED, cut_off_text()
+            self.folder.record(parent, SENT, FAILED, cut_off_text())
         except (FmApiError, AuthError, Unresolved) as exc:
             row["status"], row["detail"] = ERROR, str(exc)
             self.folder.record(parent, SENT, FAILED, str(exc))
@@ -205,7 +219,7 @@ class PublishRun(JobState):
         # The panel leaves out what has no item number or shares one; this keeps a job that has them anyway from sending an empty
         # number, or from writing one item from several components.
         if not number:
-            return self._leave_out(row, "Skipped: no item number.")
+            return self._leave_out(row, t("run.publish_skipped_no_number"))
         if shared_key(number) in self._shared:
             reason = shared_reason(number, self._shared[shared_key(number)])
             self.folder.record(number, "item", SKIPPED, reason)
@@ -215,13 +229,13 @@ class PublishRun(JobState):
         try:
             left_out = self._item(item, number)
         except Cancelled:   # a read the cancel ended: the item is not a failure
-            row["status"], row["detail"] = CANCELLED, "Cancelled."
+            row["status"], row["detail"] = CANCELLED, t("run.job_cancelled")
             return
         except Exception as exc:
             log.exception("Publishing %s failed", number)
             self.folder.record(number, "item", FAILED, str(exc) or type(exc).__name__)
         entries = self.folder.entries_of(number)
-        row["detail"] = "; ".join(f"{e['artifact']}: {e['detail']}" for e in entries)
+        row["detail"] = "; ".join(f"{artifact_label(e['artifact'])}: {e['detail']}" for e in entries)
         with self._lock:
             row["status"] = ERROR if any(e["status"] == FAILED for e in entries) else DONE
             self.done += 1
@@ -273,9 +287,9 @@ class PublishRun(JobState):
         fields = [m.fm_field_id for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id]
         files: List[Tuple[str, Any]] = []
         if not fields:
-            self.folder.record(number, THUMBNAIL, SKIPPED, "No field is mapped to the thumbnail.")
+            self.folder.record(number, THUMBNAIL, SKIPPED, t("run.thumbnail_no_field"))
         elif result["fm"].get("state") not in (NEW, FOUND):   # nothing is sent for the item: the picture would not be used
-            self.folder.record(number, THUMBNAIL, SKIPPED, "Not needed: nothing is sent for this item.")
+            self.folder.record(number, THUMBNAIL, SKIPPED, t("run.thumbnail_not_needed"))
         else:
             image = self._thumbnail(number, folder, component_id, thumbnail_url)
             files = [(field, image) for field in fields] if image else []
@@ -285,7 +299,7 @@ class PublishRun(JobState):
     def _record_blank(self, number: str, rows: List[Dict[str, Any]]) -> None:
         blank = [f"{r['name']} (-> {r['fm_field']})" for r in rows if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
         if blank:
-            self.folder.record(number, "blank fields", SKIPPED, "No value in the Data Model, not sent: " + ", ".join(blank))
+            self.folder.record(number, "blank fields", SKIPPED, t("run.blank_fields", fields=", ".join(blank)))
 
     def _write_request(self, number: str, folder: str, request: Optional[Dict[str, Any]], reason: str) -> str:
         """Write the request to the item's folder and return its path ("" when there is none, and the reason is recorded)."""
@@ -315,7 +329,7 @@ class PublishRun(JobState):
             elif link:
                 out.append(dict(row, value=link))
             else:
-                self.folder.record(number, "picklist " + row["fm_field"], SKIPPED, f"'{value}' is not an option of {row['fm_field']} in Fusion Manage, so it was not sent.")
+                self.folder.record(number, "picklist " + row["fm_field"], SKIPPED, t("run.picklist_no_option", value=value, field=row["fm_field"]))
         return out
 
     def _component(self, number: str, fm_info: Dict[str, Any], linked: Dict[str, str]) -> Optional[Tuple[str, str]]:
@@ -343,7 +357,7 @@ class PublishRun(JobState):
         try:
             self.folder.record(number, SENT, OK, self._dispatcher.send_item(number, request))
         except Cancelled:
-            self.folder.record(number, SENT, FAILED, CUT_OFF)
+            self.folder.record(number, SENT, FAILED, cut_off_text())
             raise
         except (FmApiError, AuthError) as exc:
             self.folder.record(number, SENT, FAILED, str(exc))
@@ -366,10 +380,10 @@ class PublishRun(JobState):
         ("" if none). The saved file is the original; the value has its white background cleared."""
         try:
             if not url:
-                self.folder.record(number, THUMBNAIL, SKIPPED, "The Data Model has no thumbnail for this component yet.")
+                self.folder.record(number, THUMBNAIL, SKIPPED, t("run.thumbnail_none"))
                 return ""
             data = self._download_thumbnail(component_id, url)
-            self.folder.record(number, THUMBNAIL, OK, f"{len(data)} bytes",
+            self.folder.record(number, THUMBNAIL, OK, t("run.thumbnail_bytes", count=len(data)),
                                self.folder.write_bytes(os.path.join(folder, "thumbnail.png"), data))
             return "data:image/png;base64," + base64.b64encode(clear_white_background(data)).decode("ascii")
         except Cancelled:
@@ -382,10 +396,10 @@ class PublishRun(JobState):
     def _write_boms(self) -> None:
         for parent, lines in self._bom_requests.items():
             relative = os.path.join("bom", safe_name(parent) + ".bom.request.json")
-            self.folder.record(parent, "bom requests", OK, f"{len(lines)} request(s)",
+            self.folder.record(parent, "bom requests", OK, t("run.bom_requests_written", count=len(lines)),
                                self.folder.write_json(relative, {"parent": parent, "requests": lines}))
         if not self._bom_requests:
-            self.folder.record(self.job.get("root_number", ""), "bom requests", SKIPPED, "No Bill of Materials changes.")
+            self.folder.record(self.job.get("root_number", ""), "bom requests", SKIPPED, t("run.bom_no_changes"))
 
     # ---- Any thread -------------------------------------------------------------
 

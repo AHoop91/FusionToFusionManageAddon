@@ -14,6 +14,7 @@ import webbrowser
 from typing import Any, Callable, Dict, List, Optional
 
 from ..config.models import ConnectionSettings
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from .callback_server import CallbackServer
 from .errors import AuthError
@@ -97,7 +98,7 @@ class AuthService:
             raise AuthError(" ".join(problems))
         with self._lock:
             if self._state == STATE_SIGNING_IN:
-                raise AuthError("Sign-in already in progress.")
+                raise AuthError(t("data.auth_in_progress"))
             self._state, self._error, self._client_id = STATE_SIGNING_IN, "", settings.client_id
             generation = self._generations.get(settings.client_id, 0)
             self._cancel.clear()
@@ -122,7 +123,7 @@ class AuthService:
         try:
             result = server.wait(LOGIN_TIMEOUT_SECONDS, self._cancel)
             if not result["code"]:
-                raise AuthError(result["error"] or "Sign-in failed.")
+                raise AuthError(result["error"] or t("data.auth_failed"))
             tokens = exchange_code(settings.client_id, result["code"],
                                    settings.callback_url, verifier)
             with self._lock:   # the check and the save are one step: a sign-out cannot come between them
@@ -138,7 +139,7 @@ class AuthService:
             self._fail(str(exc), settings.client_id, generation)
         except Exception as exc:  # noqa: BLE001 - background thread must not die silently
             log.exception("Unexpected sign-in failure")
-            self._fail(f"Unexpected error: {exc}", settings.client_id, generation)
+            self._fail(t("data.auth_unexpected", reason=exc), settings.client_id, generation)
         finally:
             callback = self._on_login_done
             if callback is not None:
@@ -188,18 +189,18 @@ class AuthService:
             generation = self._generations.get(settings.client_id, 0)   # the session this call belongs to
         tokens = self._store.load(settings.client_id)
         if not tokens:
-            raise AuthError("Not signed in.")
+            raise AuthError(t("data.auth_not_signed_in"))
         if self._fresh(tokens):
             return tokens["access_token"]
         with self._refresh_lock:
             tokens = self._store.load(settings.client_id)   # another thread may have refreshed while this one waited
             if not tokens:
-                raise AuthError("Not signed in.")
+                raise AuthError(t("data.auth_not_signed_in"))
             if self._fresh(tokens):
                 return tokens["access_token"]
             refresh = tokens.get("refresh_token")
             if not refresh:
-                raise AuthError("Session expired; sign in again.")
+                raise AuthError(t("data.auth_session_expired"))
             try:
                 fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
             except AuthError as exc:
@@ -210,7 +211,7 @@ class AuthService:
             fresh.setdefault("refresh_token", refresh)
             with self._lock:   # the check and the save are one step: a sign-out during the refresh must not be undone by it
                 if self._generations.get(settings.client_id, 0) != generation:
-                    raise AuthError("Not signed in.")
+                    raise AuthError(t("data.auth_not_signed_in"))
                 self._store.save(settings.client_id, fresh)
             return fresh["access_token"]
 

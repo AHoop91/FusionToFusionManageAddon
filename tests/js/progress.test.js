@@ -4,11 +4,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const vm = require('vm');
-const { run } = require('./helpers');
+const { run, englishI18n } = require('./helpers');
 
 const window = vm.createContext({ console: console, Date: Date });
 window.window = window;
-window.MfgUi = {};
+window.MfgUi = { i18n: englishI18n() };
 run(window, 'js/publish-jobs.js');
 const describe = window.MfgUi.pubJobs.describe;
 const tally = window.MfgUi.pubJobs.tally;

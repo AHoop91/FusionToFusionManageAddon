@@ -12,7 +12,7 @@ from tests.without_fusion import fusion_modules_stubbed
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
 with fusion_modules_stubbed():
     from src.ui.actions import settings_actions
-    from src.ui.actions.settings_actions import HUB_CHANGED, register_settings_actions, save_settings, settings_payload
+    from src.ui.actions.settings_actions import hub_changed, register_settings_actions, save_settings, settings_payload
     from src.ui.message_bridge import MessageBridge
 
 
@@ -87,7 +87,7 @@ class SaveSettingsTests(unittest.TestCase):
 
     def test_a_request_that_does_not_say_which_hub_is_refused(self):
         del self.full["hub_id"]
-        with self.assertRaisesRegex(ValueError, HUB_CHANGED[:30]):
+        with self.assertRaisesRegex(ValueError, hub_changed()[:30]):
             save_settings(self.service, self.full)
         self.service.update.assert_not_called()
 
@@ -118,7 +118,7 @@ class RegisterTests(unittest.TestCase):
         self.assertEqual(bridge.dispatch("get_settings", "")["result"]["hub"]["id"], "hub-1")
         self.assertTrue(bridge.dispatch("save_settings", '{"hub_id": "hub-1"}')["ok"])
         refused = bridge.dispatch("save_settings", '{"hub_id": "other"}')
-        self.assertEqual((refused["ok"], refused["error"]), (False, HUB_CHANGED))
+        self.assertEqual((refused["ok"], refused["error"]), (False, hub_changed()))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
 
   const TICK = ['M5 12.5l4.5 4.5L19 7.5'];
   const CROSS = ['M6 6l12 12', 'M18 6L6 18'];
@@ -43,7 +44,7 @@
     content.dataset.state = 'working';
     const balls = el('div', 'balls');
     balls.setAttribute('role', 'status');
-    balls.setAttribute('aria-label', 'Working');
+    balls.setAttribute('aria-label', t('settings.working_label'));
     for (let i = 0; i < 3; i += 1) balls.appendChild(el('span'));
     const title = el('h3', 'sp-title', headline);
     title.id = 'sp-title';
@@ -61,7 +62,7 @@
     badge.appendChild(ns.svg(ok ? TICK : CROSS, 26));
     const title = el('h3', 'sp-title', headline);
     title.id = 'sp-title';
-    const button = el('button', 'btn', ok ? 'Done' : 'Close');
+    const button = el('button', 'btn', ok ? t('settings.done') : t('settings.close'));
     button.type = 'button';
     button.addEventListener('click', close);
     content.appendChild(badge);
@@ -71,11 +72,43 @@
     button.focus();
   }
 
+  /** Ask before something that cannot be undone: ``action`` is the button that does it (and runs ``onConfirm``), next to a Cancel. */
+  function confirm(title, text, action, onConfirm) {
+    close();
+    overlay = el('div', 'ws-dialog-overlay');
+    const box = el('div', 'ws-dialog sp-dialog');
+    box.setAttribute('role', 'alertdialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'sp-title');
+    content = el('div', 'sp-content');
+    content.dataset.state = 'confirm';
+    const heading = el('h3', 'sp-title', title);
+    heading.id = 'sp-title';
+    const cancel = el('button', 'btn btn-secondary', t('settings.cancel'));
+    cancel.type = 'button';
+    cancel.addEventListener('click', close);
+    const go = el('button', 'btn btn-danger', action);
+    go.type = 'button';
+    go.addEventListener('click', function () { close(); onConfirm(); });
+    const row = el('div', 'row sp-actions');
+    row.appendChild(cancel);
+    row.appendChild(go);
+    content.appendChild(heading);
+    content.appendChild(el('p', 'sp-text', text));
+    content.appendChild(row);
+    box.appendChild(content);
+    overlay.appendChild(box);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    cancel.focus();   // the safe choice is the one a stray Enter takes
+  }
+
   ns.progress = {
     show: show,
+    confirm: confirm,
     /** An outcome with nothing before it to wait for: the dialog opens already done. */
     notify: function (title, text) { show(title, ''); result(true, title, text); },
     done: function (title, text) { result(true, title, text); },
-    fail: function (title, text) { result(false, title, text || 'Something went wrong.'); },
+    fail: function (title, text) { result(false, title, text || t('settings.went_wrong')); },
   };
 })(window.MfgUi);

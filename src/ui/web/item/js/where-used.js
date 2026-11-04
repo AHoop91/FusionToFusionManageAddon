@@ -6,6 +6,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
   const tree = ns.itemTree;
   const ITEM_COLUMN_PX = tree.ITEM_COLUMN_PX;
   const COLUMN_PX = tree.COLUMN_PX;
@@ -26,10 +27,10 @@
   /** Fill ``target`` with the parents of the item of ``view``. */
   function render(target, view) {
     const mine = ++current;
-    tree.loading(target, CLASS, 'Reading where this item is used...');
+    tree.loading(target, CLASS, t('item.wu_reading'));
     load(view, '', function (error, result) {
       if (mine !== current) return;
-      if (error) { tree.centred(target, CLASS, 'Could not read where this item is used: ' + error, true); return; }
+      if (error) { tree.centred(target, CLASS, t('item.wu_error', { error: error }), true); return; }
       draw(target, view, result);
     });
   }
@@ -53,7 +54,7 @@
       head.replaceChildren();
       const cols = [];
       const heads = [];
-      const titles = ['Item', 'Version'].concat(columns.map(titleOf));
+      const titles = [t('item.col_item'), t('item.col_version')].concat(roots.length ? columns.map(titleOf) : [t('item.bom_col_quantity'), t('item.wu_col_units'), t('item.bom_col_lifecycle')]);   // no parents: the usual columns, in words
       titles.forEach(function (title, i) {
         const col = el('col');
         col.style.width = (i === 0 ? ITEM_COLUMN_PX : COLUMN_PX) + 'px';
@@ -108,7 +109,7 @@
         const tr = el('tr');
         tr.appendChild(tree.itemCell({
           quiet: true, iconX: xs[entry.depth], number: entry.number, row: row, kind: 'assembly', room: chevronDepths[entry.depth],
-          chevron: row.up ? { open: node.open, title: node.open ? 'Collapse' : 'Show where this is used', onClick: function () { toggle(node); } } : null,
+          chevron: row.up ? { open: node.open, title: node.open ? t('item.collapse') : t('item.wu_show'), onClick: function () { toggle(node); } } : null,
           loading: node.loading, error: node.error,
         }));
         tr.appendChild(el('td', '', row.version));
@@ -123,7 +124,7 @@
     wrap.appendChild(table);
     target.replaceChildren(wrap);
     if (!roots.length) {   // the columns stay, and the message is centred in the space under them
-      tree.emptyUnder(target, ASSEMBLY_ICON, 'Not used in any assembly', 'Assemblies in Fusion Manage that hold this item will be listed here.');
+      tree.emptyUnder(target, ASSEMBLY_ICON, t('item.wu_empty'), t('item.wu_empty_hint'));
     }
   }
 

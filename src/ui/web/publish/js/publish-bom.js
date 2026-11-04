@@ -15,9 +15,11 @@
   const jobs = ns.pubJobs;
   const model = ns.bomModel;
   const tree = ns.bomTree;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
-  const READING_TREE = 'Reading every level of the Bill of Materials...';
-  const READING_FOR_PUBLISH = 'Reading every level of the Bill of Materials before publishing.';
+  function readingTree() { return t('publish.reading_tree'); }
+  function readingForPublish() { return t('publish.reading_for_publish'); }
+  function linesSoFar(progress) { return t('publish.lines_so_far', { count: Number(progress).toLocaleString() }); }
 
   let host = null;          // { summary(), ask(slot, payload), request(slot, payload), changed() }, given to ``init``
   let rows = [];            // compared rows of the Bill of Materials read so far
@@ -38,15 +40,15 @@
     const button = $('pub-publish');
     button.disabled = pending > 0 || !!reason;
     button.title = reason || (pending > 0
-      ? 'Review ' + pending + ' line' + (pending === 1 ? '' : 's') + ' first: choose keep both or remove on each Review line.'
-      : 'Publish the changes.');
+      ? (pending === 1 ? t('publish.review_first_one', { count: pending }) : t('publish.review_first_many', { count: pending }))
+      : t('publish.publish_title'));
   }
 
   /** Add Items needs the design to be compared with Fusion Manage (an item found, or none yet); ``reason`` says why it is not available. */
   function setAddItemsState(reason) {
     const button = $('pub-add-items');
     button.disabled = !!reason;
-    button.title = reason || 'Add Fusion Manage items to the end of the Bill of Materials.';
+    button.title = reason || t('publish.add_items_title');
   }
 
   // ---- What the area shows -------------------------------------------------------
@@ -54,8 +56,8 @@
   function clear() {
     shown = false;
     renderPills(null);
-    setAddItemsState('Waiting for the Bill of Materials.');
-    setPublishState(0, 'Waiting for the Bill of Materials.');
+    setAddItemsState(t('publish.waiting_bom'));
+    setPublishState(0, t('publish.waiting_bom'));
     const area = $('pub-bom');
     area.classList.remove('pub-loading');
     area.textContent = '';
@@ -66,9 +68,9 @@
   function status(entry) {
     const note = $('pub-bom-status');
     if (!note) return;
-    const text = entry.stage === 'comparing' ? 'Comparing with Fusion Manage...'
-      : entry.progress ? 'Reading the Bill of Materials... ' + Number(entry.progress).toLocaleString() + ' lines so far'
-      : 'Reading the Bill of Materials...';
+    const text = entry.stage === 'comparing' ? t('publish.comparing')
+      : entry.progress ? t('publish.reading_bom_lines', { count: Number(entry.progress).toLocaleString() })
+      : t('publish.reading_bom');
     if (text === statusText && note.textContent) return;   // the same words must not restart the "taking longer" timer
     statusText = text;
     ui.warnWhenSlow(note, text);   // adds a note if nothing new has been said for a long while
@@ -113,23 +115,23 @@
     folded: function () { refreshScope(); },
     incomplete: function () { return tree.unloaded().length > 0; },
     busy: function () { return treeLoading; },
-    busyText: function () { return treeProgress || READING_TREE; },
+    busyText: function () { return treeProgress || readingTree(); },
   };
 
   /** The design and Fusion Manage lines in one compare table; a row click opens its details. ``keepFolds`` leaves the assemblies open or closed as they are. */
   function show(lines, shared, keepFolds) {
     const area = clear();
     if (shared) {   // no table until the number is fixed in Fusion Manage, so open the design's details, which say so
-      showMessage('Several Fusion Manage items carry this design\'s item number. Renumber or remove the extra items in Fusion Manage, then refresh. The Bill of Materials is not compared until then.');
-      setAddItemsState('Several Fusion Manage items carry this design\'s item number: fix it in Fusion Manage first.');
-      setPublishState(0, 'Several Fusion Manage items carry this design\'s item number: fix it in Fusion Manage first.');
+      showMessage(t('publish.design_shared_message'));
+      setAddItemsState(t('publish.design_shared_fix'));
+      setPublishState(0, t('publish.design_shared_fix'));
       details.open(model.rootComponent(host.summary()));
       return;
     }
     rows = lines;
-    const addReason = fmItemId || designNew ? '' : 'Fusion Manage has not been compared with this design yet.';
+    const addReason = fmItemId || designNew ? '' : t('publish.not_compared');
     if (!lines.length && !model.stagedIds().length) {
-      showMessage('This item has no child components.');
+      showMessage(t('publish.no_children'));
       setAddItemsState(addReason);
       setPublishState(0);
       return;
@@ -174,7 +176,7 @@
   function finishKids(id, entry) {
     delete kidsLoading[id];
     if (!entry.ok) {
-      kidsFailed[id] = entry.message || 'Unknown error';
+      kidsFailed[id] = entry.message || t('publish.unknown_error');
       draw(true);
       return;
     }
@@ -195,13 +197,13 @@
 
   /** How far the whole tree is read; the tooltip of the spinning Expand all button says so. */
   function treeStatus(entry) {
-    treeProgress = entry.stage === 'comparing' ? 'Comparing with Fusion Manage...'
-      : entry.progress ? 'Reading the Bill of Materials... ' + Number(entry.progress).toLocaleString() + ' lines so far' : '';
+    treeProgress = entry.stage === 'comparing' ? t('publish.comparing')
+      : entry.progress ? t('publish.reading_bom_lines', { count: Number(entry.progress).toLocaleString() }) : '';
     const button = document.querySelector('.pub-cmp-tool-busy');
     if (button) { button.title = lazy.busyText(); button.setAttribute('aria-label', button.title); }
     if (publishAfterTree) {   // Publish is waiting on it: the dialog says how far it is
       const comparing = entry.stage === 'comparing';
-      showReading(comparing ? 'Comparing every line with Fusion Manage.' : READING_FOR_PUBLISH, !comparing && entry.progress ? Number(entry.progress).toLocaleString() + ' lines so far' : '');
+      showReading(comparing ? t('publish.comparing_every_line') : readingForPublish(), !comparing && entry.progress ? linesSoFar(entry.progress) : '');
     }
   }
 
@@ -216,7 +218,7 @@
     publishAfterTree = false;
     if (!entry.ok) {
       if (publishing) jobs.stopReading();
-      ns.toast.show('Could not read the whole Bill of Materials' + (publishing ? ', so nothing was published' : '') + ': ' + (entry.message || 'Unknown error'), { tone: 'error' });
+      ns.toast.show((publishing ? t('publish.tree_failed_publish', { message: entry.message || t('publish.unknown_error') }) : t('publish.tree_failed', { message: entry.message || t('publish.unknown_error') })), { tone: 'error' });
       draw(true);
       return;
     }
@@ -234,7 +236,7 @@
       jobs.stopReading();
     } else {
       const found = ns.bomPlan.publishPlan(rows, cover.summary).components.length;   // items, as the other steps count: the design and each component once
-      jobs.reading({ done: true, count: found.toLocaleString() + ' item' + (found === 1 ? '' : 's') + ' found', status: 'Starting the publish.' });
+      jobs.reading({ done: true, count: (found === 1 ? t('publish.items_found_one', { count: found.toLocaleString() }) : t('publish.items_found_many', { count: found.toLocaleString() })), status: t('publish.starting_publish') });
     }
     publish();   // says which lines wait for a choice, or queues the job
   }
@@ -276,16 +278,16 @@
     const plan = ns.bomPlan.publishPlan(rows, cover.summary);
     const skipped = cover.items.filter(function (item) { return item.status === 'skipped' && item.skip !== 'shared'; }).length;
     const shared = cover.items.filter(function (item) { return item.skip === 'shared'; }).length;
-    box.appendChild(pill('items', plan.components.length, ' Items', 'Items checked against Fusion Manage when you publish, and created or updated where they differ: the design and every component of it.'));
-    if (skipped) box.appendChild(pill('skipped', skipped, ' Lines Skipped', 'No item number, or below a skipped line: nothing is published for these lines, or for what is below them.'));
-    if (shared) box.appendChild(pill('skipped', shared, ' Shared Item Numbers', 'Components that carry the same item number would write to one Fusion Manage item, so none of them is published, nor what is below them. Give each its own item number in Fusion.'));
+    box.appendChild(pill('items', plan.components.length, ' ' + t('publish.pill_items'), t('publish.pill_items_tip')));
+    if (skipped) box.appendChild(pill('skipped', skipped, ' ' + t('publish.pill_skipped'), t('publish.pill_skipped_tip')));
+    if (shared) box.appendChild(pill('skipped', shared, ' ' + t('publish.pill_shared_numbers'), t('publish.pill_shared_numbers_tip')));
   }
 
   /** The table was drawn again (or an assembly opened or closed): count again what publishing covers, and whether a choice still waits. */
   function refreshScope() {
     if (!shown) { renderPills(null); return; }
     const cover = covered();
-    if (treeLoading) setPublishState(0, READING_TREE);
+    if (treeLoading) setPublishState(0, readingTree());
     else setPublishState(model.pendingReviews(cover.items));   // only lines in view wait for a choice: the others are not published
     renderPills(cover);
   }
@@ -301,14 +303,14 @@
     if (treeLoading) return;
     if (tree.unloaded().length > 0) {
       publishAfterTree = true;
-      showReading(READING_FOR_PUBLISH);
+      showReading(readingForPublish());
       loadTree();
       return;
     }
     const cover = covered();
     const pending = model.pendingReviews(cover.items);
     if (pending > 0) {
-      ns.toast.show(pending + ' line' + (pending === 1 ? ' needs' : 's need') + ' a choice before publishing: keep both or remove, on each Review line.', { tone: 'error' });
+      ns.toast.show((pending === 1 ? t('publish.needs_choice_one', { count: pending }) : t('publish.needs_choice_many', { count: pending })), { tone: 'error' });
       return;
     }
     const plan = ns.bomPlan.publishPlan(rows, cover.summary);

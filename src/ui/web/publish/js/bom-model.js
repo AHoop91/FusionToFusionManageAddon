@@ -12,6 +12,8 @@
 (function (ns) {
   'use strict';
 
+  function t(key, params) { return ns.i18n.t(key, params); }
+
   // What the user chose for each line whose item numbers differ: 'remove' (the Fusion Manage line goes,
   // the design line is added) or 'add' (keep both). Keyed by where the line sits and its two numbers
   // (see ``buildItems``), so a choice survives a redraw and lines read later. Publishing reads it.
@@ -120,7 +122,7 @@
   /** The component a line stands for, in the form publish.js opens: the design itself, or a BOM line. */
   function rootComponent(root) {
     return { id: root.component_id || '', root: true, item_number: root.item_number, part_number: root.part_number, description: root.description,
-             title: [root.item_number || root.part_number, root.name || root.description].filter(Boolean).join(' - ') || 'This design' };
+             title: [root.item_number || root.part_number, root.name || root.description].filter(Boolean).join(' - ') || t('publish.tree_this_design') };
   }
 
   function lineComponent(r) {
@@ -175,7 +177,7 @@
     const rootName = root.name || root.description || '';
     const rootPn = root.item_number || root.part_number || '';   // the item number is the master; the part number only stands in when there is none
     const items = [{ level: 0, root: true, sequence: '', status: 'root', hidden: false, component: rootComponent(root),
-                     design: { pn: rootPn, name: rootName || (rootPn ? '' : 'This design'), quantity: '', sequence: '' },
+                     design: { pn: rootPn, name: rootName || (rootPn ? '' : t('publish.tree_this_design')), quantity: '', sequence: '' },
                      fm: { pn: rootPn, name: rootName, quantity: '', sequence: '' } }];
     const repeats = {};
     let held = null;   // paired Fusion Manage line waiting for its design line, which follows it

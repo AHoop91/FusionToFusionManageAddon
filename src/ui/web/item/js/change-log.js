@@ -10,6 +10,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
   const tree = ns.itemTree;
   const CLASS = 'item-changelog';
   const ESTIMATE_PX = 56;     // the height of a row not yet drawn, until one has been measured
@@ -17,10 +18,10 @@
   const READ_AHEAD_ROWS = 30; // the next page is asked for when the view is this close to the last row
   // heading, width, and how to read the text of a cell from a row (the description column draws its own cell)
   const COLUMNS = [
-    { title: 'Date Time', width: 190, text: function (r) { return tree.formatDate(r.date); } },
-    { title: 'Changed By', width: 180, text: function (r) { return r.user; } },
-    { title: 'Action', width: 190, text: function (r) { return r.action; } },
-    { title: 'Description', width: 420, describe: true },
+    { title: function () { return t('item.log_col_date'); }, width: 190, text: function (r) { return tree.formatDate(r.date); } },
+    { title: function () { return t('item.log_col_user'); }, width: 180, text: function (r) { return r.user; } },
+    { title: function () { return t('item.log_col_action'); }, width: 190, text: function (r) { return r.action; } },
+    { title: function () { return t('item.col_description'); }, width: 420, describe: true },
   ];
   // A page with lines. Static markup.
   const LOG_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>';
@@ -54,7 +55,7 @@
   function render(target, view) {
     if (stop) { stop(); stop = null; }
     const mine = ++current;
-    tree.loading(target, CLASS, 'Reading the change log...');
+    tree.loading(target, CLASS, t('item.log_reading'));
     function read(offset, done) {
       tree.load('changelog_load', 'changelog_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, offset: offset }, function (error, page) {
         if (mine !== current) return;
@@ -62,7 +63,7 @@
       });
     }
     read(0, function (error, page) {
-      if (error) { tree.centred(target, CLASS, 'Could not read the change log: ' + error, true); return; }
+      if (error) { tree.centred(target, CLASS, t('item.log_error', { error: error }), true); return; }
       draw(target, page, read);
     });
   }
@@ -78,7 +79,7 @@
       const col = el('col');
       col.style.width = column.width + 'px';
       colgroup.appendChild(col);
-      const th = el('th', '', column.title);
+      const th = el('th', '', column.title());
       head.appendChild(th);
       cols.push(col);
       heads.push(th);
@@ -95,10 +96,10 @@
     const status = el('span', 'item-log-status muted');
     const bar = el('div', 'item-log-progress');
     bar.setAttribute('role', 'progressbar');
-    bar.setAttribute('aria-label', 'Reading more of the change log');
+    bar.setAttribute('aria-label', t('item.log_reading_more'));
     bar.appendChild(el('span'));
     bar.hidden = true;
-    const retry = el('button', 'btn btn-secondary item-log-retry', 'Try again');
+    const retry = el('button', 'btn btn-secondary item-log-retry', t('item.log_retry'));
     retry.type = 'button';
     retry.hidden = true;
     foot.append(status, bar, retry);
@@ -117,7 +118,7 @@
     function heightOf(i) { return heights[i] === undefined ? ESTIMATE_PX : heights[i]; }
 
     function showStatus() {
-      status.textContent = 'Showing ' + rows.length + ' of ' + total;
+      status.textContent = t('item.log_showing', { shown: rows.length, total: total });
       foot.hidden = !rows.length;
     }
 
@@ -173,7 +174,7 @@
         bar.hidden = true;
         if (error) {
           failed = true;
-          status.textContent = 'Could not read more: ' + error;
+          status.textContent = t('item.log_more_error', { error: error });
           retry.hidden = false;
           return;
         }
@@ -211,7 +212,7 @@
 
     if (!first.rows.length) {   // the columns stay, and the message is centred in the space under them
       foot.hidden = true;
-      tree.emptyUnder(target, LOG_ICON, 'No changes logged', 'Changes made to this item in Fusion Manage will be listed here.');
+      tree.emptyUnder(target, LOG_ICON, t('item.log_empty'), t('item.log_empty_hint'));
       return;
     }
     add(first);

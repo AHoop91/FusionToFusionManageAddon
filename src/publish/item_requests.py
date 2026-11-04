@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..config.workspace_models import StaticValue
+from ..core.i18n import t
 from ..fm.client import LOOKUPS, WORKSPACES, last_segment
 from ..fm.items import display_text
 from ..sync.property_compare import FOUND, MISMATCH, NEW
@@ -13,7 +14,11 @@ Row = Dict[str, Any]   # a compared property row: ``fm_field``, ``value``, ``sta
 Fields = List[Tuple[str, Any]]   # (field id, value) pairs, in the order they are sent
 Outcome = Tuple[Optional[Dict[str, Any]], str]   # (request, reason): a request, or None and why there is none
 
-SAME_VALUES = "Fusion Manage already has the same values."
+
+
+def same_values() -> str:
+    """Why there is no request for an item whose values Fusion Manage holds already."""
+    return t("run.request_same_values")
 
 
 def _is_option(value: Any) -> bool:
@@ -40,8 +45,7 @@ def _by_section(workspace_id: str, fields: Fields, field_sections: Dict[str, str
     """
     missing = sorted({field_id for field_id, _ in fields if field_id not in field_sections})
     if missing:
-        return None, (f"Not in any section of workspace {workspace_id}: {', '.join(missing)} "
-                      f"(the workspace lists {len(field_sections)} fields in its sections).")
+        return None, t("run.request_no_section", workspace=workspace_id, fields=", ".join(missing), count=len(field_sections))
     scope = f"{WORKSPACES}/{workspace_id}" + (f"/items/{item_id}" if item_id else "")
     by_section: Dict[str, List[Dict[str, Any]]] = {}
     for field_id, value in fields:
@@ -91,14 +95,14 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_
     elif state == FOUND:
         item_id = str(fm.get("item_id") or "")
         if not item_id:   # an update has to say which item
-            return None, "Fusion Manage found the item but did not give its id."
+            return None, t("run.request_no_id")
         fields = _of_status(rows, MISMATCH) + [(field_id, value) for field_id, value in fixed
                                                if current is None or not _holds(current.get(field_id), value)]
         if not fields and not files:
-            return None, SAME_VALUES
+            return None, same_values()
         fields += files
         method, url = "PATCH", f"{WORKSPACES}/{workspace_id}/items/{item_id}"
     else:
-        return None, fm.get("message") or f"Fusion Manage state is {state}."
+        return None, fm.get("message") or t("run.request_state", state=state)
     body, reason = _by_section(workspace_id, fields, field_sections, item_id)
     return ({"method": method, "url": url, "body": body}, "") if body else (None, reason)

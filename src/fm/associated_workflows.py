@@ -7,6 +7,7 @@ current state and the last step of its workflow history.
 from typing import Any, Dict, List
 
 from ..core.shapes import as_dict, dict_rows, dig
+from ..core.i18n import t
 from .client import WORKSPACES, FmApiError, FmClient
 from .pages import item_page
 
@@ -28,7 +29,7 @@ def parse_associated_workflows(data: Any, base_url: str) -> List[Dict[str, Any]]
     if data is None:   # 204: no workflow item references the item
         return []
     if not isinstance(data, list):
-        raise FmApiError("Fusion Manage did not return the associated workflows of this item.")
+        raise FmApiError(t("data.fm_no_associated_workflows"))
     rows = []
     for entry in dict_rows(data):
         item = as_dict(entry.get("item"))

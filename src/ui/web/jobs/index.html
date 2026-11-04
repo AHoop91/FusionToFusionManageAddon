@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Job Queue</title>
+  <title data-i18n="jobs.title">Job Queue</title>
   <!-- Shared panel styles -->
   <link rel="stylesheet" href="../shared/css/base.css">
   <link rel="stylesheet" href="../shared/css/tooltip.css">
@@ -16,7 +16,7 @@
   <!-- Top bar: the title and what the queue is doing. -->
   <header class="pub-jobs-bar">
     <div>
-      <h1 class="pub-jobs-title">Job Queue</h1>
+      <h1 class="pub-jobs-title" data-i18n="jobs.title">Job Queue</h1>
       <p id="pub-jobs-message" class="muted pub-jobs-message"></p>
     </div>
   </header>
@@ -25,7 +25,7 @@
   <div class="view">
     <div id="pub-jobs-list" class="view-scroll"></div>
     <footer class="pub-footer">
-      <button id="pub-jobs-clear" class="btn btn-secondary" type="button">Clear finished</button>
+      <button id="pub-jobs-clear" class="btn btn-secondary" type="button" data-i18n="jobs.clear_finished">Clear finished</button>
     </footer>
   </div>
 
@@ -40,39 +40,39 @@
         </div>
       </div>
       <div class="jq-toolbar">
-        <div id="jq-filters" class="jq-tabs" role="group" aria-label="Show items"></div>
-        <input id="jq-search" class="jq-search" type="search" placeholder="Find an item" aria-label="Find an item">
+        <div id="jq-filters" class="jq-tabs" role="group" aria-label="Show items" data-i18n-attr="aria-label:jobs.show_items"></div>
+        <input id="jq-search" class="jq-search" type="search" placeholder="Find an item" aria-label="Find an item" data-i18n-attr="placeholder:jobs.find_item;aria-label:jobs.find_item">
         <span id="jq-elapsed" class="jq-elapsed"></span>
       </div>
       <div class="jq-body">
         <div class="jq-table-wrap">
           <table class="jq-table">
-            <thead><tr><th></th><th>Item</th><th>Description</th></tr></thead>
+            <thead><tr><th></th><th data-i18n="jobs.item">Item</th><th data-i18n="jobs.description">Description</th></tr></thead>
             <tbody id="jq-items"></tbody>
           </table>
         </div>
         <aside id="jq-info" class="jq-info" aria-live="polite">
-          <h3 class="jq-info-head">Item details</h3>
+          <h3 class="jq-info-head" data-i18n="jobs.item_details">Item details</h3>
           <table id="jq-facts" class="jq-facts">
             <tbody>
-              <tr><th scope="row">Item</th><td id="jq-info-title"></td></tr>
-              <tr><th scope="row">Description</th><td id="jq-info-sub"></td></tr>
-              <tr><th scope="row">Status</th><td id="jq-info-status"></td></tr>
-              <tr><th scope="row">Publish</th><td id="jq-info-job"></td></tr>
+              <tr><th scope="row" data-i18n="jobs.item">Item</th><td id="jq-info-title"></td></tr>
+              <tr><th scope="row" data-i18n="jobs.description">Description</th><td id="jq-info-sub"></td></tr>
+              <tr><th scope="row" data-i18n="jobs.status">Status</th><td id="jq-info-status"></td></tr>
+              <tr><th scope="row" data-i18n="jobs.publish">Publish</th><td id="jq-info-job"></td></tr>
             </tbody>
           </table>
           <div id="jq-reason-row" class="jq-reason">
-            <h4 class="jq-reason-head">Reason</h4>
+            <h4 class="jq-reason-head" data-i18n="jobs.reason">Reason</h4>
             <p id="jq-info-reason" class="jq-reason-text"></p>
           </div>
-          <p id="jq-info-empty" class="jq-info-hint" hidden>Select an item in the table to see what happened to it.</p>
+          <p id="jq-info-empty" class="jq-info-hint" data-i18n="jobs.select_item" hidden>Select an item in the table to see what happened to it.</p>
         </aside>
       </div>
       <p id="jq-note" class="muted progress-note"></p>
       <div class="progress-actions">
-        <button id="jq-cancel" class="btn btn-secondary" type="button" hidden>Cancel publish</button>
-        <button id="jq-retry" class="btn btn-secondary" type="button" hidden>Retry</button>
-        <button id="jq-close" class="btn" type="button">Close</button>
+        <button id="jq-cancel" class="btn btn-secondary" type="button" data-i18n="jobs.cancel_publish" hidden>Cancel publish</button>
+        <button id="jq-retry" class="btn btn-secondary" type="button" data-i18n="jobs.retry" hidden>Retry</button>
+        <button id="jq-close" class="btn" type="button" data-i18n="jobs.close">Close</button>
       </div>
     </div>
   </div>
@@ -80,6 +80,7 @@
   <script src="../shared/js/dom.js"></script>
   <script src="../shared/js/tooltip.js"></script>
   <script src="../shared/js/bridge.js"></script>
+  <script src="../shared/js/i18n.js"></script>
   <script src="../publish/js/ui.js"></script>
   <script src="../publish/js/publish-jobs.js"></script>
   <script>
@@ -87,6 +88,7 @@
       // Fusion injects `adsk` asynchronously, so wait for it.
       (function start() {
         if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
+        if (!ns.i18n.gate(start)) return;
         ns.pubJobs.init();
       })();
     })(window.MfgUi);

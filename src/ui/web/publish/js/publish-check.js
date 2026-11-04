@@ -10,16 +10,23 @@
 
   const $ = ns.$;
   const details = ns.pubDetails;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   // BOM lines the design has that Fusion Manage lacks or holds differently; lines only Fusion Manage has (it extends the BOM) are ignored.
   const DIFFERING = ['new', 'changed', 'added', 'mismatch'];
-  const ISSUES = {
-    new: 'Not in Fusion Manage',
-    changed: 'Quantity differs',
-    mismatch: 'Different item at this position',
-    added: 'Added with Add Existing Items',
-  };
-  const REPORT_TITLES = { ok: 'Up to date', changes: 'Out of date', error: 'Could not check' };   // of the dialog behind the check button
+  function issueText(status) {
+    const issues = {
+      new: t('publish.issue_new'),
+      changed: t('publish.issue_changed'),
+      mismatch: t('publish.issue_mismatch'),
+      added: t('publish.issue_added'),
+    };
+    return issues[status] || status;
+  }
+  function reportTitle(state) {   // of the dialog behind the check button
+    const titles = { ok: t('publish.report_ok'), changes: t('publish.report_changes'), error: t('publish.report_error') };
+    return titles[state] || t('publish.report_default');
+  }
 
   let host = null;           // { summary(), rows(), structureLoaded(), partial() }, given to ``init``
   let rootCompare = null;    // the design's own properties compared with Fusion Manage (null until read)
@@ -27,9 +34,7 @@
   let knownNew = false;      // the BOM read found no Fusion Manage item for the design, before its properties were compared
   let report = { state: 'checking', text: '', props: [], lines: [], subject: '' };   // what the button last said, listed in its dialog
 
-  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
-
-  function quantityText(quantity) { return quantity === '' || quantity === undefined ? '-' : 'Qty ' + quantity; }
+  function quantityText(quantity) { return quantity === '' || quantity === undefined ? '-' : t('publish.qty_value', { quantity: quantity }); }
 
   /** The attributes of the design that differ, as the dialog lists them. */
   function attributeDifferences() {
@@ -48,7 +53,7 @@
       const status = model.statusOf(item);
       const different = status === 'mismatch';
       return {
-        number: item.design.pn, name: item.design.name, issue: ISSUES[status] || status, component: item.component,
+        number: item.design.pn, name: item.design.name, issue: issueText(status), component: item.component,
         fusion: different ? item.design.pn : quantityText(model.quantityOf(item)),
         fm: status === 'new' || status === 'added' ? '-' : different ? item.fm.pn : quantityText(item.fm.quantity),
       };
@@ -58,21 +63,21 @@
   /** What the button says now: ``{ state, text, props, lines }``. */
   function verdict() {
     const none = { props: [], lines: [] };
-    if (!host.structureLoaded() && !rootFailed) return Object.assign({ state: 'idle', text: 'Checking Fusion Manage...' }, none);   // hidden until the panel has loaded; the check then runs quietly
-    if (rootFailed) return Object.assign({ state: 'error', text: 'Could not check: ' + rootFailed }, none);
+    if (!host.structureLoaded() && !rootFailed) return Object.assign({ state: 'idle', text: t('publish.check_checking') }, none);   // hidden until the panel has loaded; the check then runs quietly
+    if (rootFailed) return Object.assign({ state: 'error', text: t('publish.check_failed', { message: rootFailed }) }, none);
     // The BOM read already searched Fusion Manage and found nothing: the design is new, so there is no check to wait for.
-    if (knownNew && !rootCompare) return Object.assign({ state: 'idle', text: 'Not in Fusion Manage yet: publishing creates it.' }, none);
-    if (!rootCompare) return Object.assign({ state: 'checking', text: 'Checking Fusion Manage...' }, none);
+    if (knownNew && !rootCompare) return Object.assign({ state: 'idle', text: t('publish.check_not_in_fm') }, none);
+    if (!rootCompare) return Object.assign({ state: 'checking', text: t('publish.check_checking') }, none);
     const own = details.changeState(rootCompare);
     // Not in Fusion Manage yet: nothing is out of date, so the button stays hidden.
-    if (own === 'new') return Object.assign({ state: 'idle', text: 'Not in Fusion Manage yet: publishing creates it.' }, none);
+    if (own === 'new') return Object.assign({ state: 'idle', text: t('publish.check_not_in_fm') }, none);
     const found = { props: attributeDifferences(), lines: lineDifferences() };
-    if (own === 'unknown') return Object.assign({ state: 'error', text: 'Fusion Manage could not be read.' }, found);
-    if (own === 'multiple') return Object.assign({ state: 'changes', text: 'Several Fusion Manage items carry this design\'s item number. Fix it in Fusion Manage.' }, found);
+    if (own === 'unknown') return Object.assign({ state: 'error', text: t('publish.check_unreadable') }, found);
+    if (own === 'multiple') return Object.assign({ state: 'changes', text: t('publish.check_multiple') }, found);
     if (found.props.length + found.lines.length) {
-      return Object.assign({ state: 'changes', text: plural(found.props.length, 'attribute difference') + ' and ' + plural(found.lines.length, 'Bill of Materials line') + ' to update.' }, found);
+      return Object.assign({ state: 'changes', text: t('publish.check_updates', { attributes: found.props.length === 1 ? t('publish.check_attributes_one', { count: 1 }) : t('publish.check_attributes_many', { count: found.props.length }), lines: found.lines.length === 1 ? t('publish.check_lines_one', { count: 1 }) : t('publish.check_lines_many', { count: found.lines.length }) }) }, found);
     }
-    return Object.assign({ state: 'ok', text: host.partial() ? 'The levels read so far match Fusion Manage.' : 'The design matches Fusion Manage.' }, found);
+    return Object.assign({ state: 'ok', text: host.partial() ? t('publish.check_partial_ok') : t('publish.check_ok') }, found);
   }
 
   /** Draw the button: scanning while the Bill of Materials and the design's properties are read, then what they say. */
@@ -81,9 +86,9 @@
     const count = $('pub-check-count');
     const v = verdict();
     const n = v.props.length + v.lines.length;
-    report = { state: v.state, text: v.text, props: v.props, lines: v.lines, subject: host.summary().item_number || 'this design' };
+    report = { state: v.state, text: v.text, props: v.props, lines: v.lines, subject: host.summary().item_number || t('publish.check_this_design') };
     button.dataset.state = v.state;
-    button.title = v.state === 'checking' ? v.text : v.text + ' Click for details.';
+    button.title = v.state === 'checking' ? v.text : t('publish.check_click', { text: v.text });
     button.setAttribute('aria-label', button.title);
     count.hidden = !n;
     count.textContent = n > 99 ? '99+' : String(n);
@@ -95,21 +100,21 @@
     const sections = [];
     if (report.props.length) {
       sections.push({
-        title: 'Attributes', columns: ['Property', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
+        title: t('publish.check_attributes'), columns: [t('publish.prop_col_property'), ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
         rows: report.props.map(function (p) { return { cells: [p.name, p.fusion, p.fm] }; }),
       });
     }
     if (report.lines.length) {
       sections.push({
-        title: 'Bill of Materials', columns: ['Item', 'Issue', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
+        title: t('publish.bom_title'), columns: [t('publish.col_item'), t('publish.check_issue'), ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
         rows: report.lines.map(function (l) {
           return { cells: [l.number, l.issue, l.fusion, l.fm], sub: l.name, onClick: l.component ? function () { details.open(l.component); } : null };
         }),
       });
     }
     ns.diffReport.open({
-      state: report.state, title: REPORT_TITLES[report.state] || 'Fusion Manage check', summary: report.text, sections: sections,
-      empty: report.state === 'ok' ? 'Attributes and Bill of Materials for ' + report.subject + ' are up to date.' : 'There is nothing to list.',
+      state: report.state, title: reportTitle(report.state), summary: report.text, sections: sections,
+      empty: report.state === 'ok' ? t('publish.check_all_up_to_date', { subject: report.subject }) : t('publish.check_nothing'),
     });
   }
 

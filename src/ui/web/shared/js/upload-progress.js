@@ -8,6 +8,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
   const ICON = '<svg class="upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M12 11v6M9 14h6"/></svg>';   // static markup
 
   function mount(container) {
@@ -19,9 +20,9 @@
     const head = el('div', 'upload-head');
     head.innerHTML = ICON;
     const text = el('div');
-    const title = el('h2', 'upload-title', 'Uploading');
+    const title = el('h2', 'upload-title', t('common.uploading'));
     text.appendChild(title);
-    const status = el('p', 'muted upload-status', 'Starting...');
+    const status = el('p', 'muted upload-status', t('common.starting'));
     text.appendChild(status);
     head.appendChild(text);
     const count = el('span', 'upload-count');
@@ -42,7 +43,7 @@
     function show(state) {
       const known = state.percent !== null && state.percent !== undefined;
       if (state.title) title.textContent = state.title;
-      status.textContent = state.stage ? state.stage + '...' : 'Starting...';
+      status.textContent = state.stage ? t('common.stage', { stage: state.stage }) : t('common.starting');
       count.textContent = known ? state.percent + '%' : '';
       bar.classList.toggle('indeterminate', !known);
       if (known) bar.setAttribute('aria-valuenow', String(state.percent)); else bar.removeAttribute('aria-valuenow');

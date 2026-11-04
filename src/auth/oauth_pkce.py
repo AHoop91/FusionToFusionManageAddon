@@ -17,6 +17,7 @@ import urllib.request
 from typing import Any, Dict, List
 
 from ..core.http import open_url
+from ..core.i18n import t
 from .errors import AuthError
 
 AUTHORIZE_URL = "https://developer.api.autodesk.com/authentication/v2/authorize"
@@ -65,9 +66,9 @@ def _post_token(form: Dict[str, str]) -> Dict[str, Any]:
             body = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
-        raise AuthError(f"Token request failed ({exc.code}): {detail}", rejected=exc.code in (400, 401)) from exc
+        raise AuthError(t("data.auth_token_failed", status=exc.code, detail=detail), rejected=exc.code in (400, 401)) from exc
     except (urllib.error.URLError, OSError) as exc:
-        raise AuthError(f"Could not reach Autodesk: {exc}") from exc
+        raise AuthError(t("data.auth_unreachable", reason=exc)) from exc
     body["expires_at"] = time.time() + int(body.get("expires_in", 0))
     return body
 

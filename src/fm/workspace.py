@@ -20,6 +20,7 @@ from urllib.parse import quote_plus
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceKind
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in, whole
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
 from .item_view import not_shown
@@ -77,9 +78,9 @@ def _verdict(kind: WorkspaceKind, valid: bool, message: str) -> Dict[str, Any]:
 def _explain(exc: FmApiError, workspace_id: str) -> str:
     """Why reading the workspace failed, in words for the user."""
     if exc.status == 404:
-        return f"Workspace {workspace_id} was not found."
+        return t("data.fm_workspace_not_found", workspace=workspace_id)
     if exc.status in REFUSED:
-        return f"You do not have access to workspace {workspace_id}."
+        return t("data.fm_workspace_no_access", workspace=workspace_id)
     return str(exc)
 
 
@@ -127,25 +128,25 @@ class WorkspaceService:
     def validate(self, kind: WorkspaceKind, workspace_id: str) -> Dict[str, Any]:
         """``{kind, valid, message}`` for one workspace id; a valid one also carries its ``fields``, ``picklists`` and ``fields_error``."""
         if not workspace_id.isdigit():   # the id goes into an address: nothing but digits may
-            return _verdict(kind, False, "Workspace ID must be a number.")
+            return _verdict(kind, False, t("data.fm_workspace_id_number"))
         base = f"{WORKSPACES}/{workspace_id}"
         try:
             workspace = self._client.get_json(base)
             if not isinstance(workspace, dict) or workspace.get("deleted"):
-                return _verdict(kind, False, f"Workspace {workspace_id} was not found or has been deleted.")
+                return _verdict(kind, False, t("data.fm_workspace_deleted", workspace=workspace_id))
             granted = parse_granted(self._client.get_json(f"{base}/users/@me/permissions"))
         except FmApiError as exc:
             log.warning("Workspace %s validation failed: %s", workspace_id, exc)
             return _verdict(kind, False, _explain(exc, workspace_id))
         except AuthError as exc:
-            return _verdict(kind, False, f"Not signed in: {exc}")
+            return _verdict(kind, False, t("data.fm_not_signed_in", reason=exc))
 
         name = str(workspace.get("name") or workspace_id)
         lacking = missing(kind.required_permissions, granted)
         if lacking:
-            return _verdict(kind, False, f"You need these permissions on '{name}': {', '.join(title(p) for p in lacking)}.")
+            return _verdict(kind, False, t("data.fm_workspace_lacking", name=name, missing=", ".join(title(p) for p in lacking)))
         fields, picklists, fields_error = self._fields_and_picklists(base)
-        return {**_verdict(kind, True, f"Workspace '{name}' is valid."), "fields": fields, "picklists": picklists, "fields_error": fields_error}
+        return {**_verdict(kind, True, t("data.fm_workspace_valid", name=name)), "fields": fields, "picklists": picklists, "fields_error": fields_error}
 
     def _fields_and_picklists(self, base: str) -> Tuple[List[Field], Dict[str, Options], str]:
         """The workspace's fields for the mapping picker: ``([field], {lookup: options}, error)``.
@@ -170,7 +171,7 @@ class WorkspaceService:
             data = self._client.get_json(f"{base}/fields")
         except (FmApiError, AuthError) as exc:
             log.warning("Could not load fields for %s: %s", base, exc)
-            return [], f"Could not load the workspace's fields: {exc}"
+            return [], t("data.fm_fields_failed", reason=exc)
         fields = [_field(row, field_id) for row in rows_in(data, "fields") if (field_id := last_segment(row.get("__self__")))]
         fields.sort(key=lambda f: f["title"].lower())
         return fields, ""

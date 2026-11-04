@@ -4,7 +4,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run } = require('./helpers');
+const { run, englishI18n } = require('./helpers');
 
 let JSDOM = null;
 try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
@@ -23,6 +23,7 @@ function openPicker({ matches, members = [], membersLate = false }) {
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   w.MfgUi = {};
+  w.MfgUi.i18n = englishI18n();
   const handlers = {};
   const sent = [];
   w.MfgUi.bridge = { send: (action, payload) => sent.push([action, payload || {}]), on: (action, fn) => { handlers[action] = fn; } };

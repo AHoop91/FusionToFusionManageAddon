@@ -10,18 +10,21 @@
   const ui = ns.pubUi;
   const el = ui.el;
   const model = ns.bomModel;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   // A row shows when it matches any filter that is on (all rows when none is). "hidden" is not a filter of its own: see ``visible``.
-  const FILTERS = [
-    { id: 'review',  label: 'Review',      title: 'Item number differs from Fusion Manage and no action is chosen yet' },
-    { id: 'new',     label: 'New',         title: 'Not in Fusion Manage yet, with the Fusion Manage line each is paired with' },
-    { id: 'added',   label: 'Added',       title: 'Picked with Add Existing Items: publishing adds them to the Fusion Manage BOM' },
-    { id: 'changed', label: 'Update',     title: 'Quantity differs from Fusion Manage' },
-    { id: 'extra',   label: 'Fusion Manage Only', title: 'Only in Fusion Manage' },
-    { id: 'skipped', label: 'Skipped',     title: 'No item number, a number shared with another component, or below such a line: publishing creates no item for them' },
-    { id: 'duplicate', label: 'Duplicates', title: 'Several Fusion Manage items carry this item number (found when publishing): renumber or remove the extras in Fusion Manage' },
-    { id: 'hidden',  label: 'Show Hidden Components', title: 'Hidden in the Fusion component tree', separate: true },
-  ];
+  function filters() {
+    return [
+    { id: 'review',  label: t('publish.filter_review'),      title: t('publish.filter_review_title') },
+    { id: 'new',     label: t('publish.filter_new'),         title: t('publish.filter_new_title') },
+    { id: 'added',   label: t('publish.filter_added'),       title: t('publish.filter_added_title') },
+    { id: 'changed', label: t('publish.filter_update'),     title: t('publish.filter_update_title') },
+    { id: 'extra',   label: t('publish.filter_extra'), title: t('publish.filter_extra_title') },
+    { id: 'skipped', label: t('publish.filter_skipped'),     title: t('publish.filter_skipped_title') },
+    { id: 'duplicate', label: t('publish.filter_duplicates'), title: t('publish.filter_duplicates_title') },
+    { id: 'hidden',  label: t('publish.filter_hidden'), title: t('publish.filter_hidden_title'), separate: true },
+    ];
+  }
   const on = {};   // filter id -> true while on
   let duplicates = {};   // item number (trimmed, lower case) -> true, for the numbers the check of a publish found on several Fusion Manage items
 
@@ -63,7 +66,7 @@
     trigger.type = 'button';
     trigger.setAttribute('aria-haspopup', 'true');
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.appendChild(el('span', '', 'Filters'));
+    trigger.appendChild(el('span', '', t('publish.filters')));
     const badge = el('span', 'pub-cmp-filter-count');
     trigger.appendChild(badge);
     trigger.appendChild(ui.svg(['M6 9l6 6 6-6']));
@@ -72,7 +75,8 @@
     pop.hidden = true;
     if (note) pop.appendChild(el('p', 'pub-cmp-menu-note', note));
     const boxes = {};
-    FILTERS.forEach(function (f) {
+    const list = filters();
+    list.forEach(function (f) {
       const row = el('label', 'pub-cmp-menu-item' + (f.separate ? ' pub-cmp-menu-sep' : ''));
       row.title = f.title;
       const box = el('input');
@@ -84,7 +88,7 @@
       row.appendChild(el('span', 'pub-cmp-filter-count', String(counts[f.id] || 0)));
       pop.appendChild(row);
     });
-    const clear = el('button', 'pub-cmp-menu-clear', 'Clear filters');
+    const clear = el('button', 'pub-cmp-menu-clear', t('publish.filters_clear'));
     clear.type = 'button';
     clear.addEventListener('click', function () {
       Object.keys(on).forEach(function (id) { delete on[id]; });
@@ -102,7 +106,7 @@
     }
     function paint() {
       const active = Object.keys(on).length;
-      FILTERS.forEach(function (f) { boxes[f.id].checked = !!on[f.id]; });
+      list.forEach(function (f) { boxes[f.id].checked = !!on[f.id]; });
       badge.textContent = String(active);
       badge.hidden = !active;
       trigger.classList.toggle('on', active > 0);

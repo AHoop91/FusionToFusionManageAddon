@@ -3,6 +3,7 @@
 from typing import Any, Callable, Dict, Tuple
 
 from ...config.hub import tenant_of_link
+from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ...fusion_mfg.model_service import read_manage_item, read_section
@@ -13,8 +14,14 @@ from .design_ref import model_ref
 log = get_logger("tenant_actions")
 
 ACTION = "detect_tenant_status"
-NO_DESIGN = "Open a design that is linked to a Fusion Manage item, then try again."
-NOT_LINKED = "The open design is not linked to a Fusion Manage item. Open a design that is, then try again."
+
+
+def no_design() -> str:
+    return t("app.tenant_no_design")
+
+
+def not_linked() -> str:
+    return t("app.tenant_not_linked")
 
 
 class NoDesign(Exception):
@@ -34,7 +41,7 @@ def register_tenant_actions(bridge: MessageBridge, open_model_ref: Callable[[], 
     def prepare() -> Callable[[], Dict[str, Any]]:
         model_id, saved_at = open_model_ref()
         if not model_id:
-            raise NoDesign(NO_DESIGN)
+            raise NoDesign(no_design())
         client = FusionGraphQlClient()
 
         def work() -> Dict[str, Any]:
@@ -42,7 +49,7 @@ def register_tenant_actions(bridge: MessageBridge, open_model_ref: Callable[[], 
             link = read_manage_item(client, summary, summary.get("component_id", ""), saved_at)
             tenant = tenant_of_link(link["urn"], link["url"])
             log.info("Tenant found from the open design's Fusion Manage item: %r", tenant)
-            return {"ok": bool(tenant), "tenant": tenant, "message": "" if tenant else NOT_LINKED}
+            return {"ok": bool(tenant), "tenant": tenant, "message": "" if tenant else not_linked()}
         return work
 
     def detect_tenant(_payload: Dict[str, Any]) -> Dict[str, Any]:

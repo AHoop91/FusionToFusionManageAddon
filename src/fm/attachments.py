@@ -7,6 +7,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict, dict_rows, dig, whole
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 
@@ -52,7 +53,7 @@ class AttachmentService:
         if not isinstance(dig(data, "attachments"), list):
             log.error("%s did not answer with a list of attachments; it held: %s", path,
                       sorted(data) if isinstance(data, dict) else type(data).__name__)
-            raise FmApiError("Fusion Manage did not return the list of files for this item.")
+            raise FmApiError(t("data.fm_no_file_list"))
         files = parse_files(data)
         for file in files:
             file["url"] = (f"{self._client.base_url}/plm/fileViewer?itemUrn={item_urn}&fileUrn={file['urn']}&vectorPdf=false"
@@ -86,7 +87,7 @@ class AttachmentService:
         address = str(data.get("url") or "")
         if not (attachment_id and address):
             log.error("The attachment answer held no id or upload address: %s %s", made.headers, made.data)
-            raise FmApiError("Fusion Manage did not give an address to upload the file to.")
+            raise FmApiError(t("data.fm_no_upload_address"))
         extra = as_dict(data.get("extraHeaders"))   # signed into the address, so sent exactly as given
         self._client.put_bytes(address, content, {str(k): str(v) for k, v in extra.items()}, progress=progress)
         self._client.send_json("PATCH", f"{path}/{attachment_id}", {"status": {"name": "CheckIn"}})   # the file is complete

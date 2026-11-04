@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Typed
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.items import ItemService, display_values
@@ -40,7 +41,7 @@ def _new_info(number: str, state: str = UNCHECKED, item_id: str = "") -> ItemInf
 def _unreadable(info: ItemInfo, exc: Exception) -> ItemLookup:
     """The lookup when Fusion Manage could not be read: its state is ``unknown`` and there are no values."""
     log.warning("Fusion Manage lookup failed: %s", exc)
-    info.update(state=UNKNOWN, message=f"Could not read Fusion Manage: {exc}")
+    info.update(state=UNKNOWN, message=t("run.compare_unreadable", error=exc))
     return ItemLookup(info, None)
 
 
@@ -59,10 +60,10 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, fou
     number = item_number_of(summary)
     info = _new_info(number)
     if not cfg.workspace_id:
-        info["message"] = "Set the Items workspace ID in Settings to compare with Fusion Manage."
+        info["message"] = t("run.compare_no_workspace")
         return ItemLookup(info, None)
     if not number:
-        info["message"] = "This component has no item number to look up in Fusion Manage."
+        info["message"] = t("run.compare_no_number")
         return ItemLookup(info, None)
     values = None
     try:
@@ -78,8 +79,7 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, fou
     elif picked:
         info.update(state=FOUND, item_id=picked["id"])
     else:
-        info.update(state=MULTIPLE, message=f"{len(hits)} Fusion Manage items carry the item number {number}. "
-                                            "Renumber or remove the extra items in Fusion Manage.",
+        info.update(state=MULTIPLE, message=t("run.compare_multiple", count=len(hits), number=number),
                     candidates=[{k: v for k, v in hit.items() if k != "values"} for hit in hits])   # the list, not the values
     return ItemLookup(info, values)
 

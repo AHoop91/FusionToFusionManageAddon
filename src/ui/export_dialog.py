@@ -22,8 +22,9 @@ from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
 from ..config.hub_context import HubContext, HubContexts
-from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID
+from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID, kind_texts
 from ..core.cancel import Cancelled
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.components import ComponentService
@@ -37,8 +38,9 @@ from .ui_thread import UiThread
 
 log = get_logger("export_dialog")
 
-ITEM_NOT_CONFIGURED = "Item is not configured. Complete it in Preferences."
-LABELS = {ITEM: "Item", COMPONENT: "Component"}
+def _label(destination: str) -> str:
+    """What the window calls a destination."""
+    return t("app.destination_component") if destination == COMPONENT else t("app.destination_item")
 
 
 def _document() -> str:
@@ -83,18 +85,18 @@ class ExportDialog:
         if context is None:
             return {key: reason for key in (ITEM, COMPONENT)}, None
         connection = " ".join(context.settings.validate())
-        return {ITEM: ITEM_NOT_CONFIGURED if context.items_problem else "",
-                COMPONENT: f"{connection} Complete it in Preferences." if connection else ""}, context
+        return {ITEM: t("app.item_not_configured") if context.items_problem else "",
+                COMPONENT: t("app.complete_in_preferences", problem=connection) if connection else ""}, context
 
     @staticmethod
     def _item_denial(client: FmClient, context: HubContext) -> str:
         kind = KINDS_BY_ID[ITEMS_KIND]
-        return denial(client, context.cfg.workspace_id, ATTACH_PERMISSIONS, kind.title, "attach files to")
+        return denial(client, context.cfg.workspace_id, ATTACH_PERMISSIONS, kind_texts(kind)[0], "attach files to")
 
     def _component_denial(self, client: FmClient) -> str:
         workspace_id = ComponentService(client).workspace_id()
         if not workspace_id:
-            return "No workspace called Components could be found in Fusion Manage."
+            return t("app.no_components_workspace")
         return denial(client, workspace_id, ATTACH_PERMISSIONS, "Components", "attach files to")
 
     @staticmethod
@@ -105,10 +107,10 @@ class ExportDialog:
         except Cancelled:   # the window was closed
             raise
         except (FmApiError, AuthError) as exc:
-            return f"Permissions could not be checked: {exc}"
+            return t("app.export_permissions_failed", reason=exc)
         except Exception as exc:  # noqa: BLE001 - shown to the user, never raised into a thread nobody watches
             log.exception("Could not check the permissions")
-            return f"Permissions could not be checked: {exc}"
+            return t("app.export_permissions_failed", reason=exc)
 
     def _check_access(self, setup: Dict[str, str], context: HubContext) -> None:
         """Read the user's permissions in the workspaces that are set up (a worker thread), then tell the page. A destination that is not set
@@ -128,7 +130,7 @@ class ExportDialog:
         except Exception as exc:  # noqa: BLE001 - as above
             log.exception("Could not start the permission check")
             for key in reasons:
-                reasons[key] = reasons[key] or f"Permissions could not be checked: {exc}"
+                reasons[key] = reasons[key] or t("app.export_permissions_failed", reason=exc)
         log.info("Export permissions: %s", reasons)
         self._tasks.post(lambda: self._checked(reasons, context.stamp))
 
@@ -143,7 +145,7 @@ class ExportDialog:
         """What the window shows: the formats of the open document, the destinations (why one is off, or that it is still being checked), and
         what is exported."""
         document = _document()
-        number, problem = self._panel.export_target() if document else ("", "Open a design or a drawing to export.")
+        number, problem = self._panel.export_target() if document else ("", t("app.open_to_export"))
         setup, context = self._setup()
         if context and self._access and self._access_stamp != context.stamp:   # read under other settings than those now active: not to be shown
             self._access = {}
@@ -155,7 +157,7 @@ class ExportDialog:
         destinations = []
         for key in (ITEM, COMPONENT):
             reason = setup[key] or self._access.get(key, "")
-            destinations.append({"key": key, "label": LABELS[key], "reason": reason,
+            destinations.append({"key": key, "label": _label(key), "reason": reason,
                                  "checking": not reason and key not in self._access})
         usable = [d["key"] for d in destinations if not d["reason"] and not d["checking"]]
         exports = self._config.config.exports
@@ -181,7 +183,7 @@ class ExportDialog:
         (``export_files_found``, with the format and destination asked about, so the page can tell it from an answer to an earlier choice)."""
         key, destination = str(payload.get("format") or ""), str(payload.get("destination") or "")
         if key not in formats_for(_document()) or destination not in (ITEM, COMPONENT):
-            raise ValueError("Choose a format and where to attach the file.")
+            raise ValueError(t("app.export_choose_format_destination"))
 
         def found(result: Dict[str, Any]) -> None:
             message = json.dumps({"ok": True, "result": dict(result, format=key, destination=destination), "error": None})
@@ -194,15 +196,15 @@ class ExportDialog:
         """Start the export the window asked for; raises (shown in the window) when what it asked for cannot be done now."""
         key, destination = str(payload.get("format") or ""), str(payload.get("destination") or "")
         if key not in formats_for(_document()):
-            raise ValueError("That format cannot be made from the open document. It may have changed: open the window again.")
+            raise ValueError(t("app.export_format_unavailable"))
         if destination not in (ITEM, COMPONENT):
-            raise ValueError("Choose where to attach the file.")
+            raise ValueError(t("app.export_choose_destination"))
         setup, context = self._setup()
         if context and self._access and self._access_stamp != context.stamp:
-            raise ValueError("Your settings changed. Open the window again.")
+            raise ValueError(t("app.export_settings_changed"))
         reason = setup[destination] or self._access.get(destination)
         if reason is None:
-            raise ValueError("Your permissions are still being checked. Try again in a moment.")
+            raise ValueError(t("app.export_permissions_checking"))
         if reason:
             raise ValueError(reason)
         number = str(payload.get("target") or "")   # what the window shows is what is exported, whatever is selected in Fusion now

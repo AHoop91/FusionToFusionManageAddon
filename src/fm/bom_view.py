@@ -11,6 +11,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Set
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict, dict_rows, dig, whole
 from .bom import ACCEPT, WORKING_BIAS, split_title
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
@@ -130,7 +131,7 @@ def _columns(rows: List[Dict[str, Any]], titles: Dict[str, str], kinds: Dict[str
 def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, kinds: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """``{"rows": [line], "columns": [{"id", "title"}]}``: one line, the item itself (``root``), with the BOM lines as its ``children`` in BOM order."""
     if not (isinstance(dig(data, "nodes"), list) and isinstance(dig(data, "edges"), list)):
-        raise FmApiError("Fusion Manage did not return the Bill of Materials.")
+        raise FmApiError(t("data.fm_no_bom"))
     nodes = {str(dig(n, "item", "urn") or ""): n for n in dict_rows(data["nodes"]) if isinstance(n.get("item"), dict)}
     root = nodes.get(root_urn, {})
     kinds = kinds or {}
@@ -257,6 +258,6 @@ class BomViewService:
         fields = self._client.get_json(f"{address}/fields") if address else None
         titles = parse_viewdef(fields)
         if not titles and dict_rows(dig(data, "edges")):
-            raise FmApiError("Fusion Manage did not name the columns of the Bill of Materials.")
+            raise FmApiError(t("data.fm_no_bom_columns"))
         return parse_bom(data, titles, self._client.base_url, root_urn, parse_kinds(fields))
 

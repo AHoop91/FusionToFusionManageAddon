@@ -14,7 +14,7 @@ from src.core.cancel import Cancelled
 from src.fm.client import FmApiError
 from src.publish import runner
 from src.publish.runner import ITEMS, VALIDATING, PublishRun, SharedItemNumbers, _needs_matching
-from src.publish.sender import CUT_OFF
+from src.publish.sender import cut_off_text
 from src.publish.states import CANCELLED, DONE, ERROR, RUNNING
 from src.publish.writer import FAILED, OK, SKIPPED, PublishFolder
 from src.sync.property_compare import FOUND, MATCH, MISMATCH, NEW
@@ -272,7 +272,7 @@ class BomTests(RunTestCase):
     def test_a_parent_cut_off_by_the_cancel_says_it_may_have_been_done(self):
         run, bom_row, lines = self.sending(send_bom=mock.Mock(side_effect=Cancelled()))
         run._send_bom("A", lines)
-        self.assertEqual((bom_row["status"], bom_row["detail"]), (CANCELLED, CUT_OFF))
+        self.assertEqual((bom_row["status"], bom_row["detail"]), (CANCELLED, cut_off_text()))
 
     def test_nothing_is_sent_for_a_parent_once_the_run_is_cancelled(self):
         run, bom_row, lines = self.sending(send_bom=mock.Mock())

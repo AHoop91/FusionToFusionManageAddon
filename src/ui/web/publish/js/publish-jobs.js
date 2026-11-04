@@ -11,6 +11,7 @@
   const $ = ns.$;
   const bridge = ns.bridge;
   const ui = ns.pubUi;
+  const t = ns.i18n.t;
 
   const ACTIONS = ['start_publish', 'list_publish_jobs', 'cancel_publish', 'clear_publish_jobs', 'retry_publish'];
   const POLL_MS = 1000;
@@ -31,29 +32,51 @@
 
   // Status icons (24x24 strokes): a grey clock (waiting), a blue clock (running), a red cross (failed), a grey cross (cancelled), and in the details of a job a tick (done) and a dash (skipped).
   const ICONS = {
-    queued:    { title: 'Queued', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
-    running:   { title: 'Running', paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
-    error:     { title: 'Failed', paths: ['M6 6l12 12', 'M18 6L6 18'] },
-    cancelled: { title: 'Cancelled', paths: ['M6 6l12 12', 'M18 6L6 18'] },
-    done:      { title: 'Done', paths: ['M5 12.5l4.5 4.5L19 7.5'] },
-    skipped:   { title: 'Skipped', paths: ['M6 12h12'] },
+    queued:    { paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
+    running:   { paths: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', 'M12 7v5l3 2'] },
+    error:     { paths: ['M6 6l12 12', 'M18 6L6 18'] },
+    cancelled: { paths: ['M6 6l12 12', 'M18 6L6 18'] },
+    done:      { paths: ['M5 12.5l4.5 4.5L19 7.5'] },
+    skipped:   { paths: ['M6 12h12'] },
   };
+
+  /** What a status is called, beside its icon. */
+  function statusTitle(status) {
+    switch (status) {
+      case 'running': return t('jobs.status_running');
+      case 'error': return t('jobs.status_failed');
+      case 'cancelled': return t('jobs.status_cancelled');
+      case 'done': return t('jobs.status_done');
+      case 'skipped': return t('jobs.status_skipped');
+      default: return t('jobs.status_queued');
+    }
+  }
 
   /** The status a job shows in the list: its phase, except that a finished job with failed rows reads as failed. */
   function jobStatus(job) { return job.phase === 'done' && failedRows(job) ? 'error' : job.phase; }
 
-  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+  /** "1 item", "3 items". */
+  function itemsText(n) { return n === 1 ? t('jobs.items_one', { n: n }) : t('jobs.items_other', { n: n }); }
+
+  /** "1 step", "2 steps". */
+  function stepsText(n) { return n === 1 ? t('jobs.steps_one', { n: n }) : t('jobs.steps_other', { n: n }); }
+
+  /** "1 request", "40 requests". */
+  function requestsText(n) { return n === 1 ? t('jobs.requests_one', { n: n }) : t('jobs.requests_other', { n: n }); }
+
+  /** "1 item number", "5 item numbers". */
+  function numbersText(n) { return n === 1 ? t('jobs.numbers_one', { n: n }) : t('jobs.numbers_other', { n: n }); }
 
   /** The line under a job's name in the list: where it stands, in a sentence. The details window has the rest. */
   function jobLine(job) {
     const total = job.total || 0;
     const counts = tally(job);
-    if (job.phase === 'queued') return 'Waiting' + (job.place ? ', number ' + job.place + ' in the queue' : '') + '.';
-    if (job.phase === 'running' && job.stage === 'bom') return 'Updating the Bill of Materials, ' + bomCount(job) + '.';
-    if (job.phase === 'running') return job.stage === 'validating' ? 'Checking item numbers.' : total ? 'Publishing ' + job.done + ' of ' + plural(total, 'item') + '.' : 'Publishing.';
-    if (job.phase === 'cancelled') return 'Cancelled. ' + (counts.successful ? counts.successful + ' of ' + plural(total, 'item') + ' published.' : 'Nothing was published.');
-    if (job.phase === 'error') return counts.failed ? 'Failed. ' + counts.failed + ' of ' + plural(total, 'item') + ' failed.' : 'Failed.';
-    return failedRows(job) ? 'Completed with errors. ' + plural(failedRows(job), 'step') + ' failed.' : 'Complete.';
+    if (job.phase === 'queued') return job.place ? t('jobs.line_waiting_place', { place: job.place }) : t('jobs.line_waiting');
+    if (job.phase === 'running' && job.stage === 'bom') return t('jobs.line_bom', { count: bomCount(job) });
+    if (job.phase === 'running') return job.stage === 'validating' ? t('jobs.line_checking') : total ? t('jobs.line_publishing_of', { done: job.done, items: itemsText(total) }) : t('jobs.line_publishing');
+    if (job.phase === 'cancelled') return counts.successful ? t('jobs.line_cancelled_some', { n: counts.successful, items: itemsText(total) }) : t('jobs.line_cancelled_none');
+    if (job.phase === 'error') return counts.failed ? t('jobs.line_failed_of', { n: counts.failed, items: itemsText(total) }) : t('jobs.line_failed');
+    return failedRows(job) ? t('jobs.line_with_errors', { steps: stepsText(failedRows(job)) }) : t('jobs.line_complete');
   }
 
   /** Does the job still have something to show? One that went through leaves the list. */
@@ -69,14 +92,14 @@
   function jobActions(job) {
     const cell = ui.el('td');
     if (!isFinished(job)) {
-      const cancel = ui.el('button', 'pub-outline-button', 'Cancel');
+      const cancel = ui.el('button', 'pub-outline-button', t('jobs.cancel_row'));
       cancel.type = 'button';
       cancel.addEventListener('click', function (e) { e.stopPropagation(); bridge.send('cancel_publish', { id: job.id }); });
       cell.appendChild(cancel);
     } else if (canRetry(job)) {
-      const retry = ui.el('button', 'pub-outline-button', 'Retry');
+      const retry = ui.el('button', 'pub-outline-button', t('jobs.retry'));
       retry.type = 'button';
-      retry.title = 'Send the failed requests to Fusion Manage again. What it already accepted is skipped.';
+      retry.title = t('jobs.retry_tip');
       retry.addEventListener('click', function (e) { e.stopPropagation(); retry.disabled = true; bridge.send('retry_publish', { id: job.id }); });
       cell.appendChild(retry);
     }
@@ -89,17 +112,17 @@
     const tr = ui.el('tr', 'pub-job-click');
     tr.tabIndex = 0;
     tr.setAttribute('role', 'button');
-    tr.title = 'Show the details';
+    tr.title = t('jobs.show_details');
     const icon = ICONS[status] || ICONS.queued;
     const mark = ui.el('td', 'pub-job-status pub-job-' + status);
     const label = ui.el('span', 'pub-job-status-box');
     label.appendChild(ui.svg(icon.paths, 16));
-    label.appendChild(ui.el('span', '', icon.title));
+    label.appendChild(ui.el('span', '', statusTitle(status)));
     mark.appendChild(label);
     tr.appendChild(mark);
     tr.appendChild(ui.el('td', 'pub-job-item', job.name));
     tr.appendChild(ui.el('td', 'pub-job-line', jobLine(job)));
-    tr.appendChild(ui.el('td', 'pub-job-time', elapsedText(job).replace('Elapsed ', '') || '-'));
+    tr.appendChild(ui.el('td', 'pub-job-time', elapsedClock(job) || '-'));
     tr.appendChild(jobActions(job));
     tr.addEventListener('click', function () { openDetails(job.id); });
     tr.addEventListener('keydown', function (e) {
@@ -116,12 +139,16 @@
     const cancelled = jobs.filter(function (j) { return j.phase === 'cancelled'; }).length;
     if (!running && !waiting) {
       const kept = [];
-      if (cancelled) kept.push(cancelled + ' cancelled publish' + (cancelled === 1 ? '' : 'es'));
-      if (failed) kept.push(failed + ' failed item' + (failed === 1 ? '' : 's'));
-      if (!kept.length) return 'Nothing in the queue. Publish an item and it appears here.';
-      return 'Nothing is waiting. ' + kept.join(' and ') + (cancelled + failed === 1 ? ' stays' : ' stay') + ' here until cleared.';
+      if (cancelled) kept.push(cancelled === 1 ? t('jobs.kept_cancelled_one', { n: cancelled }) : t('jobs.kept_cancelled_other', { n: cancelled }));
+      if (failed) kept.push(failed === 1 ? t('jobs.kept_failed_one', { n: failed }) : t('jobs.kept_failed_other', { n: failed }));
+      if (!kept.length) return t('jobs.queue_empty');
+      const what = kept.length === 2 ? t('jobs.kept_both', { first: kept[0], second: kept[1] }) : kept[0];
+      return cancelled + failed === 1 ? t('jobs.kept_stays', { what: what }) : t('jobs.kept_stay', { what: what });
     }
-    return [running ? running + ' running' : '', waiting ? waiting + ' waiting' : ''].filter(Boolean).join(', ') + '. Publishing runs in the background.';
+    const counts = [];
+    if (running) counts.push(t('jobs.count_running', { n: running }));
+    if (waiting) counts.push(t('jobs.count_waiting', { n: waiting }));
+    return t('jobs.queue_active', { counts: counts.length === 2 ? t('jobs.counts_both', { first: counts[0], second: counts[1] }) : counts[0] });
   }
 
   function renderList() {
@@ -131,7 +158,7 @@
     box.textContent = '';
     const table = ui.el('table', 'pub-job-rows');
     const head = ui.el('tr');
-    ['Status', 'Job', 'Progress', 'Time', ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
+    [t('jobs.status'), t('jobs.col_job'), t('jobs.col_progress'), t('jobs.col_time'), ''].forEach(function (text) { head.appendChild(ui.el('th', '', text)); });
     table.appendChild(head);
     let shown = 0;
     jobs.slice().reverse().forEach(function (job) {   // newest first
@@ -150,7 +177,6 @@
   let filter = 'all';   // which items the table lists: 'all' or one status
   let query = '';   // text an item's number or description must contain
   let selected = '';   // item number whose details show at the side
-  const NO_REASON = 'No reason was given.';
   const STATUS_ORDER = ['error', 'skipped', 'cancelled', 'running', 'queued', 'done'];
 
   function detailJob() { return jobs.filter(function (j) { return j.id === detailId; })[0] || null; }
@@ -170,7 +196,7 @@
     if (!$('jq-detail').hidden) $('jq-close').focus();
   }
 
-  function reasonOf(row) { return row.detail || NO_REASON; }
+  function reasonOf(row) { return row.detail || t('jobs.no_reason'); }
 
   function statusOf(row) { return ICONS[row.status] ? row.status : 'queued'; }
 
@@ -188,14 +214,14 @@
     const box = $('jq-filters');
     box.textContent = '';
     const rows = job.rows || [];
-    const entries = [['all', 'All', rows.length]];
+    const entries = [['all', t('jobs.filter_all'), rows.length]];
     STATUS_ORDER.forEach(function (status) {
       const n = rows.filter(function (row) { return statusOf(row) === status; }).length;
-      if (n) entries.push([status, ICONS[status].title, n]);
+      if (n) entries.push([status, statusTitle(status), n]);
     });
     if (!entries.some(function (entry) { return entry[0] === filter; })) filter = 'all';
     entries.forEach(function (entry) {
-      const button = ui.el('button', 'jq-tab', entry[1] + ' (' + entry[2] + ')');
+      const button = ui.el('button', 'jq-tab', t('jobs.filter_count', { label: entry[1], n: entry[2] }));
       button.type = 'button';
       button.setAttribute('aria-pressed', String(entry[0] === filter));
       button.addEventListener('click', function () { filter = entry[0]; renderDetails(); });
@@ -218,7 +244,7 @@
     const body = $('jq-items');
     body.textContent = '';
     if (!rows.length) {
-      const empty = ui.el('td', 'muted jq-empty', 'No items match.');
+      const empty = ui.el('td', 'muted jq-empty', t('jobs.no_match'));
       empty.colSpan = 3;
       body.appendChild(ui.el('tr')).appendChild(empty);
       return;
@@ -230,7 +256,7 @@
       tr.setAttribute('aria-selected', String(row.item === selected));
       const mark = ui.el('td', 'jq-icon');
       mark.appendChild(ui.svg(ICONS[statusOf(row)].paths, 16));
-      mark.title = ICONS[statusOf(row)].title;
+      mark.title = statusTitle(statusOf(row));
       tr.appendChild(mark);
       tr.appendChild(ui.el('td', 'jq-name', row.item || '-'));
       tr.appendChild(ui.el('td', 'jq-text', row.description || ''));
@@ -251,18 +277,18 @@
     const status = statusOf(row);
     $('jq-info-title').textContent = row.item || '-';
     $('jq-info-sub').textContent = row.description || '-';
-    $('jq-info-status').textContent = ICONS[status].title;
+    $('jq-info-status').textContent = statusTitle(status);
     $('jq-info-status').className = 'jq-' + status;
     $('jq-info-job').textContent = job.name;
-    const why = status === 'cancelled' ? 'The publish was cancelled before this item was sent.' : (status === 'error' || status === 'skipped') ? reasonOf(row) : '';
+    const why = status === 'cancelled' ? t('jobs.reason_cancelled') : (status === 'error' || status === 'skipped') ? reasonOf(row) : '';
     $('jq-info-reason').textContent = why;
     $('jq-reason-row').hidden = !why;
   }
 
   /** What the details say after the list of items: what happened to the work, and what to do next. */
   function detailNote(job) {
-    if (job.phase === 'cancelled') return 'Items already sent stay in Fusion Manage. The rest were not published: publish the design again to send them.';
-    if (job.phase === 'error' || (isFinished(job) && failedRows(job))) return 'Retry sends the failed requests again. What Fusion Manage already accepted is skipped.';
+    if (job.phase === 'cancelled') return t('jobs.note_cancelled');
+    if (job.phase === 'error' || (isFinished(job) && failedRows(job))) return t('jobs.note_failed');
     return '';
   }
 
@@ -274,7 +300,7 @@
     if (!job || !listed(job)) { closeDetails(); return; }
     const view = describe(job);
     $('jq-title').textContent = view.title;
-    $('jq-status').textContent = (view.status || '').replace(' See the Job Queue for the reasons.', '');
+    $('jq-status').textContent = job.phase === 'done' && failedRows(job) ? failureSummary(job) : (view.status || '');
     $('jq-badge').className = 'pub-badge pub-badge-' + badgeOf(view, job);
     $('jq-elapsed').textContent = elapsedText(job);
     const wrap = document.querySelector('.jq-table-wrap');
@@ -318,10 +344,16 @@
     return h ? h + ':' + String(m).padStart(2, '0') + ':' + sec : m + ':' + sec;
   }
 
-  /** "Elapsed 0:07": the time since the job started, counting up while it runs and fixed once it ends ("" while it waits). */
-  function elapsedText(job) {
+  /** "0:07": the time since the job started, counting up while it runs and fixed once it ends ("" while it waits). */
+  function elapsedClock(job) {
     if (!job || !job.started_at) return '';
-    return 'Elapsed ' + clock((job.finished_at || Date.now() / 1000) - job.started_at);
+    return clock((job.finished_at || Date.now() / 1000) - job.started_at);
+  }
+
+  /** "Elapsed 0:07": the same, in a phrase ("" while the job waits). */
+  function elapsedText(job) {
+    const time = elapsedClock(job);
+    return time ? t('jobs.elapsed', { time: time }) : '';
   }
 
   /**
@@ -337,10 +369,10 @@
 
   /** What a running job says it is doing: items are prepared several at a time, so no single one is "the" item being processed. */
   function runningStatus(job) {
-    if (job.stage === 'validating') return 'Looking up every item number in Fusion Manage before anything is written.';
-    if (job.stage === 'bom') return 'Updating the Bill of Materials.';
-    if (!job.done && !(job.rows || []).some(function (row) { return row.status === 'running'; })) return 'Reading the design and checking Fusion Manage.';
-    return job.sends ? 'Checking and updating items in Fusion Manage.' : 'Checking items and preparing their requests.';
+    if (job.stage === 'validating') return t('jobs.run_validating');
+    if (job.stage === 'bom') return t('jobs.run_bom');
+    if (!job.done && !(job.rows || []).some(function (row) { return row.status === 'running'; })) return t('jobs.run_reading');
+    return job.sends ? t('jobs.run_sending') : t('jobs.run_preparing');
   }
 
   /**
@@ -350,40 +382,46 @@
   function validation(job) {
     const found = job.validation || { done: 0, total: 0 };
     const looking = job.stage === 'validating';
-    const words = found.total + ' item number' + (found.total === 1 ? '' : 's');
-    if (!looking) return { percent: 100, count: found.total ? words + ' checked' : '', tone: 'ok' };
+    const words = numbersText(found.total);
+    if (!looking) return { percent: 100, count: found.total ? t('jobs.validation_checked', { numbers: words }) : '', tone: 'ok' };
     if (job.phase === 'queued') return { percent: 0, count: '', tone: '' };
     const percent = found.total ? Math.round(found.done * 100 / found.total) : null;
     const failed = job.phase === 'error';
-    return { percent: failed && percent === null ? 0 : percent, count: found.total ? found.done + ' of ' + words : '', tone: failed ? 'error' : '' };
+    return { percent: failed && percent === null ? 0 : percent, count: found.total ? t('jobs.validation_progress', { done: found.done, numbers: words }) : '', tone: failed ? 'error' : '' };
   }
 
   /** What the dialog says for a job: title, status line, count line, the publishing bar (percent or null while waiting) and tone. */
   function describe(job) {
     const total = job.total || 0;
-    const count = total ? job.done + ' of ' + total + ' items' : '';
+    const count = total ? t('jobs.count_items', { done: job.done, total: total }) : '';
     if (job.phase === 'queued') {
-      return { title: 'Added to the publishing queue', status: job.place > 1 ? 'Waiting, number ' + job.place + ' in the queue.' : 'Waiting to start.', count: count, percent: null, tone: '' };
+      return { title: t('jobs.title_queued'), status: job.place > 1 ? t('jobs.line_waiting_place', { place: job.place }) : t('jobs.waiting_to_start'), count: count, percent: null, tone: '' };
     }
     const validating = job.stage === 'validating';
     if (job.phase === 'running') {   // at the Bill of Materials every item is done: it goes last
-      return { title: 'Publishing ' + job.name, status: runningStatus(job), count: validating ? 'Waiting for validation' : count,
+      return { title: t('jobs.title_publishing', { name: job.name }), status: runningStatus(job), count: validating ? t('jobs.waiting_validation') : count,
                percent: validating ? 0 : publishPercent(job), tone: '' };
     }
     if (job.phase === 'error') {   // a failure in the validation leaves nothing published: its own bar is the red one
-      return { title: validating ? 'Validation failed' : 'Publish failed', status: job.message || 'The publish could not be completed.', count: validating ? 'Not started' : '',
+      return { title: validating ? t('jobs.title_validation_failed') : t('jobs.title_failed'), status: job.message || t('jobs.failed_default'), count: validating ? t('jobs.not_started') : '',
                percent: validating ? 0 : 100, tone: validating ? '' : 'error' };
     }
-    if (job.phase === 'cancelled') return { title: 'Publish cancelled', status: job.name + ' was not published.', count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
+    if (job.phase === 'cancelled') return { title: t('jobs.title_cancelled'), status: t('jobs.not_published', { name: job.name }), count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
     if (failedRows(job)) {
-      const items = failedRows(job, total);
-      const parts = [];
-      if (items) parts.push(items + ' of ' + total + ' item' + (total === 1 ? '' : 's') + ' failed.');
-      if (bomFailed(job)) parts.push('The Bill of Materials was not updated.');
-      return { title: 'Completed with errors', status: parts.join(' ') + ' See the Job Queue for the reasons.', count: count, percent: 100, tone: 'error' };
+      return { title: t('jobs.title_with_errors'), status: t('jobs.see_queue', { summary: failureSummary(job) }), count: count, percent: 100, tone: 'error' };
     }
-    return { title: 'Publish complete', percent: 100, tone: 'ok', count: count,
-             status: job.sends ? job.name + ' was published to Fusion Manage.' : job.name + ' is ready. The requests were written for review; nothing has been sent to Fusion Manage yet.' };
+    return { title: t('jobs.title_complete'), percent: 100, tone: 'ok', count: count,
+             status: job.sends ? t('jobs.published', { name: job.name }) : t('jobs.ready', { name: job.name }) };
+  }
+
+  /** What failed in a job that finished with errors: the items, then the Bill of Materials. */
+  function failureSummary(job) {
+    const total = job.total || 0;
+    const items = failedRows(job, total);
+    const parts = [];
+    if (items) parts.push(total === 1 ? t('jobs.items_failed_one', { n: items, total: total }) : t('jobs.items_failed_other', { n: items, total: total }));
+    if (bomFailed(job)) parts.push(t('jobs.bom_not_updated'));
+    return parts.join(' ');
   }
 
   /** The tally under the bar: items by result, hidden when there is no job to count. It belongs to the publishing, so it is hidden through the validation. Skipped shows only when something was left out. */
@@ -405,7 +443,7 @@
   /** How far the Bill of Materials has come, in requests (an add, update, removal or renumber each), as the sentence "12 of 40 requests". */
   function bomCount(job) {
     const sent = job.bom || { done: 0, total: 0 };
-    return sent.done + ' of ' + plural(sent.total, 'request');
+    return t('jobs.bom_count', { done: sent.done, requests: requestsText(sent.total) });
   }
 
   /**
@@ -462,8 +500,8 @@
     $('validate-count').textContent = percentText(check.percent, check.count);
     showBar('validate', check.percent, check.tone);
     $('progress-note').textContent = active
-      ? 'You can close this window. Publishing continues in the background and you can follow it in Job Queue on the Fusion Manage tab.'
-      : (job && !stoppedInValidation(job) && !isClean(job) ? 'Details are in Job Queue on the Fusion Manage tab.' : '');
+      ? t('jobs.note_background')
+      : (job && !stoppedInValidation(job) && !isClean(job) ? t('jobs.note_details') : '');
     if (!active) confirming = false;
     $('progress-confirm').hidden = !confirming;
     $('progress-actions').hidden = confirming;
@@ -555,14 +593,14 @@
   let release = null;   // gives the Publish button back while Python checks the permissions and queues the run (it says it is starting meanwhile)
 
   function handleStart(r) {
-    const s = r.ok ? r.result : { error: r.error || 'Could not publish.' };
+    const s = r.ok ? r.result : { error: r.error || t('jobs.could_not_publish_error') };
     if (s.checking) return;   // the answer comes later, pushed as start_publish_result
     if (release) release();
     release = null;
     if (s.error) {
       watched = '';
       endReading();
-      showProgress({ title: 'Could not publish', status: s.error, count: '', percent: 100, tone: 'error' }, null);
+      showProgress({ title: t('jobs.could_not_publish'), status: s.error, count: '', percent: 100, tone: 'error' }, null);
       return;
     }
     if (s.cancelled) {   // the folder dialog was cancelled: the dialog that was waiting for the job goes
@@ -582,7 +620,7 @@
   function reading(step, onClose) {
     readStep = { percent: step.done ? 100 : null, count: step.count || '', tone: step.done ? 'ok' : '', done: !!step.done };
     onAbandon = onClose || null;
-    showProgress({ title: step.done ? 'Starting the publish' : 'Reading the Bill of Materials', status: step.status, count: '', percent: 0, tone: '' }, null);
+    showProgress({ title: step.done ? t('jobs.title_starting') : t('jobs.title_reading_bom'), status: step.status, count: '', percent: 0, tone: '' }, null);
   }
 
   /** Forget the read step: the dialog goes on without it. */
@@ -600,7 +638,7 @@
 
   /** Queue a publish of ``payload`` (summary, items, operations); Python asks for the folder first. */
   function start(payload) {
-    release = ui.busy($('pub-publish'), 'Starting...');
+    release = ui.busy($('pub-publish'), t('jobs.starting'));
     bridge.send('start_publish', Object.assign({ stamp: stamp }, payload));
   }
 

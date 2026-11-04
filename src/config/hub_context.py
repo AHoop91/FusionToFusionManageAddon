@@ -15,9 +15,10 @@ from functools import cached_property
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from .config_service import ConfigService
 from .models import ConnectionSettings
-from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceConfig
+from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceConfig, kind_texts
 
 log = get_logger("hub_context")
 
@@ -38,8 +39,8 @@ class HubContext:
     @property
     def items_problem(self) -> str:
         """Why the Items workspace cannot be used yet ("" when its settings are complete)."""
-        title = KINDS_BY_ID[ITEMS_KIND].title
-        return self.cfg.setup_problem(title) if self.cfg else f"The {title} workspace ID is not set."
+        title = kind_texts(KINDS_BY_ID[ITEMS_KIND])[0]
+        return self.cfg.setup_problem(title) if self.cfg else t("data.ws_id_not_set", title=title)
 
     @cached_property
     def stamp(self) -> str:
@@ -53,7 +54,7 @@ class HubContext:
         """Why the request does not belong to this context ("" when it does): the panel names the stamp of what it read the design under."""
         if str(payload.get("stamp") or "") == self.stamp:
             return ""
-        return "The Fusion hub, its settings or the signed-in user changed since this was read. Refresh the panel and try again."
+        return t("data.hub_context_changed")
 
 
 class HubContexts:

@@ -17,6 +17,7 @@
   const filters = ns.bomFilters;
   const columns = ns.bomColumns;
   const decisions = model.decisions;
+  function t(key, params) { return ns.i18n.t(key, params); }
   const SLOT = cells.SLOT;
 
   let selectedId = null;   // component whose details are open, so its rows stay highlighted across redraws
@@ -77,8 +78,8 @@
   /** Collapse all and expand all, as a pair. ``busy``: the rest of the tree is on its way, so there is nothing to fold yet. */
   function foldTools(collapseAll, expandAll, busy, busyText) {
     const pair = el('div', 'pub-cmp-pair');
-    const collapse = foldTool('collapse', 'Collapse all', collapseAll);
-    const expand = foldTool('expand', 'Expand all', expandAll);
+    const collapse = foldTool('collapse', t('publish.collapse_all'), collapseAll);
+    const expand = foldTool('expand', t('publish.expand_all'), expandAll);
     if (busy) {
       collapse.disabled = expand.disabled = true;
       expand.classList.add('pub-cmp-tool-busy');   // the button itself spins; how far it is goes in its tooltip
@@ -116,8 +117,8 @@
     td.colSpan = 4;
     const line = el('div', 'pub-cmp-fail-line');
     line.style.paddingLeft = (item.iconX + SLOT) + 'px';
-    line.appendChild(el('span', 'pub-cmp-fail-text', 'Could not read this level: ' + message));
-    const again = el('button', 'pub-cmp-fail-retry', 'Retry');
+    line.appendChild(el('span', 'pub-cmp-fail-text', t('publish.read_level_failed', { message: message })));
+    const again = el('button', 'pub-cmp-fail-retry', t('publish.retry'));
     again.type = 'button';
     again.addEventListener('click', retry);
     line.appendChild(again);
@@ -215,7 +216,7 @@
       const reading = unread(i) && opened.has(foldKey(i)) && lazy.loading(lineOf(i));   // opened, and its lines are on their way
       spinning[i] = reading;
       toggle.appendChild(reading ? el('span', 'pub-spin') : ui.chevron());
-      toggle.setAttribute('aria-label', reading ? 'Reading the lines of this assembly' : 'Collapse or expand');
+      toggle.setAttribute('aria-label', reading ? t('publish.reading_lines') : t('publish.collapse_or_expand'));
       toggle.disabled = reading;
       toggle.addEventListener('click', function () {
         const key = foldKey(i);
@@ -240,8 +241,8 @@
       if (!fmOnly && item.design && item.design.pn) tr.dataset.number = item.design.pn;   // the item-number check marks the row of its item (markChecks)
       if (item.status === 'extra' && decisions[item.key] === 'remove') tr.classList.add('pub-cmp-removing');
       tr.appendChild(cells.itemCell(fmOnly ? item.fm : item.design, item, isAssembly(i), toggle, cells.rowActions(item, redraw), cells.statusChip(item, false)));
-      tr.appendChild(cells.presenceCell(!fmOnly, 'the design'));
-      tr.appendChild(cells.presenceCell(!['new', 'mismatch', 'added', 'linked', 'uncompared', 'skipped'].includes(item.status), 'Fusion Manage'));
+      tr.appendChild(cells.presenceCell(!fmOnly, 'design'));
+      tr.appendChild(cells.presenceCell(!['new', 'mismatch', 'added', 'linked', 'uncompared', 'skipped'].includes(item.status), 'fm'));
       tr.appendChild(cells.quantityCell(item, redraw));
       if (item.component && (item.root || item.component.id !== '')) {
         tr.classList.add('pub-cmp-pick');
@@ -262,8 +263,8 @@
       const cell = cells.itemCell(item.fm, Object.assign({}, item, { hidden: false }), false, spacer, cells.pairActions(item, redraw), cells.statusChip(item, true));
       cell.querySelector('.pub-tree-pn').classList.add('pub-cmp-diff');
       tr.appendChild(cell);
-      tr.appendChild(cells.presenceCell(false, 'the design'));
-      tr.appendChild(cells.presenceCell(true, 'Fusion Manage'));
+      tr.appendChild(cells.presenceCell(false, 'design'));
+      tr.appendChild(cells.presenceCell(true, 'fm'));
       tr.appendChild(el('td', 'num pub-cmp-qty', item.fm.quantity));
       return tr;
     }
@@ -280,8 +281,8 @@
     const busy = !!(lazy && lazy.busy());   // the rest of the tree is being read, for Expand all or for publishing
     const bar = el('div', 'pub-cmp-filters');
     bar.setAttribute('role', 'group');
-    bar.setAttribute('aria-label', 'Filter the Bill of Materials');
-    bar.appendChild(filters.menu(items, apply, lazy && lazy.incomplete() ? 'Counts cover the levels read so far. Expand all reads the rest.' : ''));   // the counts only know what has been read
+    bar.setAttribute('aria-label', t('publish.filter_bom'));
+    bar.appendChild(filters.menu(items, apply, lazy && lazy.incomplete() ? t('publish.counts_note') : ''));   // the counts only know what has been read
     bar.appendChild(foldTools(function () { foldAll(false); }, function () {
       if (lazy && lazy.incomplete()) lazy.expandAll(); else foldAll(true);
     }, busy, busy ? lazy.busyText() : ''));
@@ -326,11 +327,11 @@
 
   // ---- The check of the item numbers when publishing: each row shows what was found for its item number
   let marks = {};   // item number (trimmed, lower case) -> checking, ok or review
-  const MARK_TITLES = {
-    checking: 'Checking Fusion Manage for items with this number',
-    ok: 'One Fusion Manage item has this number, or none',
-    review: 'Several Fusion Manage items have this number. Renumber or remove the extra items in Fusion Manage, then refresh.',
-  };
+  function markTitle(state) {
+    if (state === 'checking') return t('publish.mark_checking');
+    if (state === 'ok') return t('publish.mark_ok');
+    return state === 'review' ? t('publish.mark_review') : '';
+  }
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -353,7 +354,7 @@
 
   function paintMarks(root) {
     if (!root) return;
-    const any = Object.keys(marks).some(function (key) { return MARK_TITLES[marks[key]]; });
+    const any = Object.keys(marks).some(function (key) { return markTitle(marks[key]); });
     root.classList.toggle('pub-has-ring', any);   // room for the rings at the start of each row
     root.querySelectorAll('tr[data-number]').forEach(function (tr) {
       const cell = tr.querySelector('.pub-tree-cell');
@@ -362,11 +363,11 @@
       const state = marks[tr.dataset.number.trim().toLowerCase()];
       if (old && old.dataset.state === state) return;   // already drawn
       if (old) old.remove();
-      if (!MARK_TITLES[state]) return;
+      if (!markTitle(state)) return;
       const mark = el('span', 'pub-ring pub-ring-' + state);
       mark.dataset.state = state;
-      mark.title = MARK_TITLES[state];
-      mark.setAttribute('aria-label', MARK_TITLES[state]);
+      mark.title = markTitle(state);
+      mark.setAttribute('aria-label', markTitle(state));
       mark.appendChild(ring(state));
       cell.insertBefore(mark, cell.firstChild);   // the first thing in the row, before the chevron
     });

@@ -13,6 +13,7 @@ import time
 from typing import Any, Dict, Optional
 
 from ..core.cancel import ADDIN, CancelToken
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict
 from ..core.timing import Stopwatch
@@ -75,10 +76,10 @@ def data_of(payload: Any) -> Dict[str, Any]:
         extensions = as_dict(first.get("extensions"))
         status = as_dict(extensions.get("http")).get("status")
         transient = extensions.get("code") in TRANSIENT_CODES or status in RETRY_HTTP
-        raise MfgApiError(str(first.get("message") or "GraphQL error"), transient=transient, code=str(extensions.get("code") or ""))
+        raise MfgApiError(str(first.get("message") or t("data.mfg_graphql_error")), transient=transient, code=str(extensions.get("code") or ""))
     data = answer.get("data")
     if not isinstance(data, dict):
-        raise MfgApiError("Manufacturing Data Model returned no data.")
+        raise MfgApiError(t("data.mfg_no_data"))
     return data
 
 
@@ -120,12 +121,13 @@ class FusionGraphQlClient:
             detail = _text_of(response)[:HTTP_DETAIL_CHARS]
             log.error("GraphQL HTTP %s from %s: %s", response.statusCode, FUSION_GRAPHQL_URL, detail)
             reason = _reason_in(detail)
-            raise MfgApiError(f"Manufacturing Data Model returned {response.statusCode}" + (f": {reason}" if reason else ""),
+            raise MfgApiError(t("data.mfg_returned_status_reason", status=response.statusCode, reason=reason) if reason
+                              else t("data.mfg_returned_status", status=response.statusCode),
                               transient=response.statusCode in RETRY_HTTP)
         try:
             payload = json.loads(response.data)
         except ValueError as exc:
-            raise MfgApiError("Manufacturing Data Model returned an answer that was not understood.", transient=True) from exc
+            raise MfgApiError(t("data.mfg_not_understood"), transient=True) from exc
         cost = as_dict(payload).get("extensions")   # says what the query cost in points
         log.debug("graphql %s: %.2fs, %d bytes%s", name, seconds, len(response.data),
                   f", extensions {json.dumps(cost)[:EXTENSIONS_LOG_CHARS]}" if cost else "")
@@ -158,11 +160,11 @@ class FusionGraphQlClient:
         while not done.wait(POLL_SECONDS):
             self.cancel.check()
             if time.monotonic() > deadline:
-                raise MfgApiError(f"Manufacturing Data Model did not answer within {REQUEST_TIMEOUT_SECONDS} seconds.", transient=True)
+                raise MfgApiError(t("data.mfg_timeout", seconds=REQUEST_TIMEOUT_SECONDS), transient=True)
         self.cancel.check()
         error = outcome.get("error")
         if isinstance(error, RuntimeError):
-            raise MfgApiError(f"Fusion could not send the request: {error}", transient=True) from error
+            raise MfgApiError(t("data.mfg_send_failed", reason=error), transient=True) from error
         if error is not None:
             raise error
         return outcome["response"]

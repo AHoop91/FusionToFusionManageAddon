@@ -10,6 +10,7 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.client import FmClient
 from ..fm.items import ItemService
@@ -113,7 +114,7 @@ class ReadAhead:
             raise ValueError(f"Component {component_id!r} was not read ahead: it has no item number, or is not one of the run's items.")
         found = future.result().get(component_id)
         if found is None:   # the run was cancelled before its request was made, or the Data Model left the component out of its answer
-            raise RuntimeError("Cancelled." if self._cancelled() else f"The Data Model gave nothing for component {component_id}.")
+            raise RuntimeError(t("run.job_cancelled") if self._cancelled() else t("run.read_nothing", id=component_id))
         if isinstance(found, Exception):
             raise found
         return found

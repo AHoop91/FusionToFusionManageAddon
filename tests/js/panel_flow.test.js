@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const { pageScripts, run, PUBLISH_HTML } = require('./helpers');
+const { englishI18n, pageScripts, run, PUBLISH_HTML } = require('./helpers');
 
 let JSDOM = null;
 try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
@@ -28,6 +28,7 @@ function openPanel() {
   const ns = w.MfgUi;
   const panel = { w: w, sent: [], handlers: {}, started: [], authChanged: null, own: 'match' };   // own: what the details say of the design's own state
   ns.bridge = { send: (action, payload) => panel.sent.push([action, payload || {}]), on: (action, fn) => { panel.handlers[action] = fn; } };
+  ns.i18n = englishI18n();
   ns.shell = { mountHeader() {} };
   ns.account = { init() {} };
   ns.auth = { init() {}, refresh() {}, onChange: (fn) => { panel.authChanged = fn; } };
@@ -44,7 +45,7 @@ function openPanel() {
   };
   const scripts = pageScripts();
   scripts.filter((src) => /(^|\/)dom\.js$/.test(src)).forEach((src) => run(w, src));
-  Object.assign(ns, { bridge: ns.bridge, shell: ns.shell, account: ns.account, auth: ns.auth, diffReport: ns.diffReport });   // dom.js made a fresh namespace's helpers; keep the stand-ins
+  Object.assign(ns, { bridge: ns.bridge, i18n: ns.i18n, shell: ns.shell, account: ns.account, auth: ns.auth, diffReport: ns.diffReport });   // dom.js made a fresh namespace's helpers; keep the stand-ins
   scripts.filter((src) => /\/ui\.js$|toast\.js$/.test(src)).forEach((src) => run(w, src));
   scripts.filter((src) => /\/bom-[a-z-]+\.js$|publish-check|publish-bom/.test(src)).forEach((src) => run(w, src));
   run(w, 'js/publish.js');

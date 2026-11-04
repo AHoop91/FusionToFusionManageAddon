@@ -9,21 +9,27 @@
 
   const el = ns.el;
   const svg = ns.svg;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   // ---- Tree icons and chevrons -------------------------------------------------
 
   const CUBE = ['M12 3l8 4.5v9L12 21l-8-4.5v-9z', 'M4 7.5l8 4.5 8-4.5', 'M12 12v9'];
   const TREE_ICONS = {
-    root:     { title: 'This design', paths: ['M5 3h11l3 3v15H5z', 'M8 3v6h7V3', 'M8 21v-7h8v7'] },
-    assembly: { title: 'Assembly', paths: CUBE },
-    part:     { title: 'Part', paths: CUBE },
+    root:     { paths: ['M5 3h11l3 3v15H5z', 'M8 3v6h7V3', 'M8 21v-7h8v7'] },
+    assembly: { paths: CUBE },
+    part:     { paths: CUBE },
   };
+
+  function treeIconTitle(kind) {
+    if (kind === 'root') return t('publish.tree_this_design');
+    return kind === 'assembly' ? t('publish.tree_assembly') : t('publish.tree_part');
+  }
 
   /** Icon in a grey square: the design, an assembly (has children) or a part. */
   function treeIcon(kind) {
     const icon = TREE_ICONS[kind];
     const box = el('span', 'pub-tree-icon pub-tree-icon-' + kind);
-    box.title = icon.title;
+    box.title = treeIconTitle(kind);
     box.appendChild(svg(icon.paths, 16));
     return box;
   }
@@ -53,7 +59,7 @@
     caption.textContent = text;
     slowTimers.set(caption, setTimeout(function () {
       if (caption.isConnected && !caption.closest('[hidden]')) {
-        caption.textContent = text + ' This may take a moment.';
+        caption.textContent = text + ' ' + t('publish.slow_note');
       }
     }, SLOW_MS));
   }
@@ -63,12 +69,12 @@
     const box = el('div', 'loader');
     const balls = el('div', 'balls');
     balls.setAttribute('role', 'status');
-    balls.setAttribute('aria-label', 'Loading');
+    balls.setAttribute('aria-label', t('publish.loading_aria'));
     for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
     box.appendChild(balls);
     const caption = el('p', 'muted');
     box.appendChild(caption);
-    warnWhenSlow(caption, 'Loading...');
+    warnWhenSlow(caption, t('publish.loading'));
     return box;
   }
 
@@ -78,9 +84,9 @@
     const card = el('div', 'card pub-empty pub-error-state');
     // A clock for a timeout, a warning triangle for anything else.
     card.appendChild(svg(timedOut ? ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 7v5l3 2'] : ['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
-    card.appendChild(el('h4', 'pub-error-title', timedOut ? 'Timed out' : 'Could not load'));
-    card.appendChild(el('p', 'muted', timedOut ? 'The request took too long. Please try again.' : (message || 'Unknown error')));
-    const retry = el('button', 'pub-outline-button pub-retry', 'Retry');
+    card.appendChild(el('h4', 'pub-error-title', timedOut ? t('publish.error_timed_out') : t('publish.error_could_not_load')));
+    card.appendChild(el('p', 'muted', timedOut ? t('publish.error_timeout_text') : (message || t('publish.unknown_error'))));
+    const retry = el('button', 'pub-outline-button pub-retry', t('publish.retry'));
     retry.type = 'button';
     retry.addEventListener('click', onRetry);
     card.appendChild(retry);

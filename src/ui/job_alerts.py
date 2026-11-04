@@ -7,13 +7,11 @@ the box is shown later on Fusion's main thread.
 
 import adsk.core
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from .ui_thread import UiThread
 
 log = get_logger("job_alerts")
-
-FAILED_TITLE = "Publish failed"
-DONE_TITLE = "Publish complete"
 
 
 class JobAlerts:
@@ -23,10 +21,12 @@ class JobAlerts:
         self._ui = ui
         self._tasks = tasks
 
-    def alert(self, message: str, title: str = FAILED_TITLE) -> None:
+    def alert(self, message: str, title: str = "") -> None:
+        title = title or t("app.alert_failed_title")
         self._tasks.post(lambda: self._show(message, title, adsk.core.MessageBoxIconTypes.WarningIconType))
 
-    def done(self, message: str, title: str = DONE_TITLE) -> None:
+    def done(self, message: str, title: str = "") -> None:
+        title = title or t("app.alert_done_title")
         self._tasks.post(lambda: self._show(message, title, adsk.core.MessageBoxIconTypes.InformationIconType))
 
     def _show(self, message: str, title: str, icon) -> None:

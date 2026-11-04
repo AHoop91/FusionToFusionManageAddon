@@ -61,11 +61,10 @@ class HubRoles:
             return _answer(ROLE_UNKNOWN)
         with self._lock:
             if refresh:
-                self._kept.pop(key, None)
                 self._failed_at.pop(key, None)
             now = self._clock()
             kept = self._kept.get(key)
-            if kept and now - kept[1] < KEPT_SECONDS:
+            if kept and now - kept[1] < KEPT_SECONDS and not refresh:   # a refresh reads again, but the old answer stays for is_admin until the new one is in
                 return _answer(kept[0])
             if key in self._running:
                 return {"state": PENDING, "role": ""}
@@ -76,6 +75,25 @@ class HubRoles:
             hub_name = self._config.hub_name
         self._run(lambda: self._read(key, hub_name))   # outside the lock: a runner may do the work at once, and the read takes the lock
         return {"state": PENDING, "role": ""}
+
+    def is_admin(self) -> bool:
+        """Is the user a Hub Admin of the active hub, as last read? False when the role is not known (yet) or a member's. An answer older than
+        ``KEPT_SECONDS`` still counts (the panel can stay open longer than that, and refusing an admin for it is wrong) while a read in the
+        background makes it fresh; it never waits for the network itself."""
+        email = self._user_email()
+        key = (self._config.hub_id, email.strip().lower())
+        if not key[0] or not key[1]:
+            return False
+        with self._lock:
+            kept = self._kept.get(key)
+            admin = bool(kept and kept[0].known and kept[0].admin)
+            old = bool(kept and self._clock() - kept[1] >= KEPT_SECONDS)
+        if admin and old:
+            self.get()   # starts the read again, and answers at once
+        if not admin:
+            with self._lock:
+                log.info("Not confirmed as a Hub Admin: asked for %r, roles read for %r", key, sorted(self._kept))
+        return admin
 
     def _data_model_hub_id(self, client: FusionGraphQlClient, fusion_hub_id: str, hub_name: str) -> str:
         """The Data Model's id of the hub, asked for once."""
@@ -106,8 +124,8 @@ class HubRoles:
             self._bridge.push(ACTION, _answer(role))
 
 
-def register_hub_actions(bridge: MessageBridge, config: ConfigService) -> None:
-    """Register ``get_hub_role``."""
+def register_hub_actions(bridge: MessageBridge, config: ConfigService) -> HubRoles:
+    """Register ``get_hub_role``. Answers the roles, for what only a Hub Admin may do."""
     roles = HubRoles(bridge, config)
     bridge.register(ACTION, lambda payload: roles.get(bool(payload.get("refresh"))))
 
@@ -115,3 +133,4 @@ def register_hub_actions(bridge: MessageBridge, config: ConfigService) -> None:
         roles.get()
     except Exception:  # noqa: BLE001 - a head start, nothing more
         log.exception("Could not start reading the hub role")
+    return roles

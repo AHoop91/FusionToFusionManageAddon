@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.cancel import Cancelled
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict, as_list
 from ..fm.client import FmApiError, FmClient, SendResult
@@ -36,17 +37,22 @@ from .states import CANCELLED, DONE, ERROR, RUNNING
 log = get_logger("publish_send")
 
 DUPLICATE_LINE = "error.bom.duplicate"   # Fusion Manage's answer to adding an item the BOM already has
-CUT_OFF = "Cancelled while it was being sent: Fusion Manage may have done it. Sending again checks first."
-CANCELLED_PREFIX = "Cancelled"   # how the detail of a send that the cancel stopped between requests begins (see ``send_bom``)
 BOM_REQUESTS = 5   # Bill of Materials requests of one parent in flight at once
 WRITES = 5   # requests that change Fusion Manage in flight at once, across items and every parent's Bill of Materials
 _ITEM_ID = re.compile(r"/items/(\d+)")
 _TENANT = re.compile(r"item:([^.]+)\.")
 
 
+def cut_off_text() -> str:
+    """The detail of a step a cancel ended while it was being sent."""
+    return t("run.send_cut_off")
+
+
 def was_cancelled(detail: str) -> bool:
-    """Whether the detail ``send_bom`` gave says the cancel stopped it between requests."""
-    return detail.startswith(CANCELLED_PREFIX)
+    """Whether the detail ``send_bom`` gave says the cancel stopped it between requests: it is the text of ``send_bom`` for that, with the
+    count filled in, so it is known by what comes before and after the count in the language in use."""
+    before, _, after = t("run.send_bom_cancelled", sent="\x00").partition("\x00")
+    return detail.startswith(before) and detail.endswith(after)
 
 
 def _read(path: str) -> Any:
@@ -54,7 +60,7 @@ def _read(path: str) -> Any:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
     except (OSError, ValueError) as exc:
-        raise FolderError(f"Could not read {os.path.basename(path)}: {exc}") from exc
+        raise FolderError(t("run.send_file_unreadable", name=os.path.basename(path), error=exc)) from exc
 
 
 def _in_folder(folder: str, relative: str) -> str:
@@ -65,14 +71,14 @@ def _in_folder(folder: str, relative: str) -> str:
     except ValueError:   # another drive
         inside = False
     if not inside:
-        raise FolderError(f"The manifest names a file outside the folder: {relative}")
+        raise FolderError(t("run.send_file_outside", name=relative))
     return path
 
 
 def _request(name: str, data: Any) -> Dict[str, Any]:
     """A request read from a file, which has to have what a send uses: its method and its url."""
     if not isinstance(data, dict) or not isinstance(data.get("method"), str) or not isinstance(data.get("url"), str):
-        raise FolderError(f"{name} is not a request: it has no method and url.")
+        raise FolderError(t("run.send_not_request", name=name))
     return data
 
 
@@ -81,10 +87,10 @@ def load_plan(path: str) -> Dict[str, Any]:
 
     Raises ``FolderError`` for a folder that is not one, was written by an older version, or holds a file that is not what it says."""
     if not os.path.isfile(os.path.join(path, "manifest.json")):
-        raise FolderError("This is not a publish folder: manifest.json is missing.")
+        raise FolderError(t("run.send_not_folder"))
     manifest = _read(os.path.join(path, "manifest.json"))
     if not isinstance(manifest, dict) or not isinstance(manifest.get("items"), dict):
-        raise FolderError("This folder was written by an older version. Publish again to send it.")
+        raise FolderError(t("run.send_older_folder"))
     items = []
     for number, info in manifest["items"].items():
         relative = as_dict(info).get("request")
@@ -152,7 +158,7 @@ class Dispatcher:
         shown = self._shown.get(number.casefold(), number)
         hits = self._search.search(self._workspace_id, shown)
         if len(hits) > 1:
-            raise FmApiError(f"Item {shown} matches {len(hits)} items in Fusion Manage, so it cannot be told whether the cancelled send created it.")
+            raise FmApiError(t("run.send_created_unclear", item=shown, count=len(hits)))
         return hits[0]["id"] if hits else ""
 
     def send_item(self, number: str, request: Dict[str, Any]) -> str:
@@ -163,7 +169,7 @@ class Dispatcher:
             if self._sent.done(key):
                 log.debug("Item %s was sent before, skipped", number)
                 self.learn(number, str(self._sent.entry(key).get("id") or ""))
-                return "Already sent."
+                return t("run.send_already_sent")
             doubtful = self._sent.in_doubt(key)
         if doubtful and method == "POST":   # an update can be sent again; a create may have made the item
             existing = self._created_before(number)
@@ -171,7 +177,7 @@ class Dispatcher:
                 with self._lock:
                     self.learn(number, existing)
                 self._sent.accept(key, {"id": existing})
-                return "Already created: found in Fusion Manage after a cancelled send."
+                return t("run.send_already_created")
         intended = method == "POST" and not doubtful   # an entry of its own is logged first: a crash while the create is under way leaves it in doubt
         if intended:
             self._sent.intend(key)
@@ -199,7 +205,7 @@ class Dispatcher:
         with self._lock:
             self.learn(number, new_id)
         self._sent.accept(key, {"id": new_id})
-        return f"{method} {result.status}" + ("" if new_id else "; the answer did not give the new id")
+        return f"{method} {result.status}" if new_id else t("run.send_no_new_id", method=method, status=result.status)
 
     def _diagnose(self, url: str) -> None:
         """After a refused update, log what the item itself says about its sections and state, to see why the request was refused."""
@@ -227,7 +233,7 @@ class Dispatcher:
         """
         with self._lock:
             if parent.casefold() in self._failed:
-                raise FmApiError(f"Item {parent} was not created, so its Bill of Materials was not sent.")
+                raise FmApiError(t("run.send_parent_not_created", item=parent))
         indexed = list(enumerate(requests))
         changes = [(i, r) for i, r in indexed if r["method"] != "POST"]   # removals and updates
         additions = [(i, r) for i, r in indexed if r["method"] == "POST"]
@@ -236,8 +242,8 @@ class Dispatcher:
             if batch:
                 sent += self._send_batch(parent, batch, len(requests), cancelled, progress)
                 if cancelled():
-                    return f"{CANCELLED_PREFIX} after {sent} request(s)."
-        return f"{len(requests)} request(s) sent."
+                    return t("run.send_bom_cancelled", sent=sent)
+        return t("run.send_bom_sent", count=len(requests))
 
     def _send_batch(self, parent: str, batch: List[Tuple[int, Dict[str, Any]]], count: int, cancelled: Callable[[], bool],
                     progress: Callable[[], None]) -> int:
@@ -282,7 +288,7 @@ class Dispatcher:
             failed.set()
             log.warning("Sending the Bill of Materials of %s failed at request %d: %s", parent, index + 1, exc)
             if isinstance(exc, FmApiError):   # which request, and the status it was refused with
-                raise FmApiError(f"Request {index + 1} of {count}: {exc}", exc.status) from exc
+                raise FmApiError(t("run.send_request_failed", number=index + 1, count=count, error=exc), exc.status) from exc
             raise
         self._sent.accept(key, {})
         progress()
@@ -295,11 +301,11 @@ class Dispatcher:
         with self._lock:
             shown = self._shown.get(number, number)
             if number in self._failed:
-                raise FmApiError(f"Item {shown} was not created.")
+                raise FmApiError(t("run.send_item_not_created", item=shown))
             if not self._ids.get(number):
                 hits = self._search.search(self._workspace_id, shown)
                 if len(hits) != 1:
-                    raise FmApiError(f"Item {shown} " + ("is not in Fusion Manage." if not hits else f"matches {len(hits)} items in Fusion Manage."))
+                    raise FmApiError(t("run.send_item_missing", item=shown) if not hits else t("run.send_item_ambiguous", item=shown, count=len(hits)))
                 self._ids[number] = hits[0]["id"]
             return self._ids[number]
 
@@ -338,7 +344,9 @@ class SendRun(JobState):
     kind = "send"
     sends = True
     stage = "sending"
-    unreached = "Not sent: the send failed."
+    @property
+    def unreached(self) -> str:
+        return t("run.send_not_sent")
 
     def __init__(self, path: str, plan: Dict[str, Any], fm: FmClient) -> None:
         manifest = plan["manifest"]
@@ -346,8 +354,8 @@ class SendRun(JobState):
         self.plan = plan
         self._dispatcher = Dispatcher(path, fm.with_cancel(self.token), str(manifest.get("workspace_id") or ""),   # cancelling ends a request under way
                                       {number: str(info.get("id") or "") for number, info in manifest["items"].items()})
-        self.rows = ([self.row(i["number"], "Create item" if i["request"]["method"] == "POST" else "Update item") for i in plan["items"]] +
-                     [self.row(b["parent"], f"Bill of Materials, {len(b['requests'])} request(s)") for b in plan["boms"]])
+        self.rows = ([self.row(i["number"], t("run.send_create_item") if i["request"]["method"] == "POST" else t("run.send_update_item")) for i in plan["items"]] +
+                     [self.row(b["parent"], t("run.bom_row", count=len(b["requests"]))) for b in plan["boms"]])
         self.total = len(self.rows)
 
     # ---- Worker thread ----------------------------------------------------------
@@ -374,7 +382,7 @@ class SendRun(JobState):
             row["detail"] = action()
             row["status"] = CANCELLED if self.cancelled and was_cancelled(row["detail"]) else DONE
         except Cancelled:
-            row["status"], row["detail"] = CANCELLED, CUT_OFF
+            row["status"], row["detail"] = CANCELLED, cut_off_text()
             raise
         except (FmApiError, AuthError, Unresolved) as exc:
             row["status"], row["detail"] = ERROR, str(exc)

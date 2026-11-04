@@ -23,7 +23,7 @@ from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
 from ..config.hub_context import HubContext, HubContexts
 from ..core.cancel import Cancelled, CancelToken
-from ..core.constants import ITEM_COMMAND_NAME
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.attachments import NEW_VERSION, AttachmentService
 from ..fm.client import FmClient
@@ -37,6 +37,7 @@ from ..publish.writer import safe_name
 from .export_freshness import compare
 from .item_numbers import Subject
 from .palette_host import PaletteHost
+from .ui_text import item_command_name
 from .ui_thread import UiThread
 
 log = get_logger("attachment_upload")
@@ -58,7 +59,7 @@ class UploadJob:
     confirm: Callable[[adsk.core.UserInterface, Subject], bool]   # whether the open document may be attached as the file of this item (UI thread)
 
     def stage(self, step: int) -> str:
-        return ("Finding the item", f"Creating the {self.label}", f"Uploading the {self.label}")[step]
+        return (t("app.stage_find"), t("app.stage_create", label=self.label), t("app.stage_upload", label=self.label))[step]
 
 
 class AttachmentUpload:
@@ -98,17 +99,17 @@ class AttachmentUpload:
         nothing and showing the progress window. UI thread."""
         context, reason = self._contexts.attempt()
         if context is None:
-            self._ui.messageBox(f"Could not attach a {job.label}:\n{reason}", ITEM_COMMAND_NAME)
+            self._ui.messageBox(t("app.upload_could_not_attach", label=job.label, reason=reason), item_command_name())
             return
         if not self._begin(job, FIND):
-            self._ui.messageBox("A file is already being uploaded.", ITEM_COMMAND_NAME)
+            self._ui.messageBox(t("app.upload_busy"), item_command_name())
             return
         self._window_open = True
         try:
             self._window.show()
         except Exception as exc:  # noqa: BLE001 - the upload is already marked as under way: end it, or no other could start
             log.exception("Could not show the upload window")
-            self._fail(f"Could not attach a {job.label}:\n{exc}")
+            self._fail(t("app.upload_could_not_attach", label=job.label, reason=exc))
             return
         threading.Thread(target=self._find_then_make, args=(job, context, subject, destination), daemon=True).start()
 
@@ -140,7 +141,7 @@ class AttachmentUpload:
             return
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
             log.exception("Could not find the %s of %s to attach a %s to", destination, number, job.label)
-            self._fail(f"Could not attach a {job.label}:\n{exc}")
+            self._fail(t("app.upload_could_not_attach", label=job.label, reason=exc))
             return
         log.info("Found the %s of %s in %.2fs", destination, number, time.monotonic() - began)
         self._tasks.post(lambda: self._make(job, context, workspace_id, item_id, subject, destination))
@@ -149,14 +150,14 @@ class AttachmentUpload:
         """``(workspace id, item id)`` of the working version of the item numbered ``number`` in the Items workspace: a released version
         cannot have files attached."""
         if context.items_problem:
-            raise ValueError(f"{context.items_problem} Complete it in Preferences.")
+            raise ValueError(t("app.complete_in_preferences", problem=context.items_problem))
         workspace_id = context.cfg.workspace_id
         hits = ItemService(FmClient(context.settings, self._auth, cancel), WORKING).search(workspace_id, number)
         if not hits:
-            raise LookupError(f"No item exists for {number}.")
+            raise LookupError(t("app.no_item_for_number", number=number))
         picked, competing = self._choices.resolve(workspace_id, number, hits)
         if picked is None:   # the choice is made in the Item panel, which lists the items; a file is not attached to one of them by guesswork
-            raise LookupError(f"{len(competing)} Fusion Manage items match {number}. Open the item in the Item panel and choose one first.")
+            raise LookupError(t("app.items_match_choose_in_panel", count=len(competing), number=number))
         return workspace_id, picked["id"]
 
     def _find_component(self, number: str, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
@@ -168,7 +169,7 @@ class AttachmentUpload:
         link, reason = ComponentService(FmClient(context.settings, self._auth, cancel)).find_working(number)
         workspace_id, item_id = link_ids(link)
         if not item_id:
-            raise LookupError(reason or f"No component exists for {number}.")
+            raise LookupError(reason or t("app.no_component_for_number", number=number))
         log.info("Working version of the component %s: workspace %s, item %s (%s)", number, workspace_id, item_id, link)
         return self._components.put(key, (workspace_id, item_id))
 
@@ -219,10 +220,10 @@ class AttachmentUpload:
             with open(path, "rb") as handle:
                 content = handle.read()
             if not content:   # an export that wrote nothing must not become a new, empty version of a good file
-                raise ValueError(f"The {job.label} came out empty.")
+                raise ValueError(t("app.upload_empty", label=job.label))
         except Exception as exc:  # shown to the user, never raised into Fusion
             log.exception("Could not make %s", name)
-            self._fail(f"Could not create {name}:\n{exc}")
+            self._fail(t("app.upload_could_not_create", name=name, reason=exc))
             return
         finally:
             remove_run(temp_root(), folder)
@@ -248,7 +249,7 @@ class AttachmentUpload:
             return
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
             log.exception("Could not attach %s", name)
-            self._fail(f"Could not attach {name}:\n{exc}")
+            self._fail(t("app.upload_could_not_attach_file", name=name, reason=exc))
             return
         self._tasks.post(lambda: self._done(name, kind, destination))
 
@@ -256,9 +257,9 @@ class AttachmentUpload:
         """Say the file is attached (to the Export window if it follows it, else a green tick in the panel when it is open, else a message
         box) and read the item again. UI thread."""
         if kind == NEW_VERSION:
-            message = f"A new version of {name} was uploaded to the {destination} in Fusion Manage."
+            message = t("app.upload_new_version_component" if destination == COMPONENT else "app.upload_new_version_item", name=name)
         else:
-            message = f"{name} was attached to the {destination} in Fusion Manage."
+            message = t("app.upload_attached_component" if destination == COMPONENT else "app.upload_attached_item", name=name)
         if self._follows_window():
             self._finish({"ok": True, "message": message})
             self._reload()
@@ -268,7 +269,7 @@ class AttachmentUpload:
         if self._host.visible:
             self._host.send("toast", json.dumps({"message": message, "tone": "success"}))
         else:
-            self._ui.messageBox(message, ITEM_COMMAND_NAME)
+            self._ui.messageBox(message, item_command_name())
         self._reload()
 
     def _fail(self, message: str) -> None:
@@ -278,7 +279,7 @@ class AttachmentUpload:
             self._finish({"ok": False, "message": message})
             return
         self._end()
-        self._tasks.post(lambda: self._ui.messageBox(message, ITEM_COMMAND_NAME))
+        self._tasks.post(lambda: self._ui.messageBox(message, item_command_name()))
 
     # ---- Progress -------------------------------------------------------------------
 

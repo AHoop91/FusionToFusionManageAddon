@@ -11,6 +11,7 @@
 
   const el = ns.el;
   const bridge = ns.bridge;
+  const t = ns.i18n.t;
 
   const WAIT_MS = 60000;   // how long Python is given to push the answer
   const ICONS = {
@@ -24,6 +25,15 @@
     search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M21 21l-5-5'],
   };
   const SKELETON_ROWS = 4;
+  const MARK = '{place}';   // stands where a name goes in a sentence that shows the name in bold
+
+  /** Put `text` (a sentence made with `MARK` where `name` goes) in `node`, with `name` in bold. */
+  function sentenceWithName(node, text, name) {
+    const parts = text.split(MARK);
+    if (parts[0]) node.appendChild(document.createTextNode(parts[0]));
+    node.appendChild(el('strong', 'hp-place', name));
+    if (parts[1]) node.appendChild(document.createTextNode(parts[1]));
+  }
 
   let current = null;   // the dialog that is open: {show(result), created(reply)}; one at a time
   let wanted = 0;       // id of the request whose answer is expected
@@ -53,7 +63,7 @@
   function open(hubName, onPick, options) {
     if (current) { if (options && options.onDismiss) options.onDismiss(); return; }   // one at a time: the one open stays
     const folderMode = !!(options && options.folder);
-    const crumbs = [{ label: hubName || 'Hub', project_id: '', folder_id: '' }];
+    const crumbs = [{ label: hubName || t('settings.hp_hub'), project_id: '', folder_id: '' }];
     if (folderMode && lastPlace[options.hubId]) lastPlace[options.hubId].forEach(function (crumb) { crumbs.push(crumb); });
     let chosen = null;
     let enterNew = '';   // the name of what was just made: it is opened once the list shows it
@@ -68,15 +78,15 @@
 
     const header = el('div', 'hp-header');
     const heading = el('div', 'hp-heading');
-    const title = el('h3', 'hp-title', folderMode ? options.title : 'Find the Configuration File');
+    const title = el('h3', 'hp-title', folderMode ? options.title : t('settings.hp_find_title'));
     title.id = 'hp-title';
     heading.appendChild(title);
     heading.appendChild(el('p', 'hp-sub', folderMode
-      ? 'Choose the project and folder to keep the Configuration File in.'
-      : 'Open a project and choose the Configuration File a Hub Admin saved there.'));
+      ? t('settings.hp_save_sub')
+      : t('settings.hp_find_sub')));
     const x = el('button', 'hp-x');
     x.type = 'button';
-    x.setAttribute('aria-label', 'Close');
+    x.setAttribute('aria-label', t('settings.close'));
     x.appendChild(icon('close', 18));
     header.appendChild(icon(folderMode ? 'cloud' : 'search', 22, 'hp-badge-icon'));
     header.appendChild(heading);
@@ -84,7 +94,7 @@
 
     const head = el('div', 'hp-head');
     const trail = el('nav', 'hp-trail');
-    trail.setAttribute('aria-label', 'Location in the hub');
+    trail.setAttribute('aria-label', t('settings.hp_location'));
     head.appendChild(trail);
     const make = el('button', 'hp-make');
     make.type = 'button';
@@ -102,8 +112,8 @@
     const footer = el('div', 'hp-footer');
     const target = el('p', 'hp-target');
     const actions = el('div', 'hp-actions');
-    const cancel = el('button', 'btn btn-secondary', 'Cancel');
-    const select = el('button', 'btn', folderMode ? options.action : 'Use this file');
+    const cancel = el('button', 'btn btn-secondary', t('settings.cancel'));
+    const select = el('button', 'btn', folderMode ? options.action : t('settings.hp_use_file'));
     cancel.type = select.type = 'button';
     select.disabled = true;
     actions.appendChild(cancel);
@@ -149,20 +159,19 @@
     function drawMake() {
       make.textContent = '';
       make.appendChild(icon('plus', 14));
-      make.appendChild(document.createTextNode(atHub() ? 'New project' : 'New folder'));
+      make.appendChild(document.createTextNode(atHub() ? t('settings.hp_new_project') : t('settings.hp_new_folder')));
     }
 
     /** The line over the buttons: where the file will go, or which file is chosen. */
     function drawTarget() {
       target.textContent = '';
       if (folderMode) {
-        if (atHub()) { target.textContent = 'Open a project to choose where to save.'; return; }
-        target.appendChild(document.createTextNode('Saving to '));
-        target.appendChild(el('strong', 'hp-place', placeName()));
+        if (atHub()) { target.textContent = t('settings.hp_open_project'); return; }
+        sentenceWithName(target, t('settings.hp_saving_to', { place: MARK }), placeName());
         return;
       }
-      if (chosen) { target.appendChild(document.createTextNode('Selected ')); target.appendChild(el('strong', 'hp-place', chosen.name)); }
-      else target.textContent = 'Select the Configuration File.';
+      if (chosen) sentenceWithName(target, t('settings.hp_selected', { place: MARK }), chosen.name);
+      else target.textContent = t('settings.hp_select_file');
     }
 
     // ---- Making a project or folder, in a row at the top of the list ----
@@ -178,13 +187,13 @@
       input.maxLength = 100;
       input.autocomplete = 'off';
       input.spellcheck = false;
-      input.placeholder = kind === 'project' ? 'Name of the new project' : 'Name of the new folder';
+      input.placeholder = kind === 'project' ? t('settings.hp_name_project') : t('settings.hp_name_folder');
       input.setAttribute('aria-label', input.placeholder);
-      const create = el('button', 'btn', 'Create');
+      const create = el('button', 'btn', t('settings.hp_create'));
       const back = el('button', 'hp-x');
       create.type = 'submit';
       back.type = 'button';
-      back.setAttribute('aria-label', 'Cancel');
+      back.setAttribute('aria-label', t('settings.cancel'));
       back.appendChild(icon('close', 16));
       const problem = el('p', 'hp-newerror');
       problem.hidden = true;
@@ -234,7 +243,7 @@
       const name = el('span', 'hp-name', entry.name);
       name.title = entry.name;
       text.appendChild(name);
-      if (inert && entry.name === options.fileName) text.appendChild(el('span', 'hp-tag', 'Will be updated'));
+      if (inert && entry.name === options.fileName) text.appendChild(el('span', 'hp-tag', t('settings.hp_will_update')));
       button.appendChild(text);
       if (isFolder) {
         button.appendChild(icon('chevron', 16, 'hp-chevron'));
@@ -298,7 +307,7 @@
       select.disabled = !(folderMode && !atHub());
       drawTarget();
       if (!result.ok) {
-        say('error', 'The hub could not be read', result.message);
+        say('error', t('settings.hp_read_failed'), result.message);
         select.disabled = true;   // a place that cannot be read is not one to save into
         return;
       }
@@ -313,8 +322,8 @@
       result.folders.forEach(function (f) { list.appendChild(row(f, true)); });
       files.forEach(function (f) { list.appendChild(row(f, false)); });
       if (result.folders.length || files.length) { say('', ''); return; }
-      if (atHub()) say('empty', 'No projects yet', 'No project of this hub is open to you.');
-      else say('empty', 'This folder is empty', folderMode ? 'Save here, or make a new folder first.' : 'There is no folder or .json file here.');
+      if (atHub()) say('empty', t('settings.hp_no_projects'), t('settings.hp_no_projects_detail'));
+      else say('empty', t('settings.hp_empty'), folderMode ? t('settings.hp_empty_save') : t('settings.hp_empty_find'));
     }
 
     function load() {
@@ -328,7 +337,7 @@
       wanted = -1;   // the id comes with the answer to the request below
       stopWaiting();
       stopWaiting = bridge.expect(WAIT_MS, function () {
-        if (current) current.show({ id: wanted, pending: false, ok: false, message: 'The hub did not answer in time. Try again.' });
+        if (current) current.show({ id: wanted, pending: false, ok: false, message: t('settings.hub_timeout_retry') });
       });
       bridge.send('browse_hub_files', { project_id: here().project_id, folder_id: here().folder_id });
     }

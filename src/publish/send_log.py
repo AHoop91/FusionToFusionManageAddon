@@ -15,6 +15,7 @@ import threading
 from typing import Any, Dict, Optional
 
 from ..core.atomic import write_atomically
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict
 
@@ -42,9 +43,9 @@ def load_log(folder: str) -> Dict[str, Any]:
         with open(file, encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, ValueError) as exc:
-        raise FolderError(f"Could not read {SEND_LOG}: {exc}. Sending without it could create items twice.") from exc
+        raise FolderError(t("run.sendlog_unreadable", name=SEND_LOG, error=exc)) from exc
     if not isinstance(data, dict):
-        raise FolderError(f"{SEND_LOG} is not a send log. Sending without it could create items twice.")
+        raise FolderError(t("run.sendlog_invalid", name=SEND_LOG))
     return data
 
 
@@ -124,7 +125,6 @@ class SendLog:
             try:
                 write_atomically(self._file, data)
             except OSError as exc:
-                raise LogWriteError(f"The send log could not be written ({exc}). Check Fusion Manage before sending this folder again: "
-                                    f"what was sent since may be sent twice.") from exc
+                raise LogWriteError(t("run.sendlog_unwritable", error=exc)) from exc
             with self._lock:
                 self._written = covering

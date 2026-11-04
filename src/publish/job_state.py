@@ -6,6 +6,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.cancel import ADDIN, Cancelled, CancelToken
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from .states import CANCELLED, DONE, ERROR, FINISHED, QUEUED, RUNNING
 
@@ -26,7 +27,10 @@ class JobState:
     kind = "job"
     sends = False   # does the job send to Fusion Manage
     stage = "items"   # what the job is on now, for the panel's progress text
-    unreached = "Not finished: the job failed."   # detail of a row the job never got to
+    @property
+    def unreached(self) -> str:
+        """Detail of a row the job never got to."""
+        return t("run.job_not_finished")
 
     def __init__(self, name: str, folder: str, token: Optional[CancelToken] = None) -> None:
         self.id = uuid.uuid4().hex[:8]
@@ -79,7 +83,7 @@ class JobState:
                 self.phase = CANCELLED   # in the same step as the look, so the worker cannot start it in between (``_start`` takes only a queued job)
         self.token.cancel()
         if waiting:
-            self._finish(CANCELLED, "Cancelled.")
+            self._finish(CANCELLED, t("run.job_cancelled"))
 
     def _set(self, **changes: Any) -> None:
         """Change attributes of the job together, under the lock. A name the job does not have is an error, not a new attribute."""
@@ -96,7 +100,7 @@ class JobState:
         with self._lock:
             for row in self.rows:
                 if row["status"] in (QUEUED, RUNNING):
-                    row["status"], row["detail"] = CANCELLED, "Cancelled." if self.cancelled else self.unreached
+                    row["status"], row["detail"] = CANCELLED, t("run.job_cancelled") if self.cancelled else self.unreached
             self.phase, self.message, self.finished_at = phase, message, time.time()
 
     def _finish(self, phase: str, message: str) -> None:
@@ -120,11 +124,11 @@ class JobState:
         except JobStopped as exc:
             return ERROR, str(exc)
         except Cancelled:   # a request the cancel ended (the add-in stopping does it too, with ``cancelled`` not set)
-            return CANCELLED, "Cancelled."
+            return CANCELLED, t("run.job_cancelled")
         except Exception as exc:
             log.exception("The %s run %s failed", self.kind, self.id)
             return ERROR, str(exc) or type(exc).__name__
-        return (CANCELLED, "Cancelled.") if self.cancelled else (DONE, "")
+        return (CANCELLED, t("run.job_cancelled")) if self.cancelled else (DONE, "")
 
     def crashed(self, message: str) -> None:
         """End a job whose ``work`` raised, as an error, unless it had ended: a job left queued or running would be listed for ever, and a

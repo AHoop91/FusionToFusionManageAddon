@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .items import display_text
@@ -211,7 +212,7 @@ class ItemViewService:
             layouts = pool.submit(self._layouts, workspace_id)
             data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
             if not isinstance(data, dict):
-                raise FmApiError(f"Fusion Manage gave no item {item_id} in workspace {workspace_id}.")
+                raise FmApiError(t("data.fm_no_item", item=item_id, workspace=workspace_id))
             view = build_view(data, layouts.result(), self._image, self._client.base_url, self._hidden_fields(workspace_id))
             if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
                 log.error("No sections could be built for item %s: %s", item_id, str(data)[:LOG_CHARS])

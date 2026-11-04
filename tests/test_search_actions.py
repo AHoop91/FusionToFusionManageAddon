@@ -11,7 +11,7 @@ from tests.without_fusion import fusion_modules_stubbed
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
 with fusion_modules_stubbed():
     from src.ui.actions import search_actions
-    from src.ui.actions.search_actions import (BAD_SEARCH, KEPT_ANSWERS, NO_ITEM, OPTIONS_PAGE, PickerReads,
+    from src.ui.actions.search_actions import (bad_search, KEPT_ANSWERS, no_item, OPTIONS_PAGE, PickerReads,
                                                register_search_actions)
     from src.ui.message_bridge import MessageBridge
 
@@ -57,7 +57,7 @@ class ItemsTests(Setup):
     def test_without_the_items_workspace_it_says_so_and_reads_nothing(self):
         self.config.config.workspaces = {}
         answer = self.reads.items({"token": "t1"})
-        self.assertEqual((answer["pending"], answer["ok"], answer["message"]), (False, False, NO_ITEM))
+        self.assertEqual((answer["pending"], answer["ok"], answer["message"]), (False, False, no_item()))
         self.assertEqual(self.queued, [])
 
 
@@ -76,7 +76,7 @@ class MembersTests(Setup):
 
     def test_without_the_items_workspace_it_says_so(self):
         self.config.config.workspaces = {}
-        self.assertEqual(self.reads.members({"token": "t1", "item_id": "9"})["message"], NO_ITEM)
+        self.assertEqual(self.reads.members({"token": "t1", "item_id": "9"})["message"], no_item())
 
 
 class FieldsAndOptionsTests(Setup):
@@ -89,7 +89,7 @@ class FieldsAndOptionsTests(Setup):
 
     def test_without_the_items_workspace_no_fields_are_read(self):
         self.config.config.workspaces = {}
-        self.assertEqual(self.reads.fields({"token": "t1"})["message"], NO_ITEM)
+        self.assertEqual(self.reads.fields({"token": "t1"})["message"], no_item())
 
     def test_a_page_of_picklist_options_is_read(self):
         self.workspace.return_value.options_page.return_value = {"options": []}
@@ -112,7 +112,7 @@ class FailureTests(Setup):
 
     def test_a_search_fusion_manage_cannot_read_gets_the_advice_to_check_the_filter(self):
         answer = self.failed(FmApiError("bad", 400))
-        self.assertEqual((answer["ok"], answer["pending"], answer["message"]), (False, False, BAD_SEARCH))
+        self.assertEqual((answer["ok"], answer["pending"], answer["message"]), (False, False, bad_search()))
 
     def test_any_other_refusal_is_told_as_it_is(self):
         self.assertEqual(self.failed(FmApiError("down", 503))["message"], "down")

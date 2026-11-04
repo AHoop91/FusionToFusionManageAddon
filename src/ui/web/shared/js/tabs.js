@@ -12,6 +12,7 @@
   'use strict';
 
   const $ = ns.$;
+  const t = ns.i18n.t;
   const SCROLL_STEP_RATIO = 0.6;   // fraction of the visible width per arrow click
 
   // ---- Sideways scrolling -------------------------------------------------
@@ -22,8 +23,8 @@
     wrapper.className = 'tabs-scroller';
     nav.parentNode.insertBefore(wrapper, nav);
 
-    const prev = arrowButton('prev', 'Scroll tabs left');
-    const next = arrowButton('next', 'Scroll tabs right');
+    const prev = arrowButton('prev', t('common.scroll_tabs_left'));
+    const next = arrowButton('next', t('common.scroll_tabs_right'));
     wrapper.appendChild(prev);
     wrapper.appendChild(nav);
     wrapper.appendChild(next);
@@ -84,6 +85,11 @@
         if (nav.scrollWidth > nav.clientWidth) button.scrollIntoView({ block: 'nearest', inline: 'nearest' });   // only a strip that overflows has anything to scroll
       });
     });
+
+    // A page that loaded itself again in a new language opens the tab it was on, when that tab is there to open.
+    const reopen = ns.i18n.takeOpenTab();
+    const tab = reopen && nav.querySelector('.' + buttonClass + '[data-tab="' + reopen + '"]');
+    if (tab && !tab.hidden) tab.click();
   }
 
   /** Wire the Settings tabs. Add a call here for each new tab strip. */

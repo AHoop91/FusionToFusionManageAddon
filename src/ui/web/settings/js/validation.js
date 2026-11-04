@@ -10,6 +10,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
 
   const ALERT_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2.5 22 20H2z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 9v5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.2" fill="#fff"/></svg>';
 
@@ -58,7 +59,7 @@
   }
 
   function countText(count) {
-    return count === 1 ? '1 issue needs your attention' : count + ' issues need your attention';
+    return count === 1 ? t('settings.val_count_one') : t('settings.val_count_many', { count: count });
   }
 
   /** Fill the bar with the count of open problems, or hide it when none are left. */
@@ -70,11 +71,11 @@
     const icon = el('span', 'vbar-icon');
     icon.innerHTML = ALERT_ICON;
     const text = el('span', 'vbar-text');
-    text.appendChild(el('strong', '', 'Validation failed'));
+    text.appendChild(el('strong', '', t('settings.val_failed')));
     text.appendChild(el('span', '', countText(pending.length)));
     bar.appendChild(icon);
     bar.appendChild(text);
-    bar.appendChild(el('span', 'vbar-action', 'View details'));
+    bar.appendChild(el('span', 'vbar-action', t('settings.val_details')));
   }
 
   function release(problem) {
@@ -131,10 +132,10 @@
     const badge = el('span', 'val-badge');
     badge.innerHTML = ALERT_ICON;
     const heading = el('div', 'val-heading');
-    const title = el('h3', 'val-title', 'Validation failed');
+    const title = el('h3', 'val-title', t('settings.val_failed'));
     title.id = 'val-title';
     heading.appendChild(title);
-    heading.appendChild(el('p', 'val-sub', 'Your settings were not saved. ' + countText(pending.length) + '. Select one to go to it.'));
+    heading.appendChild(el('p', 'val-sub', pending.length === 1 ? t('settings.val_sub_one') : t('settings.val_sub_many', { count: pending.length })));
     head.appendChild(badge);
     head.appendChild(heading);
     box.appendChild(head);
@@ -150,7 +151,7 @@
       row.appendChild(el('span', 'val-text', problem.message));
       if (target) {
         row.type = 'button';
-        row.appendChild(el('span', 'val-go', 'Go to field'));
+        row.appendChild(el('span', 'val-go', t('settings.val_go')));
         row.addEventListener('click', function () { close(); reveal(target); });
       }
       item.appendChild(row);
@@ -159,7 +160,7 @@
     box.appendChild(list);
 
     const actions = el('div', 'ws-dialog-actions');
-    const ok = el('button', 'btn', 'Close');
+    const ok = el('button', 'btn', t('settings.close'));
     ok.type = 'button';
     ok.addEventListener('click', close);
     actions.appendChild(ok);

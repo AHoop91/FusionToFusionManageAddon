@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Fusion Manage Settings</title>
+  <title data-i18n="settings.page_title">Fusion Manage Settings</title>
   <!-- Shared panel styles -->
   <link rel="stylesheet" href="../shared/css/base.css">
   <link rel="stylesheet" href="../shared/css/tooltip.css">
@@ -14,10 +14,21 @@
   <link rel="stylesheet" href="css/workspaces.css">
   <link rel="stylesheet" href="css/exports.css">
   <link rel="stylesheet" href="css/hub-picker.css">
+  <link rel="stylesheet" href="css/language.css">
 </head>
 <body>
   <!-- Shared top bar, filled in by shell.js. -->
   <header id="app-header" class="app-header"></header>
+
+  <!-- Shown once a language has been chosen that the ribbon does not follow until the add-in is restarted (language.js). -->
+  <div id="lang-banner" class="lang-banner" role="status" hidden>
+    <svg class="lang-banner-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+    <div class="lang-banner-text">
+      <strong data-i18n="language.restart_title">Restart the add-in to finish changing the language</strong>
+      <span data-i18n="language.restart_banner">The ribbon buttons and panel titles change after the restart.</span>
+    </div>
+    <button id="lang-restart-btn" class="btn btn-secondary lang-banner-btn" type="button" data-i18n="language.restart_button">Restart add-in</button>
+  </div>
 
   <!-- ===== Signed-out view: sign-in only ================================ -->
   <div id="view-login" class="view">
@@ -25,76 +36,76 @@
       <!-- A member's first setup: only the request to find the Configuration File, until it has been read. -->
       <div id="first-file" class="card member-card" hidden>
         <span class="member-hub" data-hub-name></span>
-        <h2>Find your Configuration File</h2>
-        <p>A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
-        <button id="first-find" class="btn" type="button">Find Configuration File</button>
-        <p class="hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
+        <h2 data-i18n="settings.find_file_title">Find your Configuration File</h2>
+        <p data-i18n="settings.find_file_text">A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
+        <button id="first-find" class="btn" type="button" data-i18n="settings.find_file_button">Find Configuration File</button>
+        <p class="hint" data-i18n="settings.member_hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
       </div>
 
       <!-- First setup, until a Client ID is saved: replaces the sign-in card. -->
       <div id="setup-wizard" class="card wizard" hidden>
         <header class="wiz-head">
-          <h2>Set up Fusion Manage</h2>
+          <h2 data-i18n="settings.wizard_title">Set up Fusion Manage</h2>
           <span class="hub-pill" data-hub-name></span>
         </header>
-        <p class="muted">Is this hub already set up, or is this the first time? Choose how to start.</p>
+        <p class="muted" data-i18n="settings.wizard_intro">Is this hub already set up, or is this the first time? Choose how to start.</p>
         <div class="wiz-choice">
           <button id="wiz-opt-new" class="wiz-opt active" type="button" aria-pressed="true">
-            <strong>New setup</strong>
-            <span>Make an APS app and connect it</span>
+            <strong data-i18n="settings.wizard_new_title">New setup</strong>
+            <span data-i18n="settings.wizard_new_text">Make an APS app and connect it</span>
           </button>
           <button id="wiz-opt-file" class="wiz-opt" type="button" aria-pressed="false">
-            <strong>Already set up</strong>
-            <span>Use the hub's Configuration File</span>
+            <strong data-i18n="settings.wizard_file_title">Already set up</strong>
+            <span data-i18n="settings.wizard_file_text">Use the hub's Configuration File</span>
           </button>
         </div>
         <div id="wiz-file" class="wiz-file" hidden>
-          <p>Another Hub Admin has already set this hub up and saved the setup as a Configuration File in the Fusion Hub. Choose that file to use the same setup. You do not need an APS app of your own or to enter a tenant.</p>
-          <button id="wiz-file-find" class="btn" type="button">Find Configuration File</button>
+          <p data-i18n="settings.wizard_file_help">Another Hub Admin has already set this hub up and saved the setup as a Configuration File in the Fusion Hub. Choose that file to use the same setup. You do not need an APS app of your own or to enter a tenant.</p>
+          <button id="wiz-file-find" class="btn" type="button" data-i18n="settings.find_file_button">Find Configuration File</button>
         </div>
         <div id="wiz-new" class="wiz-new">
-          <p class="hint">Sign-in needs an app of your own on the Autodesk Platform Services (APS) portal. Follow these steps once.</p>
+          <p class="hint" data-i18n="settings.wizard_new_hint">Sign-in needs an app of your own on the Autodesk Platform Services (APS) portal. Follow these steps once.</p>
           <ol class="wiz-steps">
             <li class="wiz-step">
               <span class="wiz-num">1</span>
               <div class="wiz-body">
-                <strong>Create an APS app</strong>
-                <p class="hint">Create it on the APS portal with the settings below. <button id="wiz-guide" class="link-btn" type="button">Open the setup guide</button></p>
+                <strong data-i18n="settings.step_create_title">Create an APS app</strong>
+                <p class="hint"><span data-i18n="settings.step_create_hint">Create it on the APS portal with the settings below.</span> <button id="wiz-guide" class="link-btn" type="button" data-i18n="settings.open_guide">Open the setup guide</button></p>
                 <div class="app-types">
-                  <div class="req-row"><strong>Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
-                  <div class="req-row"><strong>Grant Type</strong><span>Authorization Code with PKCE</span></div>
-                  <div class="req-row"><strong>API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
+                  <div class="req-row"><strong data-i18n="settings.req_app_type">Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
+                  <div class="req-row"><strong data-i18n="settings.req_grant_type">Grant Type</strong><span>Authorization Code with PKCE</span></div>
+                  <div class="req-row"><strong data-i18n="settings.req_api_access">API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
                 </div>
               </div>
             </li>
             <li class="wiz-step">
               <span class="wiz-num">2</span>
               <div class="wiz-body">
-                <strong>Add the callback URL</strong>
-                <p class="hint">On your app's page, add this as a Callback URL, and save the app.</p>
+                <strong data-i18n="settings.step_callback_title">Add the callback URL</strong>
+                <p class="hint" data-i18n="settings.step_callback_hint">On your app's page, add this as a Callback URL, and save the app.</p>
                 <span class="inline-row">
                   <code id="wiz-callback" class="wiz-callback"></code>
-                  <button id="wiz-copy" class="btn btn-secondary" type="button">Copy</button>
+                  <button id="wiz-copy" class="btn btn-secondary" type="button" data-i18n="settings.copy">Copy</button>
                 </span>
               </div>
             </li>
             <li class="wiz-step">
               <span class="wiz-num">3</span>
               <div class="wiz-body">
-                <strong>Enter the Client ID</strong>
-                <p class="hint">Copy it from your app's page on the APS portal.</p>
+                <strong data-i18n="settings.step_client_title">Enter the Client ID</strong>
+                <p class="hint" data-i18n="settings.step_client_hint">Copy it from your app's page on the APS portal.</p>
                 <label class="wiz-field">
-                  <input id="wiz-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the Client ID of your app">
+                  <input id="wiz-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the Client ID of your app" data-i18n-attr="placeholder:settings.step_client_placeholder">
                 </label>
               </div>
             </li>
             <li class="wiz-step">
               <span class="wiz-num">4</span>
               <div class="wiz-body">
-                <strong>Sign in</strong>
-                <p class="hint">Saves the Client ID and opens the Autodesk sign-in in your browser.</p>
+                <strong data-i18n="settings.step_signin_title">Sign in</strong>
+                <p class="hint" data-i18n="settings.step_signin_hint">Saves the Client ID and opens the Autodesk sign-in in your browser.</p>
                 <div class="row">
-                  <button id="wiz-signin" class="btn" type="button" disabled>Save and sign in</button>
+                  <button id="wiz-signin" class="btn" type="button" disabled data-i18n="settings.save_and_sign_in">Save and sign in</button>
                 </div>
               </div>
             </li>
@@ -105,24 +116,26 @@
       </div>
 
       <div id="login-card" class="card login-card">
-        <h2>Sign in to Fusion Manage</h2>
-        <p class="hub-line">Hub: <b data-hub-name></b></p>
-        <p id="conn-summary" class="muted">Loading...</p>
+        <h2 data-i18n="settings.login_title">Sign in to Fusion Manage</h2>
+        <p class="hub-line"><span data-i18n="settings.hub_label">Hub:</span> <b data-hub-name></b></p>
+        <p id="conn-summary" class="muted" data-i18n="settings.loading">Loading...</p>
         <div class="row">
-          <button id="signin-btn" class="btn">Sign in</button>
+          <button id="signin-btn" class="btn" data-i18n="settings.sign_in">Sign in</button>
         </div>
         <p id="conn-error" class="error" hidden></p>
-        <button id="toggle-conn" class="link-btn" type="button">Connection settings</button>
+        <button id="toggle-conn" class="link-btn" type="button" data-i18n="settings.connection_settings">Connection settings</button>
       </div>
       <!-- The connection settings form is moved here while signed out. -->
       <div id="login-settings-slot" hidden></div>
+      <!-- The language card, built by language.js: a language can be chosen before signing in. -->
+      <div id="lang-slot-login"></div>
     </div>
 
     <!-- Shown instead of the form while the browser sign-in is pending. -->
     <div id="login-loader" class="loader">
-      <div class="balls" role="status" aria-label="Logging in"><span></span><span></span><span></span></div>
-      <p class="muted">Logging in...</p>
-      <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+      <div class="balls" role="status" aria-label="Logging in" data-i18n-attr="aria-label:settings.logging_in_label"><span></span><span></span><span></span></div>
+      <p class="muted" data-i18n="settings.logging_in">Logging in...</p>
+      <button id="cancel-btn" class="btn btn-secondary" data-i18n="settings.cancel">Cancel</button>
     </div>
   </div>
 
@@ -130,18 +143,18 @@
   <div id="view-app" class="view" hidden>
     <!-- Shown while the user's role in the hub is checked, each time the panel opens. -->
     <div id="role-check" class="loader" hidden>
-      <div class="balls" role="status" aria-label="Validating"><span></span><span></span><span></span></div>
-      <p class="muted">Validating your access to this hub...</p>
+      <div class="balls" role="status" aria-label="Validating" data-i18n-attr="aria-label:settings.validating_label"><span></span><span></span><span></span></div>
+      <p class="muted" data-i18n="settings.validating_access">Validating your access to this hub...</p>
     </div>
 
     <!-- A member of the hub (not a Hub Admin) does not set it up: they find the Configuration File a Hub Admin saved in the Hub. -->
     <div id="member-prompt" class="view-scroll" hidden>
       <div class="card member-card">
         <span class="member-hub" data-hub-name></span>
-        <h2>Find your Configuration File</h2>
-        <p>A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
-        <button id="member-find" class="btn" type="button">Find Configuration File</button>
-        <p class="hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
+        <h2 data-i18n="settings.find_file_title">Find your Configuration File</h2>
+        <p data-i18n="settings.find_file_text">A Hub Admin has saved this hub's setup as a Configuration File in the Fusion Hub. Find it to start using the add-in.</p>
+        <button id="member-find" class="btn" type="button" data-i18n="settings.find_file_button">Find Configuration File</button>
+        <p class="hint" data-i18n="settings.member_hint">You are a member of this hub, not a Hub Admin. If you are unsure where the file is, ask a Hub Admin.</p>
       </div>
     </div>
 
@@ -149,30 +162,31 @@
     <div id="tenant-wizard" class="view-scroll" hidden>
       <div class="card wizard">
         <header class="wiz-head">
-          <h2>Connect your Tenant</h2>
+          <h2 data-i18n="settings.tenant_wizard_title">Connect your Tenant</h2>
           <span class="hub-pill" data-hub-name></span>
         </header>
-        <p class="muted">Enter your Fusion Manage tenant, or select <b>Find</b> to detect it automatically.</p>
+        <p class="muted" data-i18n-html="settings.tenant_wizard_text">Enter your Fusion Manage tenant, or select <b>Find</b> to detect it automatically.</p>
         <div class="field">
-          <label for="wt-tenant">Tenant <span class="info" tabindex="0" aria-label="About Tenant">i<span class="tip" role="tooltip">The first part of your Fusion Manage address: mycompany in https://mycompany.autodeskplm360.net. Find reads it from the item the open design is linked to, so open a linked design first.</span></span></label>
+          <label for="wt-tenant"><span data-i18n="settings.tenant_label">Tenant</span> <span class="info" tabindex="0" aria-label="About Tenant" data-i18n-attr="aria-label:settings.about_tenant">i<span class="tip" role="tooltip" data-i18n="settings.tenant_wizard_tip">The first part of your Fusion Manage address: mycompany in https://mycompany.autodeskplm360.net. Find reads it from the item the open design is linked to, so open a linked design first.</span></span></label>
           <span class="inline-row">
-            <input id="wt-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
-            <button id="wt-find" type="button" class="btn btn-secondary">Find</button>
+            <input id="wt-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany" data-i18n-attr="placeholder:settings.tenant_placeholder">
+            <button id="wt-find" type="button" class="btn btn-secondary" data-i18n="settings.find">Find</button>
           </span>
           <p id="wt-msg" class="wt-msg" hidden></p>
         </div>
         <button id="wt-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
         <div class="row">
-          <button id="wt-save" class="btn" type="button" disabled>Save and finish</button>
+          <button id="wt-save" class="btn" type="button" disabled data-i18n="settings.save_and_finish">Save and finish</button>
         </div>
       </div>
     </div>
 
     <nav id="settings-tabs" class="tabs" data-group="settings" role="tablist">
-      <button class="tab" data-tab="config" hidden>Configuration</button>
-      <button class="tab active" data-tab="connection">Connection</button>
-      <button class="tab" data-tab="workspaces">Item Workspace</button>
-      <button class="tab" data-tab="exports">Export</button>
+      <button class="tab" data-tab="config" hidden data-i18n="settings.tab_config">Configuration</button>
+      <button class="tab active" data-tab="connection" data-i18n="settings.tab_connection">Connection</button>
+      <button class="tab" data-tab="workspaces" data-i18n="settings.tab_workspaces">Item Workspace</button>
+      <button class="tab" data-tab="exports" data-i18n="settings.tab_exports">Export</button>
+      <button class="tab" data-tab="language" data-i18n="settings.tab_language">Language</button>
     </nav>
 
     <main id="settings-main">
@@ -183,27 +197,27 @@
             <div id="cfg-status" class="card cfg-status" data-state="current">
               <span id="cfg-icon" class="cfg-icon"></span>
               <div class="cfg-status-text">
-                <strong id="cfg-status-title">Up to date</strong>
+                <strong id="cfg-status-title" data-i18n="settings.up_to_date">Up to date</strong>
                 <span id="cfg-status-sub" class="muted"></span>
               </div>
-              <button id="cfg-check" class="btn btn-secondary" type="button">Check for updates</button>
+              <button id="cfg-check" class="btn btn-secondary" type="button" data-i18n="settings.check_updates">Check for updates</button>
             </div>
 
             <div class="card cfg-file">
               <div class="cfg-file-head">
                 <span id="cfg-file-icon" class="cfg-file-icon"></span>
                 <div class="cfg-file-id">
-                  <span class="cfg-label">Configuration File</span>
+                  <span class="cfg-label" data-i18n="settings.config_file">Configuration File</span>
                   <strong id="hub-file-name"></strong>
                   <span id="hub-file-place" class="muted"></span>
                 </div>
-                <button id="hub-file-change" class="btn btn-secondary" type="button">Change file</button>
+                <button id="hub-file-change" class="btn btn-secondary" type="button" data-i18n="settings.change_file">Change file</button>
               </div>
               <dl class="cfg-facts">
-                <div><dt>Last updated in the hub</dt><dd id="hub-file-modified"></dd></div>
-                <div><dt>Updated by</dt><dd id="hub-file-by"></dd></div>
-                <div><dt>Version</dt><dd id="hub-file-version"></dd></div>
-                <div><dt>Last read by you</dt><dd id="hub-file-read"></dd></div>
+                <div><dt data-i18n="settings.fact_modified">Last updated in the hub</dt><dd id="hub-file-modified"></dd></div>
+                <div><dt data-i18n="settings.fact_by">Updated by</dt><dd id="hub-file-by"></dd></div>
+                <div><dt data-i18n="settings.fact_version">Version</dt><dd id="hub-file-version"></dd></div>
+                <div><dt data-i18n="settings.fact_read">Last read by you</dt><dd id="hub-file-read"></dd></div>
               </dl>
             </div>
           </div>
@@ -214,47 +228,47 @@
         <!-- Configuration source and connection details. The form moves to the sign-in screen while signed out. -->
         <div id="settings-slot">
           <div id="conn-settings">
-            <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+            <p class="lock-note" hidden data-i18n="settings.lock_shared">Managed by Shared Configuration. These settings cannot be changed here.</p>
             <div class="tab-body">
               <div class="card conn-card">
                 <header class="conn-head">
-                  <h2>Connection settings</h2>
+                  <h2 data-i18n="settings.connection_settings">Connection settings</h2>
                 </header>
                 <div class="conn-guide">
-                  <p>Need help setting up your APS app? <button id="conn-guide" class="link-btn" type="button">Open the setup guide</button></p>
+                  <p><span data-i18n="settings.need_help">Need help setting up your APS app?</span> <button id="conn-guide" class="link-btn" type="button" data-i18n="settings.open_guide">Open the setup guide</button></p>
                   <div class="app-types">
-                    <div class="req-row"><strong>Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
-                    <div class="req-row"><strong>Grant Type</strong><span>Authorization Code with PKCE</span></div>
-                    <div class="req-row"><strong>API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
+                    <div class="req-row"><strong data-i18n="settings.req_app_type">Application Type</strong><span>Desktop, Mobile, Single-Page Web App</span></div>
+                    <div class="req-row"><strong data-i18n="settings.req_grant_type">Grant Type</strong><span>Authorization Code with PKCE</span></div>
+                    <div class="req-row"><strong data-i18n="settings.req_api_access">API Access</strong><span class="pills"><span class="pill">Manufacturing Data Model API</span><span class="pill">Identity API</span></span></div>
                   </div>
                 </div>
                 <fieldset id="lock-connection" class="lockable">
                   <div class="field">
-                    <label for="f-client-id">Client ID <span class="info" tabindex="0" aria-label="About Client ID">i<span class="tip" role="tooltip">The Client ID of your app on the Autodesk Platform Services (APS) portal.</span></span></label>
+                    <label for="f-client-id"><span data-i18n="settings.client_id_label">Client ID</span> <span class="info" tabindex="0" aria-label="About Client ID" data-i18n-attr="aria-label:settings.about_client_id">i<span class="tip" role="tooltip" data-i18n="settings.client_id_tip">The Client ID of your app on the Autodesk Platform Services (APS) portal.</span></span></label>
                     <input id="f-client-id" type="text" autocomplete="off" spellcheck="false">
                   </div>
                   <div class="field">
-                    <label for="f-tenant">Tenant <span class="info" tabindex="0" aria-label="About Tenant">i<span class="tip" role="tooltip">The first part of your Fusion Manage address: <b>mycompany</b> in https://mycompany.autodeskplm360.net. Find reads it from the design open in Fusion.</span></span></label>
+                    <label for="f-tenant"><span data-i18n="settings.tenant_label">Tenant</span> <span class="info" tabindex="0" aria-label="About Tenant" data-i18n-attr="aria-label:settings.about_tenant">i<span class="tip" role="tooltip" data-i18n-html="settings.tenant_tip">The first part of your Fusion Manage address: <b>mycompany</b> in https://mycompany.autodeskplm360.net. Find reads it from the design open in Fusion.</span></span></label>
                     <span class="inline-row">
-                      <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany">
-                      <button id="f-tenant-find" type="button" class="btn btn-secondary">Find</button>
+                      <input id="f-tenant" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. mycompany" data-i18n-attr="placeholder:settings.tenant_placeholder">
+                      <button id="f-tenant-find" type="button" class="btn btn-secondary" data-i18n="settings.find">Find</button>
                     </span>
                     <p id="f-tenant-msg" class="hint" hidden></p>
                   </div>
                   <div class="field">
-                    <label for="callback-url">Callback URL <span class="info" tabindex="0" aria-label="About Callback URL">i<span class="tip" role="tooltip">Add this as a Callback URL on your APS app. It follows the callback port.</span></span></label>
+                    <label for="callback-url"><span data-i18n="settings.callback_url_label">Callback URL</span> <span class="info" tabindex="0" aria-label="About Callback URL" data-i18n-attr="aria-label:settings.about_callback_url">i<span class="tip" role="tooltip" data-i18n="settings.callback_url_tip">Add this as a Callback URL on your APS app. It follows the callback port.</span></span></label>
                     <span class="inline-row">
                       <code id="callback-url" class="url-box"></code>
-                      <button id="callback-copy" type="button" class="btn btn-secondary">Copy</button>
+                      <button id="callback-copy" type="button" class="btn btn-secondary" data-i18n="settings.copy">Copy</button>
                     </span>
                   </div>
                   <div class="field-pair">
                     <div class="field">
-                      <label for="f-port">Callback port <span class="info" tabindex="0" aria-label="About Callback port">i<span class="tip" role="tooltip">A free port between 1024 and 65535.</span></span></label>
+                      <label for="f-port"><span data-i18n="settings.port_label">Callback port</span> <span class="info" tabindex="0" aria-label="About Callback port" data-i18n-attr="aria-label:settings.about_port">i<span class="tip" role="tooltip" data-i18n="settings.port_tip">A free port between 1024 and 65535.</span></span></label>
                       <input id="f-port" type="number" min="1024" max="65535">
                     </div>
                     <div class="field">
-                      <label for="f-scopes">Scopes <span class="info" tabindex="0" aria-label="About Scopes">i<span class="tip tip-end" role="tooltip">The access the add-in asks for at sign-in, separated by spaces.</span></span></label>
+                      <label for="f-scopes"><span data-i18n="settings.scopes_label">Scopes</span> <span class="info" tabindex="0" aria-label="About Scopes" data-i18n-attr="aria-label:settings.about_scopes">i<span class="tip tip-end" role="tooltip" data-i18n="settings.scopes_tip">The access the add-in asks for at sign-in, separated by spaces.</span></span></label>
                       <input id="f-scopes" type="text" autocomplete="off" spellcheck="false">
                     </div>
                   </div>
@@ -265,8 +279,8 @@
             <div class="tab-footer">
               <div class="row">
                 <span id="save-msg" class="muted"></span>
-                <button id="save-btn" class="btn btn-secondary">Save</button>
-                <button id="save-publish-btn" class="btn" hidden>Save &amp; Publish</button>
+                <button id="save-btn" class="btn btn-secondary" data-i18n="settings.save">Save</button>
+                <button id="save-publish-btn" class="btn" hidden data-i18n="settings.save_publish">Save &amp; Publish</button>
               </div>
             </div>
           </div>
@@ -276,11 +290,11 @@
       <section id="sub-workspaces" class="tab-panel" data-group="settings">
         <!-- Shown over the tab while a workspace is checked; the page scrolls under it. -->
         <div id="ws-busy" class="ws-busy loader" hidden>
-          <div class="balls" role="status" aria-label="Validating"><span></span><span></span><span></span></div>
-          <p class="muted">Validating workspace...</p>
+          <div class="balls" role="status" aria-label="Validating" data-i18n-attr="aria-label:settings.validating_label"><span></span><span></span><span></span></div>
+          <p class="muted" data-i18n="settings.validating_workspace">Validating workspace...</p>
         </div>
         <fieldset id="lock-workspaces" class="lockable">
-          <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+          <p class="lock-note" hidden data-i18n="settings.lock_shared">Managed by Shared Configuration. These settings cannot be changed here.</p>
           <div class="tab-body">
             <!-- One card per workspace kind, built by workspaces.js. -->
             <div id="workspace-cards"></div>
@@ -289,8 +303,8 @@
           <div class="tab-footer">
             <div class="row">
               <span id="ws-save-msg" class="muted"></span>
-              <button id="ws-save-btn" class="btn btn-secondary">Save</button>
-              <button id="ws-save-publish-btn" class="btn" hidden>Save &amp; Publish</button>
+              <button id="ws-save-btn" class="btn btn-secondary" data-i18n="settings.save">Save</button>
+              <button id="ws-save-publish-btn" class="btn" hidden data-i18n="settings.save_publish">Save &amp; Publish</button>
             </div>
           </div>
         </fieldset>
@@ -298,13 +312,13 @@
 
       <section id="sub-exports" class="tab-panel" data-group="settings">
         <fieldset id="lock-exports" class="lockable">
-          <p class="lock-note" hidden>Managed by Shared Configuration. These settings cannot be changed here.</p>
+          <p class="lock-note" hidden data-i18n="settings.lock_shared">Managed by Shared Configuration. These settings cannot be changed here.</p>
           <div class="tab-body">
             <div class="card conn-card">
               <header class="conn-head">
-                <h2>Export settings</h2>
+                <h2 data-i18n="settings.export_title">Export settings</h2>
               </header>
-              <p class="hint">
+              <p class="hint" data-i18n-html="settings.export_hint">
                 Where each kind of file is attached in Fusion Manage when you export it from a design or drawing. <b>Component</b> attaches it to
                 the component in the Components workspace; <b>Item</b> attaches it to the item in the Items workspace. The Export
                 window starts on the destination set here, and you can still change it there for one export.
@@ -316,11 +330,23 @@
           <div class="tab-footer">
             <div class="row">
               <span id="ex-save-msg" class="muted"></span>
-              <button id="ex-save-btn" class="btn btn-secondary">Save</button>
-              <button id="ex-save-publish-btn" class="btn" hidden>Save &amp; Publish</button>
+              <button id="ex-save-btn" class="btn btn-secondary" data-i18n="settings.save">Save</button>
+              <button id="ex-save-publish-btn" class="btn" hidden data-i18n="settings.save_publish">Save &amp; Publish</button>
             </div>
           </div>
         </fieldset>
+      </section>
+
+      <section id="sub-language" class="tab-panel" data-group="settings">
+        <div class="lang-form">
+          <div class="tab-body" id="lang-slot-tab"></div>
+          <div class="tab-footer">
+            <div class="row">
+              <button id="lang-save-btn" class="btn btn-secondary" data-i18n="settings.save">Save</button>
+              <button id="lang-save-publish-btn" class="btn" hidden data-i18n="settings.save_publish">Save &amp; Publish</button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -331,6 +357,7 @@
   <script src="../shared/js/dom.js"></script>
   <script src="../shared/js/tooltip.js"></script>
   <script src="../shared/js/bridge.js"></script>
+  <script src="../shared/js/i18n.js"></script>
   <script src="../shared/js/shell.js"></script>
   <script src="../shared/js/tabs.js"></script>
   <script src="../shared/js/account.js"></script>
@@ -343,6 +370,7 @@
   <script src="js/exports.js"></script>
   <script src="js/hub-picker.js"></script>
   <script src="js/progress.js"></script>
+  <script src="js/language.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/main.js"></script>
 </body>

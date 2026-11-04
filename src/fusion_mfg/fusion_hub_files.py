@@ -12,11 +12,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, NamedTuple
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 
 log = get_logger("fusion_hub_files")
 
 MAIN_THREAD_WAIT_SECONDS = 120   # a download of a file of a few kilobytes; a stalled Fusion does not keep the panel waiting forever
-GONE = "That is no longer in the hub."
 DOWNLOAD_PREFIX = "fusion_manage_config_"
 DOWNLOAD_NAME = "config.json"
 
@@ -54,7 +54,7 @@ def run_on_main(post: Callable[[Callable[[], None]], None], work: Callable[[], A
 
     post(task)
     if not done.wait(MAIN_THREAD_WAIT_SECONDS):
-        raise HubFilesError("Fusion did not answer in time. Try again.")
+        raise HubFilesError(t("data.hub_no_answer"))
     if "error" in box:
         raise box["error"]
     return box["value"]
@@ -64,13 +64,12 @@ def _plain(error: str) -> str:
     """What to tell the user about an error from Fusion's data API."""
     text = error.lower()
     if "403" in text or "auth-012" in text or "acm check" in text:
-        return ("Fusion would not let you download this file. You may only be able to view this project, and viewers cannot download files. "
-                "Ask a Hub Admin to give you a role that can download in this project, or to move the file to a project you can download from.")
+        return t("data.hub_download_refused")
     if "404" in text or "not found" in text:
-        return GONE
+        return t("data.hub_gone")
     if "offline" in text or "network" in text or "timed out" in text or "timeout" in text:
-        return "The hub could not be reached. Check your connection and try again."
-    return "Fusion could not read the hub. Try again, and if it keeps happening, ask a Hub Admin for help."
+        return t("data.hub_unreachable")
+    return t("data.hub_read_failed")
 
 
 def _iso(moment: Any) -> str:
@@ -94,7 +93,7 @@ def _find_file(item_id: str):
     """The file Fusion has under ``item_id``; raises ``HubFilesError`` when there is none. Fusion's main thread."""
     data_file = _core().Application.get().data.findFileById(item_id)
     if not data_file:
-        raise HubFilesError(GONE)
+        raise HubFilesError(t("data.hub_gone"))
     return data_file
 
 
@@ -131,7 +130,7 @@ class FusionHubFiles:
     def _hub():
         hub = _core().Application.get().data.activeHub
         if not hub:
-            raise HubFilesError("No hub is open. Open a hub in Fusion, then try again.")
+            raise HubFilesError(t("data.hub_none_open"))
         return hub
 
     def projects(self) -> Listing:
@@ -145,7 +144,7 @@ class FusionHubFiles:
                 if project.id == project_id:
                     root = project.rootFolder
                     return Listing([{"id": root.id, "name": root.name}], [])
-            raise HubFilesError(GONE)
+            raise HubFilesError(t("data.hub_gone"))
         return self._main(work)
 
     def contents(self, folder_id: str) -> Listing:
@@ -153,7 +152,7 @@ class FusionHubFiles:
         def work() -> Listing:
             folder = _core().Application.get().data.findFolderById(folder_id)
             if not folder:
-                raise HubFilesError(GONE)
+                raise HubFilesError(t("data.hub_gone"))
             return Listing(_entries(folder.dataFolders), _entries(folder.dataFiles))
         return self._main(work)
 
@@ -188,9 +187,9 @@ class FusionHubFiles:
             try:
                 data_file.download(target, None)
                 if not os.path.exists(target):
-                    raise HubFilesError("Fusion did not give the content of that file.")
+                    raise HubFilesError(t("data.hub_no_content"))
                 if os.path.getsize(target) > max_bytes:
-                    raise HubFilesError("The file is too large to be a configuration.")
+                    raise HubFilesError(t("data.config_file_too_large"))
                 with open(target, "rb") as handle:
                     return handle.read()
             finally:

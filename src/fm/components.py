@@ -9,6 +9,7 @@ from typing import Any, Iterable, List, NamedTuple, Tuple
 from urllib.parse import quote
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import dict_rows, dig
 from .client import LOOKUPS, WORKSPACES, FmClient, last_segment
 from .pages import ITEM_LINK
@@ -23,7 +24,6 @@ WORKSPACES_LIMIT = 200   # workspaces asked for when looking for it
 CANDIDATES = 25   # options asked for when searching by number
 SEARCH_LIMIT = 50   # results asked for when searching for the working version
 SHOWN = 5   # matches named in the message when more than one fits
-NO_NUMBER = "The item has no number to look up."
 _URN = re.compile(r"\.(\d+)\.(\d+)\s*$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
 _WORKING = re.compile(r"\[REV:\s*w(?:orking)?\s*\]", re.IGNORECASE)   # "[REV:w]": how Fusion Manage names the working version
 _WORKSPACES = TtlCache(600)   # the Components workspace's id by tenant: it does not change, and the Export window asks twice
@@ -110,10 +110,10 @@ class ComponentService:
         publish only: it names no workspace and has an option for every revision.
         """
         if not number:
-            return "", NO_NUMBER
+            return "", t("data.fm_no_number")
         workspace_id = self.workspace_id()
         if not workspace_id:
-            return "", f"No workspace called {COMPONENTS_WORKSPACE} could be found in Fusion Manage."
+            return "", t("data.fm_no_components_workspace", workspace=COMPONENTS_WORKSPACE)
         query = quote(f"{number} AND (workspaceId={workspace_id})")
         data = self._client.get_json(f"{SEARCH_RESULTS}?isFullQuery=true&limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision={WORKING}")
         found = [Candidate(str(r.get("__self__") or ""), str(r.get("descriptor") or ""), str(r.get("version") or ""))
@@ -121,17 +121,17 @@ class ComponentService:
         log.info("Working versions for %s in workspace %s: %s", number, workspace_id, [f"{c.title} {c.version} {c.link}" for c in found])
         hits = [c for c in found if c.link and _matches(c.title, number)]
         working = [c for c in hits if is_working(c.version)] or hits   # the filter gives working versions; the version is checked anyway
-        return _the_one(working, f"No working version of the component {number} in the Components workspace ({len(found)} result(s) came back for it).",
-                        f"{len(working)} working versions match {number}: {_named(working)}")
+        return _the_one(working, t("data.fm_no_working_version", number=number, count=len(found)),
+                        t("data.fm_many_working_versions", count=len(working), number=number, named=_named(working)))
 
     def find(self, lookup: str, number: str) -> Tuple[str, str]:
         """``(link, "")`` of the one option for this item number, else ``("", reason)``."""
         if not number:
-            return "", NO_NUMBER
+            return "", t("data.fm_no_number")
         data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset=0&limit={CANDIDATES}&filter={quote(number)}&asc=&desc=")
         options: List[Candidate] = [Candidate(str(r["link"]), str(r.get("title") or ""), str(r.get("version") or ""))
                                     for r in dict_rows(dig(data, "items")) if r.get("link")]
         hits = [o for o in options if _matches(o.title, number)]
         log.debug("Component options for %s: %s", number, [o.title for o in options])
-        return _the_one(hits, f"No component matching {number} in {lookup} ({len(options)} option(s) came back for it).",
-                        f"{len(hits)} components match {number}: {_named(hits)} - the Data Model has to say which")
+        return _the_one(hits, t("data.fm_no_component", number=number, lookup=lookup, count=len(options)),
+                        t("data.fm_many_components", count=len(hits), number=number, named=_named(hits)))

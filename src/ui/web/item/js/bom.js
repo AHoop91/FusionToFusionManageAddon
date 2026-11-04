@@ -6,12 +6,13 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
   const bridge = ns.bridge;
   const tree = ns.itemTree;
   const ITEM_COLUMN_PX = tree.ITEM_COLUMN_PX;
   const COLUMN_PX = tree.COLUMN_PX;
   const ICON_COLUMN_PX = 48;   // a column that only holds an icon
-  const EMPTY_COLUMNS = ['Version', 'Quantity', 'Lifecycle'];   // shown under no lines, where the real columns are not known
+  function emptyColumns() { return [t('item.col_version'), t('item.bom_col_quantity'), t('item.bom_col_lifecycle')]; }   // shown under no lines, where the real columns are not known
   const CLASS = 'item-bom';
   // A bill of materials: a list of lines. Static markup.
   const LIST_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>';
@@ -23,7 +24,12 @@
     pin: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g transform="rotate(35 12 12)"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 14v7"/></g></svg>',   // slanted, filled red
   };
   const HEAD_KIND = { ATTACHMENTS: 'attachments', WORKING_CHANGE_ORDER: 'change', PIN: 'pin' };   // field id -> icon
-  const TIPS = { attachments: 'Open the files of this item in Fusion Manage in your browser', change: 'Open the change in Fusion Manage in your browser', pin: 'The revision of this item is pinned' };
+  /** The hover text of an icon column's cell (``count`` is how many files, for the paperclip). */
+  function tipOf(kind, count) {
+    if (kind === 'attachments') return t('item.bom_tip_attachments', { count: count });
+    if (kind === 'change') return t('item.bom_tip_change');
+    return t('item.bom_tip_pin');
+  }
 
   // The bar's icons. Static markup.
   const BAR_ICONS = {
@@ -48,14 +54,14 @@
   function render(target, view) {
     const mine = ++current;
     function read(first) {
-      if (!first) { tree.loading(target, CLASS, 'Reading the Bill of Materials...'); }
+      if (!first) { tree.loading(target, CLASS, t('item.bom_reading')); }
       tree.load('bom_load', 'bom_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, view_id: chosen[view.workspace_id] || '', flat: flat }, function (error, result) {
         if (mine !== current) return;
-        if (error) { tree.centred(target, CLASS, 'Could not read the Bill of Materials: ' + error, true); return; }
+        if (error) { tree.centred(target, CLASS, t('item.bom_error', { error: error }), true); return; }
         draw(target, result, function (id) { if (id) chosen[view.workspace_id] = id; read(false); }, view);
       });
     }
-    tree.loading(target, CLASS, 'Reading the Bill of Materials...');
+    tree.loading(target, CLASS, t('item.bom_reading'));
     read(true);
   }
 
@@ -71,16 +77,16 @@
   function bar(bom, onView, redraw, onOpenAll) {
     const row = el('div', 'item-bom-bar');
     const fold = el('div', 'item-bom-pair item-bom-fold');
-    const close = tool('collapse', 'Collapse all');
-    const open = tool('expand', 'Expand all');
+    const close = tool('collapse', t('item.bom_collapse_all'));
+    const open = tool('expand', t('item.bom_expand_all'));
     close.disabled = open.disabled = flat;   // a flat list has nothing to fold
     close.addEventListener('click', function () { onOpenAll(false); });
     open.addEventListener('click', function () { onOpenAll(true); });
     fold.append(close, open);
     row.appendChild(fold);
-    row.appendChild(el('label', '', 'Views:'));
+    row.appendChild(el('label', '', t('item.bom_views_label')));
     const select = el('select');
-    select.setAttribute('aria-label', 'Views');
+    select.setAttribute('aria-label', t('item.bom_views'));
     (bom.views || []).forEach(function (v) {
       const option = el('option', '', v.name);
       option.value = v.id;
@@ -92,8 +98,8 @@
     row.appendChild(select);
 
     const pair = el('div', 'item-bom-pair');
-    const nested = tool('nested', 'Nested: each assembly holds its lines');
-    const plain = tool('flat', 'Flat: every component in one list');
+    const nested = tool('nested', t('item.bom_nested'));
+    const plain = tool('flat', t('item.bom_flat'));
     (flat ? plain : nested).classList.add('item-bom-on');
     nested.addEventListener('click', function () { if (flat) { flat = false; onView(''); } });
     plain.addEventListener('click', function () { if (!flat) { flat = true; onView(''); } });
@@ -101,7 +107,7 @@
     row.appendChild(pair);
 
     const host = el('div', 'item-bom-menu-host');
-    const gear = tool('columns', 'Choose the columns');
+    const gear = tool('columns', t('item.bom_columns'));
     host.appendChild(gear);
     function openMenu() {
       const menu = el('div', 'item-bom-menu');
@@ -133,7 +139,7 @@
   function icon(td, cell) {
     if (!cell.value) return;
     const mark = cell.url ? el('a', 'item-bom-icon item-bom-' + cell.kind) : el('span', 'item-bom-icon item-bom-' + cell.kind);
-    mark.title = TIPS[cell.kind] + (cell.kind === 'attachments' ? ' (' + cell.value + ')' : '');
+    mark.title = tipOf(cell.kind, cell.value);
     mark.innerHTML = ICONS[cell.kind];   // static markup
     if (cell.kind === 'attachments') mark.appendChild(el('span', 'item-bom-count', cell.value));
     if (cell.url) {
@@ -152,7 +158,7 @@
   function draw(target, full, onView, view) {
     target.className = 'view-scroll ' + CLASS;
     const bom = { rows: full.rows, views: full.views, view: full.view, columns: full.columns.filter(function (c) { return !hidden[c.id]; }) };
-    const columns = bom.rows.length ? bom.columns : EMPTY_COLUMNS.map(function (title) { return { title: title, icon: false }; });
+    const columns = bom.rows.length ? bom.columns : emptyColumns().map(function (title) { return { title: title, icon: false }; });
     const table = el('table', 'item-files-table item-tree-table');
     const colgroup = el('colgroup');
     const head = el('tr');
@@ -161,7 +167,7 @@
     table.tHead.appendChild(head);
     const cols = [];
     const heads = [];
-    [{ title: 'Item', icon: false }].concat(columns).forEach(function (c, i) {
+    [{ title: t('item.col_item'), icon: false }].concat(columns).forEach(function (c, i) {
       const col = el('col');
       const width = i === 0 ? ITEM_COLUMN_PX : c.icon ? ICON_COLUMN_PX : COLUMN_PX;
       col.style.width = width + 'px';
@@ -204,7 +210,7 @@
         tr.appendChild(tree.itemCell({
           quiet: true, iconX: xs[entry.depth], number: entry.number, row: node.row, kind: node.row.root ? 'root' : node.children.length ? 'assembly' : 'part', room: chevronDepths[entry.depth],
           chevron: node.children.length ? {
-            open: node.open, title: node.open ? 'Collapse' : 'Expand',
+            open: node.open, title: node.open ? t('item.collapse') : t('item.expand'),
             onClick: function () { node.open = !node.open; drawRows(); },
           } : null,
         }));
@@ -227,7 +233,7 @@
     wrap.appendChild(table);
     target.replaceChildren(bar(full, onView, function () { draw(target, full, onView, view); }, setAll), wrap);
     if (!bom.rows.length || !bom.rows[0].children.length) {   // the columns stay, and the message is centred in the space under them
-      tree.emptyUnder(target, LIST_ICON, 'No Bill of Materials', 'Items that make up this item in Fusion Manage will be listed here.');
+      tree.emptyUnder(target, LIST_ICON, t('item.bom_empty'), t('item.bom_empty_hint'));
     }
   }
 

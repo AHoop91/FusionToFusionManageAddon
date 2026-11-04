@@ -5,12 +5,13 @@ from typing import Any, Callable, Iterable, List, Optional
 import adsk.core
 import adsk.fusion
 
-from ..core.constants import ITEM_COMMAND_NAME
+from ..core.i18n import t
 from ..publish.exporters import catch_up, export_step
 from . import drawing_source
 from .attachment_upload import Progress, UploadJob
 from .export_options import DWG, DXF, PDF, STEP
 from .item_numbers import Subject
+from .ui_text import item_command_name
 
 
 SCAN_CATCH_UP = 5   # occurrences read between two times Fusion is let draw
@@ -64,7 +65,7 @@ def _export_design(path: str, subject: Subject, progress: Progress) -> None:
         return
     occurrence = _component_of_number(design, number, progress)
     if occurrence is None:
-        raise LookupError(f"No component with part number {number} in the open design.")
+        raise LookupError(t("app.no_component_in_design", number=number))
     progress(None)   # one call that cannot be followed
     export_step(path, occurrence)
 
@@ -73,7 +74,7 @@ def _confirm_design(ui: adsk.core.UserInterface, subject: Subject) -> bool:
     """Whether a design is open to make the STEP file of item ``subject`` from. Whether it holds that item is found out when the file
     is made: looking for it here would hold up the click, on Fusion's UI thread."""
     if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is None:
-        ui.messageBox("Open the design to publish as a STEP file first.", ITEM_COMMAND_NAME)
+        ui.messageBox(t("app.open_design_for_step"), item_command_name())
         return False
     return True
 
@@ -83,34 +84,36 @@ def _confirm_drawing(extension: str) -> Callable[[adsk.core.UserInterface, Subje
     def confirm(ui: adsk.core.UserInterface, subject: Subject) -> bool:
         held, reason = drawing_source.top_level_number()
         if not held:
-            ui.messageBox(f"The drawing is not ready yet:\n{reason}", ITEM_COMMAND_NAME)
+            ui.messageBox(t("app.drawing_not_ready_box", reason=reason), item_command_name())
             return False
         if held == subject.part_number:
             return True
-        question = (f"The open drawing is of {held}, but the item is {subject.item_number} ({subject.part_number}).\n\n"
-                    f"Upload this drawing as {subject.item_number}{extension} anyway?")
-        return ui.messageBox(question, ITEM_COMMAND_NAME, adsk.core.MessageBoxButtonTypes.YesNoButtonType) == adsk.core.DialogResults.DialogYes
+        question = t("app.confirm_other_drawing", held=held, item_number=subject.item_number, part_number=subject.part_number, file_name=f"{subject.item_number}{extension}")
+        return ui.messageBox(question, item_command_name(), adsk.core.MessageBoxButtonTypes.YesNoButtonType) == adsk.core.DialogResults.DialogYes
     return confirm
 
 
-_DRAWINGS = {   # format: title, label, extension, short name of the format, what writes it
-    PDF: ("Uploading Drawing PDF", "drawing PDF", ".pdf", "PDF", drawing_source.export_pdf),
-    DWG: ("Uploading Drawing DWG", "drawing DWG", ".dwg", "DWG", drawing_source.export_dwg),
-    DXF: ("Uploading Drawing DXF", "drawing DXF", ".dxf", "DXF", drawing_source.export_dxf),
+_DRAWINGS = {   # format: extension, short name of the format, what writes it
+    PDF: (".pdf", "PDF", drawing_source.export_pdf),
+    DWG: (".dwg", "DWG", drawing_source.export_dwg),
+    DXF: (".dxf", "DXF", drawing_source.export_dxf),
 }
 
 
 def drawing_job(key: str) -> UploadJob:
-    """The job that attaches the open drawing as a file of format ``key`` (``export_options.PDF``...)."""
-    title, label, extension, short, export = _DRAWINGS[key]
-    return UploadJob(title, label, extension, ("Find item", f"Create {short}", "Upload"),
+    """The job that attaches the open drawing as a file of format ``key`` (``export_options.PDF``...). Made when asked for, in the user's language."""
+    extension, short, export = _DRAWINGS[key]
+    return UploadJob(t("app.job_title_drawing", format=short), t("app.job_label_drawing", format=short), extension,
+                     (t("app.job_step_find"), t("app.job_step_create", format=short), t("app.job_step_upload")),
                      lambda path, _subject, _progress: export(path), _confirm_drawing(extension))
 
 
-STEP_JOB = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), _export_design, _confirm_design)
-DRAWING_JOB, DWG_JOB, DXF_JOB = drawing_job(PDF), drawing_job(DWG), drawing_job(DXF)
+def step_job() -> UploadJob:
+    """The job that attaches the open design as a STEP file."""
+    return UploadJob(t("app.job_title_step"), t("app.job_label_step"), ".step",
+                     (t("app.job_step_find"), t("app.job_step_create", format="STEP"), t("app.job_step_upload")), _export_design, _confirm_design)
 
 
 def export_job(key: str) -> UploadJob:
     """The job that exports the open document as format ``key``."""
-    return STEP_JOB if key == STEP else drawing_job(key)
+    return step_job() if key == STEP else drawing_job(key)

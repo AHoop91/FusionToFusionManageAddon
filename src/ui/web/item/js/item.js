@@ -8,6 +8,7 @@
   const bridge = ns.bridge;
   const $ = ns.$;
   const el = ns.el;
+  const t = ns.i18n.t;
   const POLL_INTERVAL_MS = 2000;   // Python pushes the item when it is read; this only asks now and then, in case a push is missed
   const UPLOAD_POLL_MS = 2000;   // likewise for the progress of an upload
   const LABEL_COLUMN_WIDTH = '16%';   // the row labels; the other columns share the rest equally
@@ -26,7 +27,7 @@
     $('item-empty').hidden = true;
     offerPublish = false;
     $('item-loader').hidden = !on;
-    $('item-loader-text').textContent = text || 'Loading item...';
+    $('item-loader-text').textContent = text || t('item.loading_item');
     document.querySelectorAll('.item-part').forEach(function (part) { part.hidden = on; });
   }
 
@@ -59,7 +60,7 @@
 
   /** Several items share the item number: list them, one button each, and send the one picked. */
   function showChoices(entry) {
-    showEmpty(ICON_SEVERAL, 'Several Items Share This Number', 'Choose the item to open. Your choice is kept until Fusion closes.', false, entry.choose_number);
+    showEmpty(ICON_SEVERAL, t('item.several_title'), t('item.several_hint'), false, entry.choose_number);
     const box = $('item-empty-picker');
     const list = $('item-empty-choices');
     const filter = $('item-empty-filter');
@@ -72,7 +73,7 @@
       const button = el('button', 'item-choice', '');
       button.type = 'button';
       button.appendChild(el('span', 'item-choice-name', candidate.descriptor));
-      button.appendChild(el('span', 'item-choice-id', (many ? 'ID ' : 'Item ID ') + candidate.id));
+      button.appendChild(el('span', 'item-choice-id', many ? t('item.choice_id_short', { id: candidate.id }) : t('item.choice_id', { id: candidate.id })));
       button.addEventListener('click', function () { bridge.send('choose_item', { item_id: candidate.id, stamp: entry.stamp }); });
       row.appendChild(button);
       list.appendChild(row);
@@ -117,7 +118,7 @@
       button.textContent = tab.allowed && tab.count ? tab.label + ' (' + tab.count + ')' : tab.label;
       button.disabled = !tab.allowed;
       if (tab.allowed) button.removeAttribute('title');
-      else button.title = 'Insufficient permissions';
+      else button.title = t('item.tab_no_permission');
     });
   }
 
@@ -164,7 +165,7 @@
     const view = currentView;
     ns.itemTree.load('tab_counts_load', 'tab_counts_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp }, function (error, counts) {
       if (view !== currentView) return;   // another item has been opened meanwhile
-      if (error) { ns.toast.show('Could not refresh the counts: ' + error, { tone: 'error' }); return; }
+      if (error) { ns.toast.show(t('item.counts_error', { error: error }), { tone: 'error' }); return; }
       Object.keys(counts).forEach(function (key) { if (view.tabs[key]) view.tabs[key].count = counts[key]; });
       labelTabs(view);
     });
@@ -196,7 +197,7 @@
       const img = el('img', 'item-image');
       img.src = cell.value;
       img.alt = '';
-      img.title = 'Click to enlarge';
+      img.title = t('item.enlarge');
       img.addEventListener('click', function () { openLightbox(cell.value); });
       node.appendChild(img);
     } else if (cell.kind === 'links') {
@@ -204,7 +205,7 @@
         if (i) node.appendChild(document.createTextNode(', '));
         const a = el('a', 'item-link', link.title);
         a.href = '#';
-        a.title = 'Open in Fusion Manage in your browser';
+        a.title = t('item.open_in_fusion_manage');
         a.addEventListener('click', function (event) {
           event.preventDefault();
           bridge.send('open_url', { url: link.url });
@@ -306,7 +307,7 @@
   }
 
   function renderHeader(view) {
-    $('item-title').textContent = view.title || 'Fusion Manage Item';
+    $('item-title').textContent = view.title || t('item.title_default');
     const status = $('item-status');
     status.replaceChildren();
     view.header.forEach(function (part, i) {
@@ -367,7 +368,7 @@
         entry.querySelector('.item-menu-label').textContent = found.label;
         entry.querySelector('.item-menu-icon').replaceChildren(ns.itemFiles.icon(found.ext));   // the icon the Files tab shows for that kind of file
         entry.dataset.ready = String(found.ready);
-        entry.title = found.ready ? '' : 'The drawing is still loading';
+        entry.title = found.ready ? '' : t('item.drawing_loading');
       });
       syncUpload();
     }
@@ -391,7 +392,7 @@
       setOpen(false);
       if (!currentView) return;
       following = true;
-      showUpload({ active: true, stage: 'Starting', step: -1, steps: [], percent: null });   // at once: Python is busy for a while
+      showUpload({ active: true, stage: t('item.upload_starting'), step: -1, steps: [], percent: null });   // at once: Python is busy for a while
       bridge.send(action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, stamp: currentView.stamp, request: action });
     }
     uploadTool.run = startUpload;
@@ -427,18 +428,23 @@
   const CHECKS = {
     item: {
       start: 'sync_check_load', result: 'sync_check_result',
-      differs: function (n) { return n + (n === 1 ? ' mapped field differs' : ' mapped fields differ') + ' from the open design'; },
-      section: 'Attributes',
-      columns: ['Field', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
+      differs: function (n) { return n === 1 ? t('item.diff_fields_one', { count: n }) : t('item.diff_fields_other', { count: n }); },
+      section: function () { return t('item.section_attributes'); },
+      columns: function () { return [t('item.col_field'), ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM]; },
     },
     bom: {
       start: 'bom_check_load', result: 'bom_check_result',
-      differs: function (n) { return n + (n === 1 ? ' component is' : ' components are') + ' not in this Bill of Materials as in the open design (not under the same parent, or in another quantity)'; },
-      section: 'Bill of Materials',
-      columns: ['Component', ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM],
+      differs: function (n) { return n === 1 ? t('item.diff_components_one', { count: n }) : t('item.diff_components_other', { count: n }); },
+      section: function () { return t('item.section_bom'); },
+      columns: function () { return [t('item.col_component'), ns.diffReport.COLUMN_VALUE, ns.diffReport.COLUMN_FM]; },
     },
   };
-  const LABELS = { changes: 'Out of Date', error: 'Check failed' };   // the pill; while checking there is only the spinner, and an up-to-date tab shows nothing
+  /** The pill's words: while checking there is only the spinner, and an up-to-date tab shows nothing. */
+  function labelOf(state) {
+    if (state === 'changes') return t('item.out_of_date');
+    if (state === 'error') return t('item.check_failed');
+    return '';
+  }
   const NAMES_SHOWN = 5;   // of what differs, in the tooltip
   let checkOf = {};   // tab -> what its mark shows ({state, text}), for the item shown
   let shownTab = 'item';
@@ -449,9 +455,9 @@
       case 'ok': return { state: 'ok', text: '' };   // an up-to-date tab shows nothing
       case 'changes': {
         const names = found.names.slice(0, NAMES_SHOWN).join(', ') + (found.names.length > NAMES_SHOWN ? ', ...' : '');
-        return { state: 'changes', text: check.differs(found.differences) + ' (' + names + '). Click for details.', check: check, details: found.details || [] };
+        return { state: 'changes', text: t('item.check_changes_text', { differs: check.differs(found.differences), names: names }), check: check, details: found.details || [] };
       }
-      case 'error': return { state: 'error', text: 'Could not check: ' + found.message + ' Click for details.', message: found.message };
+      case 'error': return { state: 'error', text: t('item.check_error_text', { message: found.message }), message: found.message };
       default: return { state: 'idle', text: '' };   // nothing to compare with: no saved design, or the item of a component below its top
     }
   }
@@ -463,7 +469,7 @@
     element.dataset.state = mark.state;
     element.title = mark.text;
     element.setAttribute('aria-label', mark.text);
-    $('item-check-label').textContent = LABELS[mark.state] || '';
+    $('item-check-label').textContent = labelOf(mark.state);
   }
 
   function setCheck(name, mark) {
@@ -475,10 +481,10 @@
   function runCheck(name, view) {
     const check = CHECKS[name];
     if (!check) return;
-    setCheck(name, { state: 'checking', text: 'Checking Fusion Manage...' });
+    setCheck(name, { state: 'checking', text: t('item.checking') });
     ns.itemTree.load(check.start, check.result, { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp }, function (error, found) {
       if (!currentView || currentView.item_id !== view.item_id) return;   // another item is shown now
-      setCheck(name, error ? { state: 'error', text: 'Could not check: ' + error + ' Click for details.', message: error } : describe(check, found));
+      setCheck(name, error ? { state: 'error', text: t('item.check_error_text', { message: error }), message: error } : describe(check, found));
     });
   }
 
@@ -489,16 +495,16 @@
     const mark = checkOf[shownTab];
     if (!mark || (mark.state !== 'changes' && mark.state !== 'error')) return;
     if (mark.state === 'error') {
-      ns.diffReport.open({ state: 'error', title: 'Could not check', summary: mark.message, sections: [], empty: 'Fusion Manage could not be compared with the open design.' });
+      ns.diffReport.open({ state: 'error', title: t('item.diff_error_title'), summary: mark.message, sections: [], empty: t('item.diff_error_empty') });
       return;
     }
     ns.diffReport.open({
-      state: 'changes', title: 'Out of date', summary: mark.check.differs(mark.details.length) + '.',
+      state: 'changes', title: t('item.diff_title'), summary: t('item.diff_summary', { differs: mark.check.differs(mark.details.length) }),
       sections: [{
-        title: mark.check.section, columns: mark.check.columns,
+        title: mark.check.section(), columns: mark.check.columns(),
         rows: mark.details.map(function (d) { return { cells: [d.name, d.design, d.item] }; }),
       }],
-      actions: [{ label: 'Republish', onClick: function () { bridge.send('open_publish'); } }],
+      actions: [{ label: t('item.republish'), onClick: function () { bridge.send('open_publish'); } }],
     });
   }
 
@@ -521,16 +527,16 @@
     });
     const body = $('item-body');
     body.replaceChildren();
-    if (!view.sections.length) { message('This item has no fields to show.'); return; }
+    if (!view.sections.length) { message(t('item.no_fields')); return; }
     view.sections.forEach(function (section) { body.appendChild(renderSection(section)); });
   }
 
   function handle(r) {
     clearTimeout(timer);
-    if (!r.ok) { message(r.error || 'Could not read the item.', true); return; }
+    if (!r.ok) { message(r.error || t('item.read_error'), true); return; }
     const entry = r.result;
     if (entry.pending) {
-      if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, 'Finding the Fusion Manage item...'); }
+      if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, t('item.finding')); }
       timer = setTimeout(poll, POLL_INTERVAL_MS);
       return;
     }
@@ -540,11 +546,11 @@
     if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
     if (entry.choose && entry.choose.length) { showChoices(entry); return; }
     if (entry.missing) {
-      showEmpty(ICON_MISSING, 'No Item Exists In Fusion Manage Yet', 'Fusion Manage has no item in the Items workspace for this design.', true, entry.missing);
+      showEmpty(ICON_MISSING, t('item.missing_title'), t('item.missing_hint'), true, entry.missing);
       return;
     }
-    if (!entry.seq) { message('Select a component and choose Open Fusion Manage Item.'); return; }
-    if (!entry.ok) { message(entry.message || 'Could not read the item.', true); return; }
+    if (!entry.seq) { message(t('item.select_component')); return; }
+    if (!entry.ok) { message(entry.message || t('item.read_error'), true); return; }
     render(entry.view, quiet);
   }
 
@@ -557,6 +563,7 @@
   function start() {
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
+    if (!ns.i18n.gate(start)) return;   // the language is in before the page is built
     ns.shell.mountHeader();
     ns.account.init();
     ns.auth.init();
@@ -564,7 +571,7 @@
     bridge.on('item_changed', function (note) {   // Python opened another item in this palette
       quietRead = false;   // another item (or an upload's reload): the loading screen is right
       if (note && note.item_tab) startOnItemTab = true;   // the panel was opened, not just following the selection: back to the Item tab
-      setLoading(true, 'Finding the Fusion Manage item...');   // at once, not after the answer to the poll
+      setLoading(true, t('item.finding'));   // at once, not after the answer to the poll
       poll();
     });
     bridge.on('refresh_item_view', handle);

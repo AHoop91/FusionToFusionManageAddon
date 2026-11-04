@@ -13,13 +13,18 @@
 
   const $ = ns.$;
   const bridge = ns.bridge;
+  const t = ns.i18n.t;
 
-  const STATE_TEXT = {
-    signed_out: 'Sign in with your Autodesk account to continue.',
-    signing_in: 'Logging in...',
-    signed_in: 'Signed in to Fusion Manage.',
-    error: 'Sign-in failed.',
-  };
+  /** What the sign-in card says for a state; the state itself for one not known. */
+  function stateText(state) {
+    switch (state) {
+      case 'signed_out': return t('common.signin_prompt');
+      case 'signing_in': return t('common.logging_in');
+      case 'signed_in': return t('common.signed_in_fm');
+      case 'error': return t('common.signin_failed');
+      default: return state;
+    }
+  }
 
   let profileLoaded = false;
   let autoLoginTried = false;
@@ -45,7 +50,7 @@
     $('user-wrap').hidden = !signedIn;
     if (!signedIn) ns.account.closeCard();
 
-    $('conn-summary').textContent = STATE_TEXT[state] || state;
+    $('conn-summary').textContent = stateText(state);
     // While the browser sign-in is pending, swap the form for the loader.
     $('login-form').hidden = state === 'signing_in';
     $('login-loader').hidden = state !== 'signing_in';

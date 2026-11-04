@@ -16,6 +16,7 @@ import adsk.core
 import adsk.fusion
 
 from ..core.cancel import CancelToken
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.paths import DataDirError, data_dir, temp_dir
 from ..core.shapes import as_dict, dig
@@ -167,7 +168,7 @@ class ItemNumbers:
                 data = client.query(FILE_MODEL_QUERY, {"hubId": self._hubs[ref.hub_name], "itemId": ref.file_id})
                 model = as_dict(dig(data, "item", "tipRootModel"))
                 if not model.get("id"):
-                    raise NoItemNumber("The design this drawing shows was not found in the Manufacturing Data Model.")
+                    raise NoItemNumber(t("app.number_drawing_design_not_found"))
                 log.info("Design file %s is the Data Model's %s", ref.file_id, model["id"])
                 kept = (str(model["id"]), str(model.get("timestamp") or ""))
                 self._files[ref.file_id] = kept
@@ -178,7 +179,7 @@ class ItemNumbers:
         if ref.model_id:
             return ref
         if not ref.file_id:
-            raise NoItemNumber("The design has not been saved, so it has no item number.")
+            raise NoItemNumber(t("app.number_design_not_saved"))
         return self._model_of_file(FusionGraphQlClient(cancel), ref)
 
     def forget_files(self) -> None:
@@ -204,14 +205,14 @@ class ItemNumbers:
         _, matches = self._matching(client, ref, summary, part_number)
         ids = {str(m["id"] or "") for m in matches} - {""}
         if len(ids) != 1:
-            raise NoItemNumber(f"{part_number or 'The design'} " + ("was not found in the Data Model's bill of materials of the open design."
-                                                                  if not ids else "is more than one component in this design."))
+            label = part_number or t("app.number_the_design")
+            raise NoItemNumber(t("app.number_not_in_bom", label=label) if not ids else t("app.number_several_components", label=label))
         return read_thumbnail_url(client, summary, ids.pop(), ref.time)
 
     def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""
         if not ref.model_id and not ref.file_id:
-            raise NoItemNumber("The design has not been saved, so it has no item number.")
+            raise NoItemNumber(t("app.number_design_not_saved"))
         client = None   # made when the Data Model is first asked, so an item number kept from before needs no settings
 
         def data_model() -> FusionGraphQlClient:
@@ -231,14 +232,14 @@ class ItemNumbers:
         found = {str(m["item_number"] or "") for m in matches}
         if is_design:
             part_number = matches[0]["part_number"]
-        label = part_number or "The design"
+        label = part_number or t("app.number_the_design")
         if not found:
-            raise NoItemNumber(f"{label} was not found in the Data Model's bill of materials of the open design.")
+            raise NoItemNumber(t("app.number_not_in_bom", label=label))
         if len(found) > 1:
-            raise NoItemNumber(f"Part number {part_number} has more than one item number in this design, so which item it is cannot be told.")
+            raise NoItemNumber(t("app.number_several_item_numbers", part_number=part_number))
         number = found.pop().strip()
         if not number:
-            raise NoItemNumber(f"{label} has no item number, so it has not been published to Fusion Manage.")
+            raise NoItemNumber(t("app.number_not_published", label=label))
         log.info("Part number %s is item number %s (%.2fs; the Data Model is read once per version of the design, then kept)",
                  part_number or "(the design)", number, time.monotonic() - began)
         subject = Subject(number, part_number)

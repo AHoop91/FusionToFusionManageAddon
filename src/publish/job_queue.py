@@ -8,6 +8,7 @@ when none is waiting.
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from .job_state import JobState
 from .run_files import remove_run
@@ -113,7 +114,7 @@ class JobQueue:
                 run.work()
             except Exception as exc:   # work reports its own failures; this keeps the queue alive and the run from being left unfinished
                 log.exception("Publish run %s crashed", run.id)
-                run.crashed(f"The run stopped unexpectedly: {exc}")
+                run.crashed(t("run.job_crashed", error=exc))
             self._finished(run)
             self._changed()
 

@@ -14,8 +14,7 @@
   'use strict';
 
   const el = ns.el;
-  const COLUMN_VALUE = 'Component Value';   // the two columns every report ends with: what the open design holds, and what Fusion Manage does
-  const COLUMN_FM = 'Fusion Manage Value';
+  const t = ns.i18n.t;
   const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   const ICONS = {   // static markup
     ok: '<path d="M6 12.5l4 4 8-9"/>',
@@ -61,7 +60,7 @@
       }
     });
     if (entry.onClick) {
-      tr.title = 'Open the details of this component';
+      tr.title = t('common.diff_open_details');
       tr.addEventListener('click', function () { close(); entry.onClick(); });
     }
     return tr;
@@ -110,8 +109,8 @@
     head.appendChild(text);
     const x = el('button', 'diff-close');
     x.type = 'button';
-    x.title = 'Close';
-    x.setAttribute('aria-label', 'Close');
+    x.title = t('common.close');
+    x.setAttribute('aria-label', t('common.close'));
     x.innerHTML = CLOSE_ICON;
     x.addEventListener('click', close);
     head.appendChild(x);
@@ -119,12 +118,12 @@
 
     const body = el('div', 'diff-body');
     report.sections.forEach(function (entry) { body.appendChild(section(entry)); });
-    if (!report.sections.length) body.appendChild(el('p', 'diff-empty', report.empty || 'There is nothing to list.'));
+    if (!report.sections.length) body.appendChild(el('p', 'diff-empty', report.empty || t('common.diff_empty')));
     dialog.appendChild(body);
 
     const foot = el('div', 'diff-foot');
     const actions = report.actions || [];
-    const done = button('Close', !actions.length, close);
+    const done = button(t('common.close'), !actions.length, close);
     foot.appendChild(done);
     actions.forEach(function (action, index) {
       foot.appendChild(button(action.label, index === actions.length - 1, function () { close(); action.onClick(); }));
@@ -137,5 +136,11 @@
     (foot.lastChild).focus();
   }
 
-  ns.diffReport = { open: open, close: close, COLUMN_VALUE: COLUMN_VALUE, COLUMN_FM: COLUMN_FM };
+  // The two columns every report ends with: what the open design holds, and what Fusion Manage does. Read when a report is built, so in the language in use.
+  ns.diffReport = {
+    open: open,
+    close: close,
+    get COLUMN_VALUE() { return t('common.diff_column_value'); },
+    get COLUMN_FM() { return t('common.diff_column_fm'); },
+  };
 })(window.MfgUi);

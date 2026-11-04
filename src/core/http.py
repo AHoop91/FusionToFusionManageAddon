@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from typing import Any, Iterator, List, Optional, Union
 
 from .cancel import ADDIN, CancelToken
+from .i18n import t
 
 
 class _SafeRedirects(urllib.request.HTTPRedirectHandler):
@@ -22,7 +23,7 @@ class _SafeRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         target = urllib.parse.urlparse(newurl)
         if target.scheme.lower() != "https":
-            raise urllib.error.HTTPError(req.full_url, code, f"Refused a redirect to a non-https address: {newurl}", headers, fp)
+            raise urllib.error.HTTPError(req.full_url, code, t("data.http_redirect_refused", address=newurl), headers, fp)
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is not None and target.netloc != urllib.parse.urlparse(req.full_url).netloc:
             new.remove_header("Authorization")

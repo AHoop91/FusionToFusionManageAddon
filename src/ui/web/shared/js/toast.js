@@ -8,6 +8,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
 
   const svg = ns.svg;
 
@@ -54,8 +55,8 @@
     const close = el('button', 'toast-close');
     close.appendChild(svg(['M6 6l12 12', 'M18 6L6 18']));
     close.type = 'button';
-    close.title = 'Dismiss';
-    close.setAttribute('aria-label', 'Dismiss');
+    close.title = t('common.dismiss');
+    close.setAttribute('aria-label', t('common.dismiss'));
     node.appendChild(close);
     container.appendChild(node);
 

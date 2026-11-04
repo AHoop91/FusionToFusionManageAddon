@@ -17,7 +17,14 @@
     '<circle cx="12" cy="8" r="4" fill="currentColor"/>' +
     '<path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" fill="currentColor"/></svg>';
 
-  /** Header markup. Static content only; nothing here comes from user data. */
+  /** The text called `key`, safe to put in markup (a language file's text is not trusted to be free of markup). */
+  function text(key) {
+    const box = document.createElement('span');
+    box.textContent = ns.i18n.t(key);
+    return box.innerHTML.replace(/"/g, '&quot;');
+  }
+
+  /** Header markup. Static content and the add-in's own wording only; nothing here comes from user data. */
   function headerHtml() {
     return '' +
       '<img class="logo" src="' + LOGO_URL + '" alt="Fusion Manage">' +
@@ -25,7 +32,7 @@
       // Account avatar and card: only visible while signed in.
       '<div id="user-wrap" class="user" hidden>' +
       '  <span id="role-pill" class="role-pill" hidden></span>' +
-      '  <button id="avatar-btn" class="avatar-btn" aria-haspopup="true" aria-expanded="false" title="Account">' +
+      '  <button id="avatar-btn" class="avatar-btn" aria-haspopup="true" aria-expanded="false" title="' + text('shell.account') + '">' +
       '    <span id="avatar" class="avatar">' +
       '      <span id="avatar-icon">' + AVATAR_ICON.replace(/{size}/g, '20') + '</span>' +
       '      <span id="avatar-initials" hidden></span>' +
@@ -47,14 +54,18 @@
       '    </div>' +
       '    <div class="card-divider"></div>' +
       '    <div class="card-row">' +
-      '      <span class="card-label">Status</span>' +
+      '      <span class="card-label">' + text('shell.status') + '</span>' +
       '      <span id="card-status" class="card-status"><span class="card-status-dot"></span><span id="card-status-text"></span></span>' +
       '    </div>' +
       '    <div id="card-role-row" class="card-row" hidden>' +
-      '      <span class="card-label">Permissions</span>' +
-      '      <button id="card-role-refresh" class="card-link" type="button">Refresh</button>' +
+      '      <span class="card-label">' + text('shell.permissions') + '</span>' +
+      '      <button id="card-role-refresh" class="card-link" type="button">' + text('shell.refresh') + '</button>' +
       '    </div>' +
-      '    <button id="card-signout" class="btn btn-secondary btn-block" hidden>Sign out</button>' +
+      '    <div class="card-row">' +
+      '      <span class="card-label">' + text('shell.addin') + '</span>' +
+      '      <button id="card-restart" class="card-link" type="button">' + text('shell.restart') + '</button>' +
+      '    </div>' +
+      '    <button id="card-signout" class="btn btn-secondary btn-block" hidden>' + text('shell.sign_out') + '</button>' +
       '  </div>' +
       '</div>';
   }

@@ -9,6 +9,7 @@ instead of silently ignored.
 import json
 from typing import Any, Callable, Dict, Optional
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 
 log = get_logger("bridge")
@@ -58,11 +59,11 @@ class MessageBridge:
         handler = self._handlers.get(action)
         if handler is None:
             log.warning("Unknown action: %s", action)
-            return {"ok": False, "result": None, "error": f"Unknown action: {action}"}
+            return {"ok": False, "result": None, "error": t("app.unknown_action", action=action)}
         try:
             payload = json.loads(raw_data) if raw_data else {}
             if not isinstance(payload, dict):   # every handler reads its payload as an object
-                raise ValueError("The request must be a JSON object.")
+                raise ValueError(t("app.request_not_object"))
             return {"ok": True, "result": handler(payload), "error": None}
         except Exception as exc:  # noqa: BLE001 - boundary to UI, must not raise
             log.exception("Action failed: %s", action)

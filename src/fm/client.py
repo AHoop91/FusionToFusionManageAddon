@@ -16,6 +16,7 @@ from ..config.hub import tenant_code
 from ..config.models import ConnectionSettings
 from ..core.cancel import ADDIN, CancelToken
 from ..core.http import open_url
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 
@@ -88,7 +89,7 @@ def checked_path(path: str) -> str:
     base = path.split("?", 1)[0]
     if (not path.startswith("/") or "#" in path or "\\" in path or any(ord(c) <= 32 or ord(c) == 127 for c in base)
             or ".." in base.split("/") or any(code in base.lower() for code in ("%2e", "%2f", "%5c"))):
-        raise FmApiError("That address is not one Fusion Manage can be asked for.")
+        raise FmApiError(t("data.fm_bad_address"))
     return path
 
 
@@ -128,7 +129,7 @@ class FmClient:
         """API root, e.g. https://acme.autodeskplm360.net. The tenant must be a plain host name label, so the access token
         can only go to a ``*.autodeskplm360.net`` host."""
         if not self.tenant or tenant_code(self.tenant) != self.tenant:
-            raise FmApiError("No usable Fusion hub is active; open the hub of your Fusion Manage tenant.")
+            raise FmApiError(t("data.fm_no_hub"))
         return f"https://{self.tenant}{FM_HOST_SUFFIX}"
 
     def access_token(self) -> str:
@@ -193,9 +194,9 @@ class FmClient:
                     raise
         except urllib.error.HTTPError as exc:
             log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path, _said(exc))
-            raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
+            raise FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code) from exc
         except (OSError, ValueError) as exc:
-            raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
+            raise FmApiError(t("data.fm_request_failed", path=path, reason=exc)) from exc
 
     def get_bytes(self, path: str, timeout: int = REQUEST_TIMEOUT_SECONDS) -> Tuple[bytes, str]:
         """GET ``path`` (an image or a file) and return ``(body, content type)``. Raises ``FmApiError`` on failure.
@@ -208,9 +209,9 @@ class FmClient:
             with open_url(request, timeout, self.cancel) as response:
                 return response.read(), str(response.headers.get("Content-Type") or "")
         except urllib.error.HTTPError as exc:
-            raise FmApiError(f"Fusion Manage returned {exc.code} for {path}", exc.code) from exc
+            raise FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code) from exc
         except OSError as exc:
-            raise FmApiError(f"Fusion Manage request failed for {path}: {exc}") from exc
+            raise FmApiError(t("data.fm_request_failed", path=path, reason=exc)) from exc
 
     def put_bytes(self, url: str, content: bytes, headers: Optional[Dict[str, str]] = None, timeout: int = UPLOAD_TIMEOUT_SECONDS,
                   progress: Optional[Callable[[float], None]] = None) -> int:
@@ -220,7 +221,7 @@ class FmClient:
         the caller gave one): a file being attached is not stopped by leaving a tab.
         """
         if not self.https_only(url):
-            raise FmApiError("The upload address Fusion Manage gave is not https.")
+            raise FmApiError(t("data.fm_upload_not_https"))
         body: Any = content
         if progress is not None:   # sent in pieces so the caller can see how far it has got
             body = _chunks(content, progress)
@@ -234,9 +235,9 @@ class FmClient:
         except urllib.error.HTTPError as exc:
             said = _said(exc)
             log.error("Upload HTTP %s: %s", exc.code, said)
-            raise FmApiError(f"The upload returned {exc.code}: {said[:ERROR_MESSAGE_CHARS]}", exc.code) from exc
+            raise FmApiError(t("data.fm_upload_returned", status=exc.code, said=said[:ERROR_MESSAGE_CHARS]), exc.code) from exc
         except OSError as exc:
-            raise FmApiError(f"The upload failed: {exc}") from exc
+            raise FmApiError(t("data.fm_upload_failed", reason=exc)) from exc
 
     def send_json(self, method: str, path: str, body: Any = None) -> SendResult:
         """POST, PATCH or DELETE ``path`` with ``body`` as JSON; return the status, headers and parsed answer.
@@ -267,6 +268,6 @@ class FmClient:
         except urllib.error.HTTPError as exc:
             said = _said(exc)
             log.error("Fusion Manage HTTP %s for %s %s: %s", exc.code, method, path, said)
-            raise FmApiError(f"Fusion Manage returned {exc.code} for {method} {path}: {said[:ERROR_MESSAGE_CHARS]}", exc.code) from exc
+            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code) from exc
         except OSError as exc:
-            raise FmApiError(f"Fusion Manage request failed for {method} {path}: {exc}") from exc
+            raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc)) from exc

@@ -5,14 +5,17 @@ from typing import Any, Dict, Optional
 
 from ...config.config_service import ConfigService
 from ...config.export_models import ExportSettings
+from ...core.i18n import t
 from ...config.models import MODE_COMPANY, MODE_LOCAL, ConnectionSettings
 from ...config.problems import problem_payload
 from ...config.workspace_models import WorkspaceSettings, catalog
 from ..message_bridge import MessageBridge
 
 MODES = (MODE_LOCAL, MODE_COMPANY)
-HUB_CHANGED = ("The active hub has changed since these settings were loaded. They were not saved; "
-               "reopen the panel to see this hub's settings.")
+
+
+def hub_changed() -> str:
+    return t("app.settings_hub_changed")
 
 
 def settings_payload(config: ConfigService) -> Dict[str, Any]:
@@ -38,7 +41,7 @@ def _section(payload: Dict[str, Any], key: str) -> Optional[Dict[str, Any]]:
     if key not in payload:
         return None
     if not isinstance(payload[key], dict):
-        raise ValueError(f"The settings could not be saved: '{key}' must be an object.")
+        raise ValueError(t("app.settings_part_not_object", part=key))
     return payload[key]
 
 
@@ -50,11 +53,11 @@ def save_settings(config: ConfigService, payload: Dict[str, Any]) -> Dict[str, A
     """
     # The page still shows another hub's settings (or does not say which hub it shows): saving them would overwrite this one's.
     if str(payload.get("hub_id") or "") != config.hub_id:
-        raise ValueError(HUB_CHANGED)
+        raise ValueError(hub_changed())
     current = config.config
     mode = str(payload.get("mode") or current.mode)
     if mode not in MODES:
-        raise ValueError(f"The settings could not be saved: '{mode}' is not a mode.")
+        raise ValueError(t("app.settings_bad_mode", mode=mode))
     local, workspaces, exports = (_section(payload, key) for key in ("local", "workspaces", "exports"))
     problems = config.update(
         mode,

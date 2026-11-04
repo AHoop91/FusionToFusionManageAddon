@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Publish Item</title>
+  <title data-i18n="publish.page_title">Publish Item</title>
   <!-- Shared panel styles -->
   <link rel="stylesheet" href="../shared/css/base.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
@@ -26,10 +26,10 @@
   <div id="view-login" class="view">
     <div id="login-form" class="view-scroll" hidden>
       <div class="card login-card">
-        <h2>Sign in to Fusion Manage</h2>
-        <p id="conn-summary" class="muted">Loading...</p>
+        <h2 data-i18n="publish.signin_heading">Sign in to Fusion Manage</h2>
+        <p id="conn-summary" class="muted" data-i18n="publish.loading">Loading...</p>
         <div class="row">
-          <button id="signin-btn" class="btn">Sign in</button>
+          <button id="signin-btn" class="btn" data-i18n="publish.signin_button">Sign in</button>
         </div>
         <p id="conn-error" class="error" hidden></p>
       </div>
@@ -37,9 +37,9 @@
 
     <!-- Shown instead of the form while the browser sign-in is pending. -->
     <div id="login-loader" class="loader">
-      <div class="balls" role="status" aria-label="Logging in"><span></span><span></span><span></span></div>
-      <p class="muted">Logging in...</p>
-      <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+      <div class="balls" role="status" aria-label="Logging in" data-i18n-attr="aria-label:publish.logging_in_label"><span></span><span></span><span></span></div>
+      <p class="muted" data-i18n="publish.logging_in">Logging in...</p>
+      <button id="cancel-btn" class="btn btn-secondary" data-i18n="publish.cancel">Cancel</button>
     </div>
   </div>
 
@@ -47,8 +47,8 @@
   <div id="view-app" class="view" hidden>
     <!-- Shown while the model loads. -->
     <div id="pub-loader" class="loader">
-      <div class="balls" role="status" aria-label="Loading item"><span></span><span></span><span></span></div>
-      <p class="muted">Loading item...</p>
+      <div class="balls" role="status" aria-label="Loading item" data-i18n-attr="aria-label:publish.loading_item_label"><span></span><span></span><span></span></div>
+      <p class="muted" data-i18n="publish.loading_item">Loading item...</p>
     </div>
 
     <!-- Shown, centred, in place of the item, when the user may not publish to the Items workspace. -->
@@ -61,14 +61,14 @@
       <!-- Summary of the open model, filled in by publish.js. -->
       <div class="pub-summary">
         <div id="pub-thumb" class="pub-thumb" aria-hidden="true"></div>
-        <div id="pub-summary" class="pub-summary-text"><p class="muted">Loading...</p></div>
+        <div id="pub-summary" class="pub-summary-text"><p class="muted" data-i18n="publish.loading">Loading...</p></div>
         <div class="pub-summary-tools">
         <!-- Read the design, its Bill of Materials and Fusion Manage again. The panel never does this by itself for the design that is open. -->
-        <button id="pub-refresh" class="pub-tool" type="button" title="Refresh from Fusion Manage" aria-label="Refresh from Fusion Manage">
+        <button id="pub-refresh" class="pub-tool" type="button" title="Refresh from Fusion Manage" aria-label="Refresh from Fusion Manage" data-i18n-attr="title:publish.refresh_title;aria-label:publish.refresh_title">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
         </button>
         <!-- Is the design up to date in Fusion Manage? Scans in the background; filled in by publish.js. -->
-        <button id="pub-check" class="pub-check" type="button" data-state="idle" aria-label="Checking Fusion Manage">
+        <button id="pub-check" class="pub-check" type="button" data-state="idle" aria-label="Checking Fusion Manage" data-i18n-attr="aria-label:publish.check_aria">
           <svg class="pub-check-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"/></svg>
           <svg class="pub-check-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="pub-check-tick" d="M6 12.5l4 4 8-9"/><path class="pub-check-bang" d="M12 7v6.5M12 17v.2"/></svg>
           <span id="pub-check-count" class="pub-check-count" hidden></span>
@@ -80,17 +80,17 @@
       <main class="pub-main">
         <div class="pub-bom-pane">
           <div class="pub-pane-header">
-            <span class="pub-pane-title">Bill of Materials</span>
-            <button id="pub-add-items" class="btn pub-pane-action" type="button">Add Existing Items</button>
+            <span class="pub-pane-title" data-i18n="publish.bom_title">Bill of Materials</span>
+            <button id="pub-add-items" class="btn pub-pane-action" type="button" data-i18n="publish.add_items">Add Existing Items</button>
           </div>
           <section id="pub-bom" class="pub-bom"></section>
         </div>
         <div id="pub-backdrop" class="pub-backdrop" hidden></div>
         <aside id="pub-detail" class="pub-detail" hidden>
-          <div id="pub-detail-resize" class="pub-detail-resize" role="separator" aria-orientation="vertical" aria-label="Resize details" title="Drag to resize (double-click to reset)" tabindex="0"></div>
+          <div id="pub-detail-resize" class="pub-detail-resize" role="separator" aria-orientation="vertical" aria-label="Resize details" title="Drag to resize (double-click to reset)" data-i18n-attr="aria-label:publish.detail_resize_label;title:publish.detail_resize_title" tabindex="0"></div>
           <div class="pub-pane-header">
-            <span class="pub-pane-title">Details Panel</span>
-            <button id="pub-detail-close" class="pub-detail-close" type="button" title="Close details" aria-label="Close details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            <span class="pub-pane-title" data-i18n="publish.details_panel">Details Panel</span>
+            <button id="pub-detail-close" class="pub-detail-close" type="button" title="Close details" aria-label="Close details" data-i18n-attr="title:publish.details_close;aria-label:publish.details_close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>
           <div id="pub-props" class="pub-props"></div>
         </aside>
@@ -99,8 +99,8 @@
       <!-- Actions for the open item. -->
       <footer class="pub-footer">
         <!-- What publishing covers (what is in view), filled in by publish-bom.js. -->
-        <div id="pub-pills" class="pub-pills" role="status" aria-label="What publishing covers"></div>
-        <button id="pub-publish" class="btn" disabled title="Waiting for the Bill of Materials.">Publish</button>
+        <div id="pub-pills" class="pub-pills" role="status" aria-label="What publishing covers" data-i18n-attr="aria-label:publish.pills_label"></div>
+        <button id="pub-publish" class="btn" disabled title="Waiting for the Bill of Materials." data-i18n="publish.publish" data-i18n-attr="title:publish.waiting_bom">Publish</button>
       </footer>
     </div>
   </div>
@@ -117,41 +117,41 @@
       </div>
       <!-- Steps, one after the other: the levels of the Bill of Materials not read yet are read (only then), every item number is looked up in Fusion Manage, then the items and their Bill of Materials are published. -->
       <div id="read-step" class="progress-step" hidden>
-        <p class="progress-step-head"><span class="progress-step-name">Reading</span><span id="read-count" class="muted"></span></p>
-        <div id="read-bar" class="progress-bar" role="progressbar" aria-label="Reading" aria-valuemin="0" aria-valuemax="100">
+        <p class="progress-step-head"><span class="progress-step-name" data-i18n="publish.step_reading">Reading</span><span id="read-count" class="muted"></span></p>
+        <div id="read-bar" class="progress-bar" role="progressbar" aria-label="Reading" data-i18n-attr="aria-label:publish.step_reading" aria-valuemin="0" aria-valuemax="100">
           <div id="read-fill" class="progress-fill"></div>
         </div>
       </div>
       <div id="validate-step" class="progress-step">
-        <p class="progress-step-head"><span class="progress-step-name">Validating</span><span id="validate-count" class="muted"></span></p>
-        <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validating" aria-valuemin="0" aria-valuemax="100">
+        <p class="progress-step-head"><span class="progress-step-name" data-i18n="publish.step_validating">Validating</span><span id="validate-count" class="muted"></span></p>
+        <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validating" data-i18n-attr="aria-label:publish.step_validating" aria-valuemin="0" aria-valuemax="100">
           <div id="validate-fill" class="progress-fill"></div>
         </div>
       </div>
       <div id="publish-step" class="progress-step">
-        <p class="progress-step-head"><span class="progress-step-name">Publishing</span><span id="progress-count" class="muted"></span></p>
-        <div id="progress-bar" class="progress-bar" role="progressbar" aria-label="Publishing" aria-valuemin="0" aria-valuemax="100">
+        <p class="progress-step-head"><span class="progress-step-name" data-i18n="publish.step_publishing">Publishing</span><span id="progress-count" class="muted"></span></p>
+        <div id="progress-bar" class="progress-bar" role="progressbar" aria-label="Publishing" data-i18n-attr="aria-label:publish.step_publishing" aria-valuemin="0" aria-valuemax="100">
           <div id="progress-fill" class="progress-fill"></div>
         </div>
       </div>
       <p class="muted progress-count"><span id="progress-elapsed"></span></p>
-      <div id="progress-tally" class="progress-tally" role="group" aria-label="Items by result" hidden>
-        <div class="progress-stat progress-stat-ok"><b id="tally-ok">0</b><span>Successful</span></div>
-        <div class="progress-stat progress-stat-failed"><b id="tally-failed">0</b><span>Failed</span></div>
-        <div class="progress-stat progress-stat-skipped" id="tally-skipped-box" hidden><b id="tally-skipped">0</b><span>Skipped</span></div>
-        <div class="progress-stat progress-stat-pending"><b id="tally-pending">0</b><span>Pending</span></div>
+      <div id="progress-tally" class="progress-tally" role="group" aria-label="Items by result" data-i18n-attr="aria-label:publish.tally_label" hidden>
+        <div class="progress-stat progress-stat-ok"><b id="tally-ok">0</b><span data-i18n="publish.tally_ok">Successful</span></div>
+        <div class="progress-stat progress-stat-failed"><b id="tally-failed">0</b><span data-i18n="publish.tally_failed">Failed</span></div>
+        <div class="progress-stat progress-stat-skipped" id="tally-skipped-box" hidden><b id="tally-skipped">0</b><span data-i18n="publish.tally_skipped">Skipped</span></div>
+        <div class="progress-stat progress-stat-pending"><b id="tally-pending">0</b><span data-i18n="publish.tally_pending">Pending</span></div>
       </div>
       <p id="progress-note" class="muted progress-note"></p>
       <div id="progress-confirm" class="progress-confirm" role="alertdialog" aria-labelledby="progress-confirm-text" hidden>
-        <p id="progress-confirm-text">Cancel this publish? Items already processed are kept in the folder; the rest will not be published.</p>
+        <p id="progress-confirm-text" data-i18n="publish.confirm_text">Cancel this publish? Items already processed are kept in the folder; the rest will not be published.</p>
         <div class="progress-actions">
-          <button id="progress-keep" class="btn btn-secondary" type="button">Keep publishing</button>
-          <button id="progress-stop" class="btn progress-danger" type="button">Yes, cancel publish</button>
+          <button id="progress-keep" class="btn btn-secondary" type="button" data-i18n="publish.keep_publishing">Keep publishing</button>
+          <button id="progress-stop" class="btn progress-danger" type="button" data-i18n="publish.confirm_cancel">Yes, cancel publish</button>
         </div>
       </div>
       <div id="progress-actions" class="progress-actions">
-        <button id="progress-cancel" class="btn btn-secondary" type="button">Cancel publish</button>
-        <button id="progress-close" class="btn" type="button">Close</button>
+        <button id="progress-cancel" class="btn btn-secondary" type="button" data-i18n="publish.cancel_publish">Cancel publish</button>
+        <button id="progress-close" class="btn" type="button" data-i18n="publish.close">Close</button>
       </div>
     </div>
   </div>
@@ -159,6 +159,7 @@
   <!-- Shared shell -->
   <script src="../shared/js/dom.js"></script>
   <script src="../shared/js/bridge.js"></script>
+  <script src="../shared/js/i18n.js"></script>
   <script src="../shared/js/shell.js"></script>
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>

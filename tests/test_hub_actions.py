@@ -51,6 +51,43 @@ class HubRolesTests(unittest.TestCase):
         self.finish_reads()
         self.bridge.push.assert_called_once_with("get_hub_role", {"state": "admin", "role": "ADMIN"})
 
+    def test_a_hub_admin_is_known_only_once_the_role_has_been_read(self):
+        self.assertFalse(self.roles.is_admin(), "nothing read yet")
+        self.roles.get()
+        self.assertFalse(self.roles.is_admin(), "the read is still running")
+        self.finish_reads()
+        self.assertTrue(self.roles.is_admin())
+
+    def test_a_member_is_not_a_hub_admin(self):
+        self.read_role.return_value = MEMBER
+        self.roles.get()
+        self.finish_reads()
+        self.assertFalse(self.roles.is_admin())
+
+    def test_an_old_admin_answer_still_counts_while_it_is_read_again_in_the_background(self):
+        self.roles.get()
+        self.finish_reads()
+        self.clock.now += hub_actions.KEPT_SECONDS + 1
+        self.assertTrue(self.roles.is_admin())
+        self.assertEqual(len(self.queued), 1, "the role is read again, not waited for")
+
+    def test_a_hub_admin_is_still_one_while_a_refresh_reads_the_role_again(self):
+        self.roles.get()
+        self.finish_reads()
+        self.assertEqual(self.roles.get(refresh=True)["state"], hub_actions.PENDING)
+        self.assertEqual(len(self.queued), 1, "the role is read again")
+        self.assertTrue(self.roles.is_admin(), "the answer from before stands until the new one is in")
+
+    def test_is_admin_never_reads_the_role_when_there_is_no_answer_yet(self):
+        self.assertFalse(self.roles.is_admin())
+        self.assertEqual(self.queued, [])
+
+    def test_a_hub_admin_of_another_hub_is_not_one_here(self):
+        self.roles.get()
+        self.finish_reads()
+        self.config.hub_id = "hub-2"
+        self.assertFalse(self.roles.is_admin())
+
     def test_the_role_is_read_for_the_email_in_lower_case_and_the_hubs_data_model_id(self):
         self.roles.get()
         self.finish_reads()

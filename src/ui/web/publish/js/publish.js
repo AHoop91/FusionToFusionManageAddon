@@ -13,6 +13,7 @@
   const jobs = ns.pubJobs;
   const bom = ns.pubBom;
   const check = ns.pubCheck;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
   const SECTIONS = ['structure', 'thumbnail'];    // loaded for the open design once its summary is in
@@ -56,9 +57,9 @@
     currentSummary = s;
     setThumbnail('', true);
     setSummary([
-      line('Item Number', s.item_number || '-'),
-      line('Part Number', s.part_number || '-'),
-      line('Description', s.description || '-'),
+      line(t('publish.item_number'), s.item_number || '-'),
+      line(t('publish.part_number'), s.part_number || '-'),
+      line(t('publish.description'), s.description || '-'),
     ]);
   }
 
@@ -67,7 +68,7 @@
     $('pub-loader').hidden = !on;
     $('pub-content').hidden = on;
     $('pub-denied').hidden = true;
-    if (on) ui.warnWhenSlow($('pub-loader').querySelector('p'), 'Loading item...');
+    if (on) ui.warnWhenSlow($('pub-loader').querySelector('p'), t('publish.loading_item'));
   }
 
   /** Say, in the middle of the panel and in place of the item, that the user's permissions do not allow publishing. */
@@ -130,7 +131,7 @@
 
   /** The design's own properties, compared with Fusion Manage. */
   function answerProperties(entry) {
-    const failure = entry.ok ? '' : entry.message || 'Unknown error';
+    const failure = entry.ok ? '' : entry.message || t('publish.unknown_error');
     if (entry.ok) details.setRoot(entry.data.compare);
     else details.setRootError(failure);
     check.setRoot(entry.ok ? entry.data.compare : null, failure);
@@ -139,7 +140,7 @@
   /** The first level of the Bill of Materials, compared with Fusion Manage. */
   function answerStructure(entry) {
     if (!entry.ok) {
-      check.fail(entry.message || 'Unknown error');
+      check.fail(entry.message || t('publish.unknown_error'));
       bom.showError(entry.message, function () { check.clearFailure(); loaded.structure = false; loadSection('structure'); check.update(); });
       return;
     }
@@ -244,6 +245,7 @@
   function start() {
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
+    if (!ns.i18n.gate(start)) return;   // the language is in before the page is built
     ns.shell.mountHeader();
     ns.account.init();
     ns.auth.init();

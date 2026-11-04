@@ -303,7 +303,7 @@ You are ready to use the add-in. There is nothing else to set up.
 - **Check for updates** asks the hub at once, without closing Preferences. **Change file** lets you pick a different file, for example if the Hub Admin moved it to another folder.
 - **The file's details.** The card shows the file's name and project, **Last updated in the hub**, **Updated by**, its **Version** in the hub, and **Last read by you**.
 - **Your own Client ID is kept.** If you already had a Client ID, the add-in keeps it, and your sign-in, and takes only the setup from the file.
-- **Files that are refused:** one saved from another hub, one over 1 MB, or one that is not a Fusion Manage Item Management configuration. A file with no Client ID is also refused, so ask the Hub Admin to publish again.
+- **Files that are refused:** one saved from another hub, one over 2.5 MB, or one that is not a Fusion Manage Item Management configuration. A file with no Client ID is also refused, so ask the Hub Admin to publish again.
 
 ---
 

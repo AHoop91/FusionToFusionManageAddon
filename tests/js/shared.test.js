@@ -4,7 +4,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run } = require('./helpers');
+const { run, englishI18n } = require('./helpers');
 
 let JSDOM = null;
 try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
@@ -12,7 +12,7 @@ const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
 
 function page(scripts) {
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only' });
-  dom.window.MfgUi = {};
+  dom.window.MfgUi = { i18n: englishI18n() };
   dom.window.adsk = { fusionSendData: () => {} };
   scripts.forEach((src) => run(dom.window, '../shared/js/' + src));
   return dom.window;
@@ -54,4 +54,18 @@ test('the upload bar has no value while the share done is unknown', { skip }, ()
   view.show({ stage: 'Uploading', step: 0, steps: ['a', 'b'], percent: null });
   assert.strictEqual(bar.hasAttribute('aria-valuenow'), false);
   assert.ok(bar.classList.contains('indeterminate'));
+});
+
+test('the restart in the account card asks the add-in to start again', { skip }, () => {
+  const dom = new JSDOM('<!doctype html><html><body><div id="app-header"></div></body></html>', { runScripts: 'outside-only' });
+  const w = dom.window;
+  w.MfgUi = {};
+  w.sent = [];
+  w.adsk = { fusionSendData: (action, data) => w.sent.push([action, JSON.parse(data)]) };
+  ['dom.js', 'bridge.js', 'i18n.js', 'shell.js', 'account.js'].forEach((src) => run(w, '../shared/js/' + src));
+  w.MfgUi.shell.mountHeader();
+  w.MfgUi.account.init();
+  w.sent.length = 0;
+  w.document.getElementById('card-restart').click();
+  assert.deepStrictEqual(w.sent, [['restart_addin', {}]]);
 });

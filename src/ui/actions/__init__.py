@@ -14,16 +14,17 @@ Each module registers one feature area on the ``MessageBridge``:
 ``register_actions`` is the only function the add-in entry point needs.
 """
 
-from typing import Callable
+from typing import Callable, Optional
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
+from ...config.hub_languages import HubLanguages
 from ..file_dialogs import FileDialogs
 from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
 from .auth_actions import register_auth_actions
-from .hub_actions import register_hub_actions
+from .hub_actions import HubRoles, register_hub_actions
 from .hub_file_actions import register_hub_file_actions
 from .hub_save_actions import register_hub_save_actions
 from .search_actions import register_search_actions
@@ -36,16 +37,19 @@ from .workspace_actions import register_workspace_actions
 
 
 def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
-                     dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts, post: Callable[[Callable[[], None]], None]) -> None:
-    """Register every palette action on ``bridge``; ``post`` queues work on Fusion's main thread."""
+                     dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts, post: Callable[[Callable[[], None]], None],
+                     languages: Optional[HubLanguages] = None) -> HubRoles:
+    """Register every palette action on ``bridge``; ``post`` queues work on Fusion's main thread; ``languages`` is what keeps the languages
+    a hub shares. Answers the hub roles."""
     register_settings_actions(bridge, config)
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)
     register_tenant_actions(bridge)
-    register_hub_actions(bridge, config)
-    register_hub_file_actions(bridge, config, post)
-    register_hub_save_actions(bridge, config)
+    roles = register_hub_actions(bridge, config)
+    register_hub_file_actions(bridge, config, post, languages)
+    register_hub_save_actions(bridge, config, languages)
     register_property_actions(bridge)
     register_publish_actions(bridge, config, auth)
     register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)
     register_search_actions(bridge, config, auth)
+    return roles

@@ -11,6 +11,7 @@ from typing import Any, Optional, Tuple
 import adsk.core
 import adsk.fusion
 
+from ..core.i18n import t
 from ..core.logging_setup import get_logger
 
 try:
@@ -38,7 +39,7 @@ def top_level_number() -> Tuple[str, str]:
     The reason is logged when it changes, so a drawing that never becomes ready says what it is waiting for. Main thread.
     """
     global _last_reason
-    number, reason = "", "The open document is not a drawing."
+    number, reason = "", t("app.drawing_not_open")
     document = adsk.core.Application.get().activeDocument
     if document is not None and active_drawing() is not None:
         number = cached_number()
@@ -66,7 +67,7 @@ def _document_key(document: Any) -> str:
 def _number_of(document: Any) -> Tuple[str, str]:
     references = document.documentReferences
     if not references.count:
-        return "", "The drawing has no references yet."
+        return "", t("app.drawing_no_references")
     for reference in references:
         source = reference.referencedDocument
         if source is None:
@@ -77,11 +78,11 @@ def _number_of(document: Any) -> Tuple[str, str]:
         try:
             number = str(design.rootComponent.partNumber or "").strip()
         except RuntimeError as error:   # "Part number cannot be fetched while offline": the design is still loading
-            return "", f"The part number of {source.name} cannot be read yet ({error})."
+            return "", t("app.drawing_number_unreadable", name=source.name, reason=error)
         if number:
             return number, ""
-        return "", f"The top-level component of {source.name} has no part number."
-    return "", f"{references.count} reference(s), but none of the designs is loaded yet."
+        return "", t("app.drawing_no_part_number", name=source.name)
+    return "", t("app.drawing_designs_not_loaded", count=references.count)
 
 
 def selects_top_level(entities: Any) -> bool:
@@ -128,18 +129,18 @@ def _export(path: str, kind: str, create: str) -> None:
     """Write the open drawing to ``path`` with the export options ``create`` of the drawing's export manager makes (``kind`` names the format)."""
     drawing = active_drawing()
     if drawing is None:
-        raise RuntimeError("The open document is not a drawing.")
+        raise RuntimeError(t("app.drawing_not_open"))
     manager = drawing.exportManager
     make_options = getattr(manager, create, None)
     if make_options is None:   # DWG and DXF came to the API later than PDF
-        raise RuntimeError(f"This version of Fusion cannot export a drawing as a {kind}. Update Fusion and try again.")
+        raise RuntimeError(t("app.drawing_export_unsupported", format=kind))
     options = make_options(path)
     if hasattr(options, "openPDF"):
         options.openPDF = False   # the file is attached, not shown
     if not manager.execute(options):
-        raise RuntimeError(f"Fusion could not export the drawing as a {kind}.")
+        raise RuntimeError(t("app.drawing_export_failed", format=kind))
     if not (os.path.isfile(path) and os.path.getsize(path)):   # an export straight after a drawing opens can report success and write nothing
-        raise RuntimeError(f"Fusion reported the {kind} as exported, but no file was written. Wait for the drawing to finish loading and try again.")
+        raise RuntimeError(t("app.drawing_export_no_file", format=kind))
 
 
 def export_pdf(path: str) -> None:

@@ -6,6 +6,7 @@ Sections are read separately and on demand, so the panel can show the summary fi
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict
 from .fusion_graphql_client import FusionGraphQlClient, MfgApiError
 from .parsers import parse_component, parse_properties, parse_structure, parse_summary
@@ -185,7 +186,7 @@ def _component_variables(summary: Dict[str, Any], component_id: str, saved_at: s
     """The variables that address one component of the design (at version ``saved_at`` when given); raises while the summary has no ids."""
     composition = summary.get("composition", "")
     if not component_id or not composition:
-        raise ValueError("The summary has no component id yet.")
+        raise ValueError(t("data.mfg_no_component_id"))
     variables: Dict[str, Any] = {"componentId": component_id, "composition": composition}
     if saved_at:
         variables["time"] = saved_at
@@ -235,7 +236,7 @@ def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any]
     refuses is alone, so a single bad component fails only itself. A busy answer (already retried) fails all of them."""
     composition = summary.get("composition", "")
     if not composition or not component_ids or not all(component_ids):
-        raise ValueError("The summary has no component id yet.")
+        raise ValueError(t("data.mfg_no_component_id"))
     variables: Dict[str, Any] = {"composition": composition, **{f"id{n}": cid for n, cid in enumerate(component_ids)}}
     if saved_at:
         variables["time"] = saved_at
@@ -290,12 +291,12 @@ def _read_structure(client: FusionGraphQlClient, summary: Dict[str, Any], saved_
         if progress:   # only a structure of several pages has a count worth showing
             progress(len(relations))
     else:   # the last page still named a next one: showing what was read would pass a part of the BOM off as all of it
-        raise MfgApiError(f"The Bill of Materials has more than {MAX_PAGES * STRUCTURE_PAGE_SIZE} components, more than can be read.")
+        raise MfgApiError(t("data.mfg_bom_too_many", count=MAX_PAGES * STRUCTURE_PAGE_SIZE))
     rows = parse_structure(relations, root_id)
     deepest = max((int(row["level"]) for row in rows), default=-1) + 1   # levels below the root
     log.debug("Read the structure of %s to depth %d: %d relation(s) in %d page(s), %d level(s) deep", root_id, depth, len(relations), page, deepest)
     if depth == 1:   # one level was asked for: keep the direct lines, whatever else the answer carried
         return [row for row in rows if int(row["level"]) == 0]
     if deepest >= STRUCTURE_DEPTH:   # the read stopped at its depth: there may be more below
-        raise MfgApiError(f"The Bill of Materials is nested {STRUCTURE_DEPTH} levels deep or more, more than can be read.")
+        raise MfgApiError(t("data.mfg_bom_too_deep", levels=STRUCTURE_DEPTH))
     return rows

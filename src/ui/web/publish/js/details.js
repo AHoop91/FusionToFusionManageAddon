@@ -14,25 +14,31 @@
   const $ = ns.$;
   const ui = ns.pubUi;
   const el = ui.el;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   // Tooltip per property status (the dot at the right of a property).
-  const STATUS = {
-    match:     'Matches Fusion Manage',
-    mismatch:  'Differs: publishing will update Fusion Manage',
-    new:       'No Fusion Manage item yet: publishing will create it',
-    unknown:   'Fusion Manage value could not be read',
-    multiple:  'Several Fusion Manage items carry this item number: fix it in Fusion Manage',
-    unchecked: 'Mapped: Fusion Manage is not checked yet',
-  };
+  function statusTexts() {
+    return {
+      match:     t('publish.prop_match'),
+      mismatch:  t('publish.prop_mismatch'),
+      new:       t('publish.prop_new'),
+      unknown:   t('publish.prop_unknown'),
+      multiple:  t('publish.prop_multiple'),
+      unchecked: t('publish.prop_unchecked'),
+    };
+  }
 
   // The pill at the top right of the component title: what publishing would do.
-  const PILLS = {
-    new:      { text: 'New', title: STATUS.new },
-    mismatch: { text: 'Update', title: 'Publishing will update the Fusion Manage item' },
-    match:    { text: 'Up to date', title: STATUS.match },
-    multiple: { text: 'Shared number', title: STATUS.multiple },
-    unknown:  { text: 'Error', title: 'Fusion Manage could not be read' },
-  };
+  function pills() {
+    const texts = statusTexts();
+    return {
+      new:      { text: t('publish.pill_new'), title: texts.new },
+      mismatch: { text: t('publish.pill_update'), title: t('publish.pill_update_title') },
+      match:    { text: t('publish.pill_up_to_date'), title: texts.match },
+      multiple: { text: t('publish.pill_shared'), title: texts.multiple },
+      unknown:  { text: t('publish.pill_error'), title: t('publish.pill_error_title') },
+    };
+  }
 
   let hooks = null;
   let pane = null;
@@ -86,7 +92,7 @@
     if (entry.ok) {
       compares[id] = entry.data.compare;
     } else {
-      errors[id] = entry.message || 'Unknown error';
+      errors[id] = entry.message || t('publish.unknown_error');
     }
     paint();
   }
@@ -140,7 +146,7 @@
   /** Drag handle on the right edge of column ``i``: it grows or shrinks against the next column, so the table keeps its width. */
   function columnGrip(i, table, apply) {
     const grip = el('span', 'pub-cmp-grip');
-    grip.title = 'Drag to resize the column (double-click to reset)';
+    grip.title = t('publish.col_resize');
     grip.addEventListener('pointerdown', function (event) {
       event.preventDefault();
       const startX = event.clientX;
@@ -177,7 +183,7 @@
     apply();
     table.appendChild(cols);
     const head = el('tr');
-    ['Property', 'Fusion', 'Fusion Manage', ''].forEach(function (h, i) {
+    [t('publish.prop_col_property'), t('publish.col_fusion'), t('publish.prop_col_fm'), ''].forEach(function (h, i) {
       const th = el('th', '', h);
       if (i < 2) th.appendChild(columnGrip(i, table, apply));   // moves the edge it shares with the next column
       head.appendChild(th);
@@ -186,13 +192,14 @@
     rows.forEach(function (r) {
       const tr = el('tr');
       const hasFm = r.fm_field && r.fm_value;
-      [['Property', el('td', '', r.name)],
-       ['Fusion', valueCell(r.value, r.shown, r.unit, r.original)],
-       ['Fusion Manage', valueCell(hasFm ? r.fm_value : '', '', r.unit)]].forEach(function (c) {
+      [[t('publish.prop_col_property'), el('td', '', r.name)],
+       [t('publish.col_fusion'), valueCell(r.value, r.shown, r.unit, r.original)],
+       [t('publish.prop_col_fm'), valueCell(hasFm ? r.fm_value : '', '', r.unit)]].forEach(function (c) {
         c[1].setAttribute('data-label', c[0]);
         tr.appendChild(c[1]);
       });
-      const text = STATUS[r.status] || STATUS.unknown;
+      const texts = statusTexts();
+      const text = texts[r.status] || texts.unknown;
       const cell = el('td', 'pub-status pub-status-' + r.status);
       const mark = el('span', 'pub-mark');
       mark.title = text;
@@ -208,7 +215,7 @@
   function propertiesCard(compare) {
     const card = el('div', 'card');
     if (!compare.rows.length) {
-      card.appendChild(el('p', 'muted', 'This item has no properties.'));
+      card.appendChild(el('p', 'muted', t('publish.prop_none')));
       return card;
     }
     if (compare.fm.message) {
@@ -216,15 +223,15 @@
     }
     const mapped = compare.rows.filter(function (r) { return r.status !== 'unmapped'; });
     if (mapped.length) card.appendChild(propertyTable(mapped));
-    else card.appendChild(el('p', 'muted', 'No properties are mapped to Fusion Manage. Map fields in Settings.'));
+    else card.appendChild(el('p', 'muted', t('publish.prop_none_mapped')));
     return card;
   }
 
   /** Several Fusion Manage items carry the item number: list them, and say the number has to be fixed in Fusion Manage. */
   function sharedCard(fm) {
     const card = el('div', 'card pub-pick-card');
-    card.appendChild(el('h4', 'pub-pick-title', 'Item number shared'));
-    card.appendChild(el('p', 'muted', fm.candidates.length + ' Fusion Manage items carry ' + fm.item_number + '. Renumber or remove the extra items in Fusion Manage, then refresh this panel. Nothing can be published until each item number belongs to one item.'));
+    card.appendChild(el('h4', 'pub-pick-title', t('publish.shared_title')));
+    card.appendChild(el('p', 'muted', t('publish.shared_text', { count: fm.candidates.length, number: fm.item_number })));
     fm.candidates.forEach(function (c) {
       const line = el('div', 'pub-fm-choice', c.descriptor);
       line.title = c.descriptor;
@@ -275,14 +282,15 @@
     head.appendChild(text);
     const side = el('div', 'pub-props-side');   // the state pill, in the top right corner
     const state = changeState(compare);
-    if (compare && PILLS[state]) {
+    const pillOf = pills()[state];
+    if (compare && pillOf) {
       const pill = el('span', 'pub-state pub-state-' + state);
       pill.appendChild(el('span', 'pub-state-dot'));
-      pill.appendChild(el('span', 'pub-state-label', PILLS[state].text));
+      pill.appendChild(el('span', 'pub-state-label', pillOf.text));
       const info = el('span', 'pub-state-info');   // the small "i" says there is a tooltip to read
       info.appendChild(ui.svg(['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5']));
       pill.appendChild(info);
-      pill.title = PILLS[state].title;
+      pill.title = pillOf.title;
       side.appendChild(pill);
     }
     if (side.childNodes.length) head.appendChild(side);
@@ -307,7 +315,7 @@
       content = el('div', 'card pub-props-wait');
       content.appendChild(ui.loaderNode());
     }
-    pane.appendChild(section('Properties', content));
+    pane.appendChild(section(t('publish.properties'), content));
   }
 
   // ---- Opening, closing and feeding the pane -------------------------------------

@@ -13,7 +13,7 @@ from tests.without_fusion import fusion_modules_stubbed
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
 with fusion_modules_stubbed():
     from src.ui.actions import hub_file_actions
-    from src.ui.actions.hub_file_actions import (NO_FILE_CHOSEN, NO_HUB, START_WAIT_TRIES, HubConfigFile, _Job,
+    from src.ui.actions.hub_file_actions import (no_file_chosen, no_hub, START_WAIT_TRIES, HubConfigFile, _Job,
                                                  register_hub_file_actions)
     from src.ui.message_bridge import MessageBridge
 
@@ -104,12 +104,12 @@ class PlanApplyTests(Setup):
 
     def test_no_hub_is_refused(self):
         self.config.hub_id = ""
-        with self.assertRaisesRegex(ValueError, NO_HUB):
+        with self.assertRaisesRegex(ValueError, no_hub()):
             self.file.plan_apply({})
 
     def test_no_file_is_refused(self):
         self.config.config.hub_file = None
-        with self.assertRaisesRegex(ValueError, NO_FILE_CHOSEN):
+        with self.assertRaisesRegex(ValueError, no_file_chosen()):
             self.file.plan_apply({})
 
 
@@ -257,9 +257,9 @@ class RegisterTests(unittest.TestCase):
         for action in ("browse_hub_files", "use_hub_config", "check_hub_file"):
             self.assertEqual(bridge.dispatch(f"{action}_status", "")["result"]["pending"], False)
         reply = bridge.dispatch("browse_hub_files", "{}")
-        self.assertEqual((reply["ok"], reply["error"]), (False, NO_HUB))
+        self.assertEqual((reply["ok"], reply["error"]), (False, no_hub()))
         reply = bridge.dispatch("use_hub_config", "{}")
-        self.assertEqual((reply["ok"], reply["error"]), (False, NO_HUB))
+        self.assertEqual((reply["ok"], reply["error"]), (False, no_hub()))
 
 
 if __name__ == "__main__":

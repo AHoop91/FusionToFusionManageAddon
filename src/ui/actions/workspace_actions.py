@@ -4,6 +4,7 @@ import threading
 from typing import Any, Callable, Dict
 
 from ...auth.auth_service import AuthService
+from ...core.i18n import t
 from ...config.config_service import CompanyModeUnavailable, ConfigService
 from ...config.workspace_models import KINDS_BY_ID
 from ...fm.client import FmClient
@@ -37,7 +38,7 @@ class WorkspaceChecks:
         kind_id = str(payload.get("kind", ""))
         workspace_id = str(payload.get("workspace_id", "")).strip()
         if kind_id not in KINDS_BY_ID:
-            return _failure(kind_id, workspace_id, "Unknown workspace type.")
+            return _failure(kind_id, workspace_id, t("app.unknown_workspace_type"))
         try:
             client = self._make_client()
         except CompanyModeUnavailable as exc:
@@ -53,13 +54,13 @@ class WorkspaceChecks:
         """The latest outcome for ``payload["kind"]``, for a panel that missed the push."""
         kind_id = str(payload.get("kind", ""))
         with self._lock:
-            return dict(self._results.get(kind_id) or _failure(kind_id, "", "No validation is running."))
+            return dict(self._results.get(kind_id) or _failure(kind_id, "", t("app.no_validation")))
 
     def _finish(self, kind_id: str, workspace_id: str, client: FmClient, request: int) -> None:
         try:
             outcome = {**WorkspaceService(client).validate(KINDS_BY_ID[kind_id], workspace_id), "workspace_id": workspace_id, "pending": False}
         except Exception as exc:  # noqa: BLE001 - never leave the panel spinning
-            outcome = _failure(kind_id, workspace_id, f"Validation failed: {why(exc)}")
+            outcome = _failure(kind_id, workspace_id, t("app.validation_failed", reason=why(exc)))
         with self._lock:
             if self._requests.get(kind_id) != request:   # a newer check replaced this one: its answer is not wanted
                 return

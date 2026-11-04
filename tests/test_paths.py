@@ -9,9 +9,11 @@ from unittest import mock
 from src.auth import token_store
 from src.config import config_service
 from src.config.config_envelope import ConfigTransferError
-from src.config.shared_config import NOT_ABSOLUTE, clean_source, read_shared
+from src.config.shared_config import clean_source, read_shared
 from src.core import logging_setup, paths
 from src.ui import item_numbers
+
+NOT_ABSOLUTE_ENGLISH = r"The shared configuration file must be given as a full path, such as C:\Share\config.json or \\server\share\config.json."
 
 
 @mock.patch.object(paths.sys, "platform", "win32")
@@ -102,5 +104,5 @@ class SharedSourceTests(unittest.TestCase):
             with mock.patch("src.config.shared_config.read_envelope") as read:
                 with self.assertRaises(ConfigTransferError) as caught:
                     read_shared(source)
-                self.assertEqual(str(caught.exception), NOT_ABSOLUTE)
+                self.assertEqual(str(caught.exception), NOT_ABSOLUTE_ENGLISH)
                 read.assert_not_called()

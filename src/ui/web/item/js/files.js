@@ -8,6 +8,7 @@
   'use strict';
 
   const el = ns.el;
+  const t = ns.i18n.t;
   const tree = ns.itemTree;
   const CLASS = 'item-files';
   const MIN_COLUMN_PX = 50;
@@ -15,14 +16,14 @@
 
   // column key, heading, and how to turn a file into the text shown and sorted on
   const COLUMNS = [
-    { key: 'name', title: 'File Name', width: 260 },
-    { key: 'title', title: 'Title', width: 200 },
-    { key: 'version', title: 'Ver.', width: 70, number: true },
-    { key: 'type', title: 'Type', width: 130 },
-    { key: 'size', title: 'Size', width: 90, number: true },
-    { key: 'updated', title: 'Last Updated', width: 170 },
-    { key: 'user', title: 'By User', width: 130 },
-    { key: 'description', title: 'Description' },
+    { key: 'name', title: function () { return t('item.files_col_name'); }, width: 260 },
+    { key: 'title', title: function () { return t('item.files_col_title'); }, width: 200 },
+    { key: 'version', title: function () { return t('item.files_col_version'); }, width: 70, number: true },
+    { key: 'type', title: function () { return t('item.files_col_type'); }, width: 130 },
+    { key: 'size', title: function () { return t('item.files_col_size'); }, width: 90, number: true },
+    { key: 'updated', title: function () { return t('item.col_last_updated'); }, width: 170 },
+    { key: 'user', title: function () { return t('item.col_by_user'); }, width: 130 },
+    { key: 'description', title: function () { return t('item.col_description'); } },
   ];
 
   // Icon colour and badge text by kind of file; anything else is grey and badged with its own extension.
@@ -45,8 +46,8 @@
 
   function formatSize(bytes) {
     if (!bytes) return '';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes < 1024 * 1024) return t('item.size_kb', { size: (bytes / 1024).toFixed(1) });
+    return t('item.size_mb', { size: (bytes / (1024 * 1024)).toFixed(1) });
   }
 
   function icon(ext) {
@@ -85,10 +86,10 @@
   /** Read the files of the item of ``view`` and fill ``target`` with them; ``open(file)`` runs when a file name is clicked. */
   function render(target, view, open, tools) {
     const mine = ++current;
-    tree.loading(target, CLASS, 'Reading the files...');
+    tree.loading(target, CLASS, t('item.files_reading'));
     tree.load('files_load', 'files_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, item_urn: view.item_urn }, function (error, files) {
       if (mine !== current) return;
-      if (error) { tree.centred(target, CLASS, 'Could not read the files: ' + error, true); return; }
+      if (error) { tree.centred(target, CLASS, t('item.files_error', { error: error }), true); return; }
       const mark = draw(target, files, open, tools);
       if (files.length) checkFresh(files, function (stale) { if (mine === current) mark(stale); });
     });
@@ -124,7 +125,7 @@
         const button = el('button', 'item-files-tool');
         button.type = 'button';
         button.append(icon(action.ext), el('span', '', action.label));
-        button.title = action.ready ? action.label + ' and attach it to this item' : 'The drawing is still loading';
+        button.title = action.ready ? t('item.files_attach_tip', { label: action.label }) : t('item.drawing_loading');
         button.disabled = tools.busy || !action.ready;
         button.addEventListener('click', function () { tools.run(action.action); });
         bar.appendChild(button);
@@ -166,8 +167,8 @@
     }
     fit();
     COLUMNS.forEach(function (column) {
-      const th = el('th', '', column.title);
-      th.title = 'Sort by ' + column.title;
+      const th = el('th', '', column.title());
+      th.title = t('item.files_sort', { column: column.title() });
       marks[column.key] = el('span', 'item-sort');
       th.appendChild(marks[column.key]);
       th.addEventListener('click', function () {
@@ -196,14 +197,14 @@
           const td = el('td');
           if (c.key === 'name') {
             if (stale[file.name]) {   // made from an earlier save of the open document
-              const pill = el('span', 'item-file-stale', 'Out of Date');
+              const pill = el('span', 'item-file-stale', t('item.out_of_date'));
               pill.title = stale[file.name];
               td.appendChild(pill);
             }
             td.appendChild(icon(file.ext));
             const link = el('a', 'item-link', file.name);
             link.href = '#';
-            link.title = 'Open in Fusion Manage in your browser';
+            link.title = t('item.open_in_fusion_manage');
             link.addEventListener('click', function (event) { event.preventDefault(); open(file); });
             td.appendChild(link);
           } else {
@@ -220,7 +221,7 @@
     wrap.appendChild(table);
     target.appendChild(wrap);
     if (!files.length) {   // the columns stay, and the empty message fills the space under them
-      tree.emptyUnder(target, EMPTY_FOLDER, 'No files attached', 'Files attached to this item in Fusion Manage will be listed here.');
+      tree.emptyUnder(target, EMPTY_FOLDER, t('item.files_empty'), t('item.files_empty_hint'));
     }
     return function (found) { stale = found; draw(); };   // mark the files found out of date
   }

@@ -22,6 +22,7 @@
   const bridge = ns.bridge;
   const ui = ns.pubUi;
   const el = ui.el;
+  function t(key, params) { return ns.i18n.t(key, params); }
 
   const POLL_MS = 200;          // wait between checks for an answer
   const PREFETCH_PX = 600;      // load the next page when this close to the end of the list
@@ -33,7 +34,23 @@
   const CARET = ['M6 9l6 6 6-6'];
 
   // The versions the search can list, by the search's ``revision`` filter.
-  const VERSIONS = [{ revision: '3', label: 'Working version' }, { revision: '1', label: 'Latest version' }];   // the first is searched until another is picked
+  function versions() {   // the first is searched until another is picked
+    return [{ revision: '3', label: t('publish.add_version_working') }, { revision: '1', label: t('publish.add_version_latest') }];
+  }
+
+  const KEEP = { shown: '{shown}', total: '{total}' };   // passed to ``t`` so that the two places stay in the text
+
+  /** ``template`` (a text with ``{shown}`` and ``{total}`` left in it, see ``KEEP``) as nodes with each of the two numbers in bold. */
+  function boldNumbers(template, shown, total) {
+    const numbers = { shown: shown, total: total };
+    const fragment = document.createDocumentFragment();
+    template.split(/(\{shown\}|\{total\})/).forEach(function (part) {
+      const name = /^\{(shown|total)\}$/.exec(part);
+      if (name) fragment.appendChild(el('strong', '', numbers[name[1]]));
+      else if (part) fragment.appendChild(document.createTextNode(part));
+    });
+    return fragment;
+  }
 
   // State of the open dialog. ``generation`` changes whenever the search restarts, which makes every reply for the
   // old search stale; requests for the property list and picklists belong to the dialog, not to one search.
@@ -57,7 +74,7 @@
   let frame = 0;
   let members = { ids: new Set(), numbers: new Set() };   // what the Bill of Materials holds
   let fields = [];              // filterable properties: { id, title, picklist }
-  let fieldsNote = 'Loading properties...';   // shown instead of the filters while the properties are not known
+  let fieldsNote = '';   // shown instead of the filters while the properties are not known
   let groups = [];              // filter groups being edited: { join, rows: [{ field, value, join }] }, join = how it connects to the one before
   let nextToken = 1;
   const waiting = new Map();    // token -> callback(entry) of a request in flight
@@ -84,7 +101,7 @@
 
   function onAnswer(action, r) {
     if (!dialog) return;
-    if (!r.ok) { failAll(action === 'search_status' ? '' : action, r.error || 'Unknown error'); return; }
+    if (!r.ok) { failAll(action === 'search_status' ? '' : action, r.error || t('publish.unknown_error')); return; }
     const entry = r.result;
     const waiter = waiting.get(entry.token);
     if (!waiter) return;
@@ -109,7 +126,7 @@
       if (!dialog || mine !== generation) return;
       loading = false;
       if (!entry.ok) {
-        failed = entry.message || 'Unknown error';
+        failed = entry.message || t('publish.unknown_error');
         paintStatus();
         return;
       }
@@ -161,7 +178,7 @@
     request('search_fields', {}, function (entry) {
       if (!dialog) return;
       fields = entry.ok ? entry.result.fields : [];
-      fieldsNote = entry.ok ? (fields.length ? '' : 'The workspace has no properties to filter by.') : 'Could not load the properties: ' + (entry.message || 'Unknown error');
+      fieldsNote = entry.ok ? (fields.length ? '' : t('publish.add_no_properties')) : t('publish.add_props_failed', { message: entry.message || t('publish.unknown_error') });
       renderFilters();
     });
   }
@@ -185,7 +202,7 @@
     box.disabled = added;
     row.classList.toggle('pub-add-row-added', added);
     row.hidden = (hideAdded && added) || (onlySelected && !added && !selected.has(item.id));
-    row.title = added ? itemText(item) + ' (already in the Bill of Materials)' : itemText(item);
+    row.title = added ? t('publish.add_already', { item: itemText(item) }) : itemText(item);
   }
 
   function buildRow(item) {
@@ -199,7 +216,7 @@
     text.appendChild(el('div', 'pub-add-number', item.number || item.name));
     if (item.number && item.name) text.appendChild(el('div', 'pub-add-name', item.name));
     row.appendChild(text);
-    if (item.version) row.appendChild(el('span', 'pub-add-rev', 'REV:' + item.version));
+    if (item.version) row.appendChild(el('span', 'pub-add-rev', t('publish.add_rev', { version: item.version })));
     paintRow(item, row);
     return row;
   }
@@ -228,10 +245,8 @@
     box.hidden = !items.length && !total;
     if (box.hidden) return;
     const left = (hideAdded || onlySelected) ? items.filter(function (item) { return rows.get(item.id).hidden; }).length : 0;
-    box.appendChild(el('strong', '', items.length.toLocaleString()));
-    box.appendChild(document.createTextNode(' of '));
-    box.appendChild(el('strong', '', Math.max(total, items.length).toLocaleString()));
-    if (left) box.appendChild(el('span', 'pub-add-total-note', left.toLocaleString() + ' hidden'));
+    box.appendChild(boldNumbers(t('publish.add_of', KEEP), items.length.toLocaleString(), Math.max(total, items.length).toLocaleString()));
+    if (left) box.appendChild(el('span', 'pub-add-total-note', t('publish.add_hidden_count', { count: left.toLocaleString() })));
   }
 
   function paintStatus() {
@@ -242,9 +257,9 @@
     if (failed) {
       status.classList.add('pub-add-status-card');
       status.appendChild(ui.svg(['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
-      status.appendChild(el('h4', 'pub-error-title', 'Could not load items'));
+      status.appendChild(el('h4', 'pub-error-title', t('publish.add_load_failed')));
       status.appendChild(el('p', 'muted', failed));
-      const retry = el('button', 'pub-outline-button pub-retry', 'Retry');
+      const retry = el('button', 'pub-outline-button pub-retry', t('publish.retry'));
       retry.type = 'button';
       retry.addEventListener('click', loadNext);
       status.appendChild(retry);
@@ -255,14 +270,14 @@
       status.classList.add('pub-add-status-busy');
       const balls = el('div', 'balls');
       balls.setAttribute('role', 'status');
-      balls.setAttribute('aria-label', 'Loading');
+      balls.setAttribute('aria-label', t('publish.loading_aria'));
       for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
       status.appendChild(balls);
-      status.appendChild(el('span', '', 'Loading more...'));
+      status.appendChild(el('span', '', t('publish.add_loading_more')));
     } else if (!items.length) {
-      status.textContent = 'No items match the search.';
+      status.textContent = t('publish.add_no_match');
     } else if ((onlySelected || !moreToLoad()) && items.every(function (item) { return rows.get(item.id).hidden; })) {
-      status.textContent = onlySelected ? 'No items are selected yet.' : 'Every item found is already in the Bill of Materials. Turn on "Show hidden items" to see them.';
+      status.textContent = onlySelected ? t('publish.add_none_selected') : t('publish.add_all_added');
     } else {
       status.hidden = true;
     }
@@ -304,7 +319,7 @@
     dialog.only.disabled = count === 0;
     dialog.add.disabled = count === 0;
     dialog.clear.disabled = count === 0;
-    dialog.count.textContent = count + ' selected';
+    dialog.count.textContent = t('publish.add_selected_count', { count: count });
   }
 
   /** The filter groups as the search takes them: a row's ``join`` says how it connects to the NEXT row. */
@@ -350,17 +365,18 @@
   function spinner() {
     const node = el('span', 'pub-add-spinner');
     node.setAttribute('role', 'status');
-    node.setAttribute('aria-label', 'Loading');
+    node.setAttribute('aria-label', t('publish.loading_aria'));
     return node;
   }
 
   /** AND / OR segmented switch that connects a row (or group) to the one before it. */
-  function joinSwitch(join, label, onChange) {
+  function joinSwitch(join, label, onChange) {   // the buttons say AND and OR; the value passed on stays AND or OR
     const wrap = el('div', 'pub-add-join');
     wrap.setAttribute('role', 'group');
     wrap.setAttribute('aria-label', label);
-    const buttons = ['AND', 'OR'].map(function (name) {
-      const button = el('button', 'pub-add-join-option', name);
+    const buttons = [['AND', t('publish.add_and')], ['OR', t('publish.add_or')]].map(function (pair) {
+      const name = pair[0];
+      const button = el('button', 'pub-add-join-option', pair[1]);
       button.type = 'button';
       button.setAttribute('aria-pressed', String(name === join));
       button.addEventListener('click', function () {
@@ -427,18 +443,19 @@
   }
 
   /**
-   * The choice of which versions to search: a button showing the choice and a small floating list of ``VERSIONS``.
+   * The choice of which versions to search: a button showing the choice and a small floating list of ``versions()``.
    * ``value`` is the chosen revision; ``changed()`` is called when another is picked.
    */
   function versionPicker(changed) {
-    let value = VERSIONS[0].revision;
+    const choices = versions();
+    let value = choices[0].revision;
     const button = el('button', 'pub-add-version');
     button.type = 'button';
-    button.title = 'Which versions of an item to search';
-    button.setAttribute('aria-label', 'Version');
+    button.title = t('publish.add_version_title');
+    button.setAttribute('aria-label', t('publish.add_version'));
     button.setAttribute('aria-haspopup', 'listbox');
     button.setAttribute('aria-expanded', 'false');
-    const text = el('span', 'pub-add-version-text', VERSIONS[0].label);
+    const text = el('span', 'pub-add-version-text', choices[0].label);
     button.appendChild(text);
     button.appendChild(ui.svg(CARET, 14));
 
@@ -446,7 +463,7 @@
       if (!toggleMenu(button)) return;
       const menu = el('div', 'pub-add-menu pub-add-version-menu');
       menu.setAttribute('role', 'listbox');
-      VERSIONS.forEach(function (choice) {
+      choices.forEach(function (choice) {
         const option = el('button', 'pub-add-menu-option', choice.label);
         option.type = 'button';
         option.setAttribute('role', 'option');
@@ -476,20 +493,21 @@
    * searches it on the server. ``done`` gets ``{ options: [{ title }], total, raw }``, or null when the read failed.
    * ``pick(value)`` is called on a choice.
    */
-  function combo(source, value, placeholder, pick, label) {
+  function combo(source, value, placeholder, pick, kind) {   // ``kind``: 'property' or 'value', which names the box for a screen reader
     const remote = !Array.isArray(source);
     const wrap = el('div', 'pub-add-combo-wrap');
     const button = el('button', 'pub-add-combo');
     button.type = 'button';
     button.setAttribute('aria-haspopup', 'listbox');
     button.setAttribute('aria-expanded', 'false');
+    const label = kind === 'property' ? t('publish.add_property') : t('publish.add_value');
     button.setAttribute('aria-label', label);
     const text = el('span', 'pub-add-combo-text');
     button.appendChild(text);
     button.appendChild(ui.svg(CARET, 14));
     wrap.appendChild(button);
     // A round X on the field itself, shown while a value is chosen.
-    wrap.appendChild(iconButton('pub-add-combo-clear', 'Clear ' + label.toLowerCase(), 10, function () { set(''); }));
+    wrap.appendChild(iconButton('pub-add-combo-clear', kind === 'property' ? t('publish.add_clear_property') : t('publish.add_clear_value'), 10, function () { set(''); }));
 
     function paintLabel() {
       const found = remote ? null : source.find(function (e) { return e.value === value; });
@@ -512,8 +530,8 @@
       const menu = el('div', 'pub-add-menu');
       const search = el('input', 'pub-add-menu-search');
       search.type = 'search';
-      search.placeholder = 'Search...';
-      search.setAttribute('aria-label', 'Search the list');
+      search.placeholder = t('publish.add_menu_search');
+      search.setAttribute('aria-label', t('publish.add_menu_search_label'));
       const count = el('div', 'pub-add-menu-count');
       const choices = el('div', 'pub-add-menu-list');
       choices.setAttribute('role', 'listbox');
@@ -545,14 +563,11 @@
         const line = el('span', 'pub-add-menu-count-text');   // one box, so the flex row does not spread its words apart
         if (failedRead) {
           line.classList.add('pub-add-menu-error');
-          line.textContent = 'Could not load the list';
+          line.textContent = t('publish.add_menu_failed');
         } else if (busy && !shown.length) {
-          line.textContent = 'Loading...';
+          line.textContent = t('publish.loading');
         } else {
-          line.appendChild(document.createTextNode('Showing '));
-          line.appendChild(el('strong', '', shown.length.toLocaleString()));
-          line.appendChild(document.createTextNode(' of '));
-          line.appendChild(el('strong', '', Math.max(total, shown.length).toLocaleString()));
+          line.appendChild(boldNumbers(t('publish.add_showing', KEEP), shown.length.toLocaleString(), Math.max(total, shown.length).toLocaleString()));
         }
         count.appendChild(line);
         if (busy) count.appendChild(spinner());
@@ -568,10 +583,10 @@
         if (busy) {
           const row = el('div', 'pub-add-menu-loading');
           row.appendChild(spinner());
-          row.appendChild(el('span', '', shown.length ? 'Loading more...' : 'Loading values...'));
+          row.appendChild(el('span', '', shown.length ? t('publish.add_loading_more') : t('publish.add_loading_values')));
           choices.appendChild(row);
         } else if (!shown.length) {
-          choices.appendChild(el('div', 'pub-add-menu-none', failedRead ? 'Try again in a moment' : (remote && !search.value.trim() ? 'Nothing to choose from' : 'No match')));
+          choices.appendChild(el('div', 'pub-add-menu-none', failedRead ? t('publish.add_menu_retry') : (remote && !search.value.trim() ? t('publish.add_menu_empty') : t('publish.add_menu_no_match'))));
         }
       }
 
@@ -647,14 +662,14 @@
           });
         },
       };
-      return combo(source, row.value, 'Select a value', function (value) { row.value = value; }, 'Value');
+      return combo(source, row.value, t('publish.add_select_value'), function (value) { row.value = value; }, 'value');
     }
     const input = el('input', 'pub-add-input');
     input.type = 'text';
-    input.placeholder = field ? 'Value' : 'Choose a property first';
+    input.placeholder = field ? t('publish.add_value') : t('publish.add_property_first');
     input.disabled = !field;
     input.value = row.value;
-    input.setAttribute('aria-label', 'Value');
+    input.setAttribute('aria-label', t('publish.add_value'));
     input.addEventListener('input', function () { row.value = input.value; });
     input.addEventListener('keydown', function (event) { if (event.key === 'Enter') restart(); });
     return input;
@@ -662,16 +677,16 @@
 
   function buildFilterRow(group, row, first) {
     const wrap = el('div', 'pub-add-filter-row');
-    if (!first) wrap.appendChild(joinSwitch(row.join, 'Join this row with the one above', function (join) { row.join = join; }));
+    if (!first) wrap.appendChild(joinSwitch(row.join, t('publish.add_join_row'), function (join) { row.join = join; }));
     const line = el('div', 'pub-add-filter-line');
     const entries = fields.map(function (f) { return { value: f.id, label: f.title }; });
-    line.appendChild(combo(entries, row.field, 'Choose a property', function (id) {
+    line.appendChild(combo(entries, row.field, t('publish.add_choose_property'), function (id) {
       row.field = id;
       row.value = '';
       renderFilters();
-    }, 'Property'));
+    }, 'property'));
     if (group.rows.length > 1 || groups.length > 1) {
-      line.appendChild(iconButton('pub-add-remove', 'Remove this row', 12, function () {
+      line.appendChild(iconButton('pub-add-remove', t('publish.add_remove_row'), 12, function () {
         group.rows.splice(group.rows.indexOf(row), 1);
         if (!group.rows.length) groups.splice(groups.indexOf(group), 1);
         if (!groups.length) groups.push({ join: 'AND', rows: [newRow()] });
@@ -692,18 +707,18 @@
     dialog.filterNote.hidden = !fieldsNote;
     if (fieldsNote && !fields.length) return;
     groups.forEach(function (group, g) {
-      if (g > 0) host.appendChild(joinSwitch(group.join, 'Join this group with the one above', function (join) { group.join = join; }));
+      if (g > 0) host.appendChild(joinSwitch(group.join, t('publish.add_join_group'), function (join) { group.join = join; }));
       const box = el('div', 'pub-add-group');
-      const head = el('div', 'pub-add-group-head', groups.length > 1 ? 'GROUP ' + (g + 1) : 'FILTER');
+      const head = el('div', 'pub-add-group-head', groups.length > 1 ? t('publish.add_group_n', { number: g + 1 }) : t('publish.add_filter_head'));
       box.appendChild(head);
       group.rows.forEach(function (row, r) { box.appendChild(buildFilterRow(group, row, r === 0)); });
-      const addRow = el('button', 'pub-add-link', '+ Add Row');
+      const addRow = el('button', 'pub-add-link', t('publish.add_row'));
       addRow.type = 'button';
       addRow.addEventListener('click', function () { group.rows.push(newRow()); renderFilters(); });
       box.appendChild(addRow);
       host.appendChild(box);
     });
-    const addGroup = el('button', 'pub-add-dashed', '+ Add Group');
+    const addGroup = el('button', 'pub-add-dashed', t('publish.add_group'));
     addGroup.type = 'button';
     addGroup.addEventListener('click', function () { groups.push({ join: 'AND', rows: [newRow()] }); renderFilters(); });
     host.appendChild(addGroup);
@@ -796,13 +811,13 @@
     const overlay = el('div', 'pub-add-overlay');
     const box = el('div', 'pub-add-dialog');
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Add existing items to the Bill of Materials');
+    box.setAttribute('aria-label', t('publish.add_dialog_label'));
 
     const titleBar = el('div', 'pub-add-title');
-    const title = el('h2', 'pub-add-heading', 'Add Existing Items');
+    const title = el('h2', 'pub-add-heading', t('publish.add_items'));
     title.id = 'pub-add-heading';
     box.setAttribute('aria-labelledby', title.id);
-    const closeButton = iconButton('pub-add-close', 'Close', undefined, close);
+    const closeButton = iconButton('pub-add-close', t('publish.close'), undefined, close);
     titleBar.appendChild(title);
     titleBar.appendChild(closeButton);
     box.appendChild(titleBar);
@@ -813,10 +828,10 @@
     const top = el('div', 'pub-add-top');
     const search = el('input', 'pub-add-filter');
     search.type = 'search';
-    search.placeholder = 'Search item descriptor...';
-    search.setAttribute('aria-label', 'Search item descriptor');
+    search.placeholder = t('publish.add_search_placeholder');
+    search.setAttribute('aria-label', t('publish.add_search_label'));
     const version = versionPicker(function () { restart(); });
-    const searchButton = el('button', 'btn', 'Search');
+    const searchButton = el('button', 'btn', t('publish.add_search'));
     searchButton.type = 'button';
     top.appendChild(search);
     top.appendChild(version.button);
@@ -837,10 +852,10 @@
     // Right: the matches.
     const main = el('div', 'pub-add-main');
     const resultsHead = el('div', 'pub-add-results-head');
-    resultsHead.appendChild(el('span', 'pub-add-results-title', 'Results'));
+    resultsHead.appendChild(el('span', 'pub-add-results-title', t('publish.add_results')));
     const totalLine = el('span', 'pub-add-total');
     resultsHead.appendChild(totalLine);
-    const hideSwitch = switchLabel('Show hidden items', 'Items already in the Bill of Materials, or added in this panel, are hidden. Turn on to show them (greyed out).');
+    const hideSwitch = switchLabel(t('publish.add_show_hidden'), t('publish.add_show_hidden_title'));
     const hideBox = hideSwitch.box;
     resultsHead.appendChild(hideSwitch.label);
     main.appendChild(resultsHead);
@@ -853,15 +868,15 @@
     const footer = el('div', 'pub-add-footer');
     const count = el('span', 'pub-add-count');
     footer.appendChild(count);
-    const onlySwitch = switchLabel('Show only selected', 'Narrow the list to the items you have ticked');
+    const onlySwitch = switchLabel(t('publish.add_show_selected'), t('publish.add_show_selected_title'));
     const onlyBox = onlySwitch.box;
     onlyBox.disabled = true;
     footer.appendChild(onlySwitch.label);
-    const cancel = el('button', 'btn btn-secondary', 'Cancel');
+    const cancel = el('button', 'btn btn-secondary', t('publish.cancel'));
     cancel.type = 'button';
-    const clear = el('button', 'btn btn-secondary', 'Clear');
+    const clear = el('button', 'btn btn-secondary', t('publish.add_clear'));
     clear.type = 'button';
-    const add = el('button', 'btn', 'Add to BOM');
+    const add = el('button', 'btn', t('publish.add_to_bom'));
     add.type = 'button';
     footer.appendChild(cancel);
     footer.appendChild(clear);
@@ -910,7 +925,7 @@
     generation++;
     hideAdded = true;
     onlySelected = false;
-    fields = []; fieldsNote = 'Loading properties...';
+    fields = []; fieldsNote = t('publish.add_loading_props');
     members = { ids: new Set(), numbers: new Set() };
     groups = [{ join: 'AND', rows: [newRow()] }];
     dialog = build();

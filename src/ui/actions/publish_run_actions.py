@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
+from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...core.shapes import dig
 from ...fm.client import FmApiError, FmClient
@@ -50,13 +51,13 @@ def announcement(run: Any) -> Optional[Announcement]:
     sending = run.kind == SendRun.kind
     report = send_report if sending else publish_report   # written only for a run there is something to say of
     if run.phase == CANCELLED:   # the user stopped it: nothing to say, unless a request was cut off and may have been done
-        return Announcement(True, report(run), "Cancelled: some requests may have been done") if cut_off(run) else None
+        return Announcement(True, report(run), t("app.announce_cancelled")) if cut_off(run) else None
     failed_items = any(row["status"] == ERROR for row in run.rows)
     if run.phase == ERROR or (run.phase == DONE and failed_items):
-        title = "Send to Fusion Manage failed" if sending else "Publish failed" if run.phase == ERROR else "Publish completed with errors"
+        title = t("app.announce_send_failed") if sending else t("app.alert_failed_title") if run.phase == ERROR else t("app.announce_completed_errors")
         return Announcement(True, report(run), title)
     if run.phase == DONE:
-        return Announcement(False, report(run), "Sent to Fusion Manage" if sending else "Publish complete")
+        return Announcement(False, report(run), t("app.announce_sent") if sending else t("app.alert_done_title"))
     return None
 
 
@@ -69,9 +70,8 @@ def _job_of(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _wrong_tenant(recorded: str, active: str) -> str:
     """Why a run cannot be retried: it was made for another Fusion Manage tenant than the one now active."""
     if not recorded:
-        return "This run does not record which Fusion Manage tenant it was made for, so it cannot be retried safely. Publish again."
-    return (f"This run was made for the Fusion Manage tenant '{recorded}', but the active tenant is '{active or 'none'}'. "
-            f"Open the Fusion hub of '{recorded}' to retry it.")
+        return t("app.retry_no_tenant")
+    return t("app.retry_wrong_tenant", recorded=recorded, active=active or t("app.none"))
 
 
 class PublishRuns:
@@ -101,14 +101,14 @@ class PublishRuns:
         if context is None:
             return {"error": reason}
         if not context.cfg or not context.cfg.workspace_id:
-            return {"error": "Set the Items workspace ID in Settings first."}
+            return {"error": t("app.set_items_workspace")}
         wrong = context.mismatch(payload)
         if wrong:
             log.warning("Publish refused: it was read under other settings than those now active (hub %r)", context.hub_id)
             return {"error": wrong}
         model_id, time = self._open_model_ref()
         if not model_id:
-            return {"error": "Could not find the Data Model id of the open design."}
+            return {"error": t("app.no_model_id")}
         # The permission check asks Fusion Manage, which can take seconds: not on Fusion's thread, or Fusion freezes. The answer is pushed.
         self._run(partial(self._begin, payload, context, model_id, time))
         return {"checking": True}
@@ -122,18 +122,18 @@ class PublishRuns:
             plan = load_plan(run.path)
         except FolderError as exc:
             log.warning("Retry: %s cannot be sent: %s", run.path, exc)
-            self._dialogs.notify("Retry", str(exc))
+            self._dialogs.notify(t("app.retry_title"), str(exc))
             return self.jobs()
         context, reason = self._contexts.attempt()
         if context is None:
             log.warning("Retry: %s cannot be sent: %s", run.path, reason)
-            self._dialogs.notify("Retry", reason)
+            self._dialogs.notify(t("app.retry_title"), reason)
             return self.jobs()
         fm = FmClient(context.settings, self._auth)
         recorded = str(plan["manifest"].get("tenant") or "").strip()
         if not recorded or recorded != fm.tenant:   # the active hub may have changed since: its items and workspaces are not this run's
             log.warning("Retry: %s was made for tenant %r, the active tenant is %r", run.path, recorded, fm.tenant)
-            self._dialogs.notify("Retry", _wrong_tenant(recorded, fm.tenant))
+            self._dialogs.notify(t("app.retry_title"), _wrong_tenant(recorded, fm.tenant))
             return self.jobs()
         self.queue.replace(run, SendRun(run.path, plan, fm))
         log.info("Retry queued for %s", run.path)
@@ -165,7 +165,7 @@ class PublishRuns:
         try:   # the panel is blocked without these permissions; this covers a page that was open when they changed
             denied = publish_denial(FmClient(context.settings, self._auth), context.cfg)
         except FmApiError as exc:
-            return {"error": f"Could not check your permissions in Fusion Manage: {exc}"}
+            return {"error": t("app.permissions_check_failed", reason=exc)}
         if denied:
             return {"error": denied}
         job = _job_of(payload)

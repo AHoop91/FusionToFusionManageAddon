@@ -11,10 +11,11 @@ Sign-in tokens are never part of the config.
 import json
 import os
 from typing import Union
+from ..core.i18n import t
 
 FORMAT_ID = "MfgToFm.config"
 FORMAT_VERSION = 1
-MAX_CONFIG_BYTES = 1_000_000
+MAX_CONFIG_BYTES = 2_500_000   # 2.5 MB: the settings are a few KB; the rest is room for the languages a Hub Admin shares
 
 
 class ConfigTransferError(ValueError):
@@ -24,19 +25,18 @@ class ConfigTransferError(ValueError):
 def parse_envelope(raw: Union[bytes, str]) -> dict:
     """Check the envelope in the file's content; raise ConfigTransferError on any problem."""
     if len(raw) > MAX_CONFIG_BYTES:
-        raise ConfigTransferError("The file is too large to be a configuration.")
+        raise ConfigTransferError(t("data.config_file_too_large"))
     try:
         envelope = json.loads(raw.decode("utf-8-sig") if isinstance(raw, bytes) else raw)
     except ValueError as exc:   # includes bytes that are not UTF-8
-        raise ConfigTransferError("The file is not valid JSON.") from exc
+        raise ConfigTransferError(t("data.config_file_not_json")) from exc
 
     if not isinstance(envelope, dict) or envelope.get("format") != FORMAT_ID:
-        raise ConfigTransferError("This is not an MfgToFm configuration file.")
+        raise ConfigTransferError(t("data.config_file_not_ours"))
     if envelope.get("version") != FORMAT_VERSION:
-        raise ConfigTransferError(
-            f"Unsupported configuration version: {envelope.get('version')}.")
+        raise ConfigTransferError(t("data.config_file_version", version=envelope.get("version")))
     if not isinstance(envelope.get("config"), dict):
-        raise ConfigTransferError("The file has no configuration data.")
+        raise ConfigTransferError(t("data.config_file_empty"))
     return envelope
 
 
@@ -44,9 +44,9 @@ def read_envelope(path: str) -> dict:
     """Load and check the envelope of the file at ``path``; raise ConfigTransferError on any problem."""
     try:
         if os.path.getsize(path) > MAX_CONFIG_BYTES:
-            raise ConfigTransferError("The file is too large to be a configuration.")
+            raise ConfigTransferError(t("data.config_file_too_large"))
         with open(path, "rb") as handle:
             raw = handle.read()
     except OSError as exc:
-        raise ConfigTransferError(f"Could not read the file: {exc}") from exc
+        raise ConfigTransferError(t("data.config_file_unreadable", reason=exc)) from exc
     return parse_envelope(raw)

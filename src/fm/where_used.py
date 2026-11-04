@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List
 
 from ..core.logging_setup import get_logger
+from ..core.i18n import t
 from ..core.shapes import as_dict, dict_rows
 from .bom import split_title
 from .client import WORKSPACES, FmApiError, FmClient
@@ -50,7 +51,7 @@ def parse_where_used(data: Any, base_url: str) -> Dict[str, Any]:
     if data is None:   # 204: nothing holds the item
         return {"rows": [], "columns": []}
     if not (isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("edges"), list)):
-        raise FmApiError("Fusion Manage did not return where this item is used.")
+        raise FmApiError(t("data.fm_no_where_used"))
     nodes = {}
     for node in dict_rows(data["nodes"]):
         item = as_dict(node.get("item"))
@@ -78,6 +79,6 @@ class WhereUsedService:
     def read(self, workspace_id: str, item_id: str, up: str = "") -> Dict[str, Any]:
         """The parents of an item, or (with ``up``, an ``edgeLink`` from an earlier answer) of one of those parents."""
         if up and not up.startswith(WORKSPACES + "/"):   # it came from the page: it must stay inside the API
-            raise ValueError("That is not a Fusion Manage where-used address.")
+            raise ValueError(t("data.fm_bad_where_used_address"))
         address = up or f"{WORKSPACES}/{workspace_id}/items/{item_id}/where-used?depth=1"
         return parse_where_used(self._client.get_json(address), self._client.base_url)
