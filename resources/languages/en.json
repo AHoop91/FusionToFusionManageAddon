@@ -2,6 +2,7 @@
   "language": "English",
   "strings": {
     "shell.account": "Account",
+    "shell.help": "Help",
     "shell.status": "Status",
     "shell.permissions": "Permissions",
     "shell.refresh": "Refresh",

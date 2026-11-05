@@ -7,6 +7,7 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``workspace_actions``: Fusion Manage workspace validation.
 * ``tenant_actions``: find the Fusion Manage tenant from the open design's linked item.
 * ``property_actions``: the hub's custom properties for field mapping.
+* ``help_actions``: the Help button, which opens the documentation.
 * ``publish_actions``: the open model for the Publish Item panel.
 * ``search_actions``: the Add Items picker: search matches, filterable fields and picklist options.
 * ``hub_actions``, ``hub_file_actions``, ``hub_save_actions``: the user's role in the hub, and finding or saving its Configuration File.
@@ -25,6 +26,7 @@ from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
 from .auth_actions import register_auth_actions
 from .hub_actions import HubRoles, register_hub_actions
+from .help_actions import register_help_actions
 from .hub_file_actions import register_hub_file_actions
 from .hub_save_actions import register_hub_save_actions
 from .search_actions import register_search_actions
@@ -42,6 +44,7 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     """Register every palette action on ``bridge``; ``post`` queues work on Fusion's main thread; ``languages`` is what keeps the languages
     a hub shares. Answers the hub roles."""
     register_settings_actions(bridge, config)
+    register_help_actions(bridge)
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)
     register_tenant_actions(bridge)

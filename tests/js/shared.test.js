@@ -69,3 +69,15 @@ test('the restart in the account card asks the add-in to start again', { skip },
   w.document.getElementById('card-restart').click();
   assert.deepStrictEqual(w.sent, [['restart_addin', {}]]);
 });
+
+test('the Help button in the top bar asks Python to open the documentation, signed in or not', { skip }, () => {
+  const w = new JSDOM('<!doctype html><html><body><div id="app-header"></div></body></html>', { runScripts: 'outside-only' }).window;
+  w.MfgUi = {};
+  w.sent = [];
+  w.adsk = { fusionSendData: (action, data) => w.sent.push([action, JSON.parse(data)]) };
+  ['dom.js', 'bridge.js', 'i18n.js', 'shell.js'].forEach((src) => run(w, '../shared/js/' + src));
+  w.MfgUi.shell.mountHeader();
+  w.sent.length = 0;
+  w.document.getElementById('help-btn').click();
+  assert.deepStrictEqual(w.sent, [['open_help', {}]]);
+});

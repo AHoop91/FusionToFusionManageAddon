@@ -12,6 +12,11 @@
   // Relative to a page in web/<panel>/.
   const LOGO_URL = '../shared/assets/fusion-manage-logo.svg';
 
+  const HELP_ICON =
+    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">' +
+    '<path d="M9.2 9.6a2.9 2.9 0 1 1 4.4 2.4c-1 .6-1.6 1.2-1.6 2.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<circle cx="12" cy="17.7" r="1.2" fill="currentColor"/></svg>';
+
   const AVATAR_ICON =
     '<svg viewBox="0 0 24 24" width="{size}" height="{size}" aria-hidden="true">' +
     '<circle cx="12" cy="8" r="4" fill="currentColor"/>' +
@@ -24,10 +29,25 @@
     return box.innerHTML.replace(/"/g, '&quot;');
   }
 
+  /** The Help button. */
+  function helpHtml() {
+    return '<button id="help-btn" class="help-btn" type="button" title="' + text('shell.help') + '" aria-label="' + text('shell.help') + '">' + HELP_ICON + '</button>';
+  }
+
+  /** Make the Help button work: it asks Python to open the documentation. */
+  function bindHelp() {
+    ns.$('help-btn').addEventListener('click', function () { ns.bridge.send('open_help', {}); });
+  }
+
   /** Header markup. Static content and the add-in's own wording only; nothing here comes from user data. */
   function headerHtml() {
     return '' +
       '<img class="logo" src="' + LOGO_URL + '" alt="Fusion Manage">' +
+
+      '<div class="header-right">' +
+
+      // Help: opens the documentation in the system browser, signed in or not.
+      helpHtml() +
 
       // Account avatar and card: only visible while signed in.
       '<div id="user-wrap" class="user" hidden>' +
@@ -67,13 +87,21 @@
       '    </div>' +
       '    <button id="card-signout" class="btn btn-secondary btn-block" hidden>' + text('shell.sign_out') + '</button>' +
       '  </div>' +
+      '</div>' +
       '</div>';
   }
 
   /** Fill `#app-header` with the shared top bar. */
   function mountHeader() {
     ns.$('app-header').innerHTML = headerHtml();
+    bindHelp();
   }
 
-  ns.shell = { mountHeader: mountHeader };
+  /** Put the Help button at the end of `node`, for a panel that has its own bar and not the shared top bar (the Job Queue). */
+  function mountHelp(node) {
+    node.insertAdjacentHTML('beforeend', helpHtml());
+    bindHelp();
+  }
+
+  ns.shell = { mountHeader: mountHeader, mountHelp: mountHelp };
 })(window.MfgUi);

@@ -25,6 +25,16 @@
 .avatar { width: 32px; height: 32px; font-size: 12px; border: 2px solid #fff; }
 .card-avatar { width: 48px; height: 48px; font-size: 17px; }
 
+/* Help button and the avatar, together on the right. */
+.header-right { display: flex; align-items: center; gap: 14px; }
+.help-btn {
+  display: flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; padding: 0;
+  border: 0; border-radius: 50%; background: #8a8a8a; color: #fff; cursor: pointer;
+  transition: background .12s;
+}
+.help-btn:hover { background: var(--accent); }
+.help-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ---- Avatar button and presence dot ------------------------------------- */
 .user { position: relative; display: flex; align-items: center; gap: 10px; }
 
