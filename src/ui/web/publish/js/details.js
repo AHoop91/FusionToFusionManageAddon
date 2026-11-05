@@ -183,7 +183,7 @@
     apply();
     table.appendChild(cols);
     const head = el('tr');
-    [t('publish.prop_col_property'), t('publish.col_fusion'), t('publish.prop_col_fm'), ''].forEach(function (h, i) {
+    [t('publish.prop_col_property'), t('publish.col_component'), t('publish.prop_col_fm'), ''].forEach(function (h, i) {
       const th = el('th', '', h);
       if (i < 2) th.appendChild(columnGrip(i, table, apply));   // moves the edge it shares with the next column
       head.appendChild(th);
@@ -193,7 +193,7 @@
       const tr = el('tr');
       const hasFm = r.fm_field && r.fm_value;
       [[t('publish.prop_col_property'), el('td', '', r.name)],
-       [t('publish.col_fusion'), valueCell(r.value, r.shown, r.unit, r.original)],
+       [t('publish.col_component'), valueCell(r.value, r.shown, r.unit, r.original)],
        [t('publish.prop_col_fm'), valueCell(hasFm ? r.fm_value : '', '', r.unit)]].forEach(function (c) {
         c[1].setAttribute('data-label', c[0]);
         tr.appendChild(c[1]);

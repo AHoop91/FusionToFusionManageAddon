@@ -305,7 +305,7 @@
     "publish.unknown_error": "Unknown error",
     "publish.retry": "Retry",
     "publish.col_item": "Item",
-    "publish.col_fusion": "Fusion",
+    "publish.col_component": "Component",
     "publish.col_manage": "Manage",
     "publish.col_qty": "Qty",
     "publish.col_resize": "Drag to resize the column (double-click to reset)",

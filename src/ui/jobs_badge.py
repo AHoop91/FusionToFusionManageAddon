@@ -1,8 +1,8 @@
 """The Job Queue button on the ribbon shows what the queue is doing.
 
 Fusion has no badge for a ribbon button, so the button's icon is swapped for a copy with a coloured
-dot: green while publishes are waiting or running (``resources/jobs_running``), red while one has
-failed (``resources/jobs_error``), the plain icon otherwise (``resources/jobs``). The tooltip says
+dot: green while publishes are waiting or running (``resources/images/jobs_running``), red while one has
+failed (``resources/images/jobs_error``), the plain icon otherwise (``resources/images/jobs``). The tooltip says
 the same. ``update`` may be called from any thread: the command definition is only touched on
 Fusion's main thread.
 """

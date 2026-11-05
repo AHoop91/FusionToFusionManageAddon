@@ -7,7 +7,7 @@ simpler: heavier lines, and no small print that would only blur. Run:  python to
 import math
 import os
 
-RESOURCES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources")
+RESOURCES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "images")
 
 PAGE, PAGE_LINE, TEXT_LINE = "#EEF0F3", "#A9AFBA", "#9AA1AD"
 DESIGN, DESIGN_LIGHT = "#2F8FE0", "#9ACDF6"

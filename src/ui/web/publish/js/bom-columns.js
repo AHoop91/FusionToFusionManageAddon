@@ -14,7 +14,7 @@
   const DEFAULT_WIDTHS = { wide: [0, 84, 84, 84], narrow: [0, 76, 76, 72] };
   const MIN_WIDTHS = [120, 64, 64, 56];
   const LAST = 3;   // the Qty column
-  function heads() { return [[t('publish.col_item'), ''], [t('publish.col_fusion'), 'pub-cmp-center'], [t('publish.col_manage'), 'pub-cmp-center'], [t('publish.col_qty'), 'num']]; }
+  function heads() { return [[t('publish.col_item'), ''], [t('publish.col_component'), 'pub-cmp-center'], [t('publish.col_manage'), 'pub-cmp-center'], [t('publish.col_qty'), 'num']]; }
   const dragged = { wide: {}, narrow: {} };   // layout -> column index -> width the user chose
 
   let watcher = null;   // follows the width of the panel the table is in; one at a time, for the table on screen

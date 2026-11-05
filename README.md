@@ -12,7 +12,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/AHoop91/FusionToFusionManageAddon">
-    <img src="resources/AddInIcon.svg" alt="Logo" width="200" height="200">
+    <img src="resources/images/AddInIcon.svg" alt="Logo" width="200" height="200">
   </a>
 
   <h3 align="center">Fusion Manage Item Management</h3>

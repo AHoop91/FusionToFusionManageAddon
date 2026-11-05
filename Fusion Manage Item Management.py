@@ -99,8 +99,8 @@ from src.ui.ui_text import (  # noqa: E402
 log = get_logger()
 
 def _icon(folder: str) -> str:
-    """The folder of the icons (``16x16.svg``...) named ``folder`` under ``resources``."""
-    return os.path.join(_ADDIN_DIR, "resources", folder)
+    """The folder of the icons (``16x16.svg``...) named ``folder`` under ``resources/images``."""
+    return os.path.join(_ADDIN_DIR, "resources", "images", folder)
 
 
 # ---- Add-in state -----------------------------------------------------------
@@ -174,11 +174,8 @@ class _RebuildHandler(adsk.core.CustomEventHandler):
         global _rebuilding
         _rebuilding = True
         try:
-            settings_open = bool(_palette_host and _palette_host.visible)
             stop(None)
             run(None)
-            if settings_open and _palette_host:
-                _palette_host.show()   # the Preferences that were open come back, in the language now in use
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Could not make the ribbon again in the new language")
         finally:
@@ -235,7 +232,7 @@ def run(context) -> None:
 
         bridge = _bridge = MessageBridge()
         _tasks = UiThread()
-        badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, jobs_tooltip(), os.path.join(_ADDIN_DIR, "resources"))
+        badge = JobsBadge(_ui, _tasks, JOBS_COMMAND_ID, jobs_tooltip(), os.path.join(_ADDIN_DIR, "resources", "images"))
         config, auth = ConfigService(hub_aware=True), AuthService()
         _config = config
         ribbon_module.before_command = sync_hub
