@@ -96,13 +96,15 @@ Items are matched by **item number**, which the add-in reads from the component'
 
 The add-in adds an **Export** panel and an **Item Management** panel to the **Manage** tab of the ribbon in the **Design** and **Drawing** workspaces. **Administration** is a submenu of **Item Management**; its buttons are pinned to the ribbon.
 
-| Panel | Button | Purpose |
-|---|---|---|
-| Export | Export | Open the Export window: export the open design or drawing and attach the file to its item or component |
-| Item Management | Open Fusion Manage Item | Show the item of the selected component, or of the open design or drawing |
-| Item Management | Publish Fusion Manage Item (Design only) | Preview and publish the open design |
-| Item Management ▸ Administration | Job Queue | See publishes that are waiting, running and finished |
-| Item Management ▸ Administration | Preferences | Sign in, set the connection and the workspace mapping |
+The numbers in the screenshot below match the table. A button without a number is not in the screenshot.
+
+| # | Panel | Button | Purpose |
+|---|---|---|---|
+| 1 | Export | Export | Open the Export window: export the open design or drawing and attach the file to its item or component |
+| 2 | Item Management | Open Fusion Manage Item | Show the item of the selected component, or of the open design or drawing |
+| | Item Management | Publish Fusion Manage Item (Design only) | Preview and publish the open design |
+| 3 | Item Management ▸ Administration | Job Queue | See publishes that are waiting, running and finished |
+| 4 | Item Management ▸ Administration | Preferences | Sign in, set the connection and the workspace mapping |
 
 Most buttons stay greyed out until the Items workspace is configured (see [Item Workspace](../configuration/index.md#item-workspace)). The tooltip of a greyed-out button says why.
 

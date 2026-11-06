@@ -255,6 +255,17 @@ Each line reads **Item Number - Part Name**. A component with no item number is 
 
 ![The Bill of Materials with status chips: a New line, a Review pair, and three Skipped lines under the 24mm Bearing assembly, with the 3 Lines Skipped pill at the bottom and the Filters drop-down and the collapse and expand buttons above the table](../images/bom-statuses.png){ width="900" }
 
+The numbers in the screenshot match the table.
+
+| # | Part | What it shows |
+|---|---|---|
+| 1 | **Filters** drop-down | Narrows the table to rows of one status ([Filters](#filters)) |
+| 2 | **Collapse all** and **Expand all** | Fold or unfold the whole tree ([Filters](#filters)) |
+| 3 | **New** chip | The design has the line and Fusion Manage does not; publishing adds it |
+| 4 | **Review** chip | A **New** line and a **Fusion Manage Only** line at the same position wait for your choice ([Paired rows](#paired-rows-a-replaced-item)) |
+| 5 | **Skipped** chip | The component has no item number, shares one, or sits below such a line; nothing is published for it. Hover the **i** for the reason |
+| 6 | **Lines Skipped** pill | How many lines are skipped |
+
 ### Filters
 
 The **Filters** drop-down above the table (top left) narrows it to rows of one status. Tick any number at once.

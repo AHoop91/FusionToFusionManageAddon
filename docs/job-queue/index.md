@@ -17,15 +17,16 @@ Jobs go through a **single queue, one after another**. A publish returns at once
 
 ## Reading the queue
 
-The panel is a table of every job that is waiting, running, failed or cancelled, newest first, **one row per job**. A job that went through leaves the list.
+The panel is a table of every job that is waiting, running, failed or cancelled, newest first, **one row per job**. A job that went through leaves the list. The numbers in the screenshot match the table.
 
-| Column | What it shows |
-|---|---|
-| **Status** | A pill with an icon and the status in words, the same width for every job |
-| **Job** | The name of the job, the design it publishes |
-| **Progress** | A sentence on where it stands, for example *Checking item numbers.*, *Publishing 4 of 5 items.*, *Updating the Bill of Materials, 12 of 40 requests.*, *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.* |
-| **Time** | How long the job has taken, counting up while it runs. A dash while it waits |
-| | **Cancel** while it is waiting or running, **Retry** once it has failed |
+| # | Part | What it shows |
+|---|---|---|
+| 1 | **Status** | A pill with an icon and the status in words, the same width for every job |
+| 2 | **Job** | The name of the job, the design it publishes |
+| 3 | **Progress** | A sentence on where it stands, for example *Checking item numbers.*, *Publishing 4 of 5 items.*, *Updating the Bill of Materials, 12 of 40 requests.*, *Cancelled. Nothing was published.* or *Failed. 2 of 12 items failed.* |
+| 4 | **Time** | How long the job has taken, counting up while it runs. A dash while it waits |
+| 5 | **Cancel** or **Retry** | **Cancel** while the job is waiting or running, **Retry** once it has failed |
+| 6 | **Clear finished** | Removes finished jobs from the list (see [Actions](#actions)) |
 
 ![The Job Queue with one running job: a table with the columns Status, Job, Progress and Time, and a row for PN-000701 with the blue Running pill, the progress "Checking item numbers.", the time 0:03 and a Cancel button. The Clear finished button is at the bottom](../images/job-queue-panel.png){ width="1000" }
 

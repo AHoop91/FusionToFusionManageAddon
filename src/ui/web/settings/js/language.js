@@ -14,7 +14,8 @@
   const SLOTS = ['lang-slot-tab', 'lang-slot-login'];   // each holds one card, built here
 
   let draft = { code: '', name: '' };   // what was typed in the form that makes a language file, kept while the card is built again
-  let note = null;                      // {kind: 'ok' | 'error', title, text, path} shown under that form
+  let sent = null;                      // what Create sent, put back in the form if the file could not be made
+  let note = null;                     // {kind: 'ok' | 'error', title, text, path} shown under that form
   let pickedCode = null;                // the language chosen in the list, until the panels load again in it (null: none chosen)
   let report = null;                    // what Python found checking a language file against English's, shown under the list
   let pageError = '';                   // why the language chosen cannot be used, or checked, shown at the top of the card
@@ -300,7 +301,12 @@
     const create = button(t('language.create'), 'btn', function () {
       if (!complete()) return;
       note = null;
-      ns.bridge.send('new_language', { code: draft.code, name: draft.name });
+      sent = draft;
+      draft = { code: '', name: '' };   // cleared at once: a second press cannot make the file twice
+      code.value = '';
+      name.value = '';
+      create.disabled = true;
+      ns.bridge.send('new_language', { code: sent.code, name: sent.name });
     });
     /** Both are needed before a file can be made. */
     function complete() { return draft.code.trim() !== '' && draft.name.trim() !== ''; }
@@ -386,10 +392,10 @@
     ns.bridge.on('get_language', function (r) { if (r.ok) { useLanguages(r.result); render(); } });
     ns.bridge.on('new_language', function (r) {
       if (!r.ok) {
+        draft = sent || draft;   // the file was not made: what was typed comes back to be fixed
         note = { kind: 'error', title: t('language.failed'), text: r.error };
       } else {
         ns.i18n.use(r.result);
-        draft = { code: '', name: '' };
         note = { kind: 'ok', title: t('language.created_title'), text: t('language.created_next'), path: r.result.created };
       }
       render();

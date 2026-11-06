@@ -273,6 +273,10 @@ To use it:
 | 8 | Physical Length | `LENGTH` | Bounding box |
 | 9 | Physical Mass | `ITEM_WEIGHT` | Converted to the field's unit |
 
+The numbers in the screenshot match the table: each row pairs the Fusion Manage field on the left with the property that fills it.
+
+![Mapped fields after Add default fields](../images/mapped-fields-defaults.png){ width="520" height="496" }
+
 Dimensions and mass are converted to the unit each Fusion Manage field is set to, and sent as plain numbers ([Physical properties and units](#physical-properties-and-units)). Physical properties are only available once the Data Model has finished calculating them ([Manufacturing Data Model](../reference/manufacturing-data-model.md#physical-properties)).
 
 #### Which fields your workspace needs
@@ -293,8 +297,6 @@ The add-in does not depend on any other field IDs. Map the fields you want publi
     Once the workspace has been validated, **Add default fields** leaves out any default whose field ID does not exist in your workspace. It does not warn you. If you load the defaults and a row you expected is missing, the field is missing, or its ID is different, in Fusion Manage.
 
 Check the result after loading: the **Mapped fields** list shows a row for each default your workspace has a field for, up to nine. If your workspace has been customised, add or correct the missing rows by hand.
-
-![Mapped fields after Add default fields](../images/mapped-fields-defaults.png){ width="520" height="496" }
 
 ### Default Fusion Manage Values
 
