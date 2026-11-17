@@ -26,6 +26,8 @@
   let started = false;       // the views have been asked for
   let views = [];            // [{id, name}]
   let view = '';             // id of the view shown
+  let viewCount = '';        // " (n)": how many records the view holds, once its rows are in
+  let viewPicker = null;     // the shared picker that chooses the view
   let page = 1;
   let more = false;          // whether there is a page after this one
   let selected = '';         // id of the row chosen
@@ -83,7 +85,7 @@
   }
 
   // ---- Menus ---------------------------------------------------------------------------
-  // The view list and the actions are small pop-up menus: one open at a time, closed by a click elsewhere or Escape.
+  // The actions are a small pop-up menu: one open at a time, closed by a click elsewhere or Escape.
 
   const menus = [];   // {button, list}
 
@@ -96,7 +98,7 @@
   }
 
   function items(m) {
-    return Array.prototype.filter.call(m.list.querySelectorAll('[role="option"], [role="menuitem"], [role="menuitemcheckbox"]'), function (i) { return !i.disabled; });
+    return Array.prototype.filter.call(m.list.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"]'), function (i) { return !i.disabled; });
   }
 
   /** Make ``button`` open and close ``list``, with the arrow keys moving through its entries. */
@@ -108,8 +110,7 @@
       list.hidden = false;
       button.setAttribute('aria-expanded', 'true');
       const entries = items(m);
-      const current = list.querySelector('[aria-selected="true"]');
-      const target = focusLast ? entries[entries.length - 1] : (current || entries[0]);
+      const target = focusLast ? entries[entries.length - 1] : entries[0];
       if (target) target.focus();
     }
     function close(refocus) {
@@ -144,7 +145,7 @@
 
   /** Let the buttons be pressed, or not: none while the list is read. */
   function refreshControls() {
-    $('products-view').disabled = busy || !views.length;
+    viewPicker.querySelector('.pk-btn').disabled = busy || !views.length;
     $('products-refresh-view').disabled = busy;
     $('products-view-filter').disabled = busy || !definition;
     $('products-view-columns').disabled = busy || !definition;
@@ -235,56 +236,46 @@
     window.addEventListener('scroll', function () { tip.hidden = true; }, true);
   }
 
-  function currentViewName() {
-    const current = views.find(function (v) { return v.id === view; });
-    return current ? current.name : '';
+  /** The button of the view picker: the name of the view, with how many records it holds once they are in. */
+  function viewLabel(id) {
+    const current = views.find(function (v) { return v.id === id; });
+    return current ? current.name + viewCount : '';
   }
 
-  /** A small button beside a view in the list (to rename or delete it): it appears when the row is pointed at or has the keyboard. */
-  function viewAction(className, label, paths, onClick) {
-    const button = el('button', className);
-    button.type = 'button';
-    button.setAttribute('role', 'menuitem');
-    button.setAttribute('aria-label', label);
-    button.title = label;
-    button.appendChild(ns.svg(paths, 16));
-    button.addEventListener('click', onClick);
-    return button;
-  }
-
-  /** The list of views: each an option, the one in use ticked. */
-  function paintViews() {
-    const list = $('products-view-list');
-    list.textContent = '';
-    views.forEach(function (v) {
-      const option = el('li', 'products-view-row');
-      const button = el('button', 'products-menu-item');
-      button.type = 'button';
-      button.setAttribute('role', 'option');
-      button.setAttribute('aria-selected', v.id === view ? 'true' : 'false');
-      button.appendChild(el('span', 'products-menu-label', v.name));
-      if (v.id === view) button.appendChild(ns.svg([CHECK], 16));
-      button.addEventListener('click', function () { if (v.id !== view) chooseView(v.id); });
-      option.setAttribute('role', 'none');
-      option.appendChild(button);
-      option.appendChild(viewAction('products-view-delete products-view-rename', t('products.renview_label', { name: v.name }),
-        ['M4 20h4L19 9l-4-4L4 16z', 'M13.5 6.5l4 4'], function () { askRenameView(v); }));
-      option.appendChild(viewAction('products-view-delete', t('products.delview_label', { name: v.name }),
-        ['M4 7h16', 'M10 11v6', 'M14 11v6', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'], function () { askDeleteView(v); }));
-      list.appendChild(option);
+  /** The view picker: each view with buttons to rename and delete it, the one in use marked, and after them the way to make one (a view of its
+   *  own filter, kept in Fusion Manage). */
+  function makeViewPicker() {
+    const picker = ns.picker.make({
+      className: 'pk-view',
+      ariaLabel: t('products.view_label'),
+      required: true,
+      alignRight: true,
+      searchFrom: Infinity,
+      placeholder: '',
+      search: '',
+      label: viewLabel,
+      empty: function () { return t('products.no_views'); },
+      groups: function () {
+        return [{ title: '', items: views.map(function (v) {
+          return { value: v.id, label: v.name, actions: [
+            { label: t('products.renview_label', { name: v.name }), icon: ['M4 20h4L19 9l-4-4L4 16z', 'M13.5 6.5l4 4'], className: 'pk-act-rename', run: function () { askRenameView(v); } },
+            { label: t('products.delview_label', { name: v.name }), icon: ['M4 7h16', 'M10 11v6', 'M14 11v6', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'], className: 'pk-act-delete', run: function () { askDeleteView(v); } },
+          ] };
+        }) }];
+      },
+      footer: function () { return views.length ? { label: t('products.create_view'), icon: ['M12 5v14', 'M5 12h14'], run: openNewView } : null; },
     });
-    // After the views, the way to make one: a view of its own filter, kept in Fusion Manage.
-    const create = el('button', 'products-menu-item products-menu-create');
-    create.type = 'button';
-    create.setAttribute('role', 'menuitem');
-    create.addEventListener('click', function () { closeMenus(); openNewView(); });
-    create.appendChild(el('span', 'products-menu-label', t('products.create_view')));
-    create.appendChild(ns.svg(['M12 5v14', 'M5 12h14'], 16));
-    const last = el('li');
-    last.setAttribute('role', 'none');
-    last.appendChild(create);
-    if (views.length) list.appendChild(last);
-    $('products-view-name').textContent = currentViewName();
+    picker.addEventListener('pick', function () {
+      const id = picker.getPicked()[0].value;
+      if (id !== view) chooseView(id);
+    });
+    return picker;
+  }
+
+  /** The view picker shows the view in use (without its count, until the rows are in). */
+  function paintViews() {
+    viewCount = '';
+    viewPicker.setPicked(view ? [{ value: view }] : []);
     refreshControls();
   }
 
@@ -467,8 +458,8 @@
     clearRows();
     const rows = result.rows;
     const total = result.total || ((page - 1) * PAGE_SIZE + rows.length);
-    const viewName = currentViewName();
-    $('products-view-name').textContent = viewName ? viewName + ' (' + total + ')' : '';
+    viewCount = ' (' + total + ')';
+    viewPicker.refresh();
     const columns = definition || result.columns;   // the view's own, so an empty view still shows its header
     const pictures = {};   // ids of the columns that hold pictures
     result.columns.forEach(function (c) { if (c.kind === 'image') pictures[c.id] = true; });
@@ -574,6 +565,7 @@
   // ---- Fields of other kinds ---------------------------------------------------------------
 
   const MAX_IMAGE_MB = 5;   // an image larger than this is not sent
+  const SELECT_SEARCH_FROM = 8;   // a list of choices shows its search box from this many on
 
   /** A field that takes items of another workspace: the shared picker, its list read from Python as it is searched and scrolled; the choice is
    *  shown on the button (or as chips, for several). */
@@ -611,6 +603,31 @@
       if (!picked.length) return '';
       return multi ? picked.map(function (o) { return { link: o.value }; }) : { link: picked[0].value };
     };
+    return root;
+  }
+
+  /** A field with a fixed list of choices: the shared picker, with the first entry ("Choose...") taking the choice back. The value is the choice's
+   *  value, '' for none. */
+  function selectPicker(field) {
+    const options = field.options.map(function (o) { return { value: o.value, label: o.title }; });
+    const root = ns.picker.make({
+      className: 'pk-form',
+      buttonClass: 'form-input',
+      ariaLabel: field.title,
+      searchFrom: SELECT_SEARCH_FROM,
+      placeholder: t('products.select_none'),
+      search: t('products.link_search'),
+      empty: function () { return t('products.link_empty'); },
+      text: { clear: t('products.select_none') },
+      label: function (value) { return options.find(function (o) { return o.value === value; }).label; },
+      groups: function () { return [{ title: '', items: options }]; },
+    });
+    root.addEventListener('pick', function () { root.dispatchEvent(new Event('change', { bubbles: true })); });   // the form looks at the field again
+    root.control = root.querySelector('.pk-btn');   // what the form focuses
+    root.setValue = function (raw) {   // a choice the list does not hold leaves it unchosen
+      root.setPicked(options.filter(function (o) { return o.value === (raw.link || ''); }));
+    };
+    root.getValue = function () { const picked = root.getPicked(); return picked.length ? picked[0].value : ''; };
     return root;
   }
 
@@ -699,11 +716,8 @@
     if (field.kind === 'link' || field.kind === 'links') { input = linkPicker(field, field.kind === 'links'); }
     else if (field.kind === 'image') { input = imagePicker(); }
     else if (field.kind === 'textarea') { input = el('textarea', 'form-input'); input.rows = 2; }
-    else if (field.kind === 'select') {
-      input = el('select', 'form-input');
-      input.appendChild(el('option', '', t('products.select_none'))).value = '';
-      field.options.forEach(function (o) { input.appendChild(el('option', '', o.title)).value = o.value; });
-    } else if (field.kind === 'radio') {   // a short list is all in view, as in Fusion Manage
+    else if (field.kind === 'select') { input = selectPicker(field); }
+    else if (field.kind === 'radio') {   // a short list is all in view, as in Fusion Manage
       input = el('div', 'form-radios');
       input.setAttribute('role', 'radiogroup');
       input.setAttribute('aria-label', field.title);
@@ -1100,7 +1114,6 @@
     const link = raw.link || '';
     if (record.kind === 'checkbox') target.checked = raw === true || raw === 'true';
     else if (record.kind === 'radio') Array.prototype.forEach.call(input.querySelectorAll('input'), function (r) { r.checked = r.value === link; });
-    else if (record.kind === 'select') target.value = link;
     else if (record.kind === 'date') target.value = plain(raw).slice(0, 10);
     else target.value = plain(raw);
     target.dispatchEvent(new Event('input', { bubbles: true }));   // the count of characters and the footer look again
@@ -1643,7 +1656,7 @@
       paintForm(form);
       if (values) formFields.forEach(function (f) { if (f.id in values) setFieldValue(f, values[f.id]); });
       refreshFooter();
-      const first = formFields.find(function (f) { return aimable(f.kind, f.input); });
+      const first = formFields.find(function (f) { return aimable(f.kind, f.input) || f.kind === 'select'; });
       if (first) (first.input.control || first.input).focus();
     }
     function failedWith(answer) {
@@ -1743,6 +1756,9 @@
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
     if (!ns.i18n.gate(start)) return;   // the language is in before the page is built
+    viewPicker = makeViewPicker();
+    viewPicker.querySelector('.pk-btn').disabled = true;   // until there are views
+    $('products-view').appendChild(viewPicker);
     ns.shell.mountHeader();
     ns.account.init();
     ns.auth.init();
@@ -1750,7 +1766,6 @@
     ['products_views', 'products_columns', 'products_fields', 'products_image', 'products_picture', 'products_filter', 'products_create_view', 'products_rename_view', 'products_delete_view', 'products_rows', 'products_form', 'products_variant_form', 'products_inspect', 'products_options', 'products_create', 'products_item', 'products_update', 'products_assign', 'products_status'].forEach(function (action) { bridge.on(action, onAnswer); });
     bridge.on('palette_opened', function () { if (started) loadViews(); ns.auth.refresh(); });
 
-    menu($('products-view'), $('products-view-list'));
     $('products-refresh-view').addEventListener('click', function () { loadRows(page); });
     menu($('products-actions'), $('products-actions-list'));
     initPreview();

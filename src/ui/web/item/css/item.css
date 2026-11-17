@@ -509,7 +509,9 @@ a.item-bom-attachments:hover { color: var(--accent); }
 /* The bar over the Bill of Materials: the view to show, nested or flat, and the columns. */
 .item-bom-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
 .item-bom-bar label { color: var(--muted); }
-.item-bom-bar select { height: 32px; min-width: 160px; padding: 0 8px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font: inherit; }
+.item-bom-views { min-width: 160px; }
+.item-bom-views .pk-btn { height: 32px; padding: 0 8px; background: #fff; }
+.item-bom-views .pk-btn:disabled { cursor: default; }
 .item-bom-tool {
   display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
   border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); cursor: pointer;

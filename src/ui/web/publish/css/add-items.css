@@ -43,13 +43,10 @@
 }
 .pub-add-filter { flex: 1; min-width: 0; }
 .pub-add-version {
-  box-sizing: border-box; height: 28px; min-width: 150px; padding: 0 10px 0 12px; border: 1px solid #cfd4d9; border-radius: 6px; background: #fff;
+  box-sizing: border-box; height: 28px; padding: 0 10px 0 12px; border: 1px solid #cfd4d9; border-radius: 6px; background: #fff;
   color: #1f2328; font: inherit; font-weight: 500; cursor: pointer; outline: none; transition: border-color .15s, box-shadow .15s;
-  display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap;
+  white-space: nowrap;
 }
-.pub-add-version svg { flex: none; color: #596068; }
-.pub-add-version-menu { padding: 4px; }
-.pub-add-version-menu .pub-add-menu-option { padding: 7px 12px; }
 .pub-add-version:hover { border-color: #8b939b; }
 .pub-add-version:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
 .pub-add-filter:hover, .pub-add-input:hover, .pub-add-combo:hover { border-color: #8b939b; }
@@ -120,34 +117,27 @@
 .pub-add-switch:has(input:disabled) { opacity: .5; cursor: default; }
 .pub-add-switch input:disabled { cursor: default; }
 
-/* Drop-down: a button that looks like a field, and a floating list with its own search box. */
-.pub-add-combo { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }
-.pub-add-combo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pub-add-combo-empty .pub-add-combo-text { color: #7b838b; }
-.pub-add-combo svg { flex: none; fill: none; stroke: #6a737d; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
-.pub-add-combo[aria-expanded="true"] svg { transform: rotate(180deg); }
-.pub-add-menu { position: fixed; z-index: 60; box-sizing: border-box; padding: 5px; border: 1px solid #dfe3e7; border-radius: 8px; background: #fff; font-size: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .16), 0 2px 6px rgba(0, 0, 0, .08); }
-.pub-add-menu-search { box-sizing: border-box; width: 100%; height: 26px; margin-bottom: 4px; padding: 0 8px; border: 1px solid #cfd4d9; border-radius: 6px; font: inherit; outline: none; }
-.pub-add-menu-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
-.pub-add-menu-list { max-height: 168px; overflow-y: auto; }
-.pub-add-menu-option { display: block; width: 100%; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pub-add-menu-option:hover, .pub-add-menu-option:focus-visible { background: rgba(6, 150, 215, .1); outline: none; }
-.pub-add-menu-option[aria-selected="true"] { background: rgba(6, 150, 215, .14); color: #0b5f8a; font-weight: 600; }
-.pub-add-menu-none { padding: 8px; color: #7b838b; text-align: center; }
-.pub-add-menu-count { display: flex; align-items: center; justify-content: space-between; min-height: 18px; margin: 2px 0 4px; padding: 0 4px 6px; border-bottom: 1px solid #eceff2; font-size: 11px; color: #6a737d; }
-.pub-add-menu-count strong { font-weight: 600; color: #1f2328; }
-.pub-add-menu-error { color: var(--danger); }
-.pub-add-menu-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 8px; color: #6a737d; }
-.pub-add-spinner { display: inline-block; flex: none; width: 14px; height: 14px; box-sizing: border-box; border: 2px solid rgba(6, 150, 215, .25); border-top-color: var(--accent); border-radius: 50%; animation: pub-add-spin .7s linear infinite; }
-@keyframes pub-add-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .pub-add-spinner { animation-duration: 2s; } }
+/* The shared picker (shared/css/picker.css) dressed like the fields of this page. */
+.pub-add-version-wrap { flex: none; min-width: 150px; }
+.pub-add-pk .pk-btn::after { content: ""; width: 6px; height: 6px; margin: -3px 2px 0 0; border: solid #6a737d; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pub-add-pk .pk-btn[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(225deg); }
+.pub-add-combo.placeholder { color: #7b838b; }
+.pub-add-pk .pk-menu { z-index: 60; min-width: 0; margin-top: 0; padding: 5px; border-color: #dfe3e7; border-radius: 8px; font-size: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .16), 0 2px 6px rgba(0, 0, 0, .08); }
+.pub-add-pk .pk-search { box-sizing: border-box; width: 100%; height: 26px; margin: 0 0 4px; padding: 0 8px; border-color: #cfd4d9; border-radius: 6px; outline: none; }
+.pub-add-pk .pk-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.pub-add-pk .pk-list { max-height: 168px; }
+.pub-add-pk .pk-item { padding: 4px 8px; border-radius: 6px; }
+.pub-add-version-wrap .pk-item { padding: 7px 12px; }
+.pub-add-pk .pk-item:hover, .pub-add-pk .pk-item.active { background: rgba(6, 150, 215, .1); }
+.pub-add-pk .pk-item.selected { background: rgba(6, 150, 215, .14); color: #0b5f8a; }
+.pub-add-pk .pk-count { padding: 2px 4px 6px; border-bottom: 1px solid #eceff2; font-size: 11px; }
+.pub-add-pk .pk-status { text-align: center; }
 .pub-add-combo-wrap { position: relative; }
-.pub-add-combo-set .pub-add-combo-text { margin-right: 22px; }   /* room for the X, which sits just before the chevron */
+.pub-add-combo-set .pk-text { margin-right: 22px; }   /* room for the X, which sits just before the chevron */
 .pub-add-combo-clear { position: absolute; top: 50%; right: 32px; display: none; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; transform: translateY(-50%); border: 0; background: transparent; color: #8b939b; cursor: pointer; }
 .pub-add-combo-set .pub-add-combo-clear { display: inline-flex; }
 .pub-add-combo-clear:hover { color: #1f2328; }
 .pub-add-combo-clear svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
-.pub-add-menu-search::-webkit-search-cancel-button, .pub-add-menu-search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }   /* the browser's blue X: typing is cleared by selecting the text */
 
 /* A switch with its label on one line: "Show hidden items" in the results bar, "Show only selected" in the footer. */
 .pub-add-switch { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0; font: inherit; font-size: 11px; font-weight: 500; line-height: 16px; letter-spacing: 0; color: #3d444b; cursor: pointer; user-select: none; white-space: nowrap; }

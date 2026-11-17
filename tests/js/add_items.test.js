@@ -29,7 +29,7 @@ function openPicker({ matches, members = [], membersLate = false }) {
   w.MfgUi.bridge = { send: (action, payload) => sent.push([action, payload || {}]), on: (action, fn) => { handlers[action] = fn; } };
   Object.defineProperty(w.HTMLElement.prototype, 'scrollHeight', { configurable: true, get() { return TALL + this.querySelectorAll('.pub-add-row').length * ROW_PX; } });
   Object.defineProperty(w.HTMLElement.prototype, 'clientHeight', { configurable: true, get() { return 500; } });
-  ['../shared/js/dom.js', 'js/ui.js', 'js/add-items.js'].forEach((src) => run(w, src));
+  ['../shared/js/dom.js', '../shared/js/picker.js', 'js/ui.js', 'js/add-items.js'].forEach((src) => run(w, src));
 
   const picker = { w, sent, readOffsets: [] };
   const answer = (action, token, result) => handlers[action]({ ok: true, result: { token, pending: false, ok: true, result } });

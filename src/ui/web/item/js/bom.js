@@ -85,16 +85,20 @@
     fold.append(close, open);
     row.appendChild(fold);
     row.appendChild(el('label', '', t('item.bom_views_label')));
-    const select = el('select');
-    select.setAttribute('aria-label', t('item.bom_views'));
-    (bom.views || []).forEach(function (v) {
-      const option = el('option', '', v.name);
-      option.value = v.id;
-      option.selected = v.id === bom.view;
-      select.appendChild(option);
-    });
-    select.disabled = !(bom.views || []).length;
-    select.addEventListener('change', function () { onView(select.value); });
+    const views = (bom.views || []).map(function (v) { return { value: v.id, label: v.name }; });
+    const shown = views.some(function (v) { return v.value === bom.view; }) ? bom.view : (views.length ? views[0].value : '');   // none chosen shows the first
+    const select = ns.picker.make({
+      className: 'item-bom-views',
+      ariaLabel: t('item.bom_views'),
+      required: true,
+      searchFrom: Infinity,
+      placeholder: '',
+      search: '',
+      label: function (id) { return views.find(function (v) { return v.value === id; }).label; },
+      groups: function () { return [{ title: '', items: views }]; },
+    }, shown);
+    select.querySelector('.pk-btn').disabled = !views.length;
+    select.addEventListener('pick', function () { if (select.getPicked()[0].value !== shown) onView(select.getPicked()[0].value); });
     row.appendChild(select);
 
     const pair = el('div', 'item-bom-pair');

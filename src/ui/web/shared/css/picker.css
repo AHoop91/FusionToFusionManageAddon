@@ -26,6 +26,7 @@
   display: block; width: calc(100% - 12px); margin: 0 6px 4px; padding: 5px 6px;
   border: 1px solid var(--border); border-radius: 4px; font: inherit;
 }
+.pk-search:focus { outline: none; border-color: var(--accent); }
 .pk-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; }
 .pk-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.04em; }
 .pk-item {
@@ -44,3 +45,12 @@
 .pk-status:empty, .pk-count:empty { display: none; }
 .pk-status .pk-balls { height: 14px; gap: 6px; justify-content: center; }
 .pk-status .pk-balls span { width: 8px; height: 8px; }
+.pk-row { display: flex; align-items: center; }   /* an item with small buttons of its own beside it */
+.pk-row:hover, .pk-row.on { background: var(--bg); }
+.pk-row .pk-item { flex: 1; width: auto; min-width: 0; }
+.pk-row .pk-item:hover, .pk-row .pk-item.active { background: none; }
+.pk-act { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); opacity: 0; cursor: pointer; }
+.pk-row:hover .pk-act, .pk-row.on .pk-act, .pk-act:focus-visible { opacity: 1; }
+.pk-act:hover, .pk-act.active { background: #dfe3e6; color: var(--text); }
+.pk-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; border-top: 1px solid var(--border); }
+.pk-act svg, .pk-footer svg { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

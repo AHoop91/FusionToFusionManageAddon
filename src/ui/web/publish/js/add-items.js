@@ -28,10 +28,6 @@
   const PREFETCH_PX = 600;      // load the next page when this close to the end of the list
   const MIN_WIDTH = 760;        // smallest the dialog can be resized to
   const MIN_HEIGHT = 380;
-  const MENU_ROWS = 100;        // most choices a local drop-down draws at once; typing narrows it
-  const MENU_PREFETCH_PX = 60;  // load the next batch of a long drop-down when this close to its end
-  const MENU_SEARCH_MS = 250;   // typing pause before a long drop-down is searched
-  const CARET = ['M6 9l6 6 6-6'];
 
   // The versions the search can list, by the search's ``revision`` filter.
   function versions() {   // the first is searched until another is picked
@@ -346,7 +342,7 @@
     total = 0;
     offset = 0;
     wanted = 0;
-    query = { text: dialog.search.value.trim(), groups: payloadGroups(), revision: dialog.version.value };
+    query = { text: dialog.search.value.trim(), groups: payloadGroups(), revision: dialog.version.getPicked()[0].value };
     dialog.list.scrollTop = 0;
     paintTotal();
     paintSelection();
@@ -359,14 +355,6 @@
 
   function fieldOf(id) {
     return fields.find(function (f) { return f.id === id; }) || null;
-  }
-
-  /** A small spinning circle. */
-  function spinner() {
-    const node = el('span', 'pub-add-spinner');
-    node.setAttribute('role', 'status');
-    node.setAttribute('aria-label', t('publish.loading_aria'));
-    return node;
   }
 
   /** AND / OR segmented switch that connects a row (or group) to the one before it. */
@@ -411,243 +399,64 @@
     return { label: label, box: box };
   }
 
-  // One drop-down list is open at a time; it hangs off the document so the filter pane cannot clip it.
-  let openMenu = null;   // { menu, button, onClose }
+  // The drop-downs are the shared picker (shared/js/picker.js), dressed for this page in add-items.css.
 
-  /** A click on a drop-down's button: closes its list when open (false), else closes any other list and says to open this one (true). */
-  function toggleMenu(button) {
-    const wasOpen = !!openMenu && openMenu.button === button;
-    closeMenu();
-    return !wasOpen;
-  }
-
-  /** Hang ``menu`` (already placed) off the document as the open list of ``button``; ``onClose`` (optional) runs when it closes. */
-  function showMenu(button, menu, onClose) {
-    document.body.appendChild(menu);
-    button.setAttribute('aria-expanded', 'true');
-    openMenu = { menu: menu, button: button, onClose: onClose };
-    document.addEventListener('mousedown', onOutside, true);
-  }
-
-  function closeMenu() {
-    if (!openMenu) return;
-    if (openMenu.onClose) openMenu.onClose();
-    openMenu.menu.remove();
-    openMenu.button.setAttribute('aria-expanded', 'false');
-    document.removeEventListener('mousedown', onOutside, true);
-    openMenu = null;
-  }
-
-  function onOutside(event) {
-    if (openMenu && !openMenu.menu.contains(event.target) && !openMenu.button.contains(event.target)) closeMenu();
-  }
-
-  /**
-   * The choice of which versions to search: a button showing the choice and a small floating list of ``versions()``.
-   * ``value`` is the chosen revision; ``changed()`` is called when another is picked.
-   */
+  /** The choice of which versions to search: the picker over ``versions()``, with no empty choice. ``changed()`` is called when another is picked. */
   function versionPicker(changed) {
     const choices = versions();
     let value = choices[0].revision;
-    const button = el('button', 'pub-add-version');
-    button.type = 'button';
-    button.title = t('publish.add_version_title');
-    button.setAttribute('aria-label', t('publish.add_version'));
-    button.setAttribute('aria-haspopup', 'listbox');
-    button.setAttribute('aria-expanded', 'false');
-    const text = el('span', 'pub-add-version-text', choices[0].label);
-    button.appendChild(text);
-    button.appendChild(ui.svg(CARET, 14));
-
-    button.addEventListener('click', function () {
-      if (!toggleMenu(button)) return;
-      const menu = el('div', 'pub-add-menu pub-add-version-menu');
-      menu.setAttribute('role', 'listbox');
-      choices.forEach(function (choice) {
-        const option = el('button', 'pub-add-menu-option', choice.label);
-        option.type = 'button';
-        option.setAttribute('role', 'option');
-        option.setAttribute('aria-selected', String(choice.revision === value));
-        option.addEventListener('click', function () {
-          const different = choice.revision !== value;
-          value = choice.revision;
-          text.textContent = choice.label;
-          closeMenu();
-          if (different) changed();
-        });
-        menu.appendChild(option);
-      });
-      const at = button.getBoundingClientRect();
-      menu.style.left = at.left + 'px';
-      menu.style.top = at.bottom + 4 + 'px';
-      menu.style.minWidth = at.width + 'px';
-      showMenu(button, menu);
+    const picker = ns.picker.make({
+      className: 'pub-add-pk pub-add-version-wrap',
+      buttonClass: 'pub-add-version',
+      ariaLabel: t('publish.add_version'),
+      tip: function () { return t('publish.add_version_title'); },
+      required: true,
+      searchFrom: Infinity,
+      search: '',
+      label: function (revision) { return choices.find(function (c) { return c.revision === revision; }).label; },
+      groups: function () { return [{ title: '', items: choices.map(function (c) { return { value: c.revision, label: c.label }; }) }]; },
+    }, value);
+    picker.addEventListener('pick', function () {
+      const next = picker.getPicked()[0].value;
+      if (next === value) return;
+      value = next;
+      changed();
     });
-    return { button: button, get value() { return value; } };
+    return picker;
   }
 
   /**
-   * A drop-down in place of a native select: a button showing the choice, and a floating list with a search box and a
-   * count ("50 of 1,234"). ``source`` is either ``[{ value, label }]`` (a short list, searched here) or
-   * ``{ load(offset, text, done) }`` for a long one: it is read in batches as the list is scrolled, and typing
-   * searches it on the server. ``done`` gets ``{ options: [{ title }], total, raw }``, or null when the read failed.
-   * ``pick(value)`` is called on a choice.
+   * A drop-down in place of a native select: the picker, with a round X on the field while a value is chosen. ``source`` is either
+   * ``[{ value, label }]`` (a short list, searched here) or a picker source ``function (text, offset, done)`` for a long one: it is read in
+   * batches as the list is scrolled, and typing searches it on the server. ``pick(value)`` is called on a choice, with '' when it is cleared.
    */
   function combo(source, value, placeholder, pick, kind) {   // ``kind``: 'property' or 'value', which names the box for a screen reader
-    const remote = !Array.isArray(source);
+    const remote = typeof source === 'function';
     const wrap = el('div', 'pub-add-combo-wrap');
-    const button = el('button', 'pub-add-combo');
-    button.type = 'button';
-    button.setAttribute('aria-haspopup', 'listbox');
-    button.setAttribute('aria-expanded', 'false');
-    const label = kind === 'property' ? t('publish.add_property') : t('publish.add_value');
-    button.setAttribute('aria-label', label);
-    const text = el('span', 'pub-add-combo-text');
-    button.appendChild(text);
-    button.appendChild(ui.svg(CARET, 14));
-    wrap.appendChild(button);
-    // A round X on the field itself, shown while a value is chosen.
-    wrap.appendChild(iconButton('pub-add-combo-clear', kind === 'property' ? t('publish.add_clear_property') : t('publish.add_clear_value'), 10, function () { set(''); }));
+    const picker = ns.picker.make(Object.assign({
+      className: 'pub-add-pk',
+      buttonClass: 'pub-add-combo',
+      ariaLabel: kind === 'property' ? t('publish.add_property') : t('publish.add_value'),
+      required: true,   // the X on the field clears it
+      placeholder: placeholder,
+      search: t('publish.add_menu_search'),
+      empty: function (box) { return box.querySelector('.pk-search').value.trim() ? t('publish.add_menu_no_match') : t('publish.add_menu_empty'); },
+      text: {
+        loading: t('publish.loading_aria'),
+        showing: function (shown, total) { return t('publish.add_showing', { shown: shown.toLocaleString(), total: total.toLocaleString() }); },
+      },
+      label: remote ? function (v) { return v; } : function (v) { return source.find(function (e) { return e.value === v; }).label; },
+    }, remote ? { source: source } : { groups: function () { return [{ title: '', items: source }]; } }), value);
 
-    function paintLabel() {
-      const found = remote ? null : source.find(function (e) { return e.value === value; });
-      text.textContent = found ? found.label : (value || placeholder);
-      button.classList.toggle('pub-add-combo-empty', !value);
-      wrap.classList.toggle('pub-add-combo-set', !!value);
-    }
-    paintLabel();
-
-    /** Take ``next`` as the value (empty clears it) and close the list. */
-    function set(next) {
-      value = next;
-      paintLabel();
-      closeMenu();
-      pick(next);
-    }
-
-    button.addEventListener('click', function () {
-      if (!toggleMenu(button)) return;
-      const menu = el('div', 'pub-add-menu');
-      const search = el('input', 'pub-add-menu-search');
-      search.type = 'search';
-      search.placeholder = t('publish.add_menu_search');
-      search.setAttribute('aria-label', t('publish.add_menu_search_label'));
-      const count = el('div', 'pub-add-menu-count');
-      const choices = el('div', 'pub-add-menu-list');
-      choices.setAttribute('role', 'listbox');
-      menu.appendChild(search);
-      menu.appendChild(count);
-      menu.appendChild(choices);
-
-      // What the list holds: for a long list the batches read so far, for a short one every entry.
-      let entries = remote ? [] : source;
-      let total = entries.length;
-      let nextOffset = 0;
-      let busy = false;
-      let failedRead = false;
-      let round = 0;        // changes with every new search, so a slow batch of an old one is dropped
-      let started = false;  // the first batch of this search has been read, so the total is known
-      let searchTimer = 0;
-
-      function visible() {
-        if (remote) return entries;
-        const needle = search.value.trim().toLowerCase();
-        return entries.filter(function (entry) { return !needle || entry.label.toLowerCase().indexOf(needle) >= 0; }).slice(0, MENU_ROWS);
-      }
-
-      function paint() {
-        const shown = visible();
-        if (!remote) total = shown.length;
-        // Header: "Showing 50 of 1,234", with a spinner while a batch is on its way.
-        count.textContent = '';
-        const line = el('span', 'pub-add-menu-count-text');   // one box, so the flex row does not spread its words apart
-        if (failedRead) {
-          line.classList.add('pub-add-menu-error');
-          line.textContent = t('publish.add_menu_failed');
-        } else if (busy && !shown.length) {
-          line.textContent = t('publish.loading');
-        } else {
-          line.appendChild(boldNumbers(t('publish.add_showing', KEEP), shown.length.toLocaleString(), Math.max(total, shown.length).toLocaleString()));
-        }
-        count.appendChild(line);
-        if (busy) count.appendChild(spinner());
-        choices.textContent = '';
-        shown.forEach(function (entry) {
-          const option = el('button', 'pub-add-menu-option', entry.label);
-          option.type = 'button';
-          option.setAttribute('role', 'option');
-          option.setAttribute('aria-selected', String(entry.value === value));
-          option.addEventListener('click', function () { set(entry.value); });
-          choices.appendChild(option);
-        });
-        if (busy) {
-          const row = el('div', 'pub-add-menu-loading');
-          row.appendChild(spinner());
-          row.appendChild(el('span', '', shown.length ? t('publish.add_loading_more') : t('publish.add_loading_values')));
-          choices.appendChild(row);
-        } else if (!shown.length) {
-          choices.appendChild(el('div', 'pub-add-menu-none', failedRead ? t('publish.add_menu_retry') : (remote && !search.value.trim() ? t('publish.add_menu_empty') : t('publish.add_menu_no_match'))));
-        }
-      }
-
-      /** Read the next batch of a long list (the first when the list is new). */
-      function more() {
-        if (!remote || busy || failedRead || (started && entries.length >= total)) return;
-        busy = true;
-        const mine = round;
-        paint();
-        source.load(nextOffset, search.value.trim(), function (page) {
-          if (!openMenu || openMenu.menu !== menu || mine !== round) return;
-          busy = false;
-          if (!page) { failedRead = true; paint(); return; }
-          started = true;
-          page.options.forEach(function (o) { entries.push({ value: o.title, label: o.title }); });
-          nextOffset += page.raw;
-          total = page.raw ? page.total : entries.length;   // an empty batch is the end, whatever the total said
-          paint();
-          if (choices.scrollHeight <= choices.clientHeight + MENU_PREFETCH_PX) more();   // not enough rows to scroll yet
-        });
-      }
-
-      function restartList() {
-        round++;
-        started = false;
-        entries = [];
-        total = 0;
-        nextOffset = 0;
-        busy = false;
-        failedRead = false;
-        choices.scrollTop = 0;
-        more();
-      }
-
-      choices.addEventListener('scroll', function () {
-        if (choices.scrollHeight - choices.scrollTop - choices.clientHeight < MENU_PREFETCH_PX) more();
-      }, { passive: true });
-      search.addEventListener('input', function () {
-        if (!remote) { paint(); return; }
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(restartList, MENU_SEARCH_MS);
-      });
-      search.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') { event.stopPropagation(); closeMenu(); button.focus(); }
-        else if (event.key === 'Enter') {
-          event.preventDefault();
-          const first = choices.querySelector('.pub-add-menu-option');
-          if (first) first.click();
-        }
-      });
-
-      const r = button.getBoundingClientRect();
-      const below = window.innerHeight - r.bottom;
-      menu.style.left = r.left + 'px';
-      menu.style.width = r.width + 'px';
-      if (below < 220 && r.top > below) { menu.style.bottom = (window.innerHeight - r.top + 2) + 'px'; }
-      else { menu.style.top = (r.bottom + 2) + 'px'; }
-      showMenu(button, menu, function () { clearTimeout(searchTimer); });
-      search.focus();
-      if (remote) restartList(); else paint();
-    });
+    function paintSet() { wrap.classList.toggle('pub-add-combo-set', picker.getPicked().length > 0); }
+    picker.addEventListener('pick', function () { paintSet(); pick(picker.getPicked()[0].value); });
+    wrap.appendChild(picker);
+    wrap.appendChild(iconButton('pub-add-combo-clear', kind === 'property' ? t('publish.add_clear_property') : t('publish.add_clear_value'), 10, function () {
+      picker.setPicked([]);
+      paintSet();
+      pick('');
+    }));
+    paintSet();
     return wrap;
   }
 
@@ -655,12 +464,16 @@
   function valueControl(row) {
     const field = fieldOf(row.field);
     if (field && field.picklist) {
-      const source = {
-        load: function (from, text, done) {
-          request('search_options', { lookup: field.picklist, offset: from, text: text }, function (entry) {
-            done(entry.ok ? entry.result : null);
+      const source = function (text, from, done) {
+        request('search_options', { lookup: field.picklist, offset: from, text: text }, function (entry) {
+          if (!entry.ok) { done({ error: t('publish.add_menu_failed') }); return; }
+          const page = entry.result;
+          done({
+            items: page.options.map(function (o) { return { value: o.title, label: o.title }; }),
+            next: from + page.raw,
+            total: page.raw ? page.total : 0,   // an empty page is the end, whatever the total says
           });
-        },
+        });
       };
       return combo(source, row.value, t('publish.add_select_value'), function (value) { row.value = value; }, 'value');
     }
@@ -700,7 +513,6 @@
 
   /** Draw the filter groups (again). Called when the properties arrive or the rows change; typing does not redraw. */
   function renderFilters() {
-    closeMenu();
     const host = dialog.filters;
     host.textContent = '';
     dialog.filterNote.textContent = fieldsNote;
@@ -728,7 +540,6 @@
 
   function close() {
     if (!dialog) return;
-    closeMenu();
     generation++;
     waiting.clear();
     document.removeEventListener('keydown', onKey);
@@ -834,7 +645,7 @@
     const searchButton = el('button', 'btn', t('publish.add_search'));
     searchButton.type = 'button';
     top.appendChild(search);
-    top.appendChild(version.button);
+    top.appendChild(version);
     top.appendChild(searchButton);
     body.appendChild(top);
 
