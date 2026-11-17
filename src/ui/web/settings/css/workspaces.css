@@ -118,7 +118,7 @@
 .ws-block-title + .ws-sub { margin-top: -6px; }
 
 /* ---- Portfolio Management tab: the same flat sections as the Items tab, plus on/off switches ---- */
-.pf-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; cursor: pointer; }   /* beats `.ws-body label` */
+.ws-body .pf-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; cursor: pointer; }   /* more specific than `.ws-body label` */
 .pf-switch input { position: absolute; left: 0; top: 0; width: 38px; height: 22px; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
 .pf-switch-track { position: relative; display: block; flex: none; width: 38px; height: 22px; border-radius: 11px; background: #c4cbd1; transition: background 0.15s; }
 .pf-switch-track::after {
