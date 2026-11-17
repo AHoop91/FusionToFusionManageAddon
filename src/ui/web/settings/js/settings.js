@@ -252,7 +252,7 @@
   const SAVE_POLL_MS = 500;
   const CONFIG_FILE_NAME = 'Fusion-Manage-Item-Management-config.json';   // the name Python stores the file under
   let hubSavePlace = '';   // where the file is being saved, for the dialog that shows how it goes
-  const TAB_SAVES = ['save', 'ws-save', 'ex-save'];   // id prefixes of the tabs' Save buttons, as against the first-setup steps
+  const TAB_SAVES = ['save', 'ws-save', 'pf-save', 'ex-save'];   // id prefixes of the tabs' Save buttons, as against the first-setup steps
 
   /** Show how saving to the hub stands: the dialog's balls while it is under way, its outcome when it ends. */
   function onHubSave(r) {
@@ -288,7 +288,7 @@
 
   /** A member of the hub cannot change its settings: every form and Save is switched off. */
   function applyMemberLock(locked) {
-    ['lock-connection', 'lock-workspaces', 'lock-exports'].forEach(function (id) { $(id).disabled = locked; });
+    ['lock-connection', 'lock-workspaces', 'lock-portfolio', 'lock-exports'].forEach(function (id) { $(id).disabled = locked; });
     $('save-btn').disabled = locked;
     $('f-client-id').type = locked ? 'password' : 'text';   // a member does not set up the sign-in, so the Client ID is not shown to them
     ns.workspaces.setViewOnly(locked);   // the Item Workspace tab shows what the file defines, and checks nothing
@@ -510,7 +510,7 @@
 
   // ---- Wiring -------------------------------------------------------------
 
-  // Id prefix of the Save button that started the last save ('save' | 'ws-save' | 'ex-save' | 'wiz' | 'wt').
+  // Id prefix of the Save button that started the last save ('save' | 'ws-save' | 'pf-save' | 'ex-save' | 'wiz' | 'wt').
   let saveSource = 'save';
 
   function init() {

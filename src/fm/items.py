@@ -164,7 +164,13 @@ class ItemService:
 
     def read(self, workspace_id: str, item_id: str) -> Dict[str, Any]:
         """The item's fields as ``{field id: value}``, picklists as Fusion Manage holds them (``display_values`` gives the text)."""
-        return collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}"))
+        return self.read_named(workspace_id, item_id)[1]
+
+    def read_named(self, workspace_id: str, item_id: str) -> Tuple[str, Dict[str, Any]]:
+        """``(descriptor, fields)`` of the item, from one read: the descriptor is "" when the answer holds none."""
+        data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
+        descriptor = str(next((data[key] for key in DESCRIPTOR_KEYS if data.get(key)), "")) if isinstance(data, dict) else ""
+        return descriptor, collect_values(data)
 
     def find_many(self, workspace_id: str, numbers: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """The items of the workspace whose item number is one of ``numbers``, in one search that returns the item details too.

@@ -9,11 +9,28 @@ To offer another source field, add a ``SourceField`` to ``SOURCE_FIELDS``.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..core.shapes import dict_rows
 from ..core.i18n import t
 from .problems import Problem
+
+
+@dataclass(frozen=True)
+class FieldNeed:
+    """A field a workspace must have: by its id, so a renamed title does not matter."""
+
+    field_id: str
+    type: str = ""   # the title of the field's type in Fusion Manage ("Single Selection"); "" takes any type
+    section: str = ""   # the title of the section that holds it; "" takes any section
+
+
+@dataclass(frozen=True)
+class WorkspaceSchema:
+    """What marks a workspace as the one a kind of workspace works with. The administrator may add more; nothing here may be missing."""
+
+    tabs: tuple = ()   # ``workspaceTabName`` of each tab the workspace needs (e.g. "ITEM_DETAILS")
+    fields: tuple = ()   # a ``FieldNeed`` for each field it needs
 
 
 @dataclass(frozen=True)
@@ -27,9 +44,17 @@ class WorkspaceKind:
     required_permissions: tuple = ()
     # DefaultMapping rows the "Add default fields" button adds.
     default_mappings: tuple = ()
-    # Name of the picklist that links an item to a component (e.g. CUSTOM_LOOKUP_WS_COMPONENTS_...);
+    # Name (or the start of the name) of the picklist that links an item to a component (e.g. CUSTOM_LOOKUP_WS_COMPONENTS_...);
     # the workspace's Fusion Manage field using it is the "Component linking" field. Empty: none.
     component_lookup: str = ""
+    # False: the workspace is only chosen by its id (no field mapping, no default values).
+    mapped: bool = True
+    # True: only revision controlled workspaces are offered for it; False: any workspace of the tenant.
+    revision_only: bool = True
+    # What the workspace must hold to be accepted (tabs, fields); None: nothing is checked beyond permissions.
+    schema: Optional[WorkspaceSchema] = None
+    # True: products are assigned in it, so its settings also say which field holds the Primary Component and which grid column the variants are linked in.
+    assign: bool = False
 
 
 @dataclass(frozen=True)
@@ -53,6 +78,12 @@ class SourceField:
     data_model_name: str = ""
 
 
+COMPONENT_LOOKUPS = "CUSTOM_LOOKUP_WS_COMPONENTS"   # starts the name of every picklist that lists the items of the Components workspace
+
+# The tabs and fields a Portfolio Management workspace must have. To be filled in from the layout the add-in logs for the workspace
+# ("Layout of workspace ..."): ``FieldNeed("FIELD_ID", "Single Selection", "Section title")``, and ``tabs`` by ``workspaceTabName``.
+PORTFOLIO_SCHEMA = WorkspaceSchema()
+
 WORKSPACE_KINDS = [
     # The item BOM is always published, so its permissions are required.
     WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.",
@@ -63,10 +94,15 @@ WORKSPACE_KINDS = [
                    DefaultMapping("physical:Height", "HEIGHT"), DefaultMapping("physical:Width", "WIDTH"),
                    DefaultMapping("physical:Length", "LENGTH"), DefaultMapping("physical:Mass", "ITEM_WEIGHT")),
                   "CUSTOM_LOOKUP_WS_COMPONENTS_ALL_INCLUDING_WORKING"),
+    # Product Portfolio Management: the workspace, the field of the Primary Component and the Variants grid.
+    WorkspaceKind("portfolio", "Portfolio Management", "The Fusion Manage workspace that holds the product portfolio.",
+                  ("view_items",), mapped=False, revision_only=False, schema=PORTFOLIO_SCHEMA, assign=True,
+                  component_lookup=COMPONENT_LOOKUPS),
 ]
 
 KINDS_BY_ID = {k.kind_id: k for k in WORKSPACE_KINDS}
 ITEMS_KIND = "items"   # the kind the Item panel, the publish and the BOM work with
+PORTFOLIO_KIND = "portfolio"   # the kind of the Portfolio Management tab
 LEGACY_NUMBER_FIELD = "NUMBER"   # the field the Part number used to be mapped to by default
 ITEM_NUMBER_SOURCE = "item_number"   # the source every items workspace must map: it names the Fusion Manage field holding the item number
 
@@ -116,6 +152,8 @@ def kind_texts(kind: WorkspaceKind) -> tuple:
     """The title and description of a workspace kind, in the language in use."""
     if kind.kind_id == ITEMS_KIND:
         return t("data.ws_kind_items_title"), t("data.ws_kind_items_description")
+    if kind.kind_id == PORTFOLIO_KIND:
+        return t("data.ws_kind_portfolio_title"), t("data.ws_kind_portfolio_description")
     return kind.title, kind.description
 
 
@@ -165,6 +203,20 @@ class StaticValue:
 
 
 @dataclass
+class VariantsConfig:
+    """The Variants grid of a product: the column that links each row to its component."""
+
+    link_column: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"link_column": self.link_column}
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "VariantsConfig":
+        return cls(link_column=str(data.get("link_column", "")).strip() if isinstance(data, dict) else "")
+
+
+@dataclass
 class WorkspaceConfig:
     """A workspace id, its field mapping and its static values."""
 
@@ -173,23 +225,31 @@ class WorkspaceConfig:
     static_values: List[StaticValue] = field(default_factory=list)
     # The Fusion Manage field that links an item to its component ("" = not linked).
     component_field: str = ""
+    # The Variants grid of a product (only a workspace of a kind that is assigned uses it).
+    variants: VariantsConfig = field(default_factory=VariantsConfig)
+    # Whether the feature of the workspace's kind is on at all (only the Portfolio Management kind can be turned off).
+    enabled: bool = True
 
     def maps_physical(self) -> bool:
         """Whether a mapped field takes a physical property (mass, volume ...): they are slow to read, so only a caller that maps them asks."""
         return any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in self.mappings)
 
-    def setup_problem(self, title: str) -> str:
-        """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and valid mappings."""
+    def setup_problem(self, title: str, mapped: bool = True) -> str:
+        """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and, unless ``mapped`` is False
+        (a workspace only chosen by its id), valid mappings."""
         if not self.workspace_id:
             return t("data.ws_id_not_set", title=title)
-        problems = self.validate()
+        problems = self.validate(mapped)
         return problems[0] if problems else ""
 
-    def validate(self) -> List[str]:
-        """Return human-readable problems, each saying which row it is in and what to do."""
+    def validate(self, mapped: bool = True) -> List[str]:
+        """Return human-readable problems, each saying which row it is in and what to do. ``mapped`` is False for a workspace that is only
+        chosen by its id: nothing about mappings is checked then."""
         problems: List[str] = []
         if self.workspace_id and not self.workspace_id.isdigit():
             problems.append(Problem(t("data.ws_id_not_number"), area="id"))
+        if not mapped:
+            return problems
         first_row_of_source: Dict[str, int] = {}
         for index, row in enumerate(self.mappings):
             name = t("data.ws_mapped_field", n=index + 1)
@@ -229,7 +289,9 @@ class WorkspaceConfig:
         return {"workspace_id": self.workspace_id,
                 "mappings": [row.to_dict() for row in self.mappings],
                 "static_values": [row.to_dict() for row in self.static_values],
-                "component_field": self.component_field}
+                "component_field": self.component_field,
+                "variants": self.variants.to_dict(),
+                "enabled": self.enabled}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WorkspaceConfig":
@@ -244,6 +306,8 @@ class WorkspaceConfig:
         return cls(
             workspace_id=str(data.get("workspace_id", "")).strip(),
             component_field=str(data.get("component_field", "")).strip(),
+            variants=VariantsConfig.from_dict(data.get("variants")),
+            enabled=data.get("enabled", True) is not False,
             mappings=mappings,
             static_values=[StaticValue.from_dict(r) for r in dict_rows(statics)],
         )
@@ -257,12 +321,12 @@ class WorkspaceSettings:
         default_factory=lambda: {k.kind_id: WorkspaceConfig() for k in WORKSPACE_KINDS})
 
     def get(self, kind_id: str) -> WorkspaceConfig:
-        return self.workspaces[kind_id]
+        return self.workspaces.get(kind_id) or WorkspaceConfig()
 
     def validate(self) -> List[str]:
         problems: List[str] = []
         for kind in WORKSPACE_KINDS:
-            for problem in self.workspaces[kind.kind_id].validate():
+            for problem in self.get(kind.kind_id).validate(kind.mapped):
                 problem.where["workspace"] = kind.kind_id
                 problems.append(problem)
         return problems
@@ -286,6 +350,7 @@ def catalog() -> Dict[str, Any]:
     """Static lists the panel needs to render workspace cards and mapping rows."""
     return {
         "kinds": [{"id": k.kind_id, "title": kind_texts(k)[0], "description": kind_texts(k)[1], "component_lookup": k.component_lookup,
+                   "mapped": k.mapped, "revision_only": k.revision_only, "assign": k.assign,
                    "default_mappings": [asdict(m) for m in k.default_mappings]}
                   for k in WORKSPACE_KINDS],
         "source_fields": [{"id": f.field_id, "label": source_label(f), "kind": f.kind} for f in SOURCE_FIELDS],

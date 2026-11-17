@@ -11,7 +11,7 @@
 /* The tab fills the panel, so its footer (Save) sits under the scrolling body as on the other tabs. */
 main > .tab-panel.active > .lang-form { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .lang-card h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
-.lang-card .ws-pick-wrap { max-width: 320px; }
+.lang-card .pk { max-width: 320px; }
 .lang-add { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 .lang-add-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: end; gap: 10px; margin-top: 10px; }
 .lang-add-row .field { margin: 0; }
@@ -31,12 +31,12 @@ main > .tab-panel.active > .lang-form { flex: 1; display: flex; flex-direction: 
 .lang-add-row .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
 /* The list: the code sits on the row of the name, the rows have room, and the chosen one is marked. */
-.inline-detail .ws-pick-menu { padding: 4px 0; }
-.inline-detail .ws-pick-search { margin-bottom: 6px; }
-.inline-detail .ws-pick-item { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 12px; }
-.inline-detail .ws-pick-detail { display: inline; flex: none; font-size: 12px; }
-.inline-detail .ws-pick-item.selected { color: var(--accent); background: #f2f9fd; }
-.inline-detail .ws-pick-group { padding: 8px 12px 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.inline-detail .pk-menu { padding: 4px 0; }
+.inline-detail .pk-search { margin-bottom: 6px; }
+.inline-detail .pk-item { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 12px; }
+.inline-detail .pk-detail { display: inline; flex: none; font-size: 12px; }
+.inline-detail .pk-item.selected { color: var(--accent); background: #f2f9fd; }
+.inline-detail .pk-group { padding: 8px 12px 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
 
 /* How a language file works: a note above the form. */
 .lang-how { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; background: #f2f9fd; }

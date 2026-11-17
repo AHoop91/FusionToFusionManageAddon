@@ -10,6 +10,7 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``help_actions``: the Help button, which opens the documentation.
 * ``publish_actions``: the open model for the Publish Item panel.
 * ``search_actions``: the Add Items picker: search matches, filterable fields and picklist options.
+* ``product_actions``: the Assign Product panel: the products of the Portfolio Management workspace, and creating one.
 * ``hub_actions``, ``hub_file_actions``, ``hub_save_actions``: the user's role in the hub, and finding or saving its Configuration File.
 
 ``register_actions`` is the only function the add-in entry point needs.
@@ -29,6 +30,7 @@ from .hub_actions import HubRoles, register_hub_actions
 from .help_actions import register_help_actions
 from .hub_file_actions import register_hub_file_actions
 from .hub_save_actions import register_hub_save_actions
+from .product_actions import register_product_actions
 from .search_actions import register_search_actions
 from .property_actions import register_property_actions
 from .publish_actions import register_publish_actions
@@ -55,4 +57,5 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_publish_actions(bridge, config, auth)
     register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)
     register_search_actions(bridge, config, auth)
+    register_product_actions(bridge, config, auth)
     return roles

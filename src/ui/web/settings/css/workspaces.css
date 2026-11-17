@@ -30,44 +30,6 @@
 .ws-add-btn:hover { background: var(--bg); }
 .ws-add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ws-add-btn:disabled { color: var(--muted); cursor: not-allowed; }
-.ws-pick-wrap { position: relative; min-width: 0; }
-.ws-pick-btn {
-  padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--surface);
-  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; color: var(--text); cursor: pointer;
-}
-.ws-pick-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-pick-btn.placeholder { color: var(--muted); }
-.ws-pick-btn::after { content: "\25BE"; flex: none; color: var(--muted); }
-.ws-pick-btn:disabled { cursor: not-allowed; }
-/* The list is plain elements, so it opens instantly (no native popup). */
-.ws-pick-menu {
-  position: absolute; top: 100%; left: 0; z-index: 10; width: 100%; min-width: 240px;
-  margin-top: 2px; padding: 6px 0 4px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.ws-pick-search {
-  display: block; width: calc(100% - 12px); margin: 0 6px 4px; padding: 5px 6px;
-  border: 1px solid var(--border); border-radius: 4px; font: inherit;
-}
-/* Right-hand pickers open leftwards so the list stays inside the palette. */
-.ws-pick-menu.right { left: auto; right: 0; }
-/* Opens upwards when there is no room below. */
-.ws-pick-menu.up { top: auto; bottom: 100%; margin: 0 0 2px; }
-.ws-pick-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; }
-.ws-pick-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.04em; }
-.ws-pick-empty { padding: 6px 10px; font-size: 12px; }
-.ws-pick-item {
-  display: block; width: 100%; padding: 5px 10px; border: 0; background: none;
-  font: inherit; text-align: left; color: var(--text); cursor: pointer; white-space: normal; overflow-wrap: anywhere;
-}
-.ws-pick-item:hover, .ws-pick-clear:hover { background: var(--bg); }
-.ws-pick-clear {
-  display: block; width: 100%; padding: 5px 10px; border: 0; border-bottom: 1px solid var(--border);
-  background: none; font: inherit; text-align: left; color: var(--danger); cursor: pointer;
-}
-.ws-pick-item.selected { font-weight: 600; }
-.ws-pick-item:disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; background: none; }
-.ws-pick-detail { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
 .ws-remove {
   display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
   background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
@@ -109,7 +71,7 @@
 
 .ws-panel .ws-id-label { margin-top: 0; }
 .ws-busy { position: absolute; inset: 0; z-index: 7; justify-content: center; background: rgba(255, 255, 255, 0.85); }
-#sub-workspaces { position: relative; }
+#sub-workspaces, #sub-portfolio { position: relative; }
 .ws-section { margin-bottom: 4px; }
 .ws-panel > .ws-desc { margin: 0; font-size: 12px; }
 
@@ -154,6 +116,26 @@
 .ws-panel > .ws-desc { margin-bottom: 14px; }
 .ws-sub { margin: 2px 0 10px; font-size: 12px; line-height: 1.4; }
 .ws-block-title + .ws-sub { margin-top: -6px; }
+
+/* ---- Portfolio Management tab: the same flat sections as the Items tab, plus on/off switches ---- */
+.pf-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; cursor: pointer; }   /* beats `.ws-body label` */
+.pf-switch input { position: absolute; left: 0; top: 0; width: 38px; height: 22px; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.pf-switch-track { position: relative; display: block; flex: none; width: 38px; height: 22px; border-radius: 11px; background: #c4cbd1; transition: background 0.15s; }
+.pf-switch-track::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s;
+}
+.pf-switch input:checked + .pf-switch-track { background: var(--accent); }
+.pf-switch input:checked + .pf-switch-track::after { transform: translateX(16px); }
+.pf-switch input:focus-visible + .pf-switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pf-switch input:disabled, .pf-switch input:disabled ~ * { cursor: not-allowed; }
+.pf-switch-label { font-size: 13px; font-weight: 500; }
+
+/* Everything but the Enable switch: greyed out and not usable while Product Portfolio Management is off. */
+.pf-rest { min-width: 0; margin: 20px 0 0; padding: 4px 0 0; border: 0; border-top: 1px solid var(--border); transition: opacity 0.15s; }
+.pf-rest:disabled { opacity: 0.45; }
+.pf-rest:disabled .ws-locked:disabled { opacity: 1; }
+.pf-rest:disabled * { cursor: not-allowed; }
 
 /* ---- Validation dialog: what failed, and how to put it right ---- */
 .val-dialog { display: flex; flex-direction: column; max-width: 460px; padding: 0; overflow: hidden; border-radius: 10px; }

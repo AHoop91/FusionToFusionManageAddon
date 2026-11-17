@@ -20,7 +20,7 @@
   /** The element a problem is about, or null when the panel has nothing for it (for example a row that is gone). */
   function find(where) {
     if (where.input) return document.getElementById(where.input);
-    const card = where.workspace ? document.querySelector('#workspace-cards .ws-kind[data-kind="' + where.workspace + '"]') : null;
+    const card = where.workspace ? document.querySelector('.ws-kind[data-kind="' + where.workspace + '"]') : null;
     if (!card) return null;
     let part = null;
     if (where.area === 'id') part = card.querySelector('.ws-id');
@@ -102,7 +102,7 @@
     problem.note.setAttribute('role', 'alert');
     place(problem.note, target);
     // Choosing or typing in the field puts it right.
-    const event = target.classList.contains('ws-pick-wrap') ? 'pick' : 'input';
+    const event = target.classList.contains('pk') ? 'pick' : 'input';
     // A cleared picker is still wrong, so only a choice puts it right.
     const done = function () { if (event === 'input' || target.querySelector('input').value) resolve(problem); };
     target.addEventListener(event, done);

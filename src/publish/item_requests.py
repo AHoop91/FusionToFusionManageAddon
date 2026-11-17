@@ -54,7 +54,7 @@ def _by_section(workspace_id: str, fields: Fields, field_sections: Dict[str, str
     return {"sections": [{"link": named(link), "fields": entries} for link, entries in by_section.items()]}, ""
 
 
-def _holds(current: Any, value: Any) -> bool:
+def holds(current: Any, value: Any) -> bool:
     """Whether the item's current value of a field is ``value`` (a picklist option is held as ``{"link": ...}``)."""
     if isinstance(value, dict):   # a link to an item, e.g. the component
         return isinstance(current, dict) and current.get("link") == value.get("link")
@@ -97,7 +97,7 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_
         if not item_id:   # an update has to say which item
             return None, t("run.request_no_id")
         fields = _of_status(rows, MISMATCH) + [(field_id, value) for field_id, value in fixed
-                                               if current is None or not _holds(current.get(field_id), value)]
+                                               if current is None or not holds(current.get(field_id), value)]
         if not fields and not files:
             return None, same_values()
         fields += files

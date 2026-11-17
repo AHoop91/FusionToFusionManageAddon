@@ -24,7 +24,7 @@ from .export_models import ExportSettings
 from .hub import tenant_code
 from .models import MODE_COMPANY, MODE_LOCAL, AppConfig, ConnectionSettings
 from .shared_config import clean_source, read_cache, read_shared, write_cache
-from .workspace_models import ITEMS_KIND, KINDS_BY_ID, WorkspaceSettings, kind_texts
+from .workspace_models import ITEMS_KIND, KINDS_BY_ID, PORTFOLIO_KIND, WorkspaceSettings, kind_texts
 
 log = get_logger("config")
 
@@ -146,6 +146,12 @@ class ConfigService:
         """Why the Items workspace cannot be used yet ("" when its settings are complete)."""
         kind = KINDS_BY_ID[ITEMS_KIND]
         return self.config.workspaces.get(kind.kind_id).setup_problem(kind_texts(kind)[0])
+
+    def portfolio_setup_problem(self) -> str:
+        """Why Portfolio Management cannot be used ("" when it is on and its workspace is set)."""
+        kind = KINDS_BY_ID[PORTFOLIO_KIND]
+        cfg = self.config.workspaces.get(kind.kind_id)
+        return cfg.setup_problem(kind_texts(kind)[0], kind.mapped) if cfg.enabled else t("data.portfolio_off")
 
     def _read(self) -> None:
         """Read config from disk. A missing file is a first run (defaults); an unreadable one is an error, because

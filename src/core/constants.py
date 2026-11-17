@@ -16,6 +16,8 @@ MENU_UPLOAD_STEP_COMMAND_ID = "MfgToFm_MenuUploadStepCmd"
 MENU_UPLOAD_DRAWING_COMMAND_ID = "MfgToFm_MenuUploadDrawingCmd"
 EXPORT_COMMAND_ID = "MfgToFm_ExportCmd"
 EXPORT_PALETTE_ID = "MfgToFm_ExportPalette"
+PRODUCT_COMMAND_ID = "MfgToFm_AssignProductCmd"
+PRODUCT_PALETTE_ID = "MfgToFm_ProductPalette"
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"
@@ -41,5 +43,7 @@ UPLOAD_PROGRESS_WIDTH = 460
 UPLOAD_PROGRESS_HEIGHT = 190
 EXPORT_WIDTH = 520
 EXPORT_HEIGHT = 760
+PRODUCT_WIDTH = 1100
+PRODUCT_HEIGHT = 720
 JOBS_WIDTH = 900
 JOBS_HEIGHT = 720

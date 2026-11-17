@@ -23,6 +23,7 @@ function openCard(role) {
     '<div id="lang-banner" hidden></div><button id="lang-restart-btn"></button><button class="tab" data-tab="language"></button><button id="lang-save-btn"></button><button id="lang-save-publish-btn" hidden></button></body></html>', { runScripts: 'outside-only' });
   const w = dom.window;
   w.MfgUi = {};
+  w.Element.prototype.scrollIntoView = () => {};   // jsdom has no layout to scroll
   w.sent = [];
   w.adsk = { fusionSendData: (action, data) => w.sent.push([action, JSON.parse(data)]) };
   ['../shared/js/dom.js', '../shared/js/bridge.js'].forEach((src) => run(w, src));
@@ -34,7 +35,7 @@ function openCard(role) {
   w.state = STATE;
   w.MfgUi.settings = { roleState: () => (role === undefined ? 'admin' : role), publish: () => w.sent.push(['publish', {}]) };   // a Hub Admin unless the test says otherwise
   w.MfgUi.progress = { notify: (title, text) => w.sent.push(['notify', { title: title, text: text }]) };
-  ['../settings/js/picker.js', '../settings/js/language.js'].forEach((src) => run(w, src));
+  ['../shared/js/picker.js', '../settings/js/language.js'].forEach((src) => run(w, src));
   w.MfgUi.language.init();
   return w;
 }
@@ -61,8 +62,8 @@ test('Create sends what was typed, and the answer shows where the file is and of
   assert.deepStrictEqual([...note.querySelectorAll('button')].map((b) => b.textContent), ['Open folder', 'Reload']);
   assert.strictEqual($(w, 'lang-code').value, '', 'the form is empty for the next one');
 
-  w.document.querySelector('.ws-pick-btn').click();   // the new language is in the list
-  assert.ok([...w.document.querySelectorAll('.ws-pick-item')].some((item) => item.textContent.includes('Deutsch')));
+  w.document.querySelector('.pk-btn').click();   // the new language is in the list
+  assert.ok([...w.document.querySelectorAll('.pk-item')].some((item) => item.textContent.includes('Deutsch')));
 });
 
 test('Create waits until both the code and the name are filled in', { skip }, () => {
@@ -83,9 +84,9 @@ test('Create waits until both the code and the name are filled in', { skip }, ()
 
 test('a short list has no search box and no heading', { skip }, () => {
   const w = openCard();
-  w.document.querySelector('.ws-pick-btn').click();
-  assert.strictEqual(w.document.querySelector('.ws-pick-search').hidden, true);
-  assert.strictEqual(w.document.querySelector('.ws-pick-group'), null);
+  w.document.querySelector('.pk-btn').click();
+  assert.strictEqual(w.document.querySelector('.pk-search').hidden, true);
+  assert.strictEqual(w.document.querySelector('.pk-group'), null);
 });
 
 test('a language the add-in refuses is explained under the form and what was typed stays', { skip }, () => {
@@ -104,9 +105,9 @@ test('choosing a language in the list uses it at once, with no Save; the list ha
   const w = openCard();
   w.state = Object.assign({}, STATE, { languages: STATE.languages.concat([{ code: 'de', name: 'Deutsch', source: 'user' }]) });
   w.MfgUi.language.render();
-  w.document.querySelector('.ws-pick-btn').click();
-  assert.strictEqual(w.document.querySelector('.ws-pick-clear'), null);
-  [...w.document.querySelectorAll('.ws-pick-item')].find((item) => item.textContent.includes('Deutsch')).click();
+  w.document.querySelector('.pk-btn').click();
+  assert.strictEqual(w.document.querySelector('.pk-clear').hidden, true);
+  [...w.document.querySelectorAll('.pk-item')].find((item) => item.textContent.includes('Deutsch')).click();
   assert.deepStrictEqual(w.sent.pop(), ['set_language', { code: 'de' }]);
 });
 
@@ -148,8 +149,8 @@ test('the languages the hub shares are in the list, under their own heading', { 
   const w = openCard('admin');
   w.state = Object.assign({}, STATE, { languages: STATE.languages.concat([{ code: 'es', name: 'Español', source: 'hub' }]) });
   w.MfgUi.language.render();
-  w.document.querySelector('.ws-pick-btn').click();
-  assert.ok([...w.document.querySelectorAll('.ws-pick-group')].some((g) => /Shared by your hub/.test(g.textContent)));
+  w.document.querySelector('.pk-btn').click();
+  assert.ok([...w.document.querySelectorAll('.pk-group')].some((g) => /Shared by your hub/.test(g.textContent)));
 });
 
 test('each custom language is a tile that says whether it is only local or shared in the hub; there is nothing to tick', { skip }, () => {

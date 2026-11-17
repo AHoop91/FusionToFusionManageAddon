@@ -24,11 +24,12 @@ class SetupGate:
     """Enables or disables the commands that need the settings to be complete, and a loaded drawing."""
 
     def __init__(self, ui: adsk.core.UserInterface, commands: Sequence[RibbonCommand], problem: Callable[[], str],
-                 drawing_problem: Callable[[], str] = lambda: "") -> None:
+                 drawing_problem: Callable[[], str] = lambda: "", portfolio_problem: Callable[[], str] = lambda: "") -> None:
         self._ui = ui
-        self._commands = [c for c in commands if c.needs_setup or c.needs_drawing]
+        self._commands = [c for c in commands if c.needs_setup or c.needs_drawing or c.needs_portfolio]
         self._problem = problem
         self._drawing_problem = drawing_problem
+        self._portfolio_problem = portfolio_problem
         self._shown: Dict[str, str] = {}   # command id -> the reason last applied, so only a change is written
 
     def refresh(self) -> None:
@@ -36,11 +37,13 @@ class SetupGate:
         try:
             setup = self._problem()
             drawing = self._drawing_problem()
+            portfolio = self._portfolio_problem()
         except Exception:  # noqa: BLE001 - unknown state: leave the commands as they are
             log.exception("Could not check what the commands need")
             return
         for command in self._commands:
-            reason = (setup if command.needs_setup else "") or (drawing if command.needs_drawing else "")
+            reason = ((setup if command.needs_setup else "") or (portfolio if command.needs_portfolio else "")
+                      or (drawing if command.needs_drawing else ""))
             if self._shown.get(command.command_id) == reason:
                 continue
             definition = self._ui.commandDefinitions.itemById(command.command_id)

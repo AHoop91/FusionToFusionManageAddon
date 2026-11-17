@@ -12,6 +12,7 @@ from .client import WORKSPACES, FmApiError, FmClient
 
 PERMISSION_PREFIX = "permission.shortname."
 VIEW_ITEMS = "view_items"   # without it nothing of the workspace can be seen
+ADD_ITEMS = "add_items"   # to create an item
 ATTACH_PERMISSIONS = (VIEW_ITEMS, "add_attachments", "edit_attachments")   # to find the record, attach a file, and give a file a new version
 REFUSED = (401, 403)   # the statuses of a request the user is not allowed to make
 
@@ -30,6 +31,15 @@ def parse_granted(data: Any) -> Set[str]:
 def granted(client: FmClient, workspace_id: str) -> Set[str]:
     """The short names of the permissions the user holds in the workspace. Raises ``FmApiError`` when they cannot be read."""
     return parse_granted(client.get_json(f"{WORKSPACES}/{workspace_id}/users/@me/permissions"))
+
+
+def may(client: FmClient, workspace_id: str, permission: str) -> bool:
+    """Whether the user holds ``permission`` in the workspace. When the permissions cannot be read (but for being refused) it is True:
+    Fusion Manage still refuses what the user may not do, and the add-in must not take a right away on a failed read."""
+    try:
+        return permission in granted(client, workspace_id)
+    except FmApiError as exc:
+        return exc.status not in REFUSED
 
 
 def title(permission: str) -> str:

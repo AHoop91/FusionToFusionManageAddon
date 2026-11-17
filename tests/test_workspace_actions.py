@@ -110,7 +110,7 @@ class RegisteredActionsTests(unittest.TestCase):
         self.queued = []
         self.config = mock.Mock()
         self.service = mock.Mock()
-        self.service.return_value.revision_controlled.return_value = [{"id": "242", "name": "Items"}]
+        self.service.return_value.all_workspaces.return_value = [{"id": "242", "name": "Items", "revision": True}]
         for patch in (mock.patch.object(workspace_actions, "FmClient"),
                       mock.patch.object(workspace_actions, "WorkspaceService", self.service)):
             patch.start()
@@ -129,10 +129,10 @@ class RegisteredActionsTests(unittest.TestCase):
         self.assertEqual((result["pending"], result["workspaces"]), (True, []))
         self.finish()
         done = self.call("list_workspaces_status")["result"]
-        self.assertEqual((done["pending"], done["ok"], done["workspaces"]), (False, True, [{"id": "242", "name": "Items"}]))
+        self.assertEqual((done["pending"], done["ok"], done["workspaces"]), (False, True, [{"id": "242", "name": "Items", "revision": True}]))
 
     def test_a_failed_listing_is_told_with_why(self):
-        self.service.return_value.revision_controlled.side_effect = RuntimeError("down")
+        self.service.return_value.all_workspaces.side_effect = RuntimeError("down")
         self.call("list_workspaces")
         self.finish()
         done = self.call("list_workspaces_status")["result"]

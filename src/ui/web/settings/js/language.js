@@ -98,7 +98,7 @@
     const cfg = {
       valueClass: 'lang-value',
       required: true,   // a language is always chosen: there is nothing to clear
-      inlineDetail: true,   // the code is on the row of the name
+      className: 'inline-detail',   // the code is on the row of the name
       searchFrom: 8,   // a handful of languages needs no search
       placeholder: shown,
       search: t('language.search'),

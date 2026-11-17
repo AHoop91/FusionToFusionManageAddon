@@ -38,12 +38,12 @@ def bad_search() -> str:
 Read = Callable[[FmClient], Any]   # what a request does with the client, on the worker thread
 
 
-def _answer(token: str, **changes: Any) -> Dict[str, Any]:
+def answer_for(token: str, **changes: Any) -> Dict[str, Any]:
     """An answer the panel polls for by ``token``: ``pending`` while the read runs, then ``ok`` with its ``result``, or why it failed (``message``)."""
     return {"token": token, "pending": False, "ok": False, "result": None, "message": "", **changes}
 
 
-def _token(payload: Dict[str, Any]) -> str:
+def token_of(payload: Dict[str, Any]) -> str:
     """The token the panel names its request by. Raises ``ValueError`` when there is none: an answer with no token cannot be asked for."""
     token = str(payload.get("token") or "")
     if not token:
@@ -66,10 +66,10 @@ class PickerReads:
 
     def items(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """A page of the items matching the text and filters."""
-        token = _token(payload)
+        token = token_of(payload)
         workspace = self._workspace()
         if not workspace:
-            return _answer(token, message=no_item())
+            return answer_for(token, message=no_item())
         item_id = str(payload.get("item_id") or "")   # no item yet while the design is not in Fusion Manage
         text, groups = str(payload.get("text") or ""), payload.get("groups")
         offset, revision = max(0, whole(payload.get("offset"))), whole(payload.get("revision")) or LATEST
@@ -77,37 +77,37 @@ class PickerReads:
 
     def members(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The items the Bill of Materials of the design's item holds."""
-        token = _token(payload)
+        token = token_of(payload)
         workspace = self._workspace()
         if not workspace:
-            return _answer(token, message=no_item())
+            return answer_for(token, message=no_item())
         item_id = str(payload.get("item_id") or "")
         if not item_id:   # the design is not in Fusion Manage: its Bill of Materials holds nothing yet
-            return _answer(token, ok=True, result={"ids": [], "numbers": []})
+            return answer_for(token, ok=True, result={"ids": [], "numbers": []})
         return self._start(token, lambda client: ItemSearchService(client).members(workspace, item_id))
 
     def fields(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The fields a search can filter by."""
-        token = _token(payload)
+        token = token_of(payload)
         workspace = self._workspace()
         if not workspace:
-            return _answer(token, message=no_item())
+            return answer_for(token, message=no_item())
         return self._start(token, lambda client: {"fields": WorkspaceService(client).filterable_fields(f"{WORKSPACES}/{workspace}")})
 
     def options(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """A page of the options of a picklist, for a value drop-down."""
-        token = _token(payload)
+        token = token_of(payload)
         lookup = str(payload.get("lookup") or "")
         if not lookup:
-            return _answer(token, message=t("app.no_picklist"))
+            return answer_for(token, message=t("app.no_picklist"))
         offset, text = max(0, whole(payload.get("offset"))), str(payload.get("text") or "")
         return self._start(token, lambda client: WorkspaceService(client).options_page(lookup, offset, OPTIONS_PAGE, text))
 
     def status(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """How the request with this token stands."""
-        token = _token(payload)
+        token = token_of(payload)
         with self._lock:
-            return dict(self._answers.get(token) or _answer(token, message=t("app.unknown_request")))
+            return dict(self._answers.get(token) or answer_for(token, message=t("app.unknown_request")))
 
     def _workspace(self) -> str:
         cfg = self._config.config.workspaces.get(ITEMS_KIND)
@@ -120,24 +120,29 @@ class PickerReads:
                 self._answers.pop(next(iter(self._answers)))
         return answer
 
-    def _start(self, token: str, read: Read) -> Dict[str, Any]:
-        """Run ``read(client)`` on a worker thread and return the pending answer the panel polls."""
+    def _start(self, token: str, read: Read, alongside: bool = False) -> Dict[str, Any]:
+        """Run ``read(client)`` on a worker thread and return the pending answer the panel polls. Reads go one at a time, unless ``alongside``
+        says this one may run with the others (a picture: each is a read of its own, and a form asks for several)."""
         client = self._make_client()   # first: when it cannot be made, no answer is left pending for ever
-        pending = self._keep(_answer(token, pending=True))
-        self._run(lambda: self._finish(token, client, read))
+        pending = self._keep(answer_for(token, pending=True))
+        self._run(lambda: self._finish(token, client, read, alongside))
         return pending
 
-    def _finish(self, token: str, client: FmClient, read: Read) -> None:
+    def _finish(self, token: str, client: FmClient, read: Read, alongside: bool = False) -> None:
         try:
-            with self._fetching:
+            if alongside:
                 result = read(client)
-            self._keep(_answer(token, ok=True, result=result))
+            else:
+                with self._fetching:
+                    result = read(client)
+            self._keep(answer_for(token, ok=True, result=result))
         except FmApiError as exc:
             log.warning("Picker read failed: %s", exc)
-            self._keep(_answer(token, message=bad_search() if exc.status == BAD_REQUEST else str(exc)))
+            fields = getattr(exc, "fields", None)   # a write that named the fields it refused: the panel shows each beside its field
+            self._keep(answer_for(token, message=bad_search() if exc.status == BAD_REQUEST and not fields else str(exc), **({"fields": fields} if fields else {})))
         except Exception as exc:  # noqa: BLE001 - never leave the panel waiting
             log.exception("Picker read failed")
-            self._keep(_answer(token, message=why(exc)))
+            self._keep(answer_for(token, message=why(exc)))
 
 
 def register_search_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:

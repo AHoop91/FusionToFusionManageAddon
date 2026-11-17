@@ -7,8 +7,8 @@ class Problem(str):
     """The text of a problem. It is a string, so it joins and compares as one; ``where`` tells the panel which field to mark.
 
     ``where`` is ``{"input": id}`` for a field of the Connection tab, or ``{"workspace": kind, "area": ..., "row": n, "part": ...}`` for
-    a workspace's settings: ``area`` is ``id``, ``mapping``, ``static``, ``component`` or ``mappings`` (the list as a whole), ``row`` counts
-    from 0 within its list and ``part`` is ``source`` or ``field``.
+    a workspace's settings: ``area`` is ``id``, ``mapping``, ``static``, ``component`` or ``mappings``
+    (the list as a whole), ``row`` counts from 0 within its list and ``part`` is ``source`` or ``field``.
     """
 
     where: Dict[str, Any]

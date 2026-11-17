@@ -18,22 +18,25 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote_plus
 
 from ..auth.errors import AuthError
-from ..config.workspace_models import WorkspaceKind
+from ..config.workspace_models import WorkspaceKind, kind_texts
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in, whole
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
 from .item_view import not_shown
 from .permissions import REFUSED, missing, parse_granted, title
+from .workspace_schema import problems as schema_problems, read_layout
 
 log = get_logger("fm.workspace")
 
+PICKLIST_ORDER = "title"   # the options of a picklist are asked for by title, the order Fusion Manage lists them in (unasked, they come as they were created)
 OPTIONS_PAGE = 100   # picklist options requested per call
 MAX_OPTIONS = 2000   # stop reading a picklist after this many options
 READERS = 4          # picklists read at once
 WORKSPACES_PAGE = 100   # workspaces requested per call
 MAX_WORKSPACES = 2000   # stop reading the list of workspaces after this many
 WORKSPACES_BULK = "application/vnd.autodesk.plm.workspaces.bulk+json"
+GRID_VIEW = "13"   # /api/v3/workspaces/{id}/views/13: the Grid tab of an item (its columns are that view's fields)
 REVISION_CONTROLLED_TYPE = "6"   # /api/v3/workspace-types/6: "Revision Controlled Workspace"
 
 Field = Dict[str, Any]   # a workspace field as the mapping picker takes it (see ``_field``)
@@ -47,8 +50,10 @@ def _type_id(row: Dict[str, Any]) -> str:
 
 
 def _option(item: Dict[str, Any]) -> Dict[str, str]:
-    """``{value: link, title}`` of a picklist option row."""
-    return {"value": str(item["link"]), "title": str(item.get("title") or item["link"])}
+    """``{value: link, title}`` of a picklist option row; an item of a workspace says which version it is (``[REV:w]``), which follows its title."""
+    title = str(item.get("title") or item["link"])
+    version = item.get("version")
+    return {"value": str(item["link"]), "title": f"{title} {version}" if isinstance(version, str) and version else title}
 
 
 def _field(row: Dict[str, Any], field_id: str) -> Field:
@@ -59,13 +64,13 @@ def _field(row: Dict[str, Any], field_id: str) -> Field:
     ``computed`` whether Fusion Manage works its value out."""
     lookup_name = last_segment(row.get("picklist"))
     links = bool(row.get("picklistFieldDefinition"))
-    return {"id": field_id, "title": str(row.get("name") or row.get("title") or field_id),
+    return {"id": field_id, "title": str(row.get("name") or field_id),
             "type": str(as_dict(row.get("type")).get("title") or ""),
             "picklist": "" if links or row.get("editability") == "NEVER" else lookup_name,
-            "link_lookup": lookup_name if links else "", "shown": not not_shown(row, set()), "computed": _is_computed(row)}
+            "link_lookup": lookup_name if links else "", "shown": not not_shown(row, set()), "computed": is_computed(row)}
 
 
-def _is_computed(row: Dict[str, Any]) -> bool:
+def is_computed(row: Dict[str, Any]) -> bool:
     """Whether a field's value is worked out by Fusion Manage (a computed field) rather than entered: its ``formulaField`` flag."""
     return row.get("formulaField") is True or row.get("derived") is True
 
@@ -110,7 +115,15 @@ class WorkspaceService:
 
         Raises ``AuthError`` or ``FmApiError`` when the list cannot be read.
         """
-        found: List[Dict[str, str]] = []
+        return [{"id": w["id"], "name": w["name"]} for w in self.all_workspaces() if w["revision"]]
+
+    def all_workspaces(self) -> List[Dict[str, Any]]:
+        """The tenant's workspaces that are not deleted or controlled, as ``[{id, name, revision}]`` sorted by name; ``revision`` is whether
+        the workspace is revision controlled (the ones that hold items).
+
+        Raises ``AuthError`` or ``FmApiError`` when the list cannot be read.
+        """
+        found: List[Dict[str, Any]] = []
         seen: List[str] = []
         # the bulk form: plain JSON leaves out each workspace's name and type
         rows = self._rows(lambda offset: f"{WORKSPACES}?offset={offset}&limit={WORKSPACES_PAGE}", MAX_WORKSPACES, WORKSPACES_BULK)
@@ -119,9 +132,9 @@ class WorkspaceService:
                 continue   # a controlled workspace (Components, Drawings) is not one that holds items
             workspace_id, kind_id = last_segment(row.get("__self__")), _type_id(row)
             seen.append(f"{row.get('name')}={kind_id or row.get('type')!r}")
-            if workspace_id and kind_id == REVISION_CONTROLLED_TYPE:
-                found.append({"id": workspace_id, "name": str(row.get("name") or workspace_id)})
-        log.info("Workspace types: %s; revision controlled: %d", seen, len(found))
+            if workspace_id:
+                found.append({"id": workspace_id, "name": str(row.get("name") or workspace_id), "revision": kind_id == REVISION_CONTROLLED_TYPE})
+        log.info("Workspace types: %s; listed: %d", seen, len(found))
         found.sort(key=lambda w: w["name"].lower())
         return found
 
@@ -145,32 +158,51 @@ class WorkspaceService:
         lacking = missing(kind.required_permissions, granted)
         if lacking:
             return _verdict(kind, False, t("data.fm_workspace_lacking", name=name, missing=", ".join(title(p) for p in lacking)))
-        fields, picklists, fields_error = self._fields_and_picklists(base)
-        return {**_verdict(kind, True, t("data.fm_workspace_valid", name=name)), "fields": fields, "picklists": picklists, "fields_error": fields_error}
+        fields, fields_error = self.fields(base)   # read once: the schema check and the mapping picker both use it
+        if kind.schema is not None:
+            wrong = fields_error or self._schema_problem(kind, name, workspace_id, fields)
+            if wrong:
+                return _verdict(kind, False, wrong)
+        picklists = {} if fields_error else self._picklists(fields)
+        grid, grid_error = self.grid_fields(base) if kind.assign else ([], "")   # only a workspace that has a Variants grid is asked for its columns
+        return {**_verdict(kind, True, t("data.fm_workspace_valid", name=name)), "fields": fields, "picklists": picklists, "fields_error": fields_error,
+                "grid_fields": grid, "grid_error": grid_error}
 
-    def _fields_and_picklists(self, base: str) -> Tuple[List[Field], Dict[str, Options], str]:
-        """The workspace's fields for the mapping picker: ``([field], {lookup: options}, error)``.
+    def _schema_problem(self, kind: WorkspaceKind, name: str, workspace_id: str, fields: List[Field]) -> str:
+        """Why the workspace is not one the kind can work with ("" when it has everything its schema needs)."""
+        try:
+            layout = read_layout(self._client, workspace_id, fields)
+        except FmApiError as exc:
+            return t("data.schema_not_read", name=name, reason=exc)
+        except AuthError as exc:
+            return t("data.fm_not_signed_in", reason=exc)
+        lacking = schema_problems(kind.schema, layout)
+        return t("data.schema_not_matching", name=name, kind=kind_texts(kind)[0], problems="; ".join(lacking)) if lacking else ""
 
-        A failure here does not invalidate the workspace; the panel shows ``error`` in the empty field list instead.
-        """
-        fields, error = self.fields(base)
-        if error:
-            return [], {}, error
+    def _picklists(self, fields: List[Field]) -> Dict[str, Options]:
+        """The options of the picklists the fields use, ``{lookup: options}``; a field whose list could not be loaded is left as plain text."""
         lookups = sorted({field["picklist"] for field in fields if field["picklist"]})
         with ThreadPoolExecutor(max_workers=READERS) as pool:   # one lookup per picklist, several at once
             loaded = {lookup: options for lookup, options in zip(lookups, pool.map(self.options, lookups)) if options}
         for field in fields:   # a list that could not be loaded leaves its field as plain text (the field dicts are ours: made by ``fields``)
             if field["picklist"] not in loaded:
                 field["picklist"] = ""
-        return fields, loaded, ""
+        return loaded
 
-    def fields(self, base: str) -> Tuple[List[Field], str]:
+    def grid_fields(self, base: str) -> Tuple[List[Field], str]:
+        """The columns of the workspace's Grid tab, as ``fields`` gives fields: ``([column], error)``. A grid that cannot be read leaves the
+        workspace usable; it only has no columns to pick."""
+        return self.fields(base, f"views/{GRID_VIEW}/fields")
+
+    def fields(self, base: str, path: str = "fields") -> Tuple[List[Field], str]:
         """The workspace's fields, without their picklist options, by title: ``([field], error)`` (see ``_field``).
-        ``error`` says why they could not be read, and is "" when they were."""
+        ``error`` says why they could not be read, and is "" when they were. ``path`` is the list under ``base`` to read."""
         try:
-            data = self._client.get_json(f"{base}/fields")
+            data = self._client.get_json(f"{base}/{path}")
+            if path != "fields":
+                log.info("Fields of %s/%s: %.4000s", base, path, data)   # how a grid is described is read from here
         except (FmApiError, AuthError) as exc:
-            log.warning("Could not load fields for %s: %s", base, exc)
+            log.warning("Could not load fields for %s/%s: %s", base, path, exc)
             return [], t("data.fm_fields_failed", reason=exc)
         fields = [_field(row, field_id) for row in rows_in(data, "fields") if (field_id := last_segment(row.get("__self__")))]
         fields.sort(key=lambda f: f["title"].lower())
@@ -188,7 +220,7 @@ class WorkspaceService:
 
         ``raw`` is how many options the page held (where the next page starts)."""
         offset = max(0, whole(offset))
-        data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset={offset}&limit={whole(limit)}&filter={quote_plus(text.strip())}&asc=&desc=")
+        data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset={offset}&limit={whole(limit)}&filter={quote_plus(text.strip())}&asc={PICKLIST_ORDER}&desc=")
         rows = as_list(dig(data, "items"))
         total = whole(dig(data, "totalCount"))
         if rows:
@@ -198,7 +230,7 @@ class WorkspaceService:
     def options(self, lookup: str) -> Options:
         """The options of one picklist; empty if it cannot be read."""
         try:
-            rows = self._rows(lambda offset: f"{LOOKUPS}/{lookup}?offset={offset}&limit={OPTIONS_PAGE}&filter=&asc=&desc=", MAX_OPTIONS)
+            rows = list(self._rows(lambda offset: f"{LOOKUPS}/{lookup}?offset={offset}&limit={OPTIONS_PAGE}&filter=&asc={PICKLIST_ORDER}&desc=", MAX_OPTIONS))
             return [_option(row) for row in rows if row.get("link")]
         except (FmApiError, AuthError) as exc:
             log.warning("Could not load picklist %s: %s", lookup, exc)

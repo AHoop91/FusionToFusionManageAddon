@@ -124,14 +124,19 @@ class ComponentService:
         return _the_one(working, t("data.fm_no_working_version", number=number, count=len(found)),
                         t("data.fm_many_working_versions", count=len(working), number=number, named=_named(working)))
 
-    def find(self, lookup: str, number: str) -> Tuple[str, str]:
-        """``(link, "")`` of the one option for this item number, else ``("", reason)``."""
+    def matching(self, lookup: str, number: str) -> Tuple[List[Candidate], str]:
+        """``(options, reason)``: every option of the picklist for this item number (one for each revision of the component), and why there
+        is none when there is none."""
         if not number:
-            return "", t("data.fm_no_number")
+            return [], t("data.fm_no_number")
         data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset=0&limit={CANDIDATES}&filter={quote(number)}&asc=&desc=")
         options: List[Candidate] = [Candidate(str(r["link"]), str(r.get("title") or ""), str(r.get("version") or ""))
                                     for r in dict_rows(dig(data, "items")) if r.get("link")]
         hits = [o for o in options if _matches(o.title, number)]
         log.debug("Component options for %s: %s", number, [o.title for o in options])
-        return _the_one(hits, t("data.fm_no_component", number=number, lookup=lookup, count=len(options)),
-                        t("data.fm_many_components", count=len(hits), number=number, named=_named(hits)))
+        return hits, t("data.fm_no_component", number=number, lookup=lookup, count=len(options))
+
+    def find(self, lookup: str, number: str) -> Tuple[str, str]:
+        """``(link, "")`` of the one option for this item number, else ``("", reason)``."""
+        hits, none = self.matching(lookup, number)
+        return _the_one(hits, none, t("data.fm_many_components", count=len(hits), number=number, named=_named(hits)))

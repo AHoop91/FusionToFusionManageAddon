@@ -1,0 +1,46 @@
+/* ==========================================================================
+   The picker (shared/js/picker.js): a button and a list of plain elements, laid out in the window by the script.
+   A page that wants another look adds a class to the wrapper (cfg.className) and styles it in its own sheet.
+   ========================================================================== */
+
+.pk { position: relative; min-width: 0; }
+.pk-btn {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--surface);
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; color: var(--text); cursor: pointer;
+}
+.pk-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-btn.placeholder { color: var(--muted); }
+.pk-btn::after { content: "\25BE"; flex: none; color: var(--muted); }
+.pk-btn:disabled { cursor: not-allowed; }
+.pk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.pk-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border: 1px solid #c9dff0; border-radius: 999px; background: #eef7fd; font-size: 12px; }
+.pk-chip-x { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; }
+.pk-chip-x:hover { background: #d7e9f6; color: var(--text); }
+.pk-menu {
+  position: fixed; z-index: 10; min-width: 240px; max-width: calc(100vw - 16px);
+  margin-top: 2px; padding: 6px 0 4px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.pk-menu.up { margin: 0 0 2px; }   /* opens upwards when there is no room below */
+.pk-search {
+  display: block; width: calc(100% - 12px); margin: 0 6px 4px; padding: 5px 6px;
+  border: 1px solid var(--border); border-radius: 4px; font: inherit;
+}
+.pk-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; }
+.pk-group { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.04em; }
+.pk-item {
+  display: block; width: 100%; padding: 5px 10px; border: 0; background: none;
+  font: inherit; text-align: left; color: var(--text); cursor: pointer; white-space: normal; overflow-wrap: anywhere;
+}
+.pk-item:hover, .pk-item.active, .pk-clear:hover { background: var(--bg); }
+.pk-clear {
+  display: block; width: 100%; padding: 5px 10px; border: 0; border-bottom: 1px solid var(--border);
+  background: none; font: inherit; text-align: left; color: var(--danger); cursor: pointer;
+}
+.pk-item.selected { font-weight: 600; }
+.pk-item:disabled { color: var(--muted); opacity: 0.5; cursor: not-allowed; background: none; }
+.pk-detail { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+.pk-status, .pk-count { margin: 0; padding: 6px 10px; font-size: 12px; color: var(--muted); }
+.pk-status:empty, .pk-count:empty { display: none; }
+.pk-status .pk-balls { height: 14px; gap: 6px; justify-content: center; }
+.pk-status .pk-balls span { width: 8px; height: 8px; }

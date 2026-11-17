@@ -59,6 +59,20 @@ def _item_links(raw: Any, pages: PageLoader) -> List[Dict[str, str]]:
     return links if links and len(links) == len(options) and all(link["url"] for link in links) else []
 
 
+def load_image(client: FmClient, link: str) -> str:
+    """An image field's picture as a data uri ("" when it cannot be read or is too big)."""
+    if not link.startswith("/"):
+        return ""
+    try:
+        body, kind = client.get_bytes(link)
+    except (FmApiError, OSError) as exc:
+        log.warning("Could not read the image %s: %s", link, exc)
+        return ""
+    if len(body) > MAX_IMAGE_BYTES or not kind.lower().startswith("image/"):
+        return ""
+    return f"data:{kind.split(';')[0]};base64,{base64.b64encode(body).decode('ascii')}"
+
+
 def _text_of(node: Dict[str, Any], kind: str) -> str:
     """The text a plain field shows: a check box as Yes or No, a value with its unit of measure."""
     text = display_text(node.get("value"))
@@ -95,7 +109,7 @@ def not_shown(node: Any, hidden: Set[str]) -> bool:
     return node.get("visible") is False or node.get("hidden") is True or field_id(node) in hidden
 
 
-def _names(layout: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
+def layout_names(layout: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
     """The titles a matrix layout gives its columns or rows: those under the first of ``keys`` that holds any (empty if none does)."""
     for key in keys:
         found = as_list(layout.get(key))
@@ -122,12 +136,12 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
     empty = {"kind": "text", "value": ""}
     rows = [[cells.get(field_id(grid[r][c]), empty) if c < len(grid[r]) and not gone[r][c] else empty for c in keep_cols]
             for r in keep_rows]
-    all_columns = _names(layout, COLUMN_KEYS)
+    all_columns = layout_names(layout, COLUMN_KEYS)
     if len(all_columns) == width:
         columns = [all_columns[c] for c in keep_cols]
     else:   # not named by the layout: the first row's field titles
         columns = [rows[0][i].get("title", "") for i in range(len(keep_cols))]
-    all_labels = _names(layout, ROW_KEYS)
+    all_labels = layout_names(layout, ROW_KEYS)
     labels = [all_labels[r] for r in keep_rows] if len(all_labels) == len(grid) else [""] * len(rows)
     return {"columns": columns, "labels": labels, "rows": [[{"kind": c["kind"], "value": c["value"]} for c in r] for r in rows]}
 
@@ -249,14 +263,4 @@ class ItemViewService:
         return self._hidden_cache.put(key, hidden)
 
     def _image(self, link: str) -> str:
-        """An image field's picture as a data uri ("" when it cannot be read or is too big)."""
-        if not link.startswith("/"):
-            return ""
-        try:
-            body, kind = self._client.get_bytes(link)
-        except (FmApiError, OSError) as exc:
-            log.warning("Could not read the image %s: %s", link, exc)
-            return ""
-        if len(body) > MAX_IMAGE_BYTES or not kind.lower().startswith("image/"):
-            return ""
-        return f"data:{kind.split(';')[0]};base64,{base64.b64encode(body).decode('ascii')}"
+        return load_image(self._client, link)

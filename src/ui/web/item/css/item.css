@@ -424,7 +424,6 @@ svg.item-empty-icon {
 /* Borders of a collapsed table stay behind when a cell sticks, so these tables keep each cell's own borders (separate, with no gap). */
 :is(.item-files-wrap, .item-log-scroll) .item-files-table { border-collapse: separate; border-spacing: 0; }
 :is(.item-files-wrap, .item-log-scroll) .item-files-table th { position: sticky; top: 0; z-index: 2; }
-.item-files-wrap::-webkit-scrollbar { width: 8px; }
 
 /* The Where Used tab: the same table, as a tree. Headings do not sort, so no pointer or hover. */
 #item-whereused, #item-bom, #item-workflows, #item-changelog { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
@@ -473,11 +472,8 @@ svg.item-empty-icon {
 .item-tree-pn { font-weight: 600; }
 .item-tree-pn + .item-tree-name::before { content: " - "; }
 
-/* The Files tab lines up with the Item tab, and its sideways scroll bar stays slim. */
+/* The Files tab lines up with the Item tab. */
 #item-files { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
-.item-files-wrap::-webkit-scrollbar { height: 8px; }
-.item-files-wrap::-webkit-scrollbar-thumb { background: #c4c9ce; border-radius: 4px; }
-.item-files-wrap::-webkit-scrollbar-track { background: transparent; }
 
 .item-tree-table td { padding-top: 2px; padding-bottom: 2px; }
 .item-tree-seq { flex: none; min-width: 14px; margin: 0 0 0 8px; font-weight: 600; }

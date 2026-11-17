@@ -63,7 +63,7 @@
 
 /* ---- Account card ------------------------------------------------------- */
 .user-card {
-  position: absolute; right: 0; top: 44px; z-index: 10; width: 280px;
+  position: absolute; right: 0; top: 44px; z-index: 45; width: 280px;   /* above the panels and pop-ups of the pages (up to 40), under their dialogs (50) */
   padding: 16px; background: var(--surface); border: 1px solid var(--border);
   border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }

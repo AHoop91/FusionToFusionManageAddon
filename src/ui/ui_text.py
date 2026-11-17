@@ -32,6 +32,15 @@ def export_title() -> str:
     return t("app.export_title")
 
 
+def products_title() -> str:
+    """The name of the Assign Product command and the title of its window."""
+    return t("app.products_title")
+
+
+def products_tooltip() -> str:
+    return t("app.products_tooltip")
+
+
 def upload_title() -> str:
     return t("app.upload_title")
 
@@ -41,7 +50,7 @@ def ribbon_merged_panel_name() -> str:
 
 
 def ribbon_administration_name() -> str:
-    """The submenu of Job Queue and Preferences."""
+    """The submenu of Job Queue and Settings."""
     return t("app.ribbon_administration")
 
 

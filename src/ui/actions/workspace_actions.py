@@ -84,7 +84,7 @@ def register_workspace_actions(bridge: MessageBridge, config: ConfigService, aut
 
     def prepare_list() -> Callable[[], Dict[str, Any]]:
         client = make_client()
-        return lambda: {"workspaces": WorkspaceService(client).revision_controlled()}
+        return lambda: {"workspaces": WorkspaceService(client).all_workspaces()}
 
     def list_workspaces(_payload: Dict[str, Any]) -> Dict[str, Any]:
         try:

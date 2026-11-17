@@ -5,6 +5,7 @@ This module only composes the pieces (config, auth, bridge, palette, toolbar
 button); all logic lives in the ``src`` package.
 """
 
+import importlib
 import os
 import sys
 import traceback
@@ -57,6 +58,10 @@ from src.core.constants import (  # noqa: E402
     MENU_PUBLISH_COMMAND_ID,
     MENU_UPLOAD_DRAWING_COMMAND_ID,
     MENU_UPLOAD_STEP_COMMAND_ID,
+    PRODUCT_COMMAND_ID,
+    PRODUCT_HEIGHT,
+    PRODUCT_PALETTE_ID,
+    PRODUCT_WIDTH,
     PUBLISH_HEIGHT,
     PUBLISH_PALETTE_ID,
     PUBLISH_WIDTH,
@@ -83,6 +88,8 @@ from src.ui.ui_text import (  # noqa: E402
     menu_publish_name,
     preferences_name,
     preferences_tooltip,
+    products_title,
+    products_tooltip,
     publish_title,
     publish_tooltip,
     ribbon_administration_name,
@@ -113,6 +120,7 @@ _jobs_host = None
 _progress_host = None
 _export_host = None
 _export_dialog = None
+_product_host = None
 _item_host = None
 _item_panel = None
 _item_menu = None
@@ -147,10 +155,16 @@ def setup_problem() -> str:
     return _config.items_setup_problem()
 
 
+def portfolio_problem() -> str:
+    """Why the Portfolio Management workspace is not set up (the active hub is looked at first)."""
+    sync_hub()
+    return _config.portfolio_setup_problem()
+
+
 def _push_to_panels(action: str, data: str) -> None:
     """Send ``data`` to every panel, from any thread: the send itself is done on the main thread, by a custom event."""
     def send() -> None:
-        for host in (_palette_host, _publish_host, _jobs_host, _item_host, _export_host, _progress_host):   # the panels that can show a hub's state, or an upload's
+        for host in (_palette_host, _publish_host, _jobs_host, _item_host, _export_host, _product_host, _progress_host):   # the panels that can show a hub's state, or an upload's
             try:
                 if host:
                     host.send(action, data)
@@ -175,7 +189,7 @@ class _RebuildHandler(adsk.core.CustomEventHandler):
         _rebuilding = True
         try:
             stop(None)
-            run(None)
+            _run(None)
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Could not make the ribbon again in the new language")
         finally:
@@ -221,9 +235,9 @@ def _close_settings(_payload) -> dict:
     return {}
 
 
-def run(context) -> None:
-    """Add-in start: compose services, palette and ribbon."""
-    global _bridge, _config, _hub_languages, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
+def _run(context) -> None:
+    """Compose services, palette and ribbon."""
+    global _bridge, _config, _hub_languages, _ui, _palette_host, _publish_host, _jobs_host, _progress_host, _export_host, _export_dialog, _product_host, _item_host, _item_panel, _item_menu, _ribbon, _tasks, _gate, _watcher
     ADDIN.reset()   # work is allowed again (the add-in may be started once more in the same process)
     try:
         start_language()   # first: every title, name and tooltip below is built in the user's language (fixed once built: a change makes them again)
@@ -250,6 +264,7 @@ def run(context) -> None:
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host, _publish_host.show)
         _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, export_title(), "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
         _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
+        _product_host = PaletteHost(_ui, bridge, PRODUCT_PALETTE_ID, products_title(), "products", True, PRODUCT_WIDTH, PRODUCT_HEIGHT)
         bridge.set_pusher(_push_to_panels)   # background work can now tell the panels when it is done, instead of being asked
         menu_commands = [
             RibbonCommand(MENU_OPEN_COMMAND_ID, item_command_name(),
@@ -274,6 +289,11 @@ def run(context) -> None:
                                   ribbon_open_tooltip(),
                                   _item_panel.open_selected,
                                   _icon("item"), needs_setup=True)
+        # Held back until the Portfolio Management workspace is set; the Items workspace is not needed to choose a product.
+        assign_product = RibbonCommand(PRODUCT_COMMAND_ID, products_title(),
+                                       products_tooltip(),
+                                       _product_host.show,
+                                       _icon("products"), needs_portfolio=True)
         # Not held back by the setup or the drawing loading: the Export window says what is missing, and which destination that leaves off.
         export = RibbonCommand(EXPORT_COMMAND_ID, export_title(),
                                ribbon_export_tooltip(),
@@ -290,17 +310,17 @@ def run(context) -> None:
         ], ribbon_administration_name(), _icon("settings"))
         # Panels appear in this order, Export on the left. Publishing is opened from the item panel and the right-click menu, not the ribbon.
         export_panel = RibbonPanel(RIBBON_EXPORT_PANEL_ID, export_title(), [RibbonGroup([export])])
+        item_panel = RibbonPanel(RIBBON_MERGED_PANEL_ID, ribbon_merged_panel_name(), [RibbonGroup([open_item, assign_product]), administration])
+        drawing_item_panel = RibbonPanel(RIBBON_MERGED_PANEL_ID, ribbon_merged_panel_name(), [RibbonGroup([open_item]), administration])
         panels = {
-            RIBBON_DESIGN_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, ribbon_merged_panel_name(),
-                                                                [RibbonGroup([open_item]), administration])],
-            RIBBON_DRAWING_WORKSPACE: [export_panel, RibbonPanel(RIBBON_MERGED_PANEL_ID, ribbon_merged_panel_name(),
-                                                                 [RibbonGroup([open_item]), administration])],
+            RIBBON_DESIGN_WORKSPACE: [export_panel, item_panel],
+            RIBBON_DRAWING_WORKSPACE: [export_panel, drawing_item_panel],
         }
         _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME)
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
-        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), setup_problem, drawing_source.problem)
+        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), setup_problem, drawing_source.problem, portfolio_problem)
         _watcher = GateWatcher(_ui, _tasks, _gate, lambda: drawing_source.active_drawing() is not None and bool(drawing_source.problem()))
         _watcher.check()
         config.on_change(lambda: _tasks.post(_gate.refresh))   # saving the settings can come from any thread
@@ -309,6 +329,22 @@ def run(context) -> None:
         log.exception("Add-in failed to start")
         if _ui:
             _ui.messageBox(start_failed(traceback.format_exc()))
+
+
+_started = False   # set by the first ``run``; a reload of this file starts it over
+
+
+def run(context) -> None:
+    """Add-in start, called by Fusion. Fusion keeps this module, and with it everything it imported, between a Stop and the next Run, so
+    the next Run would go on with the old code: this file is loaded again first (which purges and imports ``src`` afresh)."""
+    global _started
+    module = sys.modules.get(__name__)
+    if _started and module is not None:
+        importlib.reload(module)
+        module.run(context)
+        return
+    _started = True
+    _run(context)
 
 
 def stop(context) -> None:
@@ -327,6 +363,8 @@ def stop(context) -> None:
             _export_host.dispose()
         if _jobs_host:
             _jobs_host.dispose()
+        if _product_host:
+            _product_host.dispose()
         if _item_host:
             _item_host.dispose()
         if _item_panel:

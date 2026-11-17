@@ -16,7 +16,10 @@
 
   const el = ns.el;
   const makePicker = ns.picker.make;
-  const refreshPicker = ns.picker.refresh;
+  const pickText = {   // what every picker here says that is not about its own list
+    get clear() { return t('settings.pick_clear'); },
+    get taken() { return t('settings.pick_taken'); },
+  };
   const infoTip = ns.info.tip;
   const confirmDefaults = ns.info.confirmDefaults;
 
@@ -54,12 +57,13 @@
 
   const sourceCfg = {
     valueClass: 'ws-source',
+    text: pickText,
     alignRight: true,
     get placeholder() { return t('settings.ws_source_placeholder'); },
     get search() { return t('settings.ws_search_fields'); },
     tip: function () { return propsTip; },
     empty: function () { return t('settings.ws_no_match_fields'); },
-    taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-source'); },
+    takenValues: function (wrap) { return valuesInOtherRows(wrap, 'ws-source'); },
     label: function (value) {
       const field = catalog.source_fields.filter(function (f) { return f.id === value; })[0];
       if (field) return field.label;
@@ -95,6 +99,7 @@
 
   const workspaceCfg = {
     valueClass: 'ws-id',
+    text: pickText,
     get placeholder() { return t('settings.ws_choose'); },
     get search() { return t('settings.ws_search'); },
     tip: function () { return workspacesTip; },
@@ -107,13 +112,16 @@
       const found = workspaceList.filter(function (w) { return w.id === value; })[0];
       return found ? found.name : value;
     },
-    groups: function (current) {
-      const items = workspaceList.map(function (w) { return { value: w.id, label: w.name }; });
+    groups: function (current, wrap) {
+      const revisionOnly = catalogKind(kindOf(wrap)).revision_only !== false;   // the Items workspace is a revision controlled one; others may be of any type
+      const listed = workspaceList.filter(function (w) { return !revisionOnly || w.revision !== false; });
+      const items = listed.map(function (w) { return { value: w.id, label: w.name }; });
       // A saved workspace missing from the list must still be shown.
-      if (current && !workspaceList.some(function (w) { return w.id === current; })) {
+      if (current && !listed.some(function (w) { return w.id === current; })) {
         items.push({ value: current, label: current });
       }
-      return items.length ? [{ title: t('settings.ws_group_revision'), items: items }] : [];
+      const title = revisionOnly ? t('settings.ws_group_revision') : t('settings.ws_group_all');
+      return items.length ? [{ title: title, items: items }] : [];
     },
   };
 
@@ -128,8 +136,8 @@
     workspaceList = result.workspaces || [];
     workspacesTip = result.ok ? '' : t('settings.ws_load_failed', { message: result.message || t('settings.unknown_error') });
     document.querySelectorAll('.ws-id').forEach(function (input) {
-      refreshPicker(input.parentNode, workspaceCfg);   // shows names for saved ids
-      ns.picker.rebuildOpen(input.parentNode, workspaceCfg);   // a list opened while loading
+      input.parentNode.refresh();   // shows names for saved ids
+      input.parentNode.rebuildOpen();   // a list opened while loading
     });
   }
 
@@ -147,6 +155,24 @@
 
   const fmFields = {};        // kindId -> [{id, title, type}]
   const fmFieldsError = {};   // kindId -> why the field list is missing
+  const gridFields = {};      // kindId -> the columns of the Grid tab, as the fields are
+  const gridError = {};       // kindId -> why the columns are missing
+
+  /** Whether a field links to the component workspace: it uses a picklist whose name is, or starts with, the kind's component lookup. */
+  function linksToComponents(field, lookup) {
+    return !!(lookup && field.link_lookup && field.link_lookup.indexOf(lookup) === 0);
+  }
+
+  function catalogKind(kindId) {
+    return catalog.kinds.filter(function (k) { return k.id === kindId; })[0] || {};
+  }
+
+  /** Picker items for fields, plus a saved field missing from the list: it must still be shown. */
+  function fieldItems(fields, current) {
+    const items = fields.map(function (f) { return { value: f.id, label: f.title, detail: f.id + ' · ' + f.type }; });
+    if (current && !fields.some(function (f) { return f.id === current; })) items.push({ value: current, label: current });
+    return items;
+  }
 
   function kindOf(wrap) {
     const panel = wrap.closest('.ws-kind');
@@ -155,6 +181,7 @@
 
   const fmFieldCfg = {
     valueClass: 'ws-fm-field',
+    text: pickText,
     get placeholder() { return t('settings.ws_fm_placeholder'); },
     get search() { return t('settings.ws_search_fields'); },
     empty: function (wrap) {
@@ -162,7 +189,7 @@
       if ((fmFields[kind] || []).length) return t('settings.ws_no_match_fields');
       return fmFieldsError[kind] || t('settings.ws_no_fields_loaded');
     },
-    taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap)); },
+    takenValues: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap)); },
     label: function (value) {
       // Show the title with the id that is actually stored.
       for (const kind in fmFields) {
@@ -194,6 +221,7 @@
   function valueCfg(options) {
     return {
       valueClass: 'ws-static-value',
+      text: pickText,
       alignRight: true,
       get placeholder() { return t('settings.ws_value_placeholder'); },
       get search() { return t('settings.ws_search_values'); },
@@ -223,25 +251,54 @@
   /** Picker config for the field that links an item to a component: fields using the component picklist. */
   const componentCfg = {
     valueClass: 'ws-component-field',
+    text: pickText,
     alignRight: true,
     get placeholder() { return t('settings.ws_link_placeholder'); },
     get search() { return t('settings.ws_search_fields'); },
     empty: function (wrap) {
       const kind = kindOf(wrap);
-      if ((fmFields[kind] || []).length) return t('settings.ws_no_link_field');
+      if ((fmFields[kind] || []).length) return catalogKind(kind).assign ? t('settings.ws_no_primary_field') : t('settings.ws_no_link_field');
       return fmFieldsError[kind] || t('settings.ws_no_fields_loaded');
     },
-    taken: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field'); },
+    takenValues: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field'); },
     label: fmFieldCfg.label,
     groups: function (current, wrap) {
       const kind = kindOf(wrap);
-      const lookup = (catalog.kinds.filter(function (k) { return k.id === kind; })[0] || {}).component_lookup;
-      const fields = (fmFields[kind] || []).filter(function (f) { return lookup && f.link_lookup === lookup; });
-      const items = fields.map(function (f) { return { value: f.id, label: f.title, detail: f.id + ' · ' + f.type }; });
-      if (current && !fields.some(function (f) { return f.id === current; })) {
-        items.push({ value: current, label: current });
-      }
+      const lookup = catalogKind(kind).component_lookup;
+      const items = fieldItems((fmFields[kind] || []).filter(function (f) { return linksToComponents(f, lookup); }), current);
       return items.length ? [{ title: t('settings.ws_group_link'), items: items }] : [];
+    },
+  };
+
+  /** The columns of the Grid tab that link to the component workspace. */
+  function linkColumns(kindId) {
+    const columns = gridFields[kindId] || [];
+    const lookup = catalogKind(kindId).component_lookup;
+    return columns.filter(function (f) { return linksToComponents(f, lookup); });
+  }
+
+  /** Picker config for the Grid column that links a variant to its component. */
+  const gridLinkCfg = {
+    valueClass: 'ws-grid-link',
+    text: pickText,
+    alignRight: true,
+    get placeholder() { return t('settings.ws_variants_link_placeholder'); },
+    get search() { return t('settings.ws_search_fields'); },
+    empty: function (wrap) {
+      const kind = kindOf(wrap);
+      if ((gridFields[kind] || []).length) return t('settings.ws_no_grid_columns');
+      return gridError[kind] || t('settings.ws_no_fields_loaded');
+    },
+    label: function (value) {
+      for (const kind in gridFields) {
+        const column = gridFields[kind].filter(function (f) { return f.id === value; })[0];
+        if (column) return column.title + ' (' + column.id + ')';
+      }
+      return value;
+    },
+    groups: function (current, wrap) {
+      const items = fieldItems(linkColumns(kindOf(wrap)), current);
+      return items.length ? [{ title: t('settings.ws_group_grid'), items: items }] : [];
     },
   };
 
@@ -255,7 +312,7 @@
     hubProps = result.properties || [];
     propsTip = result.ok ? '' : t('settings.ws_props_failed', { message: result.message || t('settings.unknown_error') });
     document.querySelectorAll('.ws-source').forEach(function (input) {
-      refreshPicker(input.parentNode, sourceCfg);   // lists build on open; this updates the tooltip
+      input.parentNode.refresh();   // lists build on open; this updates the tooltip
     });
   }
 
@@ -340,7 +397,7 @@
   let viewOnly = false;   // a member only sees what the Configuration File defines: nothing is checked against Fusion Manage
 
   function cardOf(kindId) {
-    return $('workspace-cards').querySelector('.ws-kind[data-kind="' + kindId + '"]');
+    return document.querySelector('.ws-kind[data-kind="' + kindId + '"]');
   }
 
   /** Lock or unlock every gated section of a card and show the status text. */
@@ -363,10 +420,11 @@
 
   const busyCards = new Set();   // the cards whose workspace is being checked
 
-  /** Show the bouncing-ball overlay, over the visible part of the tab, while Python checks a workspace. */
+  /** Show the bouncing-ball overlay, over the visible part of the card's tab, while Python checks a workspace. */
   function setBusy(card, busy) {
     if (busy) busyCards.add(card); else busyCards.delete(card);
-    $('ws-busy').hidden = !busyCards.size;
+    const tab = card.closest('.tab-panel');
+    tab.querySelector('.ws-busy').hidden = !Array.from(busyCards).some(function (c) { return tab.contains(c); });
   }
 
   // Validations in flight: kindId -> workspace id being checked. Python answers
@@ -419,8 +477,11 @@
       fmFields[result.kind] = result.fields || [];
       fmFieldsError[result.kind] = result.fields_error || '';
       fmPicklists[result.kind] = result.picklists || {};
+      gridFields[result.kind] = result.grid_fields;
+      gridError[result.kind] = result.grid_error;
+      card.querySelectorAll('.ws-grid-link').forEach(function (i) { i.parentNode.refresh(); });
       // Saved ids show their titles once the field list is known.
-      card.querySelectorAll('.ws-component-field').forEach(function (i) { refreshPicker(i.parentNode, componentCfg); });
+      card.querySelectorAll('.ws-component-field').forEach(function (i) { i.parentNode.refresh(); });
       // Static rows built before validation (typed values) become pickers where the field has a list.
       card.querySelectorAll('.ws-static-row').forEach(function (row) { row.rebuildValue(); });
       loadProperties();   // custom properties are per hub, so refresh with each validation
@@ -456,8 +517,9 @@
   function buildIdSection(kind, config) {
     const section = el('div', 'ws-section');
     const label = el('label', 'ws-id-label', t('settings.ws_label'));
-    label.appendChild(infoTip(t('settings.ws_label_tip')));
+    if (!kind.assign) label.appendChild(infoTip(t('settings.ws_label_tip')));
     section.appendChild(label);
+    if (kind.assign) section.appendChild(describe(t('settings.ws_portfolio_label_tip')));   // said in the open, not behind an info icon
     const idRow = el('div', 'ws-id-row');
     // The picker sits in a wrapper so a green tick can overlay its right edge.
     const wrap = el('div', 'ws-id-wrap');
@@ -492,17 +554,63 @@
     return box;
   }
 
-  /** The Fusion Manage field that links each item to its component. */
+  /** The Fusion Manage field that links each item to its component (for a workspace that is assigned: the field of the Primary Component). */
   function buildComponentSection(kind, config) {
+    if (kind.assign) {
+      return buildFieldSection(t('settings.ws_primary_title'), t('settings.ws_primary_tip'), t('settings.ws_primary_field'), '',
+        makePicker(componentCfg, config.component_field || ''));
+    }
     const section = el('div', 'ws-section');
     section.appendChild(heading(t('settings.ws_component_linking')));
     section.appendChild(hint());
     const block = el('div', 'ws-block');
-    block.appendChild(blockTitle(t('settings.ws_component_field'),
-      t('settings.ws_component_field_tip', { lookup: kind.component_lookup })));
+    block.appendChild(blockTitle(t('settings.ws_component_field'), t('settings.ws_component_field_tip', { lookup: kind.component_lookup })));
     block.appendChild(makePicker(componentCfg, config.component_field || ''));
     section.appendChild(lockedSection([block]));
     return section;
+  }
+
+  // The Portfolio Management tab is laid out like the Items tab: a heading, a line saying what it is for, then the setting.
+
+  /** A section that sets one field: heading and what it is for, then a labelled picker. Locked until the workspace validates. */
+  function buildFieldSection(title, text, label, note, picker) {
+    const section = el('div', 'ws-section');
+    section.appendChild(heading(title));
+    section.appendChild(describe(text));
+    const block = el('div', 'ws-block');
+    block.appendChild(blockTitle(label));
+    block.appendChild(picker);
+    if (note) block.appendChild(describe(note));
+    section.appendChild(lockedSection([block]));
+    return section;
+  }
+
+  /** A section with an on/off switch (the checkbox has class ``cls``). */
+  function buildSwitchSection(title, text, label, cls, checked) {
+    const section = el('div', 'ws-section');
+    section.appendChild(heading(title));
+    section.appendChild(describe(text));
+    const toggle = el('label', 'pf-switch');
+    const box = el('input', cls);
+    box.type = 'checkbox';
+    box.checked = checked;
+    toggle.appendChild(box);
+    toggle.appendChild(el('span', 'pf-switch-track'));
+    toggle.appendChild(el('span', 'pf-switch-label', label));
+    section.appendChild(toggle);
+    return section;
+  }
+
+  /** The Variants grid: the column that links each row to its component. */
+  function buildVariantsSection(config) {
+    return buildFieldSection(t('settings.ws_variants_title'), t('settings.ws_variants_tip'), t('settings.ws_variants_link'),
+      t('settings.ws_variants_link_tip'), makePicker(gridLinkCfg, config.variants.link_column));
+  }
+
+  /** Whether Product Portfolio Management is on at all. */
+  function buildEnabledSection(config) {
+    return buildSwitchSection(t('settings.ws_enable_title'), t('settings.ws_enable_tip'), t('settings.ws_enable_allow'),
+      'ws-enabled', config.enabled !== false);
   }
 
   /** Source field -> FM field id rows, then the static values. */
@@ -570,9 +678,20 @@
     const panel = el('div', 'ws-kind ws-panel');
     panel.dataset.kind = kind.id;
     panel.appendChild(el('p', 'ws-desc muted', kind.description));
-    panel.appendChild(buildIdSection(kind, config));
-    if (kind.component_lookup) panel.appendChild(buildComponentSection(kind, config));
-    panel.appendChild(buildMappingSection(kind, config));
+    // Every section but the on/off switch sits in `rest`, which is greyed out and disabled while the feature is off.
+    let rest = panel;
+    if (kind.assign) {
+      const enabled = buildEnabledSection(config);
+      panel.appendChild(enabled);
+      rest = el('fieldset', 'pf-rest');
+      rest.disabled = config.enabled === false;
+      enabled.querySelector('.ws-enabled').addEventListener('change', function (e) { rest.disabled = !e.target.checked; });
+      panel.appendChild(rest);
+    }
+    rest.appendChild(buildIdSection(kind, config));
+    if (kind.component_lookup || kind.assign) rest.appendChild(buildComponentSection(kind, config));
+    if (kind.assign) rest.appendChild(buildVariantsSection(config));
+    if (kind.mapped !== false) rest.appendChild(buildMappingSection(kind, config));   // a workspace only chosen by its id has no mapping
 
     // Wiring: choosing a workspace invalidates, then asks Python to validate.
     const idInput = panel.querySelector('.ws-id');
@@ -623,9 +742,14 @@
 
   // ---- Public API ---------------------------------------------------------
 
-  /** Validate every workspace that has an id but is not validated yet (on opening the tab). */
+  /** Every workspace card of the settings: the Item Workspace tab's and the Portfolio Management tab's. */
+  function allCards() {
+    return document.querySelectorAll('#workspace-cards .ws-kind, #portfolio-cards .ws-kind');
+  }
+
+  /** Validate every workspace that has an id but is not validated yet (on opening a tab). */
   function autoValidate() {
-    $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
+    allCards().forEach(function (card) {
       const kindId = card.dataset.kind;
       if (validated[kindId] !== card.querySelector('.ws-id').value.trim() && !polling[kindId]) validateKind(card, kindId);
     });
@@ -633,8 +757,10 @@
 
   /** Listen for validation results. Call once at start-up. */
   function init() {
-    const tab = document.querySelector('.tab[data-tab="workspaces"]');
-    if (tab) tab.addEventListener('click', autoValidate);
+    ['workspaces', 'portfolio'].forEach(function (name) {
+      const tab = document.querySelector('.tab[data-tab="' + name + '"]');
+      if (tab) tab.addEventListener('click', autoValidate);
+    });
     ns.bridge.on('validate_workspace', onValidated);
     ns.bridge.on('validate_workspace_status', onValidated);
     ns.bridge.on('list_workspaces', onWorkspaces);
@@ -643,29 +769,34 @@
     ns.bridge.on('list_custom_properties_status', onProperties);
   }
 
-  /** Rebuild the card from `settings.workspaces` and `settings.catalog`. */
-  function render(settings) {
-    catalog = settings.catalog;
-    // Keep the selected workspace tab across a rebuild (e.g. after Save).
-    const active = document.querySelector('#workspace-cards .ws-tab.active');
-    const container = $('workspace-cards');
+  /** Rebuild one tab's card, keeping its selected workspace tab (e.g. after Save). */
+  function renderCards(container, kinds, settings) {
+    const active = container.querySelector('.ws-tab.active');
     container.textContent = '';
-    container.appendChild(buildCard(catalog.kinds, settings));
+    if (!kinds.length) return;
+    container.appendChild(buildCard(kinds, settings));
     if (active) {
       Array.prototype.forEach.call(container.querySelectorAll('.ws-tab'), function (tab) {
         if (tab.textContent === active.textContent) tab.click();
       });
     }
+  }
+
+  /** Rebuild the cards from `settings.workspaces` and `settings.catalog`: workspaces with a mapping on the Item Workspace tab, the rest on Portfolio Management. */
+  function render(settings) {
+    catalog = settings.catalog;
+    renderCards($('workspace-cards'), catalog.kinds.filter(function (k) { return k.mapped !== false; }), settings);
+    renderCards($('portfolio-cards'), catalog.kinds.filter(function (k) { return k.mapped === false; }), settings);
     // Saved ids show as names, so read the list once in the background; with none saved it waits for a picker to open.
-    if (workspacesState === 'idle' && Array.prototype.some.call(container.querySelectorAll('.ws-id'), function (i) { return i.value; })) loadWorkspaces();
-    // Settings can load while the Workspaces tab is already showing.
-    if ($('sub-workspaces').classList.contains('active')) autoValidate();
+    if (workspacesState === 'idle' && Array.prototype.some.call(allCards(), function (card) { return card.querySelector('.ws-id').value; })) loadWorkspaces();
+    // Settings can load while a workspace tab is already showing.
+    if ($('sub-workspaces').classList.contains('active') || $('sub-portfolio').classList.contains('active')) autoValidate();
   }
 
   /** Read every card back into the `workspaces` payload Python expects. */
   function read() {
     const result = {};
-    $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
+    allCards().forEach(function (card) {
       result[card.dataset.kind] = {
         workspace_id: card.querySelector('.ws-id').value,
         component_field: (card.querySelector('.ws-component-field') || { value: '' }).value,
@@ -675,6 +806,8 @@
             fm_field_id: row.querySelector('.ws-fm-field').value,
           };
         }),
+        variants: { link_column: (card.querySelector('.ws-grid-link') || { value: '' }).value },
+        enabled: (card.querySelector('.ws-enabled') || { checked: true }).checked,
         static_values: Array.prototype.map.call(card.querySelectorAll('.ws-static-row'), function (row) {
           return {
             fm_field_id: row.querySelector('.ws-fm-field').value,
@@ -690,7 +823,7 @@
   function setViewOnly(on) {
     if (viewOnly === on) return;
     viewOnly = on;
-    $('workspace-cards').querySelectorAll('.ws-kind').forEach(function (card) {
+    allCards().forEach(function (card) {
       setValid(card, !!validated[card.dataset.kind] && validated[card.dataset.kind] === card.querySelector('.ws-id').value.trim(), '');
     });
   }

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="../shared/css/layout.css">
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/picker.css">
   <!-- Settings panel styles -->
   <link rel="stylesheet" href="css/settings.css">
   <link rel="stylesheet" href="css/workspaces.css">
@@ -185,6 +186,7 @@
       <button class="tab" data-tab="config" hidden data-i18n="settings.tab_config">Configuration</button>
       <button class="tab active" data-tab="connection" data-i18n="settings.tab_connection">Connection</button>
       <button class="tab" data-tab="workspaces" data-i18n="settings.tab_workspaces">Item Workspace</button>
+      <button class="tab" data-tab="portfolio" data-i18n="settings.tab_portfolio">Portfolio Management</button>
       <button class="tab" data-tab="exports" data-i18n="settings.tab_exports">Export</button>
       <button class="tab" data-tab="language" data-i18n="settings.tab_language">Language</button>
     </nav>
@@ -289,7 +291,7 @@
 
       <section id="sub-workspaces" class="tab-panel" data-group="settings">
         <!-- Shown over the tab while a workspace is checked; the page scrolls under it. -->
-        <div id="ws-busy" class="ws-busy loader" hidden>
+        <div class="ws-busy loader" hidden>
           <div class="balls" role="status" aria-label="Validating" data-i18n-attr="aria-label:settings.validating_label"><span></span><span></span><span></span></div>
           <p class="muted" data-i18n="settings.validating_workspace">Validating workspace...</p>
         </div>
@@ -305,6 +307,29 @@
               <span id="ws-save-msg" class="muted"></span>
               <button id="ws-save-btn" class="btn btn-secondary" data-i18n="settings.save">Save</button>
               <button id="ws-save-publish-btn" class="btn" hidden data-i18n="settings.save_publish">Save &amp; Publish</button>
+            </div>
+          </div>
+        </fieldset>
+      </section>
+
+      <section id="sub-portfolio" class="tab-panel" data-group="settings">
+        <!-- Shown over the tab while the workspace is checked; the page scrolls under it. -->
+        <div class="ws-busy loader" hidden>
+          <div class="balls" role="status" aria-label="Validating" data-i18n-attr="aria-label:settings.validating_label"><span></span><span></span><span></span></div>
+          <p class="muted" data-i18n="settings.validating_workspace">Validating workspace...</p>
+        </div>
+        <fieldset id="lock-portfolio" class="lockable">
+          <p class="lock-note" hidden data-i18n="settings.lock_shared">Managed by Shared Configuration. These settings cannot be changed here.</p>
+          <div class="tab-body">
+            <!-- The Portfolio Management workspace card, built by workspaces.js. -->
+            <div id="portfolio-cards"></div>
+          </div>
+          <button id="pf-save-error" class="validation-bar" type="button" aria-haspopup="dialog" hidden></button>
+          <div class="tab-footer">
+            <div class="row">
+              <span id="pf-save-msg" class="muted"></span>
+              <button id="pf-save-btn" class="btn btn-secondary" data-i18n="settings.save">Save</button>
+              <button id="pf-save-publish-btn" class="btn" hidden data-i18n="settings.save_publish">Save &amp; Publish</button>
             </div>
           </div>
         </fieldset>
@@ -362,8 +387,8 @@
   <script src="../shared/js/tabs.js"></script>
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/picker.js"></script>
   <!-- Settings panel -->
-  <script src="js/picker.js"></script>
   <script src="js/info.js"></script>
   <script src="js/validation.js"></script>
   <script src="js/workspaces.js"></script>

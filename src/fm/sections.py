@@ -64,14 +64,15 @@ class SectionService:
         cached = self._cache.get(key)
         return cached if cached is not None else self._cache.put(key, self._read(workspace_id))
 
-    def layouts(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:
-        """``{section id: the section as the workspace lays it out}``: its fields and its matrices (grids of fields)."""
-        return {last_segment(_link(s)): s for s in self._details(workspace_id) if _link(s)}
+    def layouts(self, workspace_id: str, fresh: bool = False) -> Dict[str, Dict[str, Any]]:
+        """``{section id: the section as the workspace lays it out}``: its fields and its matrices (grids of fields). ``fresh`` reads it again
+        instead of using what was kept."""
+        return {last_segment(_link(s)): s for s in self._details(workspace_id, fresh) if _link(s)}
 
-    def _details(self, workspace_id: str) -> List[Dict[str, Any]]:
+    def _details(self, workspace_id: str, fresh: bool = False) -> List[Dict[str, Any]]:
         """Every section of the workspace with its fields and matrices (read once, then shared for a few minutes)."""
         key = (self._client.tenant, workspace_id)
-        cached = self._details_cache.get(key)
+        cached = None if fresh else self._details_cache.get(key)
         if cached is not None:
             return cached
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")

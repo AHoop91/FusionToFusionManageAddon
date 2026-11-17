@@ -39,3 +39,12 @@ button, input, select, textarea { font-family: inherit; }
 
 .muted { color: var(--muted); }
 .error { color: var(--danger); }
+
+/* Slim scrollbars everywhere: a thin rounded thumb that darkens when pointed at, no arrow buttons and no track. A scroll area that hides its own
+   bar (the tab strips) says so itself. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-thumb { min-width: 32px; min-height: 32px; border: 3px solid transparent; border-radius: 6px; background: #c4cad1; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: #9aa3ad; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:active { background: #6f7a86; background-clip: padding-box; }

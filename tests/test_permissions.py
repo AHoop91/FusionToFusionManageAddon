@@ -1,7 +1,8 @@
 import unittest
 from unittest import mock
 
-from src.fm.permissions import missing, parse_granted, title
+from src.fm.client import FmApiError
+from src.fm.permissions import may, missing, parse_granted, title
 from src.fm.tabs import TabService
 
 PERMISSIONS = {"permissions": [{"name": "permission.shortname.view_items"}, {"name": "permission.shortname.view_bom"},
@@ -20,6 +21,16 @@ class PermissionTests(unittest.TestCase):
     def test_missing_and_title(self):
         self.assertEqual(missing(["view_items", "add_items"], {"view_items"}), ["add_items"])
         self.assertEqual(title("add_to_bom"), "Add To Bom")
+
+    def test_may_is_true_when_held_false_when_refused_and_true_when_unreadable(self):
+        client = mock.Mock()
+        client.get_json.return_value = {"permissions": [{"name": "permission.shortname.add_items"}]}
+        self.assertTrue(may(client, "77", "add_items"))
+        self.assertFalse(may(client, "77", "edit_items"))
+        for status, expected in ((403, False), (401, False), (500, True)):
+            with self.subTest(status=status):
+                client.get_json.side_effect = FmApiError("no", status)
+                self.assertEqual(may(client, "77", "add_items"), expected)
 
     def test_tabs_are_allowed_by_permission(self):
         client = mock.Mock(tenant="T")

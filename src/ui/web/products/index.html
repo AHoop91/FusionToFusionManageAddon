@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title data-i18n="products.title">Assign Product</title>
+  <link rel="stylesheet" href="../shared/css/base.css">
+  <link rel="stylesheet" href="../shared/css/tooltip.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="../shared/css/header.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/picker.css">
+  <link rel="stylesheet" href="../shared/css/progress.css">   <!-- the dialog shown while a design is assigned -->
+  <link rel="stylesheet" href="../item/css/item.css">   <!-- the sections and fields of the form look as they do on the Item panel -->
+  <link rel="stylesheet" href="css/products-page.css">
+</head>
+<body>
+  <!-- The shared top bar, filled in by shell.js. -->
+  <header id="app-header" class="app-header"><img class="logo" src="../shared/assets/fusion-manage-logo.svg" alt="Fusion Manage"></header>
+
+  <!-- Until the first answer about the sign-in arrives, so "Logging in" is not shown to someone who is. -->
+  <div id="products-ready" class="loader">
+    <div class="balls" role="status" aria-label="Getting things ready" data-i18n-attr="aria-label:export.getting_ready_label"><span></span><span></span><span></span></div>
+    <p class="muted" data-i18n="export.getting_ready">Getting things ready...</p>
+  </div>
+
+  <!-- ===== Signed-out view: sign-in only ================================ -->
+  <div id="view-login" class="view" hidden>
+    <div id="login-form" class="view-scroll" hidden>
+      <div class="card login-card">
+        <h2 data-i18n="export.signin_title">Sign in to Fusion Manage</h2>
+        <p id="conn-summary" class="muted" data-i18n="export.loading">Loading...</p>
+        <div class="row">
+          <button id="signin-btn" class="btn" data-i18n="export.signin">Sign in</button>
+        </div>
+        <p id="conn-error" class="error" hidden></p>
+      </div>
+    </div>
+    <div id="login-loader" class="loader">
+      <div class="balls" role="status" aria-label="Logging in" data-i18n-attr="aria-label:export.logging_in_label"><span></span><span></span><span></span></div>
+      <p class="muted" data-i18n="export.logging_in">Logging in...</p>
+      <button id="cancel-btn" class="btn btn-secondary" data-i18n="export.cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== Signed-in view: the products of the Portfolio Management workspace ===== -->
+  <div id="view-app" class="view" hidden>
+    <div class="products">
+      <!-- As the list of a workspace is in Fusion Manage: the way back, a button to add, and the view chosen, over a full-width table. -->
+      <div class="products-bar">
+        <h1 class="visually-hidden" data-i18n="products.heading">Products</h1>
+        <button id="products-new" class="products-add" type="button" disabled><span data-i18n="products.new">Create New Product</span></button>
+        <div class="products-dropdown">
+          <button id="products-view" class="products-view" type="button" aria-haspopup="listbox" aria-expanded="false" disabled>
+            <span id="products-view-name" class="products-view-name"></span>
+            <svg class="products-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <ul id="products-view-list" class="products-menu products-menu-end" role="listbox" tabindex="-1" aria-label="Views" data-i18n-attr="aria-label:products.view_label" hidden></ul>
+        </div>
+        <button id="products-refresh-view" class="products-icon-btn" type="button" disabled aria-label="Refresh view" title="Refresh view"
+                data-i18n-attr="aria-label:products.refresh_view;title:products.refresh_view">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.35-5.65M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="products-view-filter" class="products-icon-btn products-tool" type="button" disabled aria-label="Filter the view" title="Filter the view"
+                data-i18n-attr="aria-label:products.view_filter;title:products.view_filter">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 4.5C3 3.7 7 3 12 3s9 .7 9 1.5L14 12v7l-4 2v-9z" fill="currentColor"/></svg>
+        </button>
+        <button id="products-view-columns" class="products-icon-btn products-tool" type="button" disabled aria-label="Choose columns" title="Choose columns"
+                data-i18n-attr="aria-label:products.view_columns;title:products.view_columns">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16 4h4v16h-4z" fill="currentColor"/></svg>
+        </button>
+        <!-- The actions on the list itself, at the right of the bar. -->
+        <div class="products-dropdown products-actions">
+          <button id="products-actions" class="products-icon-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Actions" title="Actions"
+                  data-i18n-attr="aria-label:products.actions;title:products.actions">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill-rule="evenodd" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z M12 15a3 3 0 100-6 3 3 0 000 6z" fill="currentColor"/></svg>
+          </button>
+          <ul id="products-actions-list" class="products-menu products-menu-end" role="menu" aria-label="Actions" data-i18n-attr="aria-label:products.actions" hidden>
+            <li role="none">
+              <button id="products-compact" class="products-menu-item" type="button" role="menuitemcheckbox" aria-checked="false">
+                <span class="products-menu-label" data-i18n="products.compact_rows">Compact rows</span>
+                <span class="products-switch" aria-hidden="true"></span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <p id="products-error" class="products-alert" role="alert" hidden></p>
+      <div class="products-table-wrap">
+        <table id="products-table" class="products-table"><thead></thead><tbody></tbody></table>
+        <p id="products-status" class="products-status" aria-live="polite"></p>
+        <!-- Over the rows while they are read: three bouncing balls, in the middle of the table. -->
+        <div id="products-loading" class="products-loading" hidden>
+          <div class="balls" id="products-balls" role="status"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+      <!-- Always there: how many records, the paging, which product is chosen, and the button to assign it. -->
+      <footer class="products-footer">
+        <div class="products-footer-info">
+          <span id="products-count" class="products-count"></span>
+          <nav id="products-pager" class="products-pager" hidden aria-label="Pages" data-i18n-attr="aria-label:products.pages">
+            <button id="products-prev" class="products-icon-btn" type="button" aria-label="Previous" data-i18n-attr="aria-label:products.previous">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <span id="products-page" class="products-page"></span>
+            <button id="products-next" class="products-icon-btn" type="button" aria-label="Next" data-i18n-attr="aria-label:products.next">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </nav>
+        </div>
+        <div class="products-footer-pick">
+          <button id="products-edit" class="btn btn-secondary" type="button" disabled data-i18n="products.edit">Edit</button>
+          <button id="products-assign" class="btn" type="button" disabled data-i18n="products.assign">Assign Product</button>
+        </div>
+      </footer>
+      <!-- The panel of the whole view, from the funnel and the columns button on the bar: its filters, and its columns. -->
+      <aside id="products-view-panel" class="products-view-panel" role="dialog" aria-label="Filters" data-i18n-attr="aria-label:products.view_filters" hidden>
+        <div class="pvp-head">
+          <div class="pvp-tabs" role="tablist">
+            <button id="products-tab-filters" class="pvp-tab on" type="button" role="tab" aria-selected="true" data-i18n="products.view_filters">Filters</button>
+            <button id="products-tab-columns" class="pvp-tab off" type="button" role="tab" aria-selected="false" data-i18n="products.view_columns_tab">Columns</button>
+          </div>
+          <button id="products-view-close" class="pvp-close" type="button" aria-label="Close" title="Close" data-i18n-attr="aria-label:products.close;title:products.close">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div id="products-pane-filters" class="pvp-pane">
+          <div class="pvp-pickwrap">
+            <input id="products-view-pick" class="form-input pvp-pick" type="text" autocomplete="off" placeholder="- Select a column -" aria-label="Select a column"
+                   data-i18n-attr="placeholder:products.panel_pick;aria-label:products.panel_select">
+            <div id="products-view-tree" class="pvp-tree" hidden></div>
+          </div>
+          <div id="products-view-cards" class="pvp-cards"></div>
+        </div>
+        <!-- The columns of the view: the ones shown (drag to reorder, untick to hide), and the others to add. -->
+        <div id="products-pane-columns" class="pvp-pane" hidden>
+          <h3 class="pvp-cols-title" data-i18n="products.cols_shown">Shown columns</h3>
+          <div id="products-cols-shown" class="pvp-cols-shown"></div>
+          <h3 class="pvp-cols-title" data-i18n="products.cols_available">Available columns</h3>
+          <input id="products-cols-search" class="form-input pvp-cols-search" type="search" autocomplete="off" placeholder="Type column/group name" aria-label="Search columns" data-i18n-attr="placeholder:products.cols_search;aria-label:products.cols_search_label">
+          <div id="products-cols-tree" class="pvp-cols-tree"></div>
+        </div>
+        <div class="pvp-foot">
+          <button id="products-view-cancel" class="btn btn-secondary" type="button" data-i18n="products.cancel">Cancel</button>
+          <button id="products-view-save" class="btn" type="button" title="Saving changes this view for everyone who uses it."
+                  data-i18n-attr="title:products.filter_shared" data-i18n="products.filter_save">Save</button>
+        </div>
+      </aside>
+      <!-- The filters of one column, opened from the funnel in its header. -->
+      <div id="products-filter-pop" class="products-filter-pop" role="dialog" hidden>
+        <div id="products-filter-body" class="pfl-body"></div>
+        <div class="pfl-foot">
+          <button id="products-filter-add" class="pfl-add" type="button"><span class="pfl-plus" aria-hidden="true">+</span> <span data-i18n="products.filter_add">Add another filter</span></button>
+          <div class="pfl-actions">
+            <button id="products-filter-cancel" class="btn btn-secondary" type="button" data-i18n="products.cancel">Cancel</button>
+            <button id="products-filter-save" class="btn" type="button" title="Saving changes this view for everyone who uses it."
+                    data-i18n-attr="title:products.filter_shared" data-i18n="products.filter_save">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- The form for a new product, in place of the list and under the same top bar: every section of the workspace, as the Item panel shows
+         them, with the fields that can be filled in. -->
+    <div id="products-formview" class="products-formview" hidden>
+      <header class="pf-bar">
+        <h1 id="products-form-title" class="visually-hidden" data-i18n="products.form_title">New product</h1>
+        <button id="products-create" class="btn" type="submit" form="products-form" data-i18n="products.create" disabled>Save</button>
+        <button id="products-form-cancel" class="btn btn-secondary" type="button" data-i18n="products.cancel">Cancel</button>
+        <span class="pf-hint" data-i18n="products.required_hint">* Required field</span>
+      </header>
+      <!-- Narrow the form down: by name, or to the fields that are required. -->
+      <div class="pf-filters" role="group" aria-label="Filters" data-i18n-attr="aria-label:products.fields_filters">
+        <span class="pf-filters-title" data-i18n="products.fields_filters">Filters</span>
+        <input id="products-fields-search" class="form-input pf-filters-search" type="search" autocomplete="off" placeholder="Search Fields" aria-label="Search Fields"
+               data-i18n-attr="placeholder:products.fields_search;aria-label:products.fields_search">
+        <label class="pf-filters-check"><input id="products-fields-required" type="checkbox"><span data-i18n="products.fields_required">Required Fields Only</span></label>
+      </div>
+      <form id="products-form" class="products-formscroll" novalidate>
+        <p id="products-form-error" class="products-alert modal-alert" role="alert" hidden></p>
+        <div id="products-form-body" class="modal-body"></div>
+        <p id="products-fields-none" class="form-empty" role="status" data-i18n="products.fields_none" hidden>No fields match the filters.</p>
+      </form>
+      <!-- Live check of the form: says whether it can be saved yet, and opens the list of what is needed. -->
+      <footer id="products-footer" class="pf-footer" data-state="loading">
+        <span class="pf-footer-dot" aria-hidden="true"></span>
+        <span id="products-footer-text" class="pf-footer-text" role="status" aria-live="polite"></span>
+        <button id="products-checklist" class="btn btn-secondary" type="button" data-i18n="products.checklist_open">What is needed</button>
+      </footer>
+      <div id="products-sending" class="pf-sending" hidden>
+        <div class="loader">
+          <div class="balls" role="status" aria-label="Saving the product…" data-i18n-attr="aria-label:products.sending"><span></span><span></span><span></span></div>
+          <p class="muted" data-i18n="products.sending">Saving the product…</p>
+        </div>
+      </div>
+    </div>
+    <!-- Over the page while a design is being assigned: nothing behind it can be pressed until it is done. -->
+    <div id="products-assigning" class="progress-backdrop" hidden>
+      <div class="progress pf-assigning" role="alertdialog" aria-modal="true" aria-busy="true" aria-labelledby="products-assigning-title" aria-describedby="products-assigning-text">
+        <div class="pf-assigning-head">
+          <span class="pf-assigning-spinner" aria-hidden="true"></span>
+          <div class="pf-assigning-text">
+            <h2 id="products-assigning-title" class="progress-title" data-i18n="products.checking_title">Checking existing product</h2>
+            <p id="products-assigning-text" class="progress-status" data-i18n="products.checking_text">Looking at what this product already holds.</p>
+          </div>
+        </div>
+        <div class="progress-bar indeterminate" role="progressbar" aria-label="Updating product" data-i18n-attr="aria-label:products.assigning_title"><div class="progress-fill"></div></div>
+      </div>
+    </div>
+    <!-- Asked when the product holds the component already, or has a primary component: what to do, and on the right what each choice does to the product. -->
+    <div id="products-assign-modal" class="pf-modal" hidden>
+      <div id="products-assign-card" class="pf-modal-card pfa-dialog" role="alertdialog" aria-modal="true" aria-labelledby="products-assign-title" aria-describedby="products-assign-text">
+        <header class="pfa-head">
+          <h2 id="products-assign-title"></h2>
+          <p id="products-assign-text" class="pfa-lead"></p>
+        </header>
+        <div class="pfa-body">
+          <div id="products-assign-choices" class="pfa-choices" role="radiogroup" aria-labelledby="products-assign-title">
+            <button id="products-assign-replace" class="pfa-card" type="button" role="radio" aria-checked="false">
+              <span class="pfa-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></svg>
+              </span>
+              <span class="pfa-card-text">
+                <span class="pfa-card-title" data-i18n="products.assign_replace_title">Set Primary Component</span>
+                <span id="products-assign-replace-sub" class="pfa-card-sub"></span>
+              </span>
+            </button>
+            <button id="products-assign-variant" class="pfa-card" type="button" role="radio" aria-checked="false">
+              <span class="pfa-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8.5v7M8.5 12h7"/></svg>
+              </span>
+              <span class="pfa-card-text">
+                <span class="pfa-card-title" data-i18n="products.assign_variant_title">Add As Variant</span>
+                <span id="products-assign-variant-sub" class="pfa-card-sub"></span>
+              </span>
+            </button>
+          </div>
+          <div id="products-assign-revisions" class="pfa-revisions" hidden></div>
+          <!-- Opens to the right of the choices once one is made. -->
+          <div id="products-assign-panel" class="pfa-panel" hidden>
+            <section id="products-assign-pane-replace" hidden>
+              <p id="products-assign-replace-note" class="pfa-note"></p>
+              <div class="pfa-change">
+                <div class="pfa-side">
+                  <span class="pfa-side-label" data-i18n="products.assign_line_current">Current primary component</span>
+                  <span class="pfa-cmp-line"><span id="products-assign-cur-name" class="pfa-cmp-name"></span><span id="products-assign-cur-rev" class="pfa-badge"></span></span>
+                </div>
+                <svg class="pfa-change-arrow" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                <div class="pfa-side new">
+                  <span class="pfa-side-label" data-i18n="products.assign_line_new">New primary component</span>
+                  <span class="pfa-cmp-line"><span id="products-assign-new-name" class="pfa-cmp-name"></span><span id="products-assign-new-rev" class="pfa-badge"></span></span>
+                </div>
+              </div>
+              <h3 id="products-assign-options-title" class="pfa-options-title" data-i18n="products.assign_options_title" hidden>Options</h3>
+              <label id="products-assign-keep-row" class="pfa-keep" hidden>
+                <input id="products-assign-keep" type="checkbox" checked>
+                <span id="products-assign-keep-text"></span>
+              </label>
+            </section>
+            <!-- The other columns of the row to be added to the Variants grid. -->
+            <div id="products-assign-fields" class="pfa-details" hidden>
+              <p id="products-assign-fields-note" class="pfa-note" hidden></p>
+              <div id="products-assign-fields-list"></div>
+            </div>
+          </div>
+        </div>
+        <nav class="pfa-stepbar" aria-label="Steps"><ol id="products-assign-stepper" class="pfa-stepper"></ol></nav>
+        <footer class="pfa-foot">
+          <button id="products-assign-cancel" class="btn btn-secondary" type="button" data-i18n="products.assign_cancel">Cancel</button>
+          <span class="pfa-foot-right">
+            <button id="products-assign-back" class="btn btn-secondary" type="button" hidden data-i18n="products.assign_back">Back</button>
+            <button id="products-assign-confirm" class="btn" type="button" disabled></button>
+          </span>
+        </footer>
+      </div>
+    </div>
+    <!-- Rename a view: it is shared, so the new name is seen by everyone. -->
+    <div id="products-renview-modal" class="pf-modal" hidden>
+      <div class="pf-modal-card pf-assign-card" role="dialog" aria-modal="true" aria-labelledby="products-renview-title">
+        <header class="pf-modal-head">
+          <h2 id="products-renview-title" data-i18n="products.renview_title">Rename view</h2>
+        </header>
+        <div class="pf-modal-body">
+          <div class="pf-newview-labelrow">
+            <label class="pf-newview-label" for="products-renview-name" data-i18n="products.newview_name">Name</label>
+            <span id="products-renview-chars" class="pf-newview-chars" aria-live="polite"></span>
+          </div>
+          <input id="products-renview-name" class="pf-newview-input" type="text" maxlength="30" autocomplete="off">
+          <p id="products-renview-error" class="pf-newview-error" role="alert" hidden></p>
+          <div class="pf-assign-actions pf-renview-actions">
+            <button id="products-renview-cancel" class="btn btn-secondary" type="button" data-i18n="products.assign_cancel">Cancel</button>
+            <button id="products-renview-ok" class="btn" type="button" disabled data-i18n="products.renview_ok">Rename</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Asked before a view is deleted: it is shared, so it goes for everyone. -->
+    <div id="products-delview-modal" class="pf-modal" hidden>
+      <div class="pf-modal-card pf-assign-card" role="alertdialog" aria-modal="true" aria-labelledby="products-delview-title" aria-describedby="products-delview-text">
+        <header class="pf-modal-head">
+          <h2 id="products-delview-title" data-i18n="products.delview_title">Delete view?</h2>
+        </header>
+        <div class="pf-modal-body">
+          <p id="products-delview-text" class="pf-assign-text"></p>
+          <p id="products-delview-error" class="pf-newview-error" role="alert" hidden></p>
+          <div class="pf-assign-actions">
+            <button id="products-delview-cancel" class="btn btn-secondary" type="button" data-i18n="products.assign_cancel">Cancel</button>
+            <button id="products-delview-ok" class="btn pf-danger" type="button" data-i18n="products.delview_ok">Delete view</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Create New View: a name and the columns the new view shows. Filters are set on it afterwards. -->
+    <div id="products-newview-modal" class="pf-modal" hidden>
+      <div class="pf-modal-card pf-newview-card" role="dialog" aria-modal="true" aria-labelledby="products-newview-title">
+        <header class="pf-modal-head">
+          <h2 id="products-newview-title" data-i18n="products.newview_title">Create new view</h2>
+        </header>
+        <div class="pf-modal-body pf-newview-body">
+          <div class="pf-newview-labelrow">
+            <label class="pf-newview-label" for="products-newview-name" data-i18n="products.newview_name">Name</label>
+            <span id="products-newview-chars" class="pf-newview-chars" aria-live="polite"></span>
+          </div>
+          <input id="products-newview-name" class="pf-newview-input" type="text" maxlength="30" autocomplete="off">
+          <div class="pf-newview-lists">
+            <section class="pf-newview-pane" aria-labelledby="products-newview-selected-title">
+              <header class="pf-newview-pane-head">
+                <h3 id="products-newview-selected-title" class="pf-newview-pane-title" data-i18n="products.newview_selected">Selected columns</h3>
+                <span id="products-newview-count" class="pf-newview-count" aria-live="polite"></span>
+                <button id="products-newview-clear" class="pf-newview-link" type="button" data-i18n="products.newview_clear">Remove all</button>
+              </header>
+              <div id="products-newview-chosen" class="pf-newview-list"></div>
+            </section>
+            <section class="pf-newview-pane" aria-labelledby="products-newview-available-title">
+              <header class="pf-newview-pane-head">
+                <h3 id="products-newview-available-title" class="pf-newview-pane-title" data-i18n="products.newview_available">Available fields</h3>
+              </header>
+              <input id="products-newview-search" class="pf-newview-input pf-newview-search" type="search" autocomplete="off" data-i18n-attr="placeholder:products.newview_search;aria-label:products.newview_search" placeholder="Search fields">
+              <div id="products-newview-list" class="pf-newview-list"></div>
+            </section>
+          </div>
+          <p id="products-newview-error" class="pf-newview-error" role="alert" hidden></p>
+          <div class="pf-assign-actions pf-newview-foot">
+            <button id="products-newview-cancel" class="btn btn-secondary" type="button" data-i18n="products.assign_cancel">Cancel</button>
+            <button id="products-newview-create" class="btn" type="button" disabled data-i18n="products.newview_create">Create view</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- What is needed before the form can be saved. -->
+    <div id="products-checklist-modal" class="pf-modal" hidden>
+      <div class="pf-modal-card" role="dialog" aria-modal="true" aria-labelledby="products-checklist-title">
+        <header class="pf-modal-head">
+          <h2 id="products-checklist-title" data-i18n="products.checklist_title">What is needed to save</h2>
+          <button id="products-checklist-close" class="products-icon-btn" type="button" aria-label="Close" data-i18n-attr="aria-label:products.checklist_close">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div id="products-checklist-body" class="pf-modal-body"></div>
+      </div>
+    </div>
+  </div>
+  <script src="../shared/js/dom.js"></script>
+  <script src="../shared/js/tooltip.js"></script>
+  <script src="../shared/js/bridge.js"></script>
+  <script src="../shared/js/i18n.js"></script>
+  <script src="../shared/js/shell.js"></script>
+  <script src="../shared/js/account.js"></script>
+  <script src="../shared/js/auth.js"></script>
+  <script src="../shared/js/picker.js"></script>
+  <script src="../item/js/safe-html.js"></script>
+  <script src="js/validators.js"></script>
+  <script src="js/sortable.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/products-page.js"></script>
+</body>
+</html>

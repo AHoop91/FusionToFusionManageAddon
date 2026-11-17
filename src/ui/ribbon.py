@@ -42,6 +42,7 @@ class RibbonCommand:
     needs_setup: bool = False   # greyed out until the settings are complete (see ``SetupGate``)
     root_only: bool = False   # a right-click entry offered only when the top of the tree is selected (a design's root, the top of what a drawing shows)
     needs_drawing: bool = False   # greyed out until the open drawing has loaded enough to say which item it is of (see ``SetupGate``)
+    needs_portfolio: bool = False   # greyed out until the Portfolio Management workspace is set (see ``SetupGate``)
     context: str = ""   # a right-click entry offered only in "design" or "drawing" documents; "" in either
 
 

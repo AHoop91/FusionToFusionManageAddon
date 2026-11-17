@@ -117,7 +117,32 @@ def clock(dot=None):
     return make
 
 
+def portfolio(size):
+    """A portfolio of products: a grid of tiles, one picked out, with a cube on it."""
+    small = size == 16
+    gap = 6 if small else 5
+    tile = (58 - gap) / 2
+    out = ""
+    for row in range(2):
+        for col in range(2):
+            x, y = 3 + col * (tile + gap), 3 + row * (tile + gap)
+            picked = row == 0 and col == 0
+            fill, line = (DESIGN, DESIGN) if picked else (PAGE, PAGE_LINE)
+            out += f'  <rect x="{x}" y="{y}" width="{tile}" height="{tile}" rx="5" fill="{fill}" stroke="{line}" stroke-width="{3.4 if small else 2.4}"/>\n'
+    cx, cy, r = 3 + tile / 2, 3 + tile / 2, tile * 0.3
+    top = f"M{cx} {cy - r} L{cx + r} {cy - r / 2} V{cy + r / 2} L{cx} {cy + r} L{cx - r} {cy + r / 2} V{cy - r / 2} Z"
+    out += stroke(top, "#fff", 3 if small else 2.4)
+    if not small:
+        out += stroke(f"M{cx - r} {cy - r / 2} L{cx} {cy} L{cx + r} {cy - r / 2} M{cx} {cy} V{cy + r}", "#fff", 2.4)
+        for col in range(2):
+            x = 3 + col * (tile + gap)
+            out += stroke(f"M{x + 6} {3 + tile + gap + tile * 0.4} H{x + tile - 6} M{x + 6} {3 + tile + gap + tile * 0.65} H{x + tile - 14}", TEXT_LINE, 3)
+        out += stroke(f"M{3 + tile + gap + 6} {3 + tile * 0.4} H{3 + 2 * tile + gap - 6} M{3 + tile + gap + 6} {3 + tile * 0.65} H{3 + 2 * tile + gap - 14}", TEXT_LINE, 3)
+    return svg(size, out)
+
+
 ICONS = {
+    "products": portfolio,
     "item": item_icon(SEARCH),
     "publish": item_icon(ARROW),
     "upload_step": export_icon("STEP", "#D6204D"),

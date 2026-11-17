@@ -35,6 +35,15 @@ window.MfgUi.svg = function (paths, size) {
   return node;
 };
 
+/** The three bouncing balls of a wait: ``label`` is what a screen reader says; ``className`` may add to ``balls``. */
+window.MfgUi.balls = function (label, className) {
+  const node = window.MfgUi.el('div', className ? 'balls ' + className : 'balls');
+  node.setAttribute('role', 'status');
+  node.setAttribute('aria-label', label);
+  for (let i = 0; i < 3; i++) node.appendChild(window.MfgUi.el('span'));
+  return node;
+};
+
 /**
  * Where the icon of each tree level starts (px, by level): every level steps in by one ``slot`` (a chevron box), so a
  * chevron sits under its parent's icon. ``room`` is whether the top level has a chevron on any row, so it leaves space for it.

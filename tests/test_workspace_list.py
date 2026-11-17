@@ -37,5 +37,23 @@ class RevisionControlledTests(unittest.TestCase):
         self.assertEqual(WorkspaceService(_Client("nope")).revision_controlled(), [])
 
 
+class AllWorkspacesTests(unittest.TestCase):
+    def test_every_live_workspace_is_listed_and_says_whether_it_is_revision_controlled(self):
+        client = _Client({"totalCount": 4, "items": [
+            _row(9, "Portfolio", 1), _row(242, "Items", 6), _row(76, "Old", 1, deleted=True), _row(57, "Components", 6, controlled=True)]})
+        found = WorkspaceService(client).all_workspaces()
+        self.assertEqual(found, [{"id": "242", "name": "Items", "revision": True}, {"id": "9", "name": "Portfolio", "revision": False}])
+
+
+class PicklistOrderTests(unittest.TestCase):
+    def test_the_options_of_a_picklist_are_asked_for_by_title(self):
+        client = _Client({"totalCount": 1, "items": [{"link": "/api/v3/lookups/L/options/2", "title": "1 Best"}]},
+                         {"totalCount": 1, "items": [{"link": "/api/v3/lookups/L/options/2", "title": "1 Best"}]})
+        service = WorkspaceService(client)
+        service.options("L")
+        service.options_page("L", 0, 50, "bes")
+        self.assertTrue(all("asc=title" in path for path in client.paths), client.paths)
+
+
 if __name__ == "__main__":
     unittest.main()

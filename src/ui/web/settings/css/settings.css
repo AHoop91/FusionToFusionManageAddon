@@ -127,7 +127,7 @@ main > .tab-panel.active > .lockable, #settings-slot, #conn-settings { flex: 1; 
 .vbar-action { flex: none; font-size: 12px; font-weight: 600; color: var(--danger); text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---- A field a failed save marks, with its message under it ---- */
-input.invalid, .invalid > .ws-pick-btn { border-color: var(--danger); background: #fffafa; box-shadow: 0 0 0 1px var(--danger); }
+input.invalid, .invalid > .pk-btn { border-color: var(--danger); background: #fffafa; box-shadow: 0 0 0 1px var(--danger); }
 .ws-add-btn.invalid { color: var(--danger); text-decoration: underline; }
 .field-error { margin: 4px 0 0; font-size: 12px; line-height: 1.4; color: var(--danger); }
 
@@ -150,11 +150,11 @@ input.invalid, .invalid > .ws-pick-btn { border-color: var(--danger); background
 /* A member sees the Item Workspace and Export settings as the file defines them: readable, but plainly read-only. Nothing is faded, so
    the text stays clear; the controls are flat and grey, with no carets, no delete buttons and no hover. */
 #lock-workspaces:disabled, #lock-exports:disabled, #lock-workspaces .ws-locked:disabled { opacity: 1; }
-#lock-workspaces input:disabled, #lock-workspaces select:disabled, #lock-workspaces textarea:disabled, #lock-workspaces .ws-pick-btn:disabled,
+#lock-workspaces input:disabled, #lock-workspaces select:disabled, #lock-workspaces textarea:disabled, #lock-workspaces .pk-btn:disabled,
 #lock-exports input:disabled, #lock-exports select:disabled, #lock-exports textarea:disabled {
   color: #5f6368; -webkit-text-fill-color: #5f6368; background: var(--bg); border-color: var(--border); cursor: default;
 }
-#lock-workspaces .ws-pick-btn:disabled::after { display: none; }
+#lock-workspaces .pk-btn:disabled::after { display: none; }
 #lock-workspaces:disabled .ws-remove, #lock-workspaces:disabled .ws-add-btn, #lock-workspaces:disabled .ws-defaults { display: none; }
 #lock-exports:disabled .ex-choice { background: var(--bg); }
 #lock-exports:disabled .ex-choice label.ex-opt { cursor: default; color: #5f6368; }

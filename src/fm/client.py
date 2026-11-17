@@ -26,7 +26,7 @@ log = get_logger("fm.client")
 FM_HOST_SUFFIX = ".autodeskplm360.net"
 DEBUG_BODY = 20000   # bytes of a request or answer kept in a verbose log
 ANSWER_LOG_BYTES = 500   # bytes of a write's answer kept in the normal log
-ERROR_BODY_BYTES = 1000   # bytes of a refusal read, for the log
+ERROR_BODY_BYTES = 8000   # bytes of a refusal read, for the log and for a form that shows what was refused
 ERROR_MESSAGE_CHARS = 300   # characters of it that go into the message the user can see
 REQUEST_TIMEOUT_SECONDS = 15
 WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
@@ -45,9 +45,10 @@ LOOKUPS = "/api/v3/lookups"
 class FmApiError(Exception):
     """Raised when a Fusion Manage request fails or returns bad data."""
 
-    def __init__(self, message: str, status: int = NO_RESPONSE) -> None:
+    def __init__(self, message: str, status: int = NO_RESPONSE, body: str = "") -> None:
         super().__init__(message)
         self.status = status   # HTTP status, or ``NO_RESPONSE`` when there was none
+        self.body = body   # what Fusion Manage said in a refusal, as it said it (the start of it): for a caller that reads it
 
     @property
     def outcome_unknown(self) -> bool:
@@ -69,6 +70,11 @@ def _said(exc: urllib.error.HTTPError) -> str:
 def last_segment(link: Any) -> str:
     """The id at the end of a link such as ``/api/v3/workspaces/242/views/1/fields/TITLE`` ("" if not text)."""
     return link.rstrip("/").rsplit("/", 1)[-1] if isinstance(link, str) else ""
+
+
+def id_of(node: Dict[str, Any]) -> str:
+    """The id of a row: the end of its ``__self__``, ``link`` or ``urn``, else its ``id`` ("" if it has none)."""
+    return last_segment(node.get("__self__") or node.get("link") or node.get("urn")) or str(node.get("id") or "")
 
 
 # What a signed upload address can ask to be sent with the file
@@ -239,16 +245,17 @@ class FmClient:
         except OSError as exc:
             raise FmApiError(t("data.fm_upload_failed", reason=exc)) from exc
 
-    def send_json(self, method: str, path: str, body: Any = None) -> SendResult:
+    def send_json(self, method: str, path: str, body: Any = None, content_type: str = "application/json") -> SendResult:
         """POST, PATCH or DELETE ``path`` with ``body`` as JSON; return the status, headers and parsed answer.
 
+        ``content_type`` is the type the body is sent as (a view definition goes back as the META type it was read as).
         A write can have no answer (201 with only a ``Location`` header, 204), so ``data`` may be None.
         A refusal raises ``FmApiError`` whose message carries what Fusion Manage said, since that is
         the reason the user needs.
         """
         self.cancel.check()
         payload = None if body is None else json.dumps(body).encode("utf-8")
-        request = self._request(self._url(path), "application/json", method, payload, "application/json" if payload is not None else "")
+        request = self._request(self._url(path), "application/json", method, payload, content_type if payload is not None else "")
         if log.isEnabledFor(logging.DEBUG):
             log.debug("%s %s body: %s", method, path, _clip(payload or b""))
         began = time.monotonic()
@@ -268,6 +275,6 @@ class FmClient:
         except urllib.error.HTTPError as exc:
             said = _said(exc)
             log.error("Fusion Manage HTTP %s for %s %s: %s", exc.code, method, path, said)
-            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code) from exc
+            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code, said) from exc
         except OSError as exc:
             raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc)) from exc
