@@ -20,6 +20,7 @@
 
   const USAGE_PAGE = 25;   // cards shown at first in each group, and added by each press of Load more
   const EXTERNAL_ICON = ['M15 3h6v6', 'M10 14L21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'];   // a square with an arrow out of it
+  const DENIED_ICON = ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M5.6 5.6l12.8 12.8'];   // a circle with a bar across it
   const EMPTY_ICON =['M3 7l9-4 9 4-9 4-9-4z', 'M3 7v10l9 4 9-4V7', 'M12 11v10'];   // an empty box: the design is in no product
   const PICTURE_ICON = ['M3 5h18v14H3z', 'M3 15l5-5 4 4 3-3 6 6'];   // stands in for a picture there is not
   const usagePictures = {};   // picture link -> data uri ('' when there is none)
@@ -267,8 +268,18 @@
     if (pictureWatcher) pictureWatcher.disconnect();   // the cards it watched are about to go
     host.forgetMenus(body);
     body.textContent = '';
+    $('products-usage').hidden = !!(result && result.denied);   // the head says what the design is: not when the user may not see the rest
     if (!result) { body.appendChild(usageSkeleton()); return; }
     if (result.error) { usageLine(t('products.usage_failed', { reason: result.error }), 'pu-bad'); return; }
+    if (result.denied) {   // as the Item panel says it, and nothing else on the page
+      const denied = el('div', 'pu-empty plain item-empty item-empty-denied');
+      const icon = ns.svg(DENIED_ICON, 24);
+      icon.classList.add('item-empty-icon');
+      denied.appendChild(icon);
+      denied.appendChild(el('p', 'item-empty-text', result.denied));
+      body.appendChild(denied);
+      return;
+    }
     if (result.unpublished) { usageLine(result.message, 'pu-muted'); return; }
     if (!result.primary.length && !result.variants.length) {   // used nowhere: one message, in the middle of the space there is
       const empty = usageEmpty(t('products.usage_none', { number: result.number }), 56, true);

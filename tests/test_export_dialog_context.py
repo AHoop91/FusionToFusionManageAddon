@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 from src.config.models import ConnectionSettings
+from src.fm.client import FmApiError
 from src.config.workspace_models import ITEMS_KIND, WorkspaceConfig
 from tests.hub_fixtures import auth_of, capture, config_of
 from tests.without_fusion import fusion_modules_stubbed
@@ -56,6 +57,21 @@ class SetupReasonTests(Setup):
     def test_the_ribbon_button_is_off_with_the_reason_when_no_destination_is_set_up(self):
         self.config.effective_settings.side_effect = RuntimeError("shared file unreadable")
         self.assertEqual(self.dialog.problem(), "shared file unreadable")
+
+
+class AppRefusedTests(Setup):
+    def client(self, error=None):
+        client = mock.Mock()
+        client.get_json.side_effect = error
+        return client
+
+    def test_the_app_is_refused_when_the_list_of_workspaces_is_a_401(self):
+        self.assertTrue(ExportDialog._app_refused(self.client(FmApiError("x", 401))))
+
+    def test_it_is_not_when_the_user_is_only_refused_a_workspace_or_the_list_is_read(self):
+        self.assertFalse(ExportDialog._app_refused(self.client(FmApiError("x", 404))))
+        self.assertFalse(ExportDialog._app_refused(self.client()))
+        self.assertFalse(ExportDialog._app_refused(self.client(RuntimeError("down"))))
 
 
 class ReadAgainTests(Setup):

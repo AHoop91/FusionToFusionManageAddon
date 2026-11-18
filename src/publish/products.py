@@ -20,6 +20,7 @@ from ..fm.client import WORKSPACES, FmApiError, FmClient, last_segment
 from ..fm.bom import split_title
 from ..fm.components import Candidate, ComponentService, is_working, number_matches
 from ..fm.items import ItemService, display_text
+from ..fm.permissions import REFUSED
 from ..fm.pages import page_url
 from ..fm.tableaus import PICTURE_LINK
 from ..fm.v1_search import GRIDVIEW, Field, Sort, V1SearchService
@@ -85,6 +86,10 @@ def _link_of(value: Any) -> str:
 def _picture_link(values: Dict[str, Any]) -> str:
     """The link of the first picture among the field values of an item ("" when it holds none)."""
     return next((link for link in map(_link_of, values.values()) if PICTURE_LINK.fullmatch(link)), "")
+
+
+class NotAllowed(Exception):
+    """Fusion Manage does not let the user in: their app's Client ID has no user mapped to it, or they may not read the workspace."""
 
 
 class ProductService:
@@ -245,7 +250,7 @@ class ProductService:
         primary: Dict[str, None] = {}   # the ids of the products, in the order found
         variants: Dict[str, int] = {}   # the id of each product -> how many rows of its Variants grid hold the component
         primary_key, column_key = field_id.upper(), link_column.upper()
-        for row in V1SearchService(self._client).rows(workspace_id, fields, [Sort(field_id)]):   # sorted on an Item Details field: the service needs a sort
+        for row in self._v1_rows(workspace_id, fields, [Sort(field_id)]):   # sorted on an Item Details field: the service needs a sort
             for key, text in row.entries:
                 if not text or not number_matches(text, number):
                     continue
@@ -263,6 +268,25 @@ class ProductService:
         log.info("Component %s is the Primary Component of %d product(s) and a variant of %d", number, len(primary), len(variants))
         return {"number": number, "variants_checked": bool(link_column), "primary": [cards[item] for item in primary],
                 "variants": [{**cards[item], "rows": rows} for item, rows in variants.items()]}
+
+    def _v1_rows(self, workspace_id: str, fields: List[Field], sort: List[Sort]) -> List[Any]:
+        """The rows of a v1 search. Raises ``NotAllowed`` when Fusion Manage does not accept the user's app, else ``FmApiError`` with the reason.
+
+        Seen: a Client ID with no user mapped to it is answered 401 by the v3 API but 500 by the v1 search, so a 500 is asked of v3 again."""
+        try:
+            return list(V1SearchService(self._client).rows(workspace_id, fields, sort))
+        except FmApiError as exc:
+            if exc.status in REFUSED or (exc.status >= 500 and self._app_not_accepted(workspace_id)):
+                raise NotAllowed() from exc
+            raise
+
+    def _app_not_accepted(self, workspace_id: str) -> bool:
+        """Whether the v3 API refuses the user's app: it reads the workspace's own page, which any user of the workspace may."""
+        try:
+            self._client.get_json(f"{WORKSPACES}/{workspace_id}")
+        except FmApiError as exc:
+            return exc.status in REFUSED
+        return False
 
     def update_variant(self, workspace_id: str, item_id: str, row_id: str, number: str, link_column: str) -> Dict[str, Any]:
         """Change the component of the row ``row_id`` of the Variants grid to the revision of ``number`` that is to be assigned (see ``assign``): the

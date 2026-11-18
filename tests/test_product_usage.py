@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from src.fm.client import FmApiError
 from src.fm.pages import page_url
-from src.publish.products import ProductService
+from src.publish.products import NotAllowed, ProductService
 
 PRIMARY, LINK = "PRIMARY_COMPONENT", "COMPONENT"
 
@@ -34,6 +34,42 @@ class Client:
     def get_json(self, path, accept="application/json"):
         self.read.append(path)
         return {"descriptor": self.descriptor + path.rsplit("/", 1)[1], "fields": self.fields}
+
+
+class RefusedClient(Client):
+    """A client whose app Fusion Manage does not accept: the v1 search says ``search`` and a read of the workspace says ``read``."""
+
+    def __init__(self, search, read):
+        super().__init__([], FmApiError("search", search))
+        self.read_error = FmApiError("read", read)
+
+    def get_json(self, path, accept="application/json"):
+        if path == "/api/v3/workspaces/242":
+            raise self.read_error
+        return super().get_json(path, accept)
+
+
+class NotAllowedTests(unittest.TestCase):
+    def usage(self, client):
+        return ProductService(client).usage("242", "PN-1", PRIMARY, LINK)
+
+    def test_a_401_or_403_from_the_search_is_not_allowed(self):
+        for status in (401, 403):
+            with self.subTest(status=status), self.assertRaises(NotAllowed):
+                self.usage(Client([], FmApiError("x", status)))
+
+    def test_a_500_is_not_allowed_when_the_v3_api_refuses_the_app_as_well(self):
+        with self.assertRaises(NotAllowed):
+            self.usage(RefusedClient(500, 401))
+
+    def test_a_500_is_an_error_as_it_is_when_the_v3_api_accepts_the_app(self):
+        with self.assertRaises(FmApiError) as caught:
+            self.usage(Client([], FmApiError("down", 500)))
+        self.assertEqual(caught.exception.status, 500)
+
+    def test_a_500_is_an_error_as_it_is_when_the_workspace_cannot_be_read_for_another_reason(self):
+        with self.assertRaises(FmApiError):
+            self.usage(RefusedClient(500, 404))
 
 
 class UsageTests(unittest.TestCase):
@@ -95,7 +131,7 @@ class UsageTests(unittest.TestCase):
 
     def test_a_failed_search_raises_and_is_not_an_empty_answer(self):
         with self.assertRaises(FmApiError):
-            ProductService(Client([], FmApiError("401", 401))).usage("242", "PN-1", PRIMARY, LINK)
+            ProductService(Client([], FmApiError("404", 404))).usage("242", "PN-1", PRIMARY, LINK)
 
 
 if __name__ == "__main__":

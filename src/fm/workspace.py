@@ -150,7 +150,10 @@ class WorkspaceService:
             granted = parse_granted(self._client.get_json(f"{base}/users/@me/permissions"))
         except FmApiError as exc:
             log.warning("Workspace %s validation failed: %s", workspace_id, exc)
-            return _verdict(kind, False, _explain(exc, workspace_id))
+            verdict = _verdict(kind, False, _explain(exc, workspace_id))
+            if exc.status in REFUSED:
+                verdict["unauthorized"] = True   # the page says what to check, in a dialog
+            return verdict
         except AuthError as exc:
             return _verdict(kind, False, t("data.fm_not_signed_in", reason=exc))
 

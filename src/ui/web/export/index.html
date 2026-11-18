@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="../shared/css/layout.css">
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/empty-state.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
   <link rel="stylesheet" href="../shared/css/upload-progress.css">
   <link rel="stylesheet" href="css/export-page.css">
@@ -60,6 +61,8 @@
           <span id="export-destination-summary" class="export-pill" title="Where the file will be attached" data-i18n-attr="title:export.destination_tip"></span>
         </header>
         <p id="export-problem" class="export-alert" role="alert" hidden></p>
+        <!-- Fusion Manage does not let the user in: this stands in place of the choices (see export-page.js). -->
+        <div id="export-denied" class="export-denied item-empty item-empty-denied" role="alert"></div>
 
         <section id="export-format-group" class="export-group" aria-labelledby="export-format-title">
           <h2 id="export-format-title" data-i18n="export.format_title">File format</h2>

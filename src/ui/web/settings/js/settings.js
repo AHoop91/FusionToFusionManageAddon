@@ -105,6 +105,7 @@
     ns.account.renderRole(result.state);
     updateViews();
     ns.language.render();   // only a Hub Admin is offered to add a language
+    ns.workspaces.offerRefused();   // and only a Hub Admin is told what to do about a workspace Fusion Manage refused
     if (roleDialog) {
       roleDialog = false;
       if (result.state === 'unknown') ns.progress.fail(t('settings.role_failed_title'), t('settings.role_failed_text'));

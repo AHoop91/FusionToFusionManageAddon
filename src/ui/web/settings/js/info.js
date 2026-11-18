@@ -2,7 +2,7 @@
  * Info tips and the confirm dialog of the Item Workspace tab, as ``ns.info``.
  *
  * ``tip(text)`` is an info icon that shows a tip on hover; ``confirmDefaults(kind, onYes)`` asks
- * before "Add default fields" replaces the mapped fields.
+ * before "Add default fields" replaces the mapped fields; ``unauthorized()`` says what to check when Fusion Manage refuses a workspace.
  */
 (function (ns) {
   'use strict';
@@ -69,5 +69,35 @@
     ok.addEventListener('click', function () { close(); onYes(); });
   }
 
-  ns.info = { tip: infoTip, confirmDefaults: confirmDefaults };
+  /** Say that Fusion Manage refused the user, and what to check. One at a time: asking again while it is open does nothing. */
+  function unauthorized() {
+    if (document.getElementById('ws-unauthorized')) return;
+    const overlay = el('div', 'ws-dialog-overlay');
+    overlay.id = 'ws-unauthorized';
+    const box = el('div', 'ws-dialog ws-denied');
+    box.setAttribute('role', 'alertdialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'ws-unauthorized-title');
+    const icon = el('span', 'ws-denied-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.appendChild(ns.svg(['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M5.6 5.6l12.8 12.8'], 28));
+    box.appendChild(icon);
+    const title = el('h3', 'ws-dialog-title', t('settings.unauthorized_title'));
+    title.id = 'ws-unauthorized-title';
+    box.appendChild(title);
+    box.appendChild(el('p', 'ws-dialog-text', t('settings.unauthorized_intro')));
+    const steps = el('ol', 'ws-denied-list');
+    [t('settings.unauthorized_step_signin'), t('settings.unauthorized_step_open'), t('settings.unauthorized_step_add'),
+      t('settings.unauthorized_step_retry')].forEach(function (text) { steps.appendChild(el('li', '', text)); });
+    box.appendChild(steps);
+    const actions = el('div', 'ws-dialog-actions');
+    const close = el('button', 'btn', t('settings.close'));
+    close.type = 'button';
+    actions.appendChild(close);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+    close.addEventListener('click', present(overlay, close));
+  }
+
+  ns.info = { tip: infoTip, confirmDefaults: confirmDefaults, unauthorized: unauthorized };
 })(window.MfgUi);

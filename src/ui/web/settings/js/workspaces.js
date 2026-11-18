@@ -489,6 +489,17 @@
       delete validated[result.kind];
     }
     setValid(card, result.valid, result.message);
+    if (result.unauthorized) { refusedSeen = true; offerRefused(); }
+  }
+
+  let refusedSeen = false;   // Fusion Manage refused a workspace, and the user has not been told what an administrator does about it
+
+  /** Say what to do about a refusal, to a Hub Admin only: a member cannot do it, and is not shown it. The role may still be being read, so
+   *  this is asked again when it is known. */
+  function offerRefused() {
+    if (!refusedSeen || ns.settings.roleState() !== 'admin') return;
+    refusedSeen = false;
+    ns.info.unauthorized();
   }
 
   // ---- Workspace sections -------------------------------------------------
@@ -828,5 +839,5 @@
     });
   }
 
-  ns.workspaces = { init: init, render: render, read: read, setViewOnly: setViewOnly };
+  ns.workspaces = { init: init, render: render, read: read, setViewOnly: setViewOnly, offerRefused: offerRefused };
 })(window.MfgUi);

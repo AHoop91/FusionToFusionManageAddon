@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
-from ...config.workspace_models import PORTFOLIO_KIND, WorkspaceConfig
+from ...config.workspace_models import KINDS_BY_ID, PORTFOLIO_KIND, WorkspaceConfig, kind_texts
 from ...core.i18n import t
 from ...core.shapes import whole
 from ...fm.client import FmClient
@@ -16,7 +16,7 @@ from ...fm.components import LINEAGE, ComponentService
 from ...fm.permissions import ADD_ITEMS, may
 from ...fm.workspace_form import WorkspaceFormService
 from ...fm.tableaus import TableauService
-from ...publish.products import REPLACE, REPLACE_MOVE, VARIANT, VARIANT_UPDATE, ProductService
+from ...publish.products import REPLACE, REPLACE_MOVE, VARIANT, VARIANT_UPDATE, NotAllowed, ProductService
 from ..item_number_error import NoItemNumber
 from ..message_bridge import MessageBridge
 from .background import Runner, in_thread, why
@@ -202,7 +202,10 @@ class ProductReads(PickerReads):
                 number = self._design.number(ref)
             except NoItemNumber as exc:
                 return {"unpublished": True, "message": str(exc)}
-            return ProductService(client).usage(workspace, number, field, column)
+            try:
+                return ProductService(client).usage(workspace, number, field, column)
+            except NotAllowed:   # not an error either: the page says so in place of the cards, as the Item panel does
+                return {"denied": t("app.no_view_permission", workspace=kind_texts(KINDS_BY_ID[PORTFOLIO_KIND])[0])}
 
         return self._in_workspace(payload, look, alongside=True)
 

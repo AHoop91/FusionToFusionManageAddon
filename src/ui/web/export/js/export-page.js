@@ -15,6 +15,7 @@
   const el = ns.el;
   const t = ns.i18n.t;
 
+  const DENIED_ICON = ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', 'M5.6 5.6l12.8 12.8'];   // a circle with a bar across it
   const CONTEXT_POLL_MS = 2000;   // how often to ask again while there is nothing to export yet
   const UPLOAD_POLL_MS = 2000;    // Python pushes every change of how far the export has got; this only asks now and then, in case a push is missed
   const START_WAIT_MS = 30000;    // how long an export may go without saying how far it is, before it is called failed
@@ -27,6 +28,7 @@
   let itemNumber = null;    // the item number of what is exported: null until it has been read, then it (empty when there is none)
   let format = '';         // the key of the format chosen
   let destination = '';    // the key of the destination chosen
+  let denied = '';         // why every destination is off when Fusion Manage does not accept the app; "" when it does
   let access = null;       // why each destination may not be attached to, once the permission check has answered
   let accessTimer = 0;
   let files = null;        // what is attached where the export would go: {state: 'loading'}, or Python's answer; null when nothing is asked
@@ -259,6 +261,18 @@
     box.style.backgroundImage = url ? 'url("' + url.replace(/"/g, '%22') + '")' : '';
   }
 
+  /** When Fusion Manage does not let the user in, say so as the Item panel does, in place of the choices (the page's CSS hides them). */
+  function paintDenied() {
+    const box = $('export-denied');
+    box.replaceChildren();
+    document.querySelector('.export-body').classList.toggle('is-denied', !!denied);
+    if (!denied) return;
+    const icon = ns.svg(DENIED_ICON, 24);
+    icon.classList.add('item-empty-icon');
+    box.appendChild(icon);
+    box.appendChild(el('p', 'item-empty-text', denied));
+  }
+
   /** The choices: what is exported, any problem with it, the formats and destinations, and what pressing Export will do. */
   function renderForm() {
     if (access) applyAccess();
@@ -273,6 +287,7 @@
     problem.hidden = !context.problem;
     renderFormats();
     renderDestinations();
+    paintDenied();
     syncRun();
     loadFiles();
   }
@@ -401,6 +416,7 @@
     bridge.on('export_access', function (r) {
       if (!r.ok) return;
       access = r.result.reasons;
+      denied = r.result.denied || '';
       if (context) renderForm();   // else it is taken in when the context arrives
     });
     bridge.on('export_files', function (r) { if (!r.ok) { files = { state: 'unavailable', message: r.error }; renderFiles(); } });

@@ -236,8 +236,6 @@
 .item-grip-active { background: var(--accent); opacity: 0.5; }
 
 /* No item has the number: an icon and a line of text, centred in the panel. */
-.item-empty { color: var(--muted); text-align: center; }
-.item-empty-text { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.005em; color: var(--text); overflow-wrap: anywhere; }
 .item-empty .item-empty-hint { margin: -6px 0 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .item-empty .btn[hidden], .item-empty [hidden] { display: none; }
 
@@ -264,21 +262,6 @@
   font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text); overflow-wrap: anywhere;
 }
 
-/* The icon sits on a soft round tile; nothing here is wrong, so it stays grey (red-tinted only when access is denied). */
-svg.item-empty-icon {
-  box-sizing: content-box;
-  width: 56px;
-  height: 56px;
-  padding: 20px;
-  border-radius: 50%;
-  background: #eaedf1;
-  fill: none;
-  stroke: #8a95a3;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.item-empty-denied svg.item-empty-icon { background: #fbeeee; stroke: #c25252; }
 
 /* What Publish does: a short numbered list in a light card. */
 .item-empty-steps {

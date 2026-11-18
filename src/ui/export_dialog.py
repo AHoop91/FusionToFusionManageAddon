@@ -6,7 +6,8 @@ out again at each call, since the open document can change while the window is o
 A destination is off when it is not set up (the Items workspace not being configured in Preferences, or no connection), and also when the
 user may not attach files to its workspace. The permissions are read from Fusion Manage when the window opens, on a worker thread so
 Fusion is not held up, and the page is told the result (``export_access``); until then the destinations say they are being checked. They
-are read under one ``HubContext``, and again when the hub or the settings have changed since.
+are read under one ``HubContext``, and again when the hub or the settings have changed since. When Fusion Manage does not accept the app at
+all (its Client ID is not added there), the page is told so in ``denied``, and says it in place of the reasons, as the Item panel does.
 """
 
 import json
@@ -26,9 +27,9 @@ from ..config.workspace_models import ITEMS_KIND, KINDS_BY_ID, kind_texts
 from ..core.cancel import Cancelled
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
-from ..fm.client import FmApiError, FmClient
+from ..fm.client import WORKSPACES, FmApiError, FmClient
 from ..fm.components import ComponentService
-from ..fm.permissions import ATTACH_PERMISSIONS, denial
+from ..fm.permissions import ATTACH_PERMISSIONS, REFUSED, denial
 from . import drawing_source
 from .export_options import DESIGN, DRAWING, describe, formats_for
 from .item_panel import ItemPanel
@@ -121,6 +122,7 @@ class ExportDialog:
         """Read the user's permissions in the workspaces that are set up (a worker thread), then tell the page. A destination that is not set
         up keeps its setup reason and is not asked about."""
         reasons = dict(setup)
+        denied = ""   # said when Fusion Manage does not accept the app
         try:
             client = FmClient(context.settings, self._auth, self._panel.export_token)
             checks = {key: check for key, check in ((ITEM, lambda c: self._item_denial(c, context)), (COMPONENT, self._component_denial))
@@ -129,6 +131,10 @@ class ExportDialog:
                 asked = {key: pool.submit(self._asked, check, client) for key, check in checks.items()}
                 for key, future in asked.items():
                     reasons[key] = future.result()
+            if any(reasons[key] for key in checks) and self._app_refused(client):   # asked only when something was refused: a 403 is not this
+                denied = t("app.export_no_permission")
+                for key in checks:
+                    reasons[key] = denied
         except Cancelled:   # the window was closed: nobody waits for the answer
             log.info("The check of the permissions to attach files was cancelled")
             return
@@ -137,12 +143,24 @@ class ExportDialog:
             for key in reasons:
                 reasons[key] = reasons[key] or t("app.export_permissions_failed", reason=exc)
         log.info("Export permissions: %s", reasons)
-        self._tasks.post(lambda: self._checked(reasons, context.stamp))
+        self._tasks.post(lambda: self._checked(reasons, context.stamp, denied))
 
-    def _checked(self, reasons: Dict[str, str], stamp: str) -> None:
+    @staticmethod
+    def _app_refused(client: FmClient) -> bool:
+        """Whether the v3 API refuses the user's app itself (a 401 for the list of workspaces, which any signed-in user may read), as it does
+        for a Client ID with no user mapped to it: not that the user lacks permission in one workspace."""
+        try:
+            client.get_json(f"{WORKSPACES}?offset=0&limit=1")
+        except FmApiError as exc:
+            return exc.status in REFUSED
+        except Exception:  # noqa: BLE001 - not known to be refused: the reasons found stand
+            return False
+        return False
+
+    def _checked(self, reasons: Dict[str, str], stamp: str, denied: str = "") -> None:
         """Keep what the permission check found, made under the context of ``stamp``, and tell the page. UI thread."""
         self._access, self._access_stamp, self._checking = reasons, stamp, False
-        self._host.send("export_access", json.dumps({"ok": True, "result": {"reasons": reasons}, "error": None}))
+        self._host.send("export_access", json.dumps({"ok": True, "result": {"reasons": reasons, "denied": denied}, "error": None}))
 
     # ---- The page's calls -----------------------------------------------------------
 

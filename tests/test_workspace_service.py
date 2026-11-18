@@ -76,6 +76,11 @@ class ValidateTests(unittest.TestCase):
                 self.assertEqual(validate({self.BASE: FmApiError("x", status)})["message"], expected)
         self.assertEqual(validate({self.BASE: FmApiError("down", 503)})["message"], "down")
 
+    def test_a_refusal_is_marked_unauthorized_and_a_missing_workspace_is_not(self):
+        self.assertTrue(validate({self.BASE: FmApiError("x", 401)})["unauthorized"])
+        self.assertTrue(validate({self.BASE: FmApiError("x", 403)})["unauthorized"])
+        self.assertNotIn("unauthorized", validate({self.BASE: FmApiError("x", 404)}))
+
     def test_not_being_signed_in_is_said(self):
         self.assertIn("Not signed in", validate({self.BASE: AuthError("expired")})["message"])
 
