@@ -143,6 +143,86 @@
     target.appendChild(empty);
   }
 
+  const TABLE_MIN_PX = 50;   // the narrowest a column of a sortable table can be dragged to
+
+  /**
+   * Fill ``target`` with a table of ``options.rows`` and return ``{draw}`` (``draw()`` draws the rows again, after they or what a cell shows changed).
+   * Each column of ``options.columns`` has a ``key``, a ``title``, a ``cell(td, row)`` that fills a cell, and optionally a ``width`` in px that the
+   * user can drag (``resize: false`` fixes it; the last column has none and takes what is left), and ``sort(row)``, the value it sorts on (a column
+   * without it has a heading that does nothing). The table opens sorted by ``options.sortKey`` (none: as the rows come), is never narrower than its
+   * columns and ``options.lastMin`` px for the last, and when there are no rows the headings stay with ``options.empty`` (``{icon, text, hint}``)
+   * under them. It is styled by ``item-files-table``.
+   */
+  function sortableTable(target, options) {
+    const columns = options.columns;
+    let sortKey = options.sortKey || '';
+    let ascending = true;
+    const table = el('table', 'item-files-table');
+    const colgroup = el('colgroup');
+    const cols = columns.map(function (column) {
+      const col = el('col');
+      if (column.width) col.style.width = column.width + 'px';
+      colgroup.appendChild(col);
+      return col;
+    });
+    table.appendChild(colgroup);
+    function fit() {
+      const fixed = cols.reduce(function (sum, col) { return sum + (parseFloat(col.style.width) || 0); }, 0);
+      table.style.minWidth = (fixed + options.lastMin) + 'px';
+    }
+    fit();
+    const head = el('tr');
+    const marks = {};
+    columns.forEach(function (column, i) {
+      const th = el('th', '', column.title);
+      if (column.sort) {
+        th.title = t('item.files_sort', { column: column.title });
+        marks[column.key] = el('span', 'item-sort');
+        th.appendChild(marks[column.key]);
+        th.addEventListener('click', function () {
+          ascending = sortKey === column.key ? !ascending : true;
+          sortKey = column.key;
+          draw();
+        });
+      }
+      if (column.width && column.resize !== false) th.appendChild(grip(cols[i], { min: TABLE_MIN_PX, onResize: fit, stopClick: true }));   // stopClick: not a sort
+      head.appendChild(th);
+    });
+    table.appendChild(el('thead')).appendChild(head);
+    const body = el('tbody');
+    table.appendChild(body);
+
+    function draw() {
+      const rows = options.rows.slice();
+      const sorting = columns.find(function (c) { return c.key === sortKey; });
+      if (sorting) {
+        rows.sort(function (a, b) {
+          const x = sorting.sort(a);
+          const y = sorting.sort(b);
+          return (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
+        });
+      }
+      columns.forEach(function (c) { if (marks[c.key]) marks[c.key].textContent = c.key === sortKey ? (ascending ? '\u2191' : '\u2193') : ''; });
+      body.replaceChildren();
+      rows.forEach(function (row) {
+        const tr = el('tr');
+        columns.forEach(function (c) {
+          const td = el('td');
+          c.cell(td, row);
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+
+    draw();
+    const wrap = el('div', 'item-files-wrap');   // a wide table scrolls sideways
+    wrap.appendChild(table);
+    target.appendChild(wrap);
+    if (!options.rows.length) emptyUnder(target, options.empty.icon, options.empty.text, options.empty.hint);
+    return { draw: draw };
+  }
+
   /** The bouncing balls and a caption in the middle of ``target``. */
   function loading(target, className, text) {
     target.className = 'view-scroll item-centred ' + className;
@@ -194,5 +274,5 @@
     return td;
   }
 
-  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, leave: leave, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable };
+  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, leave: leave, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable, sortableTable: sortableTable };
 })(window.MfgUi);

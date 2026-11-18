@@ -34,8 +34,7 @@
   const GRID_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="M3 10h18M3 15h18M9 5v14M15 5v14"/></svg>';   // a table (static markup)
   const GRID_OPEN_PX = 136;     // the column of buttons: the width of the button and the padding of its cell
   const GRID_COLUMN_PX = 200;   // the width a column starts with
-  const GRID_MIN_PX = 50;       // and the least one can be dragged to
-  const GRID_LAST_PX = 200;     // the last column, which takes what is left
+  const GRID_LAST_PX = 200;     // the least the last column, which takes what is left, is
   const PIN = 'M12 22s-7-6.3-7-12a7 7 0 0 1 14 0c0 5.7-7 12-7 12zm0-9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';   // a map pin: where the product is in its workflow
 
   let host = null;   // what the page lends: see ``init``
@@ -66,85 +65,35 @@
   }
 
   /** The Grid tab, drawn as the Attachments tab draws its files: columns of a width to drag, a heading to sort by and, when there are no rows,
-   *  the columns with an icon and a line in the space under them. The columns are the grid's, as Fusion Manage lays them out, after one of ours:
+   *  the columns with an icon and a line in the space under them (the table is ``ns.itemTree.sortableTable``, as the Attachments tab's is). The columns are the grid's, as Fusion Manage lays them out, after one of ours:
    *  Open Design, a link on each row that opens the design of its component in Fusion. The column that names the component is a link that
    *  opens the item in Fusion Manage, as a linked field is on the Item tab. */
   function paintGrid() {
     const pane = panes.grid;
     if (!pane || !grid) return;
-    const columns = [{ id: '__open_design', title: '', plain: true }].concat(grid.columns);   // the column of buttons has no title, and nothing to sort or resize
+    const columns = [{
+      key: '__open_design', title: '', width: GRID_OPEN_PX, resize: false,   // the column of buttons has no title, and nothing to sort or resize
+      cell: function (td, row) { if (row.link) td.appendChild(openButton(function (done) { host.open(row.link, done); })); },
+    }].concat(grid.columns.map(function (column, i) {
+      return {
+        key: column.id, title: column.title, width: i < grid.columns.length - 1 ? GRID_COLUMN_PX : 0,   // the last takes what is left
+        sort: function (row) { return (row.cells[column.id] || '').toLowerCase(); },
+        cell: function (td, row) {
+          td.title = row.cells[column.id] || '';
+          if (column.id === grid.link_column && row.url) td.appendChild(rowLink(row.title, function () { bridge.send('open_url', { url: row.url }); }));
+          else td.textContent = row.cells[column.id] || '';
+        },
+      };
+    }));
     pane.className = 'view-scroll item-files item-grid';
     pane.replaceChildren();
     if (!grid.link_column) pane.appendChild(el('p', 'pu-muted', t('products.browse_no_column')));
-    let sortKey = '';
-    let ascending = true;
-    const table = el('table', 'item-files-table');
-    const colgroup = el('colgroup');
-    const cols = columns.map(function (column, i) {
-      const col = el('col');
-      if (i < columns.length - 1) col.style.width = (column.plain ? GRID_OPEN_PX : GRID_COLUMN_PX) + 'px';   // the last takes what is left
-      colgroup.appendChild(col);
-      return col;
+    ns.itemTree.sortableTable(pane, {
+      columns: columns,
+      rows: grid.rows,
+      lastMin: GRID_LAST_PX,
+      empty: { icon: GRID_ICON, text: t('products.browse_grid_empty'), hint: t('products.browse_grid_empty_hint') },
     });
-    table.appendChild(colgroup);
-    function fit() {   // never narrower than its columns, so a narrow window scrolls the table sideways
-      const fixed = cols.reduce(function (sum, col) { return sum + (parseFloat(col.style.width) || 0); }, 0);
-      table.style.minWidth = (fixed + GRID_LAST_PX) + 'px';
-    }
-    fit();
-    const head = el('tr');
-    const marks = {};
-    columns.forEach(function (column, i) {
-      const th = el('th', '', column.title);
-      if (!column.plain) {
-        th.title = t('item.files_sort', { column: column.title });
-        marks[column.id] = el('span', 'item-sort');
-        th.appendChild(marks[column.id]);
-        th.addEventListener('click', function () {
-          ascending = sortKey === column.id ? !ascending : true;
-          sortKey = column.id;
-          draw();
-        });
-        if (i < columns.length - 1) th.appendChild(ns.itemTree.grip(cols[i], { min: GRID_MIN_PX, onResize: fit, stopClick: true }));   // stopClick: not a sort
-      }
-      head.appendChild(th);
-    });
-    table.appendChild(el('thead')).appendChild(head);
-    const body = el('tbody');
-    table.appendChild(body);
-
-    function draw() {
-      const rows = grid.rows.slice();
-      if (sortKey) {
-        rows.sort(function (a, b) {
-          const x = (a.cells[sortKey] || '').toLowerCase();
-          const y = (b.cells[sortKey] || '').toLowerCase();
-          return (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
-        });
-      }
-      columns.forEach(function (c) { if (marks[c.id]) marks[c.id].textContent = c.id === sortKey ? (ascending ? '↑' : '↓') : ''; });
-      body.replaceChildren();
-      rows.forEach(function (row) {
-        const tr = el('tr');
-        columns.forEach(function (c) {
-          const td = el('td');
-          if (c.plain) {
-            if (row.link) td.appendChild(openButton(function (done) { host.open(row.link, done); }));
-          } else {
-            td.title = row.cells[c.id] || '';
-            if (c.id === grid.link_column && row.url) td.appendChild(rowLink(row.title, function () { bridge.send('open_url', { url: row.url }); }));
-            else td.textContent = row.cells[c.id] || '';
-          }
-          tr.appendChild(td);
-        });
-        body.appendChild(tr);
-      });
-    }
-    draw();
-    const wrap = el('div', 'item-files-wrap');   // a wide table scrolls sideways
-    wrap.appendChild(table);
-    pane.appendChild(wrap);
-    if (!grid.rows.length) ns.itemTree.emptyUnder(pane, GRID_ICON, t('products.browse_grid_empty'), t('products.browse_grid_empty_hint'));
   }
 
   /** Make ``button`` run ``run(done)`` when pressed, and show it is under way (a turning ring, and not to be pressed again) until ``done`` is called. */

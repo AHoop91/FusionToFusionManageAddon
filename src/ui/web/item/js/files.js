@@ -11,7 +11,6 @@
   const t = ns.i18n.t;
   const tree = ns.itemTree;
   const CLASS = 'item-files';
-  const MIN_COLUMN_PX = 50;
   const LAST_COLUMN_MIN_PX = 200;   // the description column
 
   // column key, heading, and how to turn a file into the text shown and sorted on
@@ -145,85 +144,34 @@
     target.appendChild(toolbar(tools));
 
     let stale = {};   // file name -> why it is out of date, once Python has checked
-    let sortKey = 'name';
-    let ascending = true;
-    const table = el('table', 'item-files-table');
-    const head = el('tr');
-    const body = el('tbody');
-    const marks = {};
 
-    // Each column has a pixel width the user can drag; the description (no width) takes what the panel has left.
-    const colgroup = el('colgroup');
-    const cols = COLUMNS.map(function (column) {
-      const col = el('col');
-      if (column.width) col.style.width = column.width + 'px';
-      colgroup.appendChild(col);
-      return col;
+    function nameCell(td, file) {
+      if (stale[file.name]) {   // made from an earlier save of the open document
+        const pill = el('span', 'item-file-stale', t('item.out_of_date'));
+        pill.title = stale[file.name];
+        td.appendChild(pill);
+      }
+      td.appendChild(icon(file.ext));
+      const link = el('a', 'item-link', file.name);
+      link.href = '#';
+      link.title = t('item.open_in_fusion_manage');
+      link.addEventListener('click', function (event) { event.preventDefault(); open(file); });
+      td.appendChild(link);
+    }
+
+    const table = tree.sortableTable(target, {
+      columns: COLUMNS.map(function (c) {
+        return {
+          key: c.key, title: c.title(), width: c.width, sort: function (file) { return sortValue(file, c); },
+          cell: c.key === 'name' ? nameCell : function (td, file) { td.textContent = shown(file, c); },
+        };
+      }),
+      rows: files,
+      sortKey: 'name',
+      lastMin: LAST_COLUMN_MIN_PX,
+      empty: { icon: EMPTY_FOLDER, text: t('item.files_empty'), hint: t('item.files_empty_hint') },
     });
-    table.appendChild(colgroup);
-    function fit() {   // the table is never narrower than its columns, so a narrow panel scrolls it sideways
-      const fixed = cols.reduce(function (sum, col) { return sum + (parseFloat(col.style.width) || 0); }, 0);
-      table.style.minWidth = (fixed + LAST_COLUMN_MIN_PX) + 'px';
-    }
-    fit();
-    COLUMNS.forEach(function (column) {
-      const th = el('th', '', column.title());
-      th.title = t('item.files_sort', { column: column.title() });
-      marks[column.key] = el('span', 'item-sort');
-      th.appendChild(marks[column.key]);
-      th.addEventListener('click', function () {
-        ascending = sortKey === column.key ? !ascending : true;
-        sortKey = column.key;
-        draw();
-      });
-      if (column.width) th.appendChild(tree.grip(cols[COLUMNS.indexOf(column)], { min: MIN_COLUMN_PX, onResize: fit, stopClick: true }));   // stopClick: not a sort
-      head.appendChild(th);
-    });
-    table.appendChild(el('thead')).appendChild(head);
-    table.appendChild(body);
-
-    function draw() {
-      const column = COLUMNS.find(function (c) { return c.key === sortKey; });
-      const rows = files.slice().sort(function (a, b) {
-        const x = sortValue(a, column);
-        const y = sortValue(b, column);
-        return (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
-      });
-      COLUMNS.forEach(function (c) { marks[c.key].textContent = c.key === sortKey ? (ascending ? '↑' : '↓') : ''; });
-      body.replaceChildren();
-      rows.forEach(function (file) {
-        const tr = el('tr');
-        COLUMNS.forEach(function (c) {
-          const td = el('td');
-          if (c.key === 'name') {
-            if (stale[file.name]) {   // made from an earlier save of the open document
-              const pill = el('span', 'item-file-stale', t('item.out_of_date'));
-              pill.title = stale[file.name];
-              td.appendChild(pill);
-            }
-            td.appendChild(icon(file.ext));
-            const link = el('a', 'item-link', file.name);
-            link.href = '#';
-            link.title = t('item.open_in_fusion_manage');
-            link.addEventListener('click', function (event) { event.preventDefault(); open(file); });
-            td.appendChild(link);
-          } else {
-            td.textContent = shown(file, c);
-          }
-          tr.appendChild(td);
-        });
-        body.appendChild(tr);
-      });
-    }
-
-    draw();
-    const wrap = el('div', 'item-files-wrap');   // a wide table scrolls sideways
-    wrap.appendChild(table);
-    target.appendChild(wrap);
-    if (!files.length) {   // the columns stay, and the empty message fills the space under them
-      tree.emptyUnder(target, EMPTY_FOLDER, t('item.files_empty'), t('item.files_empty_hint'));
-    }
-    return function (found) { stale = found; draw(); };   // mark the files found out of date
+    return function (found) { stale = found; table.draw(); };   // mark the files found out of date
   }
 
   ns.itemFiles = { render: render, icon: icon };
