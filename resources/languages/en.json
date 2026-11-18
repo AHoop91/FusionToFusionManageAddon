@@ -1033,6 +1033,7 @@
     "common.role_member": "MEMBER",
     "common.signin_prompt": "Sign in with your Autodesk account to continue.",
     "common.logging_in": "Logging in...",
+    "common.login_help": "Taking longer than usual? Finish signing in in your browser, or select Cancel and try again.",
     "common.signed_in_fm": "Signed in to Fusion Manage.",
     "common.signin_failed": "Sign-in failed.",
     "common.diff_open_details": "Open the details of this component",

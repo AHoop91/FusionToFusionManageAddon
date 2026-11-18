@@ -7,6 +7,10 @@
  * shows the app, the header account controls, and loads the profile.
  *
  * Panel-specific behaviour hooks in through `onChange(callback)`.
+ *
+ * "Logging in" is shown from the start, until the first answer about the sign-in arrives, and while a browser sign-in is pending. Python
+ * pushes the state when a sign-in ends, but an answer can be missed (the page was not ready, or a panel was opened while another one signed
+ * in), so while the loader is up the state is asked for every few seconds, and after a while the loader says what to do.
  */
 (function (ns) {
   'use strict';
@@ -31,6 +35,33 @@
   let loginHeld = false;   // a panel that has nothing to sign in with yet (no Client ID) holds the automatic sign-in back
   const changeListeners = [];
 
+  const WAIT_POLL_MS = 3000;    // how often the state is asked for while "Logging in" is shown
+  const WAIT_HELP_MS = 20000;   // how long "Logging in" is shown before it says what to do
+  let waitTimer = 0;
+  let waitSince = 0;
+
+  /** Keep asking for the state while the loader is shown, and say what to do when it has been shown for a while; stop when it is not. */
+  function watchLoader(waiting) {
+    const help = $('login-help');
+    if (!waiting) {
+      clearInterval(waitTimer);
+      waitTimer = 0;
+      if (help) help.hidden = true;
+      return;
+    }
+    if (waitTimer) return;
+    waitSince = Date.now();
+    waitTimer = setInterval(function () {
+      bridge.send('auth_status');
+      if (Date.now() - waitSince < WAIT_HELP_MS) return;
+      const note = $('login-help') || ns.el('p', 'muted', t('common.login_help'));
+      note.id = 'login-help';
+      note.hidden = false;
+      const loader = $('login-loader');
+      if (note.parentNode !== loader) loader.insertBefore(note, $('cancel-btn'));
+    }, WAIT_POLL_MS);
+  }
+
   /** Call `callback(signedIn)` every time the sign-in state is rendered. */
   function onChange(callback) { changeListeners.push(callback); }
 
@@ -54,6 +85,7 @@
     // While the browser sign-in is pending, swap the form for the loader.
     $('login-form').hidden = state === 'signing_in';
     $('login-loader').hidden = state !== 'signing_in';
+    watchLoader(state === 'signing_in');
     $('conn-error').hidden = !status.error;
     $('conn-error').textContent = status.error || '';
     ns.account.renderPresence(signedIn);
@@ -80,7 +112,10 @@
     });
 
     $('signin-btn').addEventListener('click', function () { bridge.send('auth_login'); });
-    $('cancel-btn').addEventListener('click', function () { bridge.send('auth_cancel'); });
+    // Cancel also asks how things stand: when no sign-in is under way (the loader was only the page waiting for its first answer), there is
+    // nothing for Python to cancel and no push to follow, so this is what ends the wait.
+    $('cancel-btn').addEventListener('click', function () { bridge.send('auth_cancel'); bridge.send('auth_status'); });
+    watchLoader($('login-loader') !== null && !$('login-loader').hidden);   // the pages that show "Logging in" until they are told otherwise
   }
 
   ns.auth = {
