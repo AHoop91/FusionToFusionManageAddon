@@ -37,6 +37,10 @@ Details worth knowing:
 - `save_view_filters` takes `changes` as `[{column, match: "ALL"|"ANY", filters: [{type, value}]}]`; an empty `filters` clears the column. `column` is a key (`views/1/fields/TITLE`) or a bare id. A field the view does not show yet joins it as its last column. With `columns` (a list of keys) the view shows exactly those, in that order, in the same save; a sorted view stays sorted, by its first column if the sorted one went (`_arrange_columns`).
 - The view's content type matters. A view definition is sent back with the `META` content type it was read with. The tests simulate a 415 on it (`tests/test_tableaus.py`, `refuse_meta`); no real 415 is in the log.
 
+## Screens
+
+The View product portfolio window has three screens, one shown at a time by `showScreen('usage' | 'list' | 'form')`: the usage screen (where the open design is used, shown first and again after an assign or when the palette is opened), the list of products (reached by Assign to product, with Back to return) and the form of a product. `openList` loads the views the first time the list is shown.
+
 ## Actions (`src/ui/actions/product_actions.py`)
 
 Each `ProductReads` method wraps one `TableauService` call in `_in_workspace`, which answers at once if the Portfolio workspace is off or not set up, and otherwise runs the read on a worker thread.
@@ -50,6 +54,11 @@ Each `ProductReads` method wraps one `TableauService` call in `_in_workspace`, w
 | `products_create_view`, `products_rename_view`, `products_delete_view` | `create_view`, `rename_view`, `delete_view` | `name` and `columns`; `view` and `name`; `view` |
 | `products_rows` | `rows` | `view`, `page`, `size` |
 | `products_image`, `products_picture` | `image`, `picture` (run `alongside`, so they do not queue behind the one-at-a-time lock) | `item`, `field`, `number`; `link` |
+| `products_usage` | `usage`: where the open design is the Primary Component of a product or a variant (`ProductService.usage`, the v1 search). A design with no item number answers `{unpublished, message}`. | none |
+| `products_design` | `design`: the open design's name, number and thumbnail url (`ItemNumbers.describe`) with the revision and state of its Components item. Blank details, not an error, when the design is not saved or the item is not found. | none |
+| `products_design_file`, `products_open_file` | `design_file` reads the lineage id of a component item (worker thread); `open_design_file` opens it in Fusion (Fusion's thread, no token). Not offered on the usage screen (see [manufacturing-data-model.md](manufacturing-data-model.md)). | `link`; `file` |
+
+`products_usage` returns each product as `{id, number, name, url, picture, component}` (and `rows` for a variant): `number` and `name` are its descriptor split by `bom.split_title`, `url` is its page in Fusion Manage, `picture` the link of the first picture it holds and `component` the link of its Primary Component item. The search is sorted on the Primary Component field, since the v1 search needs a sort. A page reads every product it names once, one after another.
 
 ## JavaScript
 
@@ -61,6 +70,8 @@ All of it is in `src/ui/web/products/js/`.
 | Rows | `loadRows(page)` asks `products_rows` (50 a page, `PAGE_SIZE`) and, for page 1, `readColumns` asks `products_columns` so the header shows while rows are still on the way. `rowsToken` and `columnsToken` drop an answer that arrives after a newer request. `drawRows` paints the body, and `more` is true when `total` says there is another page (or, with no total, the page was full). |
 | Table | `paintHeader` (a title per column, plus a funnel button when the column has filters), `cellOf` (markup through `ns.safeHtml.render`, a picture, or text), a radio column that picks one row. The first column is styled as the product itself (`products-primary`). |
 | Column widths | `applyWidths` and `startResize`: the first drag fixes every column at the width it has, then only the dragged column moves (minimum 60 px). |
+| Usage screen | `loadUsage` asks `products_usage` and `products_design` together (`usageSeq` and `designSeq` drop an answer that is late). `showDesign` paints the head: thumbnail, name, number, revision and state chips. A card asks for its picture (`products_picture`) only once it is on screen in the usage view (`whenSeen`, an `IntersectionObserver`), so a card below the fold or on a tab that is not shown is not read. `showUsage` paints the two groups, "Primary component of" and "Variant of", as two tabs, Primary Components and Variants (`usageTabs`; it opens on the tab chosen last, else the first with cards), each over a grid of cards (`usageGroup`, `usageCard`). A group shows `USAGE_PAGE` (25) cards and a Load more button adds the next 25, and the tab says how many are shown of how many there are ("Variants (25 of 80)"); this pages what the check has read, not the read itself, which still covers every product. A design used nowhere shows one centred message with an icon (`pu-empty-state`). While a read is on its way `showDesign(null)` and `usageSkeleton` show grey sweeping blocks. |
+| Card menu | `usageMenu(entries)` is the three dots and the menu they open (`[{label, run}]`), made with the page's own `menu(button, list)` (arrow keys, Escape, one open at a time) and the `products-menu` classes; `forgetMenus` drops the menus of cards that are replaced. A card offers Open in Fusion Manage (`open_url`). Every action the page asks for must be in the `bridge.on` list near the end of `products-page.js`: `tests/test_products.py` checks it. |
 | Pictures | `cellOf` puts a shimmering block in the cell and queues the picture. `pumpPictures` asks `products_image` for at most 8 at once. `pictureCache` (`'item:field'` to data URI) stops a picture being asked for twice. |
 | Filters | `filters.js`, below. |
 | Sorting | `sortable.js` is drag to reorder, not row sorting: `ns.sortable.start(event, row, list, rowSelector, onDrop)` moves a row of a list by its grip. It is used for the columns lists (the Columns tab and the new view dialog). The table does not sort rows; a view's own `sort` is kept when it is saved. |

@@ -11,7 +11,9 @@ from urllib.parse import quote
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
 from ..core.shapes import dict_rows, dig
-from .client import LOOKUPS, WORKSPACES, FmClient, last_segment
+from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
+from .item_view import revision_and_state
+from .items import collect_values
 from .pages import ITEM_LINK
 from .v3_search import WORKING, ItemFinder
 from .ttl_cache import TtlCache
@@ -22,6 +24,8 @@ COMPONENTS_WORKSPACE = "Components"   # what Fusion Manage calls the workspace o
 WORKSPACES_LIMIT = 200   # workspaces asked for when looking for it
 CANDIDATES = 25   # options asked for when searching by number
 SHOWN = 5   # matches named in the message when more than one fits
+LINEAGE = re.compile(r"urn:adsk\.wipprod:dm\.lineage:[A-Za-z0-9_-]+")   # the id Fusion finds a design's data file by
+LINEAGE_FIELD = "LINEAGE_URN"   # the Components workspace field that holds it
 _URN = re.compile(r"\.(\d+)\.(\d+)\s*$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
 _WORKING = re.compile(r"\[REV:\s*w(?:orking)?\s*\]", re.IGNORECASE)   # "[REV:w]": how Fusion Manage names the working version
 _WORKSPACES = TtlCache(600)   # the Components workspace's id by tenant: it does not change, and the Export window asks twice
@@ -35,7 +39,7 @@ class Candidate(NamedTuple):
     version: str   # ``[REV:w]`` (empty when the answer gives none)
 
 
-def _matches(title: str, number: str) -> bool:
+def number_matches(title: str, number: str) -> bool:
     """The option is the number alone, or starts with it and then a separator (``PN-1 - Axle``), not a longer number (``PN-10``)."""
     title, number = title.strip().casefold(), number.strip().casefold()
     return title == number or bool(re.match(re.escape(number) + r"(?![0-9a-z])", title))
@@ -99,6 +103,23 @@ class ComponentService:
                 _WORKSPACES.put(key, found)
         return found
 
+    def design_file(self, link: str) -> str:
+        """The lineage id (``urn:adsk.wipprod:dm.lineage:...``) of the Fusion design the component item at ``link`` was published from: what Fusion
+        opens the design by. It is the item's Lineage URN field. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no design."""
+        workspace_id, item_id = link_ids(link)
+        if not item_id:
+            raise FmApiError(t("data.fm_no_design_file"))
+        found = str(collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")).get(LINEAGE_FIELD) or "")
+        if not LINEAGE.fullmatch(found):
+            raise FmApiError(t("data.fm_no_design_file"))
+        return found
+
+    def revision_and_state(self, number: str) -> Tuple[str, str]:
+        """``(revision, life cycle state)`` of the working version of the component with this item number; ``("", "")`` when it has none (an item
+        that has not been published is not an error: ``find_working`` says why)."""
+        link, _ = self.find_working(number)
+        return revision_and_state(self._client.get_json(link)) if link else ("", "")
+
     def find_working(self, number: str) -> Tuple[str, str]:
         """``(link, "")`` of the working version of the record for this item number in the Components workspace, else ``("", reason)``.
 
@@ -114,7 +135,7 @@ class ComponentService:
         found = [Candidate(f"{WORKSPACES}/{workspace_id}/items/{hit['id']}", hit["descriptor"], "")
                  for hit in ItemFinder(self._client, WORKING).search(workspace_id, number)]
         log.info("Working versions for %s in workspace %s: %s", number, workspace_id, [f"{c.title} {c.link}" for c in found])
-        working = [c for c in found if _matches(c.title, number)]
+        working = [c for c in found if number_matches(c.title, number)]
         return _the_one(working, t("data.fm_no_working_version", number=number, count=len(found)),
                         t("data.fm_many_working_versions", count=len(working), number=number, named=_named(working)))
 
@@ -126,7 +147,7 @@ class ComponentService:
         data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset=0&limit={CANDIDATES}&filter={quote(number)}&asc=&desc=")
         options: List[Candidate] = [Candidate(str(r["link"]), str(r.get("title") or ""), str(r.get("version") or ""))
                                     for r in dict_rows(dig(data, "items")) if r.get("link")]
-        hits = [o for o in options if _matches(o.title, number)]
+        hits = [o for o in options if number_matches(o.title, number)]
         log.debug("Component options for %s: %s", number, [o.title for o in options])
         return hits, t("data.fm_no_component", number=number, lookup=lookup, count=len(options))
 

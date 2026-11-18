@@ -23,6 +23,9 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Pick one item when several share a number | `resolve_hits`, `ItemChoices` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
 | Read an item's fields | `ItemService.read`, `read_named` | `fm/items.py` | |
 | Search a workspace's Grid tab (the v3 search cannot) | `V1SearchService.page` or `rows`, with `build_definition` | `fm/v1_search.py` | [finding-items.md](finding-items.md) |
+| Find where a design is used in the portfolio (a product's Primary Component, or a row of its Variants grid) | `ProductService.usage` (the `products_usage` action) | `publish/products.py`, `ui/actions/product_actions.py` | [finding-items.md](finding-items.md) |
+| The open design's name, number and thumbnail from the Data Model, with the revision and state of its Fusion Manage item | `ItemNumbers.describe`, `item_view.revision_and_state` (the `products_design` action) | `ui/item_numbers.py`, `fm/item_view.py` | [finding-items.md](finding-items.md) |
+| Open the Fusion design a Components item was published from (its Lineage URN, then `findFileById`) | `ComponentService.design_file`, `open_design_file` (the `products_design_file` and `products_open_file` actions) | `fm/components.py`, `ui/actions/product_actions.py` | [finding-items.md](finding-items.md) |
 | Search the Items workspace with text and filters (Add Items picker) | `ItemSearchService.page`, `search_path`, `build_query` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
 | Find the Components record for a part | `ComponentService.find_working`, `find`, `matching` | `fm/components.py` | [finding-items.md](finding-items.md) |
 | Read an item's BOM, its BOM tab, or where it is used | `fm/bom.py`, `fm/bom_view.py`, `fm/where_used.py` | `fm/` | |

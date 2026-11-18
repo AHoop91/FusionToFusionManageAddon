@@ -14,11 +14,15 @@ when none do. A value left blank is never sent, so clearing a field is not somet
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.i18n import t
-from ..core.shapes import as_list, dict_rows, rows_in
+from ..core.shapes import as_dict, as_list, dict_rows, rows_in
 from ..core.logging_setup import get_logger
 from ..fm.client import WORKSPACES, FmApiError, FmClient, last_segment
-from ..fm.components import Candidate, ComponentService, is_working
+from ..fm.bom import split_title
+from ..fm.components import Candidate, ComponentService, is_working, number_matches
 from ..fm.items import ItemService, display_text
+from ..fm.pages import page_url
+from ..fm.tableaus import PICTURE_LINK
+from ..fm.v1_search import GRIDVIEW, Field, Sort, V1SearchService
 from ..fm.v3_search import number_key
 from ..fm.refusal import read_refusal
 from ..fm.sections import SectionService
@@ -70,6 +74,17 @@ def _latest_revision(hits: List[Candidate]) -> Candidate:
     it is asked for the RELEASED composition or the WORKING one."""
     released = [c for c in hits if not is_working(c.version)]
     return max(released or hits, key=_item_id)
+
+
+def _link_of(value: Any) -> str:
+    """The link a field value holds ("" when it is not a link)."""
+    link = as_dict(value).get("link")
+    return link if isinstance(link, str) else ""
+
+
+def _picture_link(values: Dict[str, Any]) -> str:
+    """The link of the first picture among the field values of an item ("" when it holds none)."""
+    return next((link for link in map(_link_of, values.values()) if PICTURE_LINK.fullmatch(link)), "")
 
 
 class ProductService:
@@ -215,6 +230,39 @@ class ProductService:
         if not columns:
             columns = [{"id": i, "title": title} for i, title in titles.items()]
         return columns, rows
+
+    def usage(self, workspace_id: str, number: str, field_id: str, link_column: str) -> Dict[str, Any]:
+        """Where the component with ``number`` is used in the portfolio, whatever revision of it a product holds: as a product's Primary Component
+        (``field_id``) or as a row of its Variants grid (``link_column``, "" when the grid is not set up, so variants are not looked for).
+
+        ``{"number", "primary": [{"id", "number", "name", "url", "picture", "component"}], "variants": [... and "rows"], "variants_checked"}``:
+        ``id`` is the product's item id, ``number`` and ``name`` its descriptor split in two, ``url`` the product's page in
+        Fusion Manage, ``picture`` the link of the first picture it holds ("" when it has none; ``products_picture`` reads it), ``component``
+        the link of the item that is its Primary Component ("" when it has none; the design it came from is what Fusion opens) and ``rows``
+        how many rows of the grid hold the component. It reads the two fields of every product with the v1 search, which can read the Grid where the v3 search cannot, and
+        compares them here by item number (``number_matches``). Raises ``FmApiError`` with the reason: a failed check is not "not used"."""
+        fields = [Field(field_id)] + ([Field(link_column, GRIDVIEW)] if link_column else [])
+        primary: Dict[str, None] = {}   # the ids of the products, in the order found
+        variants: Dict[str, int] = {}   # the id of each product -> how many rows of its Variants grid hold the component
+        primary_key, column_key = field_id.upper(), link_column.upper()
+        for row in V1SearchService(self._client).rows(workspace_id, fields, [Sort(field_id)]):   # sorted on an Item Details field: the service needs a sort
+            for key, text in row.entries:
+                if not text or not number_matches(text, number):
+                    continue
+                if key.upper() == primary_key:
+                    primary[row.dms_id] = None
+                elif key.upper() == column_key:
+                    variants[row.dms_id] = variants.get(row.dms_id, 0) + 1
+        service = ItemService(self._client)
+        cards = {}
+        for item in dict.fromkeys([*primary, *variants]):
+            descriptor, values = service.read_named(workspace_id, item)
+            code, name = split_title(descriptor)
+            cards[item] = {"id": item, "number": code, "name": name, "picture": _picture_link(values), "component": _link_of(values.get(field_id)),
+                           "url": page_url(self._client.base_url, self._client.tenant, workspace_id, item)}
+        log.info("Component %s is the Primary Component of %d product(s) and a variant of %d", number, len(primary), len(variants))
+        return {"number": number, "variants_checked": bool(link_column), "primary": [cards[item] for item in primary],
+                "variants": [{**cards[item], "rows": rows} for item, rows in variants.items()]}
 
     def update_variant(self, workspace_id: str, item_id: str, row_id: str, number: str, link_column: str) -> Dict[str, Any]:
         """Change the component of the row ``row_id`` of the Variants grid to the revision of ``number`` that is to be assigned (see ``assign``): the

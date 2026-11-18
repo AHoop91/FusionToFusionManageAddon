@@ -19,6 +19,10 @@ class OpenDesign:
         """The item number of the design (what Fusion Manage finds its component by). Raises ``NoItemNumber`` with the reason when it has none."""
         return self._item_numbers().resolve(ref, "").item_number
 
+    def describe(self, ref: Any) -> Any:
+        """``{"number", "name", "thumbnail_url"}`` of the design (see ``ItemNumbers.describe``). Raises ``NoItemNumber`` when it is not saved."""
+        return self._item_numbers().describe(ref)
+
     def _item_numbers(self) -> Any:
         if self._numbers is None:
             from ..item_numbers import ItemNumbers

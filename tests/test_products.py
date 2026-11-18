@@ -1,6 +1,7 @@
 """The products of Portfolio Management: creating one, and the actions of the Assign Product panel."""
 
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -9,6 +10,7 @@ from src.fm.client import FmApiError, SendResult
 from src.fm.components import Candidate
 from src.publish import products
 from src.publish.products import ProductService
+from src.ui.item_number_error import NoItemNumber
 from tests.without_fusion import fusion_modules_stubbed
 
 with fusion_modules_stubbed():
@@ -398,6 +400,78 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(self.queued, [])
         design.ref.assert_not_called()
 
+    def test_usage_asks_for_the_number_of_the_open_design_and_gives_the_settings_fields(self):
+        cfg = self.config.config.workspaces[PORTFOLIO_KIND]
+        cfg.component_field, cfg.variants.link_column = "PRIMARY", "VARIANT"
+        design = mock.Mock()
+        design.number.return_value = "PN-1"
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.service.return_value.usage.return_value = {"primary": [], "variants": []}
+        self.reads.usage({"token": "t1"})
+        self.finish()
+        self.service.return_value.usage.assert_called_once_with("77", "PN-1", "PRIMARY", "VARIANT")
+        self.assertTrue(self.reads.status({"token": "t1"})["ok"])
+
+    def test_usage_of_a_design_with_no_item_number_is_an_answer_and_not_an_error(self):
+        self.config.config.workspaces[PORTFOLIO_KIND].component_field = "PRIMARY"
+        design = mock.Mock()
+        design.number.side_effect = NoItemNumber("No item number yet.")
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads.usage({"token": "t1"})
+        self.finish()
+        answer = self.reads.status({"token": "t1"})
+        self.assertTrue(answer["ok"])
+        self.assertEqual(answer["result"], {"unpublished": True, "message": "No item number yet."})
+        self.service.return_value.usage.assert_not_called()
+
+    def test_design_gives_the_data_model_details_and_the_revision_and_state_of_its_item(self):
+        design = mock.Mock()
+        design.describe.return_value = {"number": "PN-1", "name": "Axle", "thumbnail_url": "https://x/t.png"}
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        with mock.patch.object(product_actions, "ComponentService") as components:
+            components.return_value.revision_and_state.return_value = ("B", "Released")
+            self.reads.design({"token": "t1"})
+            self.finish()
+        components.return_value.revision_and_state.assert_called_once_with("PN-1")
+        self.assertEqual(self.reads.status({"token": "t1"})["result"], {"number": "PN-1", "name": "Axle", "thumbnail_url": "https://x/t.png",
+                                                                       "revision": "B", "state": "Released"})
+
+    def test_design_with_no_item_in_fusion_manage_still_gives_its_details(self):
+        design = mock.Mock()
+        design.describe.return_value = {"number": "PN-1", "name": "Axle", "thumbnail_url": ""}
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        with mock.patch.object(product_actions, "ComponentService") as components:
+            components.return_value.revision_and_state.return_value = ("", "")
+            self.reads.design({"token": "t1"})
+            self.finish()
+        result = self.reads.status({"token": "t1"})["result"]
+        self.assertEqual((result["name"], result["revision"], result["state"]), ("Axle", "", ""))
+
+    def test_design_that_is_not_saved_gives_blank_details_and_not_an_error(self):
+        design = mock.Mock()
+        design.describe.side_effect = NoItemNumber("Save the design first.")
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads.design({"token": "t1"})
+        self.finish()
+        answer = self.reads.status({"token": "t1"})
+        self.assertTrue(answer["ok"])
+        self.assertEqual(answer["result"]["name"], "")
+
+    def test_design_file_reads_the_lineage_of_the_component_item(self):
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, mock.Mock())
+        with mock.patch.object(product_actions, "ComponentService") as components:
+            components.return_value.design_file.return_value = "urn:adsk.wipprod:dm.lineage:abc"
+            self.reads.design_file({"token": "t1", "link": "/api/v3/workspaces/57/items/15677"})
+            self.finish()
+        components.return_value.design_file.assert_called_once_with("/api/v3/workspaces/57/items/15677")
+        self.assertEqual(self.reads.status({"token": "t1"})["result"], {"file": "urn:adsk.wipprod:dm.lineage:abc"})
+
+    def test_usage_needs_the_primary_field(self):
+        design = mock.Mock()
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.assertFalse(self.reads.usage({"token": "t1"})["ok"])
+        self.assertEqual(self.queued, [])
+
     def test_without_the_workspace_it_says_so(self):
         self.config.config.workspaces = {}
         for answer in (self.reads.views({"token": "t1"}), self.reads.rows({"token": "t3"}), self.reads.create({"token": "t2", "values": {"A": "x"}}),
@@ -405,11 +479,22 @@ class ActionTests(unittest.TestCase):
             self.assertEqual((answer["ok"], answer["pending"]), (False, False))
             self.assertIn("not set up", answer["message"])
 
+    def test_the_page_listens_for_the_answer_of_every_action(self):
+        """An action the page does not listen for answers into the void: its card or list waits for ever."""
+        scripts = Path(product_actions.__file__).parents[1] / "web" / "products" / "js"
+        page = "".join((scripts / name).read_text(encoding="utf-8") for name in ("products-page.js", "usage.js"))
+        bridge = MessageBridge()
+        with mock.patch.object(product_actions, "FmClient"):
+            product_actions.register_product_actions(bridge, self.config, mock.Mock())
+        for action in bridge._handlers:
+            with self.subTest(action=action):
+                self.assertIn("'%s'" % action, page)
+
     def test_the_actions_are_registered(self):
         bridge = MessageBridge()
         with mock.patch.object(product_actions, "FmClient"):
             product_actions.register_product_actions(bridge, self.config, mock.Mock())
-        for action in ("products_views", "products_rows", "products_form", "products_options", "products_create", "products_item", "products_update", "products_picture", "products_status"):
+        for action in ("products_views", "products_rows", "products_form", "products_options", "products_create", "products_item", "products_update", "products_picture", "products_usage", "products_design", "products_design_file", "products_status"):
             with self.subTest(action=action):
                 self.assertTrue(bridge.dispatch(action, '{"token": "x"}')["ok"])
 

@@ -4,7 +4,7 @@ They are read and written on a worker thread and the panel polls ``products_stat
 (``PickerReads``): Fusion's palette handler never waits on the network.
 """
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
@@ -12,14 +12,38 @@ from ...config.workspace_models import PORTFOLIO_KIND, WorkspaceConfig
 from ...core.i18n import t
 from ...core.shapes import whole
 from ...fm.client import FmClient
+from ...fm.components import LINEAGE, ComponentService
 from ...fm.permissions import ADD_ITEMS, may
 from ...fm.workspace_form import WorkspaceFormService
 from ...fm.tableaus import TableauService
 from ...publish.products import REPLACE, REPLACE_MOVE, VARIANT, VARIANT_UPDATE, ProductService
+from ..item_number_error import NoItemNumber
 from ..message_bridge import MessageBridge
 from .background import Runner, in_thread, why
 from .design_number import OpenDesign
 from .search_actions import PickerReads, answer_for, token_of
+
+
+def _fusion_app() -> Any:
+    import adsk.core   # Fusion's module is loaded when asked, so this file imports without Fusion
+    return adsk.core.Application.get()
+
+
+def open_design_file(payload: Dict[str, Any], app: Callable[[], Any] = _fusion_app) -> Dict[str, Any]:
+    """Open the design whose data file has the lineage id ``file`` in Fusion. Runs on Fusion's thread. Raises ``ValueError`` with the reason when
+    the id is not a design's, or the active hub has no such file (Fusion finds a file in the active hub only)."""
+    file_id = str(payload.get("file") or "")
+    if not LINEAGE.fullmatch(file_id):
+        raise ValueError(t("app.design_file_bad"))
+    fusion = app()
+    found = fusion.data.findFileById(file_id)
+    if found is None:
+        raise ValueError(t("app.design_file_missing"))
+    fusion.documents.open(found, True)
+    return {}
+
+
+NO_DESIGN = {"number": "", "name": "", "thumbnail_url": "", "revision": "", "state": ""}   # what ``design`` answers for a design that is not saved
 
 
 class ProductReads(PickerReads):
@@ -131,10 +155,9 @@ class ProductReads(PickerReads):
             return answer_for(token, message=t("app.product_no_variants_column"))
         if mode not in ("", REPLACE, VARIANT, REPLACE_MOVE, VARIANT_UPDATE):
             return answer_for(token, message=t("app.unknown_request"))
-        try:
-            ref = self._design.ref()
-        except Exception as exc:  # noqa: BLE001 - the panel is told, not left waiting
-            return answer_for(token, message=why(exc))
+        ref, failed = self._open_design(token)
+        if failed:
+            return failed
         field, column = cfg.component_field, cfg.variants.link_column
         if mode == VARIANT_UPDATE:   # the revision of a row that holds the component already
             row_id = str(payload.get("row_id") or "")
@@ -155,13 +178,63 @@ class ProductReads(PickerReads):
             return answer_for(token, message=t("app.product_choose_first"))
         if not cfg or not cfg.component_field:
             return answer_for(token, message=t("app.product_no_primary_field"))
-        try:
-            ref = self._design.ref()
-        except Exception as exc:  # noqa: BLE001 - the panel is told, not left waiting
-            return answer_for(token, message=why(exc))
+        ref, failed = self._open_design(token)
+        if failed:
+            return failed
         field, column = cfg.component_field, cfg.variants.link_column
         return self._in_workspace(payload, lambda client, workspace: ProductService(client).inspect(
             workspace, item, self._design.number(ref), field, column))
+
+    def usage(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Where the open design is used in the portfolio: as a Primary Component, as a variant, or not at all (see ``ProductService.usage``).
+        A design with no item number is answered ``{"unpublished": True, "message"}``: it is not in Fusion Manage, which is not an error."""
+        token = token_of(payload)
+        cfg = self._cfg()
+        if not cfg or not cfg.component_field:
+            return answer_for(token, message=t("app.product_no_primary_field"))
+        ref, failed = self._open_design(token)
+        if failed:
+            return failed
+        field, column = cfg.component_field, cfg.variants.link_column
+
+        def look(client: FmClient, workspace: str) -> Dict[str, Any]:
+            try:
+                number = self._design.number(ref)
+            except NoItemNumber as exc:
+                return {"unpublished": True, "message": str(exc)}
+            return ProductService(client).usage(workspace, number, field, column)
+
+        return self._in_workspace(payload, look, alongside=True)
+
+    def design_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """The lineage id of the design a component item was published from (see ``ComponentService.design_file``), for ``products_open_file``."""
+        link = str(payload.get("link") or "")
+        return self._start(token_of(payload), lambda client: {"file": ComponentService(client).design_file(link)}, alongside=True)
+
+    def design(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """The open design, for the head of the page: its name, item number and thumbnail from the Data Model, and the revision and life cycle state
+        of the item it has in Fusion Manage (blank when the design has no item there yet)."""
+        token = token_of(payload)
+        ref, failed = self._open_design(token)
+        if failed:
+            return failed
+
+        def look(client: FmClient) -> Dict[str, Any]:
+            try:
+                details = dict(self._design.describe(ref))
+            except NoItemNumber:
+                return dict(NO_DESIGN)
+            revision, state = ComponentService(client).revision_and_state(details["number"]) if details["number"] else ("", "")
+            return {**details, "revision": revision, "state": state}
+
+        return self._start(token, look, alongside=True)
+
+    def _open_design(self, token: str) -> Tuple[Any, Optional[Dict[str, Any]]]:
+        """``(reference of the open design, None)``, or ``(None, the answer that says it could not be read)``. Fusion's thread."""
+        try:
+            return self._design.ref(), None
+        except Exception as exc:  # noqa: BLE001 - the panel is told, not left waiting
+            return None, answer_for(token, message=why(exc))
 
     def variant_form(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The columns of the Variants grid that a person can fill in for the row added (the column that links the component is not one)."""
@@ -193,6 +266,9 @@ def register_product_actions(bridge: MessageBridge, config: ConfigService, auth:
     bridge.register("products_fields", reads.fields)
     bridge.register("products_image", reads.image)
     bridge.register("products_picture", reads.picture)
+    bridge.register("products_design", reads.design)
+    bridge.register("products_design_file", reads.design_file)
+    bridge.register("products_open_file", open_design_file)
     bridge.register("products_filter", reads.save_filters)
     bridge.register("products_create_view", reads.create_view)
     bridge.register("products_rename_view", reads.rename_view)
@@ -202,6 +278,7 @@ def register_product_actions(bridge: MessageBridge, config: ConfigService, auth:
     bridge.register("products_options", reads.options)
     bridge.register("products_variant_form", reads.variant_form)
     bridge.register("products_inspect", reads.inspect)
+    bridge.register("products_usage", reads.usage)
     bridge.register("products_create", reads.create)
     bridge.register("products_item", reads.item)
     bridge.register("products_update", reads.update)

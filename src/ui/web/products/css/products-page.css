@@ -12,6 +12,58 @@ body { background: #f5f5f5; }
 
 .products-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 0; }
 .products-dropdown { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Where the open design is used, over the list: what it is a part of, and the way to assign it. */
+.products-usageview { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: auto; padding: 16px; background: var(--bg); }
+.products-usageview > * { width: 100%; max-width: 1100px; margin-left: auto; margin-right: auto; }
+.products-usageview[hidden] { display: none; }
+.products-usage { display: flex; align-items: center; gap: 16px; margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.pu-body { display: flex; flex: 1 0 auto; flex-direction: column; margin-top: 12px; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+.pu-body p { margin: 2px 0; }
+.pu-body .pu-bad { color: var(--danger); }
+.pu-body .pu-muted { color: var(--muted); }
+.pu-actions { display: flex; flex: none; gap: 8px; }
+.products-usage .pu-text { flex: 1; min-width: 0; }
+.pu-title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.pu-design-thumb { display: flex; flex: none; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 8px; background: #eef0f2; color: #9aa3ab; overflow: hidden; }
+.pu-design-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.pu-design-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 20px; font-size: 12px; color: var(--muted); }
+.pu-chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #3b4450; background: #e4e8ec; }
+.pu-chip.state { color: #1f6f3a; background: #dff3e5; }
+/* A grey block that sweeps while what it stands for is read: the head of the page and the cards. */
+.pu-title.loading { width: 220px; height: 22px; }
+.pu-chip.loading { width: 64px; height: 18px; color: transparent; }
+.pu-skel-line { height: 12px; }
+.pu-card.skeleton { pointer-events: none; }
+.pu-card.skeleton .pu-thumb { background: none; }
+.pu-more { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; font-size: 12px; }
+.pu-tabs { flex: none; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.pu-tabs .tab { flex: 0 0 auto; padding: 10px 18px; font-weight: 600; }
+.pu-skel-tab { height: 20px; margin: 10px 18px 12px 0; }
+/* The tabs, their panel and an empty panel grow to fill the space under the header card, so an empty panel's message is centred in it. */
+.pu-tabbed { display: flex; flex: 1 0 auto; flex-direction: column; }
+.pu-panel { flex: 1 0 auto; }
+.pu-panel:not([hidden]) { display: flex; flex-direction: column; }
+.pu-panel[hidden] { display: none; }
+.pu-panel .pu-cards { flex: none; }
+.pu-thumb svg, .pu-design-thumb svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.pu-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; flex: 1 0 120px; min-height: 120px; padding: 16px; border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; text-align: center; color: var(--muted); }
+.pu-empty svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.pu-empty p { margin: 0; }
+.pu-empty.plain { border: 0; }
+.pu-menu { flex: none; align-self: flex-start; }
+.pu-menu .products-icon-btn { width: 28px; height: 28px; border-color: transparent; background: none; }
+.pu-menu .products-icon-btn svg { fill: none; stroke: currentColor; stroke-width: 3.5; stroke-linecap: round; }
+.pu-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.pu-card { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.pu-card:hover { border-color: #b8bec4; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+.pu-thumb { display: flex; flex: none; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 6px; background: #eef0f2; color: #9aa3ab; overflow: hidden; }
+.pu-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
+.pu-info { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
+.pu-name { font-size: 14px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.pu-number { font-size: 12px; color: var(--muted); }
+.pu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--muted); }
+.pu-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; background: var(--accent); }
+.pu-badge.variant { background: #6f42c1; }
 .products-alert { margin: 0 16px 8px; padding: 10px 14px; border: 1px solid #f3c1c5; border-left: 4px solid var(--danger); border-radius: 2px; color: var(--danger); background: #fff5f5; overflow-wrap: anywhere; }
 
 .products-add { display: inline-flex; align-items: center; justify-content: center; margin-right: auto; border: 0; background: #0696d7; color: #fff; font: inherit; cursor: pointer; }
@@ -100,14 +152,14 @@ body { background: #f5f5f5; }
 .products-pick input[type="radio"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Pictures fill their column, so widening the column makes them larger; in compact rows they are small and shown larger on pointing at them. */
-.products-thumb { display: block; width: 100%; height: auto; max-width: none; max-height: 360px; margin: 6px 0; object-fit: contain; cursor: zoom-in; }
-.products-thumb-skeleton { width: 100%; height: auto; aspect-ratio: 1; max-height: 360px; margin: 6px 0; }
+.products-thumb { display: block; width: auto; height: auto; max-width: 100%; max-height: 100px; margin: 6px 0; object-fit: contain; cursor: zoom-in; }
+.products-thumb-skeleton { width: 100px; height: auto; aspect-ratio: 1; max-height: 100px; margin: 6px 0; }
 .products-table.compact td { height: 24px; line-height: 1.2; }
 .products-table.compact .products-thumb { width: auto; max-width: 56px; max-height: 20px; }
 .products-table.compact .products-thumb-skeleton { width: 20px; }
-.products-thumb-skeleton, .im-skeleton { border-radius: 4px; background: linear-gradient(90deg, #eceff2 25%, #f6f8fa 45%, #eceff2 65%) 0 0 / 300% 100%; animation: products-shimmer 1.4s ease-in-out infinite; }
+.products-thumb-skeleton, .im-skeleton, .pu-skel, .pu-thumb.loading, .pu-design-thumb.loading, .pu-title.loading, .pu-chip.loading { border-radius: 4px; background: linear-gradient(90deg, #eceff2 25%, #f6f8fa 45%, #eceff2 65%) 0 0 / 300% 100%; animation: products-shimmer 1.4s ease-in-out infinite; }
 @keyframes products-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
-@media (prefers-reduced-motion: reduce) { .products-thumb-skeleton, .im-skeleton { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .products-thumb-skeleton, .im-skeleton, .pu-skel, .pu-thumb.loading, .pu-design-thumb.loading, .pu-title.loading, .pu-chip.loading { animation: none; } }
 .products-preview { position: fixed; z-index: 70; max-width: 360px; max-height: 360px; padding: 4px; background: #fff; border: 1px solid #d0d5db; border-radius: 6px; box-shadow: 0 8px 24px rgba(16, 24, 40, .22); pointer-events: none; }
 .products-preview[hidden] { display: none; }
 .products-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(20, 24, 28, .78); cursor: zoom-out; }

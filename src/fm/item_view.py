@@ -146,10 +146,15 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
     return {"columns": columns, "labels": labels, "rows": [[{"kind": c["kind"], "value": c["value"]} for c in r] for r in rows]}
 
 
+def revision_and_state(item: Dict[str, Any]) -> Tuple[str, str]:
+    """``(revision, life cycle state)`` of an item as Fusion Manage gives it ("Pending" for a working version, "" for what it does not give)."""
+    version = "Pending" if item.get("versionId") == "w" else str(item.get("version") or "")
+    return version, display_text(item.get("lifecycle"))
+
+
 def _header(item: Dict[str, Any], fields: Dict[str, Dict[str, str]]) -> List[str]:
     """The line under the title: where the item is in its life cycle, and its type (the number is already in the title)."""
-    version = "Pending" if item.get("versionId") == "w" else str(item.get("version") or "")
-    lifecycle = display_text(item.get("lifecycle"))
+    version, lifecycle = revision_and_state(item)
     kind = fields.get("TYPE", {}).get("value", "")
     return [t for t in (version, lifecycle, kind) if t]
 

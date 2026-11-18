@@ -29,6 +29,7 @@ All code is in `src/fusion_mfg/`.
 | A thumbnail | `read_section("thumbnail")`, `read_thumbnail_url` | `thumbnail { status signedUrl }`. The URL is short-lived, so ask when it is needed. | Item panel, export, publish |
 | The linked Fusion Manage item | `read_manage_item` | `lifecycle { itemUrn itemUrl }` (the hyperlink on the Item Number in Fusion) | `tenant_actions` |
 | Everything a publish needs of several components | `read_publish_components` | One query with an alias per component (`c0`, `c1`...): properties, thumbnail, link, and the physical properties when mapped | `read_ahead` |
+| The design itself (name, item number, thumbnail) | `item_numbers.ItemNumbers.describe` | The summary, then the thumbnail of its root component | `products_design`, for the head of View product portfolio |
 | The Data Model id of a design file | `item_numbers.FILE_MODEL_QUERY` | `item(hubId, itemId) { ... on DesignItem { tipRootModel { id timestamp } } }` | `ItemNumbers._model_of_file`, for a design that a drawing shows and Fusion has not loaded |
 
 A saved version of a design never changes. Reads that are asked again and again are cached for the version in use: `DesignReads` (summary, structure, properties; only the last version asked about is held, reads of one version are serialised so a burst of callers makes one read) and `ItemNumbers._Remembered` (a file of found item numbers).
@@ -46,6 +47,23 @@ A design is addressed by `modelId` and, to pin a saved version, `time` (`saved_a
 ### Physical properties (`physical.py`)
 
 Mass, volume, area, density and the bounding box are not in `allProperties`; the Data Model works them out and `status` says when (`COMPLETED`). They are read with `primaryModel { physicalProperties }` only when a caller maps them, because they are slow. They become property rows named `Physical Mass`, `Physical Length` and so on (`PHYSICAL_NAMES` in `src/config/workspace_models.py`; a mapping source is `physical:<name>`). Fusion Manage's weight field is in kilograms, so a mass is converted from the unit the Data Model names (`KILOGRAMS_PER`); an unknown unit is logged and sent as it is.
+
+## From a Fusion Manage item to its design
+
+A component item of the Components workspace carries the ids of the design it was published from. This is **Seen**: the answer of `GET /api/v3/workspaces/<ws>/items/<id>` of a published component (log and paste of 2026-11-18, workspace 57).
+
+| Key | What it holds |
+| --- | --- |
+| `modelId`, `componentId` | The Data Model's ids, base64url encoded. `modelId` decodes to `model~<space>~<asset>` and `componentId` to `product~<space>~<product>`. The `modelId` of a design that is open in Fusion is the same string as `rootDataComponent.mfgdmModelId`. |
+| field `SPACE_COLLECTION_ID`, `PRODUCT_URN`, `ASSET_URN` | The `<space>` part, the `<product>` part of `componentId` and the `<asset>` part of `modelId`. |
+| field `LINEAGE_URN` | `urn:adsk.wipprod:dm.lineage:<id>`: the design's data file. It is the same string as `DesignRef.file_id` (the file's `dataFile.id`). |
+| `fusionTeamLink` | A web address ending `/g/data/<base64url of the lineage urn>?version=<n>`. |
+| field `DESIGN_THUMBNAIL` | `value.link` is a signed S3 address that expires after 300 s. |
+| `version`, `versionId`, `lifecycle` | `[REV:C]`, `C` (`w` for a working version), and the state link with its `title`. `item_view.revision_and_state` reads them. |
+
+The model id does **not** contain the file's lineage id: the two are unrelated strings (the add-in logged both for one design), so a lineage id cannot be worked out from a model id. Go through the item's `LINEAGE_URN` instead.
+
+Fusion opens a design by its lineage id: `Application.data.findFileById(urn)` and `documents.open(file)`, on Fusion's own thread, and only for a file in the active hub. `ComponentService.design_file(link)` reads the lineage from a component item's link (the Lineage URN field; it raises when the field is missing, and does not decode `fusionTeamLink`) and `product_actions.open_design_file` opens it (the `products_design_file` and `products_open_file` actions). View product portfolio does not offer it, since the design is open there; a screen that needs it adds a menu entry that calls `openInFusion(product.component)` in `products-page.js` and the text "Open in Fusion". No query that goes from a model id to its file has been found.
 
 ## Not the Data Model
 

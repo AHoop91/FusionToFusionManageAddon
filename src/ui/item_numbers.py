@@ -21,9 +21,10 @@ from ..core.logging_setup import get_logger
 from ..core.paths import DataDirError, data_dir, temp_dir
 from ..core.shapes import as_dict, dig
 from ..fusion_mfg.design_reads import DesignReads
-from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
+from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient, MfgApiError
 from ..fusion_mfg.hub_lookup import read_hub_id
 from ..fusion_mfg.model_service import read_thumbnail_url
+from .item_number_error import NoItemNumber
 
 log = get_logger("item_numbers")
 
@@ -35,10 +36,6 @@ query ($hubId: ID!, $itemId: ID!) {
   }
 }
 """
-
-
-class NoItemNumber(Exception):
-    """The component has no item number in the Data Model (or it cannot be told which), so it is not published."""
 
 
 class DesignRef(NamedTuple):
@@ -208,6 +205,23 @@ class ItemNumbers:
             label = part_number or t("app.number_the_design")
             raise NoItemNumber(t("app.number_not_in_bom", label=label) if not ids else t("app.number_several_components", label=label))
         return read_thumbnail_url(client, summary, ids.pop(), ref.time)
+
+    def describe(self, ref: DesignRef, cancel: Optional[CancelToken] = None) -> Dict[str, str]:
+        """``{"number", "name", "thumbnail_url"}`` of the design itself, from the Data Model: its item number ("" when it has none), its name and
+        a signed url of its thumbnail ("" when it has none yet or it could not be read; it expires soon). Raises ``NoItemNumber`` when the design
+        is not saved. Worker thread."""
+        if not ref.model_id and not ref.file_id:
+            raise NoItemNumber(t("app.number_design_not_saved"))
+        ref = self.model_of(ref, cancel)
+        client = FusionGraphQlClient(cancel)
+        summary = self.reads.summary(client, ref.model_id, ref.time)
+        try:
+            thumbnail = read_thumbnail_url(client, summary, str(summary.get("component_id") or ""), ref.time)
+        except MfgApiError as exc:   # the picture only decorates the answer: the design is described without it
+            log.warning("The thumbnail of the design could not be read: %s", exc)
+            thumbnail = ""
+        return {"number": str(summary.get("item_number") or "").strip(), "name": str(summary.get("name") or summary.get("part_number") or ""),
+                "thumbnail_url": thumbnail if thumbnail.startswith("https://") else ""}
 
     def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""

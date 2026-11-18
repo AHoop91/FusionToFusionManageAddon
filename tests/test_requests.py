@@ -3,7 +3,7 @@
 import unittest
 
 from src.config.workspace_models import StaticValue
-from src.fm.components import _matches
+from src.fm.components import number_matches
 from src.fm.sections import parse_sections
 from src.publish.bom_requests import bom_requests
 from src.publish.item_requests import field_entry, item_request
@@ -42,9 +42,9 @@ class ItemRequestTests(unittest.TestCase):
         self.assertIsNone(holding)
 
     def test_component_option_matches_the_number_not_a_longer_one(self):
-        self.assertTrue(_matches("PN-000703", "pn-000703"))
-        self.assertTrue(_matches("PN-000703 - Axle", "PN-000703"))
-        self.assertFalse(_matches("PN-0007031", "PN-000703"))
+        self.assertTrue(number_matches("PN-000703", "pn-000703"))
+        self.assertTrue(number_matches("PN-000703 - Axle", "PN-000703"))
+        self.assertFalse(number_matches("PN-0007031", "PN-000703"))
 
     def test_existing_item_is_patched_with_differences_only(self):
         rows = [row("TITLE", "Axle", MISMATCH), row("MATERIAL", "Steel", MATCH)]

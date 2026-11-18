@@ -33,7 +33,7 @@ def export_title() -> str:
 
 
 def products_title() -> str:
-    """The name of the Assign Product command and the title of its window."""
+    """The name of the View product portfolio command and the title of its window."""
     return t("app.products_title")
 
 

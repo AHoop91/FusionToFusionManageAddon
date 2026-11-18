@@ -1,5 +1,5 @@
 /**
- * The Assign Product window: browses the Portfolio Management workspace by view. It asks for the views (``products_views``), and for a page of
+ * The View product portfolio window: it first says where the open design is used (``products_usage``), then, to assign it, browses the Portfolio Management workspace by view. It asks for the views (``products_views``), and for a page of
  * the rows of the one chosen (``products_rows``), and creates a new product (``products_create``) from a form made of the workspace's own
  * sections and fields (``products_form``). Python answers a request at once with
  * "pending" and the page asks for the outcome (``products_status``) until it is there. Choosing a row only marks it for now.
@@ -24,6 +24,7 @@
   const waiting = {};        // token -> what to do with the answer
   let rowsToken = '';        // the rows read that counts: an older one that arrives late is dropped
   let started = false;       // the views have been asked for
+  let checked = false;       // the first check of where the design is used has been made
   let views = [];            // [{id, name}]
   let view = '';             // id of the view shown
   let viewCount = '';        // " (n)": how many records the view holds, once its rows are in
@@ -135,9 +136,17 @@
     list.addEventListener('click', function () { close(true); });
   }
 
+  /** Forget the menus whose button is inside ``container``, which is about to be emptied. */
+  function forgetMenus(container) {
+    for (let i = menus.length - 1; i >= 0; i--) if (container.contains(menus[i].button)) menus.splice(i, 1);
+  }
+
   document.addEventListener('click', function (event) {
     if (!event.target.closest('.products-dropdown')) closeMenus();
   });
+
+  // The usage screen (usage.js) asks through the page's own request, menu and picture view.
+  const usage = ns.usage.init({ ask: ask, failure: failure, openLightbox: openLightbox, menu: menu, forgetMenus: forgetMenus });
 
   // ---- Views ---------------------------------------------------------------------------
 
@@ -1072,8 +1081,20 @@
   }
 
   function showPage(form) {
-    $('products-formview').hidden = !form;
-    document.querySelector('.products').hidden = form;
+    showScreen(form ? 'form' : 'list');
+  }
+
+  /** Show one of the three screens: ``usage`` (where the open design is used), ``list`` (the products, to assign it to one) or ``form``. */
+  function showScreen(name) {
+    $('products-usageview').hidden = name !== 'usage';
+    document.querySelector('.products').hidden = name !== 'list';
+    $('products-formview').hidden = name !== 'form';
+  }
+
+  /** The list of products: asked for the first time it is shown. */
+  function openList() {
+    showScreen('list');
+    if (!started) loadViews();
   }
 
   /** The text of a value Fusion Manage holds: a picklist or a link is an object with a title. */
@@ -1619,6 +1640,8 @@
       const done = answer.result;
       if (done.status === 'exists') { startAssign(); return; }
       loadRows(page);
+      showScreen('usage');   // the way the design stands to the products has changed: say how it stands now
+      usage.load();
     });
   }
 
@@ -1734,7 +1757,7 @@
   /** The sign-in state is known: the page is ready, or the sign-in screen is shown. */
   function signInKnown(signedIn) {
     $('products-ready').hidden = true;
-    if (signedIn && !started) loadViews();
+    if (signedIn && !checked) { checked = true; showScreen('usage'); usage.load(); }
   }
 
   (function start() {
@@ -1748,8 +1771,8 @@
     ns.account.init();
     ns.auth.init();
 
-    ['products_views', 'products_columns', 'products_fields', 'products_image', 'products_picture', 'products_filter', 'products_create_view', 'products_rename_view', 'products_delete_view', 'products_rows', 'products_form', 'products_variant_form', 'products_inspect', 'products_options', 'products_create', 'products_item', 'products_update', 'products_assign', 'products_status'].forEach(function (action) { bridge.on(action, onAnswer); });
-    bridge.on('palette_opened', function () { if (started) loadViews(); ns.auth.refresh(); });
+    ['products_views', 'products_columns', 'products_fields', 'products_image', 'products_picture', 'products_filter', 'products_create_view', 'products_rename_view', 'products_delete_view', 'products_rows', 'products_form', 'products_variant_form', 'products_inspect', 'products_usage', 'products_design', 'products_design_file', 'products_options', 'products_create', 'products_item', 'products_update', 'products_assign', 'products_status'].forEach(function (action) { bridge.on(action, onAnswer); });
+    bridge.on('palette_opened', function () { if (started) loadViews(); if (checked) { showScreen('usage'); usage.load(); } ns.auth.refresh(); });
 
     $('products-refresh-view').addEventListener('click', function () { loadRows(page); });
     menu($('products-actions'), $('products-actions-list'));
@@ -1760,6 +1783,9 @@
     $('products-new').addEventListener('click', function () { openForm(''); });
     $('products-edit').addEventListener('click', function () { openForm(selected); });
     $('products-assign').addEventListener('click', startAssign);
+    $('products-usage-assign').addEventListener('click', openList);
+    $('products-back').addEventListener('click', function () { showScreen('usage'); });
+    $('products-usage-recheck').addEventListener('click', usage.load);
     $('products-assign-replace').addEventListener('click', function () { chooseAssign('replace'); });
     $('products-assign-back').addEventListener('click', backAssign);
     $('products-assign-variant').addEventListener('click', function () { chooseAssign('variant'); });

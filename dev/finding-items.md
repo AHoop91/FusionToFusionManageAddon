@@ -57,16 +57,25 @@ What the help pages document, and the code relies on:
 
 ## Searching the Grid: the v1 search
 
-`src/fm/v1_search.py` posts a search definition to `POST /api/rest/v1/workspaces/<id>/items/search`. Fields, filters and sort each name the tab they live on (`fieldTypeID`; the Grid is `GRIDVIEW`, 2). Use `build_definition` with `Field`, `Filter` and `Sort`, then `V1SearchService.page` (one page) or `rows` (every row). A single filter must be sent with `OR`; `build_definition` does that. Everything about its request and answer is **Assumed** from the v1 help page, and it has not been called against a tenant. The v1 API documents a session cookie for sign-in; the client sends the add-in's v3 bearer token, which has not been confirmed to be accepted.
+`src/fm/v1_search.py` posts a search definition to `POST /api/rest/v1/workspaces/<id>/items/search`. Fields, filters and sort each name the tab they live on (`fieldTypeID`; the Grid is `GRIDVIEW`, 2). Use `build_definition` with `Field`, `Filter` and `Sort`, then `V1SearchService.page` (one page) or `rows` (every row). A single filter must be sent with `OR`; `build_definition` does that. Its one user is `ProductService.usage` (the portfolio check of where the open design is used): it reads the Primary Component field and the Variants link column of every product, keeps every entry of a row (`V1Row.entries`, since a Grid column may come once for each grid row), and compares them with `number_matches` here, not in the search. What the first live call showed (log of 2026-11-18, workspace 343 "Products"):
+
+- The add-in's v3 bearer token is accepted: the call was answered, not refused with 401. (The help page documents a session cookie; it is not needed.)
+- A search must name a sort. A definition with `"sort": []` is refused with 400 and `{"httpStatusCode":400,"error":[{"message":"sortFieldsList is not specified"}]}`. `build_definition` raises when it is given no sort, so a caller names one (`ProductService.usage` sorts on the Primary Component field).
+- The answer is not wrapped (`reportResult` is absent) and keeps the casing of the help page's example: `rowId` and `dmsId`, as below.
+- A picklist cell holds its text in both `value` and `label`; `formattedValue` was not seen on one.
+- A row has no entry for a field it leaves blank. The Variants Grid column was asked for and the row came back with no entry for it, so how v1 answers a Grid column that has rows is still **Assumed** (`V1Row.entries` keeps every entry, in case it comes once for each grid row).
+
+The first answer of each page is logged at info level (3000 characters, "v1 search of workspace ..."), so a new shape can be pasted here and marked Seen.
 
 ## What Fusion Manage answers
 
-No search answer is in the add-in log, so every key is **Assumed** from the code and tests (`tests/test_items_search.py`, `tests/test_item_search.py`, `tests/test_search_query.py` (all of `v3_search.py`), `tests/test_components.py`).
+The v1 answer below is **Seen**. No v3 search answer is in the add-in log, so every other key is **Assumed** from the code and tests (`tests/test_items_search.py`, `tests/test_item_search.py`, `tests/test_search_query.py` (all of `v3_search.py`), `tests/test_components.py`).
 
 | Answer | Keys read |
 | --- | --- |
 | `search-results` | `items[]`, and in each: `descriptor`, `version` (`[REV:w]`), `__self__` or a link key (`LINK_KEYS`), `itemDescriptor`/`title` as a descriptor fallback; `totalCount` (or `totalHits`) |
 | `search-results` with the bulk media type | The same rows, each holding the item's fields as `.../fields/<ID>` entries with `value` (`collect_values`) |
+| v1 `workspaces/<id>/items/search` (**Seen**) | `totalResultCount`; `columnKey[].{value, label}`; `row[].{rowId, dmsId, fields.entry[].{key, fieldData.{value, label, dataType}}}`; an error is `{httpStatusCode, error[].message}` |
 | `lookups/<name>` | `items[].link`, `title`, `version` |
 | `workspaces` list (to find Components) | `items[].title` or `name`, `link` or `__self__` |
 | BOM members (`.../items/<id>/bom`) | `nodes[].item.link`, `item.title` |

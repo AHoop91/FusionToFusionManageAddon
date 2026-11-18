@@ -9,11 +9,14 @@ casing (``rowID``/``rowId``) and on a ``reportResult`` wrapper, so this reads th
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..core.i18n import t
+from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict, dict_rows, dig, whole
 from .client import FmApiError, FmClient
+
+log = get_logger("fm.v1_search")
 
 SEARCH_PATH = "/api/rest/v1/workspaces/{workspace}/items/search"
 DEFAULT_PAGE_SIZE = 100
@@ -65,9 +68,12 @@ class Sort:
 
 @dataclass(frozen=True)
 class V1Row:
-    """A matching item: its id and ``field id -> display text``. A field the item leaves blank has no entry."""
+    """A matching item: its id, ``field id -> display text`` and every ``(field id, display text)`` entry in the order sent. A field the item
+    leaves blank has no entry. ``values`` keeps the last entry of a field, so a Grid column that comes once for each row of the grid is in
+    ``entries`` only (how v1 answers a search that returns a Grid column has not been seen)."""
     dms_id: str
     values: Dict[str, str]
+    entries: Tuple[Tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -76,11 +82,14 @@ class V1Page:
     rows: List[V1Row]
 
 
-def build_definition(fields: Sequence[Field], filters: Sequence[Filter] = (), sort: Sequence[Sort] = (), logic: str = AND,
+def build_definition(fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (), logic: str = AND,
                      page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> Dict[str, Any]:
-    """The search definition to send. A single filter is sent with ``OR``, as the service requires."""
+    """The search definition to send. A single filter is sent with ``OR``, as the service requires. A ``sort`` is required: the service refuses a
+    search with none ("sortFieldsList is not specified", seen live)."""
     if page < 1 or not 0 < page_size <= MAX_PAGE_SIZE:
         raise ValueError(f"page {page} and page size {page_size} are not allowed")
+    if not sort:
+        raise ValueError("a v1 search needs a sort")
     return {
         "pageNo": page,
         "pageSize": page_size,
@@ -108,7 +117,8 @@ def parse_page(data: Any) -> V1Page:
     rows = []
     for row in dict_rows(data.get("row")):
         entries = dict_rows(dig(row, "fields", "entry"))
-        rows.append(V1Row(str(row.get("dmsId") or ""), {str(e.get("key")): _text(e.get("fieldData")) for e in entries if e.get("key")}))
+        pairs = tuple((str(e.get("key")), _text(e.get("fieldData"))) for e in entries if e.get("key"))
+        rows.append(V1Row(str(row.get("dmsId") or ""), dict(pairs), pairs))
     return V1Page(whole(data.get("totalResultCount")), rows)
 
 
@@ -124,16 +134,18 @@ class V1SearchService:
         if not workspace.isdigit():
             raise FmApiError(t("data.fm_bad_address"))
         result = self.client.send_json("POST", SEARCH_PATH.format(workspace=workspace), definition)
+        if definition.get("pageNo") == 1:   # the first answer of a search is the one worth reading; the rest repeat its shape
+            log.info("v1 search of workspace %s: %.3000s", workspace, result.data)
         return parse_page(result.data)
 
-    def rows(self, workspace_id: str, fields: Sequence[Field], filters: Sequence[Filter] = (), sort: Sequence[Sort] = (),
+    def rows(self, workspace_id: str, fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (),
              logic: str = AND, page_size: int = DEFAULT_PAGE_SIZE, limit: Optional[int] = None) -> List[V1Row]:
         """Every matching row (at most ``limit``), reading page after page until the total is reached.
 
         Raises when the search would need more than ``MAX_PAGES`` pages, and does not return a cut-off list."""
         found: List[V1Row] = []
         for number in range(1, MAX_PAGES + 1):
-            page = self.page(workspace_id, build_definition(fields, filters, sort, logic, number, page_size))
+            page = self.page(workspace_id, build_definition(fields, sort, filters, logic, number, page_size))
             found.extend(page.rows)
             if not page.rows or len(found) >= page.total or (limit is not None and len(found) >= limit):
                 return found if limit is None else found[:limit]
