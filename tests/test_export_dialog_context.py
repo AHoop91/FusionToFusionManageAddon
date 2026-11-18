@@ -46,6 +46,17 @@ class SetupReasonTests(Setup):
         self.assertEqual(reasons, {"item": "shared file unreadable", "component": "shared file unreadable"})
         self.assertIsNone(context)
 
+    def test_the_ribbon_button_is_on_when_a_destination_is_set_up(self):
+        self.assertEqual(self.dialog.problem(), "")
+
+    def test_the_ribbon_button_is_on_when_only_the_component_is_set_up(self):
+        with mock.patch.object(self.dialog, "_setup", return_value=({"item": "not set up", "component": ""}, None)):
+            self.assertEqual(self.dialog.problem(), "")
+
+    def test_the_ribbon_button_is_off_with_the_reason_when_no_destination_is_set_up(self):
+        self.config.effective_settings.side_effect = RuntimeError("shared file unreadable")
+        self.assertEqual(self.dialog.problem(), "shared file unreadable")
+
 
 class ReadAgainTests(Setup):
     def test_the_permissions_are_read_once_under_the_context_active_when_the_window_asks(self):

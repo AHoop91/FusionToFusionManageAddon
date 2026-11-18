@@ -1,7 +1,8 @@
 """Switches commands off while what they need is not ready.
 
 A ``RibbonCommand`` with ``needs_setup`` is enabled only when the settings are complete; one with ``needs_drawing`` only when, as well,
-the open drawing has loaded enough to say which item it is of. Disabling the command definition greys out every control made from
+the open drawing has loaded enough to say which item it is of; one with ``needs_destination`` only when some destination of an export
+is set up. Disabling the command definition greys out every control made from
 it, in the ribbon and in the right-click menu alike, and the tooltip says why. The reasons are put together here, in one place,
 so one cannot undo the other.
 """
@@ -24,12 +25,14 @@ class SetupGate:
     """Enables or disables the commands that need the settings to be complete, and a loaded drawing."""
 
     def __init__(self, ui: adsk.core.UserInterface, commands: Sequence[RibbonCommand], problem: Callable[[], str],
-                 drawing_problem: Callable[[], str] = lambda: "", portfolio_problem: Callable[[], str] = lambda: "") -> None:
+                 drawing_problem: Callable[[], str] = lambda: "", portfolio_problem: Callable[[], str] = lambda: "",
+                 destination_problem: Callable[[], str] = lambda: "") -> None:
         self._ui = ui
-        self._commands = [c for c in commands if c.needs_setup or c.needs_drawing or c.needs_portfolio]
+        self._commands = [c for c in commands if c.needs_setup or c.needs_drawing or c.needs_portfolio or c.needs_destination]
         self._problem = problem
         self._drawing_problem = drawing_problem
         self._portfolio_problem = portfolio_problem
+        self._destination_problem = destination_problem
         self._shown: Dict[str, str] = {}   # command id -> the reason last applied, so only a change is written
 
     def refresh(self) -> None:
@@ -38,12 +41,13 @@ class SetupGate:
             setup = self._problem()
             drawing = self._drawing_problem()
             portfolio = self._portfolio_problem()
+            destination = self._destination_problem()
         except Exception:  # noqa: BLE001 - unknown state: leave the commands as they are
             log.exception("Could not check what the commands need")
             return
         for command in self._commands:
             reason = ((setup if command.needs_setup else "") or (portfolio if command.needs_portfolio else "")
-                      or (drawing if command.needs_drawing else ""))
+                      or (destination if command.needs_destination else "") or (drawing if command.needs_drawing else ""))
             if self._shown.get(command.command_id) == reason:
                 continue
             definition = self._ui.commandDefinitions.itemById(command.command_id)

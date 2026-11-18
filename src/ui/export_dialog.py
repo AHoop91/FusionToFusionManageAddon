@@ -88,6 +88,11 @@ class ExportDialog:
         return {ITEM: t("app.item_not_configured") if context.items_problem else "",
                 COMPONENT: t("app.complete_in_preferences", problem=connection) if connection else ""}, context
 
+    def problem(self) -> str:
+        """Why nothing can be exported to when no destination is set up, and nothing when one is: for the ribbon button. UI thread."""
+        reasons = list(self._setup()[0].values())
+        return "" if "" in reasons else reasons[0]
+
     @staticmethod
     def _item_denial(client: FmClient, context: HubContext) -> str:
         kind = KINDS_BY_ID[ITEMS_KIND]

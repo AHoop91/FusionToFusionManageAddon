@@ -294,11 +294,11 @@ def _run(context) -> None:
                                        products_tooltip(),
                                        _product_host.show,
                                        _icon("products"), needs_portfolio=True)
-        # Not held back by the setup or the drawing loading: the Export window says what is missing, and which destination that leaves off.
+        # Held back only while no destination is set up; with one set up, the Export window says what is missing for the other.
         export = RibbonCommand(EXPORT_COMMAND_ID, export_title(),
                                ribbon_export_tooltip(),
                                _export_dialog.show,
-                               _icon("upload_step"))
+                               _icon("upload_step"), needs_destination=True)
         administration = RibbonGroup([
             RibbonCommand(JOBS_COMMAND_ID, jobs_title(), jobs_tooltip(),
                           _jobs_host.show,
@@ -320,7 +320,8 @@ def _run(context) -> None:
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
-        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), setup_problem, drawing_source.problem, portfolio_problem)
+        _gate = SetupGate(_ui, menu_commands + _ribbon.commands(), setup_problem, drawing_source.problem, portfolio_problem,
+                          _export_dialog.problem)
         _watcher = GateWatcher(_ui, _tasks, _gate, lambda: drawing_source.active_drawing() is not None and bool(drawing_source.problem()))
         _watcher.check()
         config.on_change(lambda: _tasks.post(_gate.refresh))   # saving the settings can come from any thread
