@@ -255,7 +255,7 @@ class FindItemTests(unittest.TestCase):
         self.addCleanup(mock.patch.stopall)
 
     def _search(self, hits):
-        service = mock.patch.object(self.module, "ItemService").start()
+        service = mock.patch.object(self.module, "ItemFinder").start()
         service.return_value.search.return_value = hits
         mock.patch.object(self.module, "FmClient").start()
         return service
@@ -276,7 +276,7 @@ class FindItemTests(unittest.TestCase):
 
     def test_the_item_is_looked_for_under_the_context_not_the_settings_now_active(self):
         client = mock.patch.object(self.module, "FmClient").start()
-        mock.patch.object(self.module, "ItemService").start().return_value.search.return_value = [{"id": "9", "descriptor": "PN-1 - Bolt"}]
+        mock.patch.object(self.module, "ItemFinder").start().return_value.search.return_value = [{"id": "9", "descriptor": "PN-1 - Bolt"}]
         self.upload._config = config_of(tenant="other", workspace="999", hub="hub2")   # another hub is active when the worker gets to it
         self.assertEqual(self.upload._find_item("PN-1", CONTEXT), ("242", "9"))
         self.assertEqual(client.call_args.args[0].tenant, "acme")

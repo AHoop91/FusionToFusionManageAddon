@@ -28,8 +28,7 @@ from ..core.logging_setup import get_logger
 from ..fm.attachments import NEW_VERSION, AttachmentService
 from ..fm.client import FmClient
 from ..fm.components import ComponentService, link_ids
-from ..fm.items import ItemChoices, ItemService
-from ..fm.search_query import WORKING
+from ..fm.v3_search import WORKING, ItemChoices, ItemFinder
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.run_files import remove_run, temp_root
@@ -152,7 +151,7 @@ class AttachmentUpload:
         if context.items_problem:
             raise ValueError(t("app.complete_in_preferences", problem=context.items_problem))
         workspace_id = context.cfg.workspace_id
-        hits = ItemService(FmClient(context.settings, self._auth, cancel), WORKING).search(workspace_id, number)
+        hits = ItemFinder(FmClient(context.settings, self._auth, cancel), WORKING).search(workspace_id, number)
         if not hits:
             raise LookupError(t("app.no_item_for_number", number=number))
         picked, competing = self._choices.resolve(workspace_id, number, hits)

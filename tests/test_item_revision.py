@@ -1,9 +1,7 @@
 import unittest
 
 from src.fm.bom import RELEASED_BIAS, WORKING_BIAS, BomService
-from src.fm.item_search import ItemSearchService
-from src.fm.items import ItemService
-from src.fm.search_query import LATEST, WORKING
+from src.fm.v3_search import LATEST, WORKING, ItemFinder, ItemSearchService
 
 
 class _Client:
@@ -18,17 +16,17 @@ class _Client:
 class ItemRevisionTests(unittest.TestCase):
     def test_a_search_asks_for_the_working_version_unless_told_otherwise(self):
         client = _Client()
-        ItemService(client).search("242", "PN-000701")
+        ItemFinder(client).search("242", "PN-000701")
         self.assertIn("&revision=3", client.paths[0])
 
     def test_a_search_can_ask_for_the_latest_version(self):
         client = _Client()
-        ItemService(client, LATEST).search("242", "PN-000701")
+        ItemFinder(client, LATEST).search("242", "PN-000701")
         self.assertIn("&revision=1", client.paths[0])
 
     def test_the_items_found_ahead_of_a_publish_are_the_working_versions(self):
         client = _Client()
-        service = ItemService(client)
+        service = ItemFinder(client)
         service.search("242", "PN-000701")
         service.find_many("242", ["PN-000701"])
         self.assertTrue(all("&revision=3" in path for path in client.paths))

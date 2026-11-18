@@ -19,10 +19,11 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 
 | I need to | Use | Where | Note |
 | --- | --- | --- | --- |
-| Find an item by item number | `ItemService.search` (one) or `find_many` (several, with fields) | `fm/items.py` | [finding-items.md](finding-items.md) |
-| Pick one item when several share a number | `resolve_hits`, `ItemChoices` | `fm/items.py` | [finding-items.md](finding-items.md) |
+| Find an item by item number | `ItemFinder.search` (one) or `find_many` (several, with fields) | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
+| Pick one item when several share a number | `resolve_hits`, `ItemChoices` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
 | Read an item's fields | `ItemService.read`, `read_named` | `fm/items.py` | |
-| Search the Items workspace with text and filters (Add Items picker) | `ItemSearchService.page`, `search_path`, `build_query` | `fm/item_search.py`, `fm/search_query.py` | [finding-items.md](finding-items.md) |
+| Search a workspace's Grid tab (the v3 search cannot) | `V1SearchService.page` or `rows`, with `build_definition` | `fm/v1_search.py` | [finding-items.md](finding-items.md) |
+| Search the Items workspace with text and filters (Add Items picker) | `ItemSearchService.page`, `search_path`, `build_query` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
 | Find the Components record for a part | `ComponentService.find_working`, `find`, `matching` | `fm/components.py` | [finding-items.md](finding-items.md) |
 | Read an item's BOM, its BOM tab, or where it is used | `fm/bom.py`, `fm/bom_view.py`, `fm/where_used.py` | `fm/` | |
 | Show an item as the Item tab does (header, sections, matrices) | `fm/item_view.py` | `fm/` | [workspace-forms.md](workspace-forms.md) |

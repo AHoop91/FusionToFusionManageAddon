@@ -13,16 +13,14 @@ from ..core.i18n import t
 from ..core.shapes import dict_rows, dig
 from .client import LOOKUPS, WORKSPACES, FmClient, last_segment
 from .pages import ITEM_LINK
-from .search_query import WORKING
+from .v3_search import WORKING, ItemFinder
 from .ttl_cache import TtlCache
 
 log = get_logger("fm.components")
 
-SEARCH_RESULTS = "/api/v3/search-results"
 COMPONENTS_WORKSPACE = "Components"   # what Fusion Manage calls the workspace of the components
 WORKSPACES_LIMIT = 200   # workspaces asked for when looking for it
 CANDIDATES = 25   # options asked for when searching by number
-SEARCH_LIMIT = 50   # results asked for when searching for the working version
 SHOWN = 5   # matches named in the message when more than one fits
 _URN = re.compile(r"\.(\d+)\.(\d+)\s*$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
 _WORKING = re.compile(r"\[REV:\s*w(?:orking)?\s*\]", re.IGNORECASE)   # "[REV:w]": how Fusion Manage names the working version
@@ -65,7 +63,7 @@ def link_ids(link: str) -> Tuple[str, str]:
 
 def _named(candidates: Iterable[Candidate]) -> str:
     """The first few of ``candidates``, each by title, version and id, for a message that says which ones fit."""
-    return ", ".join(f"{c.title} {c.version} ({last_segment(c.link)})" for c in list(candidates)[:SHOWN])
+    return ", ".join(f"{c.title} {c.version} ({last_segment(c.link)})".replace("  ", " ") for c in list(candidates)[:SHOWN])
 
 
 def parse_workspace_id(data: Any, title: str = COMPONENTS_WORKSPACE) -> str:
@@ -104,23 +102,19 @@ class ComponentService:
     def find_working(self, number: str) -> Tuple[str, str]:
         """``(link, "")`` of the working version of the record for this item number in the Components workspace, else ``("", reason)``.
 
-        The search lists a record's working version: ``GET /api/v3/search-results?query=<number> AND (workspaceId=<workspace>)&revision=3``
-        (``revision`` 1 is the latest revision, 2 every revision, 3 the working version). Each result has its ``descriptor``
-        (``PN-1 - Axle``), its ``version`` (``[REV:w]``) and its link (``__self__``). The picklist of the component linking field is for
-        publish only: it names no workspace and has an option for every revision.
+        It is the search by item number (``ItemFinder``) in the Components workspace, which lists a record's working version. Each hit has
+        its item id and its ``descriptor`` (``PN-1 - Axle``). The picklist of the component linking field is for publish only: it names no
+        workspace and has an option for every revision.
         """
         if not number:
             return "", t("data.fm_no_number")
         workspace_id = self.workspace_id()
         if not workspace_id:
             return "", t("data.fm_no_components_workspace", workspace=COMPONENTS_WORKSPACE)
-        query = quote(f"{number} AND (workspaceId={workspace_id})")
-        data = self._client.get_json(f"{SEARCH_RESULTS}?isFullQuery=true&limit={SEARCH_LIMIT}&offset=0&page=1&query={query}&revision={WORKING}")
-        found = [Candidate(str(r.get("__self__") or ""), str(r.get("descriptor") or ""), str(r.get("version") or ""))
-                 for r in dict_rows(dig(data, "items"))]
-        log.info("Working versions for %s in workspace %s: %s", number, workspace_id, [f"{c.title} {c.version} {c.link}" for c in found])
-        hits = [c for c in found if c.link and _matches(c.title, number)]
-        working = [c for c in hits if is_working(c.version)] or hits   # the filter gives working versions; the version is checked anyway
+        found = [Candidate(f"{WORKSPACES}/{workspace_id}/items/{hit['id']}", hit["descriptor"], "")
+                 for hit in ItemFinder(self._client, WORKING).search(workspace_id, number)]
+        log.info("Working versions for %s in workspace %s: %s", number, workspace_id, [f"{c.title} {c.link}" for c in found])
+        working = [c for c in found if _matches(c.title, number)]
         return _the_one(working, t("data.fm_no_working_version", number=number, count=len(found)),
                         t("data.fm_many_working_versions", count=len(working), number=number, named=_named(working)))
 

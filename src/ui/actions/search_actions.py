@@ -15,8 +15,7 @@ from ...core.i18n import t
 from ...core.logging_setup import get_logger
 from ...core.shapes import whole
 from ...fm.client import WORKSPACES, FmApiError, FmClient
-from ...fm.item_search import ItemSearchService
-from ...fm.search_query import LATEST
+from ...fm.v3_search import LATEST, ItemSearchService
 from ...fm.workspace import WorkspaceService
 from ..message_bridge import MessageBridge
 from .background import Runner, in_thread, why

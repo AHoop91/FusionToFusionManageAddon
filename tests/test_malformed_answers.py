@@ -7,10 +7,8 @@ from src.config.workspace_models import WorkspaceConfig
 from src.fm.attachments import parse_files
 from src.fm.bom import parse_bom as parse_bom_lines
 from src.fm.bom_view import parse_kinds, parse_viewdef
-from src.fm.item_search import parse_members, parse_search
-from src.fm.items import _rows
+from src.fm.v3_search import build_query, parse_members, parse_search, rows
 from src.fm.permissions import parse_granted
-from src.fm.search_query import build_query
 from src.fm.sections import parse_sections
 from src.fm.tabs import parse_counts, parse_labels
 from src.fusion_mfg.fusion_graphql_client import MfgApiError
@@ -45,7 +43,7 @@ class MalformedAnswerTests(unittest.TestCase):
         self.check(parse_bom_lines, {})
 
     def test_rows_of_a_search_are_none(self):
-        self.check(_rows, [])
+        self.check(rows, [])
 
     def test_tabs_are_none(self):
         self.check(parse_labels, {})

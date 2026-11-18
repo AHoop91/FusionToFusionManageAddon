@@ -10,7 +10,7 @@ from ..core.logging_setup import get_logger
 from ..fm.client import FmApiError, FmClient
 from ..fm.items import ItemService, display_values
 from ..fm.picklists import PicklistResolver
-from ..fm.search_query import WORKING
+from ..fm.v3_search import WORKING, ItemFinder
 from .item_number import item_number_of
 from .property_compare import FOUND, MULTIPLE, NEW, UNCHECKED, UNKNOWN, ConvertUnit, FitNumber, compare_properties
 
@@ -51,7 +51,7 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, fou
 
     ``found`` is what an earlier search already found for the number (hits, each with the item's ``values`` when the search gave them):
     it saves the search, and the read of an item whose values came with it. ``revision`` is the version of the item searched for (see
-    ``ItemService``).
+    ``ItemFinder``).
 
     The item is searched by item number in the Items workspace. When several items match, none is used: the state is ``multiple`` and
     ``candidates`` lists them, for the number to be fixed in Fusion Manage. It needs only the component's numbers, so it can run while
@@ -67,11 +67,10 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, fou
         return ItemLookup(info, None)
     values = None
     try:
-        service = ItemService(fm, revision)
-        hits = found if found is not None else service.search(cfg.workspace_id, number)
+        hits = found if found is not None else ItemFinder(fm, revision).search(cfg.workspace_id, number)
         picked = hits[0] if len(hits) == 1 else None
         if picked:
-            values = picked.get("values") or service.read(cfg.workspace_id, picked["id"])
+            values = picked.get("values") or ItemService(fm).read(cfg.workspace_id, picked["id"])
     except (FmApiError, AuthError) as exc:
         return _unreadable(info, exc)
     if not hits:

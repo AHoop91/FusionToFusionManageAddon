@@ -71,7 +71,7 @@ class DesignWithNothingToLookUpTests(unittest.TestCase):
         self.assertEqual(fm.method_calls, [])
 
     def test_searching_looks_the_number_up_in_the_workspace(self):
-        with mock.patch.object(bom_levels, "ItemService") as items:
+        with mock.patch.object(bom_levels, "ItemFinder") as items:
             items.return_value.search.return_value = [{"id": "1"}]
             found = bom_levels.search_design(mock.Mock(), mock.Mock(workspace_id="242"), {"item_number": " TOP "})
         self.assertEqual(found, [{"id": "1"}])
@@ -83,7 +83,7 @@ class LevelUnderAnAssemblyTests(unittest.TestCase):
 
     def compared(self, rows, *, parent_number="ASM", skipped=False, design_in_fm=True, hits=None):
         cfg = mock.Mock(workspace_id="242")
-        with mock.patch.object(bom_levels, "ItemService") as items, mock.patch.object(bom_levels, "read_and_compare_bom") as compare:
+        with mock.patch.object(bom_levels, "ItemFinder") as items, mock.patch.object(bom_levels, "read_and_compare_bom") as compare:
             items.return_value.search.return_value = [] if hits is None else hits
             compare.side_effect = lambda marked, *_: [{**r, "status": "skipped" if r.get("skip") else "match"} for r in marked]   # as compare_bom does
             data = bom_levels.compare_level(rows, parent_number, skipped, design_in_fm, cfg, mock.Mock())

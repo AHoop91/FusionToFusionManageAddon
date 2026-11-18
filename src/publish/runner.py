@@ -22,7 +22,7 @@ from ..core.timing import Stopwatch
 from ..fm.client import LOOKUPS, FmApiError, FmClient
 from ..fm.components import ComponentService, manage_link
 from ..fm.picklists import PicklistResolver
-from ..fm.search_query import WORKING
+from ..fm.v3_search import WORKING
 from ..fm.sections import SectionService
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import read_thumbnail_url

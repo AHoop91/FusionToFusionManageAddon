@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.fm.item_search import PAGE_SIZE, ItemSearchService, parse_members, parse_search
+from src.fm.v3_search import PAGE_SIZE, ItemSearchService, parse_members, parse_search
 
 
 class ParseSearchTests(unittest.TestCase):

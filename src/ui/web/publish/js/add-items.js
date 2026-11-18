@@ -4,7 +4,7 @@
  * of the design's Fusion Manage item.
  *
  * Filters are rows (``property = value``) in groups; rows of a group, and groups, are joined by AND or OR. The
- * search itself is built in Python (``fm/search_query.py``): this file only sends the text and the groups.
+ * search itself is built in Python (``fm/v3_search.py``): this file only sends the text and the groups.
  *
  * It is made to stay quick with thousands of matches:
  *   - pages load as the list is scrolled near its end, one request at a time, each on a Python worker thread

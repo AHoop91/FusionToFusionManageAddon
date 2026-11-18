@@ -68,8 +68,8 @@ class WorkingVersionTests(unittest.TestCase):
         (link, reason), client = self.find((15745, "PN-000701 - Universal Joint", "[REV:w]"))
         self.assertEqual((link, reason), ("/api/v3/workspaces/57/items/15745", ""))
         asked = client.paths[1]   # the search, after the list of workspaces that says which is the Components
-        self.assertTrue(asked.startswith("/api/v3/search-results?isFullQuery=true"))
-        self.assertIn("query=PN-000701%20AND%20%28workspaceId%3D57%29", asked)
+        self.assertTrue(asked.startswith("/api/v3/search-results?"))
+        self.assertIn("query=itemDescriptor%3D%22PN-000701%22+AND+(workspaceId%3D57)", asked)
         self.assertIn("revision=3", asked)
 
     def test_a_result_for_a_longer_number_is_not_it(self):

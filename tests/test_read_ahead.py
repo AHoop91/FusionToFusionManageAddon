@@ -60,7 +60,7 @@ class ReadAheadTests(unittest.TestCase):
             def find_many(self, _workspace, numbers):
                 return {n.lower(): [{"id": "1"}] for n in numbers if n != "PN-9"}
 
-        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemFinder", Items):
             with ahead([item("PN-1", "c1"), item("PN-9", "c9")]) as shared:
                 self.assertEqual(shared.found("PN-1"), [{"id": "1"}])
                 self.assertIsNone(shared.found("PN-9"))
@@ -74,7 +74,7 @@ class ReadAheadTests(unittest.TestCase):
             def find_many(self, _workspace, _numbers):
                 return {}
 
-        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemFinder", Items):
             with ahead([item(f"PN-{n}", f"c{n}") for n in range(12)]) as shared:
                 shared.found("PN-0")   # waits for the search of its numbers
                 shared.found("PN-11")
@@ -88,7 +88,7 @@ class ReadAheadTests(unittest.TestCase):
             def find_many(self, _workspace, numbers):
                 return {"pn-1": [{"id": "a"}, {"id": "b"}], "pn-2": [{"id": "c"}]}
 
-        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemFinder", Items):
             with ahead([item("PN-1", "c1"), item("PN-2", "c2"), item("PN-3", "c3")]) as shared:
                 shared.found("PN-1")
             self.assertEqual(shared.hits(), {"PN-1": 2, "PN-2": 1, "PN-3": 0})
@@ -101,7 +101,7 @@ class ReadAheadTests(unittest.TestCase):
             def find_many(self, _workspace, _numbers):
                 raise FmApiError("503")
 
-        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemFinder", Items):
             with ahead([item("PN-1", "c1")]) as shared:
                 with self.assertRaises(FmApiError):
                     shared.found("PN-1")
@@ -117,7 +117,7 @@ class ReadAheadTests(unittest.TestCase):
                 searched.extend(numbers)
                 return {"pn-1": [{"id": "1"}]}
 
-        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemService", Items):
+        with mock.patch.object(read_ahead, "read_publish_components", lambda *_a: {}), mock.patch.object(read_ahead, "ItemFinder", Items):
             with ahead([item("PN-1", "c1"), item("pn-1", "c2")]) as shared:
                 self.assertEqual(shared.found(" Pn-1 "), [{"id": "1"}])
         self.assertEqual(len(searched), 1)

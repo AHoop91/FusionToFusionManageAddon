@@ -18,7 +18,8 @@ from ..core.shapes import as_list, dict_rows, rows_in
 from ..core.logging_setup import get_logger
 from ..fm.client import WORKSPACES, FmApiError, FmClient, last_segment
 from ..fm.components import Candidate, ComponentService, is_working
-from ..fm.items import ItemService, display_text, number_key
+from ..fm.items import ItemService, display_text
+from ..fm.v3_search import number_key
 from ..fm.refusal import read_refusal
 from ..fm.sections import SectionService
 from ..fm.workspace import GRID_VIEW, WorkspaceService

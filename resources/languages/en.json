@@ -1242,6 +1242,8 @@
     "data.fm_upload_failed": "The upload failed: {reason}",
     "data.fm_upload_not_https": "The upload address Fusion Manage gave is not https.",
     "data.fm_upload_returned": "The upload returned {status}: {said}",
+    "data.fm_v1_search_too_long": "The search has more than {pages} pages of results. Narrow it and try again.",
+    "data.fm_v1_search_unexpected": "Fusion Manage answered the search in a form this add-in does not read.",
     "data.fm_workspace_deleted": "Workspace {workspace} was not found or has been deleted.",
     "data.fm_workspace_id_number": "Workspace ID must be a number.",
     "data.fm_workspace_lacking": "You need these permissions on '{name}': {missing}.",

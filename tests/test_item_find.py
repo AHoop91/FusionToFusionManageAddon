@@ -3,7 +3,7 @@
 import unittest
 from urllib.parse import parse_qs, urlparse
 
-from src.fm.items import FIND_PAGE, ITEMS_BULK, ItemService
+from src.fm.v3_search import FIND_PAGE, ITEMS_BULK, ItemFinder
 
 
 def row(item_id, descriptor, **fields):
@@ -24,7 +24,7 @@ class FakeClient:
 class FindManyTests(unittest.TestCase):
     def test_one_search_for_every_number_asks_for_the_details(self):
         client = FakeClient({"totalCount": 2, "items": [row(1, "PN-1 - Bracket", NUMBER="PN-1"), row(2, "PN-2 - Plate", NUMBER="PN-2")]})
-        found = ItemService(client).find_many("242", ["PN-1", "PN-2"])
+        found = ItemFinder(client).find_many("242", ["PN-1", "PN-2"])
         self.assertEqual(len(client.asked), 1)
         path, accept = client.asked[0]
         self.assertEqual(accept, ITEMS_BULK)
@@ -34,31 +34,31 @@ class FindManyTests(unittest.TestCase):
 
     def test_a_number_nothing_was_found_for_is_left_out(self):
         client = FakeClient({"totalCount": 1, "items": [row(1, "PN-1 - Bracket", NUMBER="PN-1")]})
-        self.assertEqual(list(ItemService(client).find_many("242", ["PN-1", "PN-2"])), ["pn-1"])
+        self.assertEqual(list(ItemFinder(client).find_many("242", ["PN-1", "PN-2"])), ["pn-1"])
 
     def test_a_hit_for_some_other_number_is_ignored(self):
         client = FakeClient({"totalCount": 1, "items": [row(5, "PN-10 - Other", NUMBER="PN-10")]})
-        self.assertEqual(ItemService(client).find_many("242", ["PN-1"]), {})
+        self.assertEqual(ItemFinder(client).find_many("242", ["PN-1"]), {})
 
     def test_two_items_with_one_number_are_both_kept(self):
         client = FakeClient({"totalCount": 2, "items": [row(1, "PN-1 - A"), row(2, "PN-1 - B")]})
-        self.assertEqual([h["id"] for h in ItemService(client).find_many("242", ["PN-1"])["pn-1"]], ["1", "2"])
+        self.assertEqual([h["id"] for h in ItemFinder(client).find_many("242", ["PN-1"])["pn-1"]], ["1", "2"])
 
     def test_the_next_page_is_read_while_there_is_more(self):
         first = [row(n, f"PN-{n} - x") for n in range(FIND_PAGE)]
         client = FakeClient({"totalCount": FIND_PAGE + 1, "items": first}, {"totalCount": FIND_PAGE + 1, "items": [row(FIND_PAGE, f"PN-{FIND_PAGE} - x")]})
-        found = ItemService(client).find_many("242", [f"PN-{n}" for n in range(FIND_PAGE + 1)])
+        found = ItemFinder(client).find_many("242", [f"PN-{n}" for n in range(FIND_PAGE + 1)])
         self.assertEqual(len(client.asked), 2)
         self.assertIn(f"offset={FIND_PAGE}", client.asked[1][0])
         self.assertEqual(len(found), FIND_PAGE + 1)
 
     def test_an_answer_without_details_still_gives_the_ids(self):
         client = FakeClient({"totalCount": 1, "items": [{"__self__": "/api/v3/workspaces/242/items/7", "descriptor": "PN-1"}]})
-        self.assertEqual(ItemService(client).find_many("242", ["PN-1"])["pn-1"][0]["values"], {})
+        self.assertEqual(ItemFinder(client).find_many("242", ["PN-1"])["pn-1"][0]["values"], {})
 
     def test_nothing_is_asked_for_no_numbers(self):
         client = FakeClient()
-        self.assertEqual(ItemService(client).find_many("242", ["", " "]), {})
+        self.assertEqual(ItemFinder(client).find_many("242", ["", " "]), {})
         self.assertEqual(client.asked, [])
 
 

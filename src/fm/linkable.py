@@ -1,7 +1,7 @@
 """Linkable items: the rows Fusion Manage offers for adding items to a Bill of Materials.
 
 Adding an item to a BOM posts its linkable-items row back (see ``publish.bom_requests``); the Add Items picker
-finds the items through the search API (see ``item_search``).
+finds the items through the search API (see ``v3_search``).
 """
 
 from typing import Any, Dict

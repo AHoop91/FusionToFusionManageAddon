@@ -28,8 +28,8 @@ from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict, dict_rows, dig, rows_in, whole
 from .client import WORKSPACES, FmApiError, FmClient, id_of, last_segment
 from .item_view import IMAGE, load_image
-from .items import display_text, item_id_of
-from .pages import field_id
+from .items import display_text
+from .pages import field_id, item_id_of
 from .ttl_cache import TtlCache
 
 log = get_logger("fm.tableaus")

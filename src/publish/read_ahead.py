@@ -13,8 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.client import FmClient
-from ..fm.items import ItemService
-from ..fm.search_query import WORKING
+from ..fm.v3_search import WORKING, ItemFinder
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import publish_batch_size, read_publish_components
 from ..sync.item_number import item_number_of
@@ -32,7 +31,7 @@ def component_id_of(item: Dict[str, Any], summary: Dict[str, Any]) -> str:
 
 
 def _number_key(number: str) -> str:
-    """An item number as ``ItemService.find_many`` keys its answer: trimmed, in lower case."""
+    """An item number as ``ItemFinder.find_many`` keys its answer: trimmed, in lower case."""
     return number.strip().lower()
 
 
@@ -44,7 +43,7 @@ def _chunks(values: List[str], size: int) -> List[List[str]]:
 class ReadAhead:
     """Starts the shared reads of a run on entering, and waits for them to finish on leaving.
 
-    Item numbers are looked up the way ``ItemService`` keys them (trimmed, lower case), so ``found`` answers for a number however it is
+    Item numbers are looked up the way ``ItemFinder`` keys them (trimmed, lower case), so ``found`` answers for a number however it is
     written. ``hits`` is by the number as the items give it.
     """
 
@@ -96,7 +95,7 @@ class ReadAhead:
         """The hits of each number the search found. A failed search raises: the run needs every number looked for before it writes."""
         if self._cancelled():
             return {}
-        found = ItemService(self._fm, WORKING).find_many(self._workspace_id, numbers)
+        found = ItemFinder(self._fm, WORKING).find_many(self._workspace_id, numbers)
         with self._count_lock:
             self.searched += len(numbers)
             self._hits.update({number: len(found.get(_number_key(number)) or []) for number in numbers})

@@ -1,7 +1,7 @@
 import unittest
 
 from src.fm.client import UPLOAD_CHUNK_BYTES, _chunks
-from src.fm.items import ItemChoices, resolve_hits
+from src.fm.v3_search import ItemChoices, resolve_hits
 from src.fm.tabs import COUNTED, TabService, parse_counts
 
 TABS = {"tabs": [

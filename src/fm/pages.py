@@ -6,9 +6,21 @@ from typing import Any
 from ..core.shapes import as_dict
 
 LINK_KEYS = ("__self__", "link", "urn")   # where an answer may name what it describes, in the order tried
+DESCRIPTOR_KEYS = ("descriptor", "itemDescriptor", "title")   # where an answer may name an item's descriptor (``9410-306 - STEP``), in the order tried
+ITEM_ID = re.compile(r"/items/(\d+)")   # the item an API link ends at, whatever workspace it names
 ITEM_LINK = re.compile(r"/workspaces/(\d+)/items/(\d+)")   # an item's API link: /api/v3/workspaces/<workspace>/items/<item>
 FIELD_ID = re.compile(r"/fields/([^/]+)/?$")   # a field's API link: .../fields/<field id>
 _TENANT = re.compile(r"[:.]([^.:]+)\.\d+\.\d+$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
+
+
+def item_id_of(row: Any) -> str:
+    """The id of the item an answer's row names ("" if none): the number after ``/items/`` in its link."""
+    row = as_dict(row)
+    for key in LINK_KEYS:
+        match = ITEM_ID.search(str(row.get(key) or ""))
+        if match:
+            return match.group(1)
+    return ""
 
 
 def tenant_of(item: Any) -> str:

@@ -34,7 +34,7 @@ from ..fm.associated_workflows import AssociatedWorkflowService
 from ..fm.change_log import ChangeLogService
 from ..fm.client import FmApiError, FmClient
 from ..fm.item_view import ItemViewService
-from ..fm.items import SEARCH_LIMIT, ItemChoices, ItemService
+from ..fm.v3_search import SEARCH_LIMIT, ItemChoices, ItemFinder
 from ..fm.permissions import VIEW_ITEMS, granted as granted_permissions
 from ..fm.tabs import TabService
 from ..fm.ttl_cache import TtlCache
@@ -794,7 +794,7 @@ class ItemPanel:
         cfg = context.cfg
         client = FmClient(context.settings, self._auth, cancel)
         with ThreadPoolExecutor(max_workers=1) as pool:
-            searching = pool.submit(ItemService(client).search, cfg.workspace_id, number)   # asked while the permissions are checked
+            searching = pool.submit(ItemFinder(client).search, cfg.workspace_id, number)   # asked while the permissions are checked
             try:
                 held = granted_permissions(client, cfg.workspace_id)
             except FmApiError as exc:

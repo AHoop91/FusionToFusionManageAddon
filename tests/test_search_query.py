@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.fm.search_query import build_query, clean_value, encode, field_id, search_path
+from src.fm.v3_search import build_query, clean_value, encode, field_id, search_path
 
 
 def row(field, value, join="AND"):

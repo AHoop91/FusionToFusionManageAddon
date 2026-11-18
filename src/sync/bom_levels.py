@@ -13,8 +13,7 @@ from ..core.timing import Stopwatch
 from ..config.workspace_models import WorkspaceConfig
 from ..fm.bom import WORKING_BIAS
 from ..fm.client import FmClient
-from ..fm.items import ItemService
-from ..fm.search_query import WORKING
+from ..fm.v3_search import WORKING, ItemFinder
 from .bom_compare import PARENT_SKIPPED, SKIPPED, UNCOMPARED, compare_bom, mark_skipped, read_and_compare_bom
 from .item_number import item_number_of
 
@@ -51,7 +50,7 @@ def search_design(fm: FmClient, cfg: WorkspaceConfig, summary: Dict[str, Any]) -
     number = item_number_of(summary)
     if not _can_look_up(cfg, number):
         return []
-    return ItemService(fm, WORKING).search(cfg.workspace_id, number)
+    return ItemFinder(fm, WORKING).search(cfg.workspace_id, number)
 
 
 def compare_design_bom(rows: List[Dict[str, Any]], summary: Dict[str, Any], cfg: WorkspaceConfig,
@@ -96,7 +95,7 @@ def compare_level(rows: List[Dict[str, Any]], parent_number: str, parent_skipped
         return {"rows": [{**row, "status": SKIPPED, "skip": PARENT_SKIPPED} for row in rows]}
     if not compared or not _can_look_up(cfg, parent_number):
         return {"rows": _with_status(rows, UNCOMPARED)}
-    hits = ItemService(fm, WORKING).search(cfg.workspace_id, parent_number)
+    hits = ItemFinder(fm, WORKING).search(cfg.workspace_id, parent_number)
     if len(hits) > 1:
         log.info("%s matches %d Fusion Manage items: its lines are not compared", parent_number, len(hits))
         return {"rows": _with_status(rows, UNCOMPARED)}

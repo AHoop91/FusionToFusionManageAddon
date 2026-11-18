@@ -14,7 +14,7 @@ ITEM = {"item_number": "PN-1", "part_number": "PN-1"}
 
 
 def service(hits=None, error=None):
-    """An ItemService whose search finds ``hits`` (or fails with ``error``) and whose read gives a fixed set of values."""
+    """An ItemFinder whose search finds ``hits`` (or fails with ``error``) and whose read gives a fixed set of values."""
     class Fake:
         def __init__(self, _fm, _revision=1):
             pass
@@ -27,7 +27,7 @@ def service(hits=None, error=None):
         def read(self, _workspace, item_id):
             return {"read": item_id}
 
-    return mock.patch.object(item_compare, "ItemService", Fake)
+    return mock.patch.multiple(item_compare, ItemService=Fake, ItemFinder=Fake)
 
 
 class LookupTests(unittest.TestCase):
