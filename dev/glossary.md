@@ -135,12 +135,13 @@ Every script attaches to `window.MfgUi` (`ns`). Load order is in each `index.htm
 | A header with logo, avatar and account card | `shell.js`, `account.js` (also the hub role pill) | |
 | Sign-in and view switching | `auth.js` | |
 | Tab strips | `tabs.js` | |
+| A section card that folds (a form or item section) | `ns.section.make(title, content, {folded})`, styled by `shared/css/section.css` | The Product Portfolio form and the Item panel both use it |
 | A short message at the bottom | `ns.toast.show` | |
 | A tooltip that shows quickly | `ns.tooltip` | |
 | A progress card for an upload | `ns.uploadProgress` | |
 | A report of what differs from Fusion Manage | `ns.diffReport` | |
 
-Shared stylesheets are in `ui/web/shared/css/`: `base.css` (tokens, reset, the scrollbar), `components.css` (buttons, cards, fields), `layout.css`, `header.css`, `picker.css`, `toast.css`, `tooltip.css`, `progress.css`, `upload-progress.css`, `diff-report.css`. Use their classes and tokens; do not restyle a button or a scrollbar.
+Shared stylesheets are in `ui/web/shared/css/`: `base.css` (tokens, reset, the scrollbar), `components.css` (buttons, cards, fields), `layout.css`, `header.css`, `picker.css`, `section.css`, `toast.css`, `tooltip.css`, `progress.css`, `upload-progress.css`, `diff-report.css`. Use their classes and tokens; do not restyle a button or a scrollbar.
 
 ## Web: reusable pieces that live inside one page
 

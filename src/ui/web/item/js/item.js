@@ -281,8 +281,7 @@
   }
 
   function renderSection(section) {
-    const wrap = el('section', 'item-section');
-    const content = el('div', 'item-section-body');
+    const content = el('div');
     section.fields.forEach(function (f) {
       const row = el('div', 'item-field');
       row.appendChild(el('div', 'item-field-label', f.title));
@@ -292,18 +291,7 @@
       content.appendChild(row);
     });
     section.matrices.forEach(function (m) { content.appendChild(renderMatrix(m)); });
-    if (section.title) {
-      const title = el('button', 'item-section-title', section.title);
-      title.type = 'button';
-      title.addEventListener('click', function () {
-        content.hidden = !content.hidden;
-        title.classList.toggle('item-collapsed', content.hidden);
-        wrap.classList.toggle('item-section-folded', content.hidden);
-      });
-      wrap.appendChild(title);
-    }
-    wrap.appendChild(content);
-    return wrap;
+    return ns.section.make(section.title, content);
   }
 
   function renderHeader(view) {

@@ -1030,10 +1030,9 @@
     formFields = [];
     formParts = [];
     form.sections.forEach(function (section, index) {
-      const card = el('section', 'pf-section');
-      const part = { card: card, rows: [], grids: [] };
+      const content = el('div');
+      const part = { card: null, rows: [], grids: [] };
       formParts.push(part);
-      const content = el('div', 'pf-section-body');
       section.fields.forEach(function (field) {
         const line = fieldLine(field);
         if (field.kind === 'auto' || field.kind === 'info') {   // not editable, but the filters still apply to it
@@ -1053,23 +1052,9 @@
         part.grids.push({ wrap: wrap, records: records });
         content.appendChild(wrap);
       });
-      const title = el('button', 'pf-section-title');
-      title.type = 'button';
-      title.appendChild(el('span', '', section.title + ' (' + (index + 1) + ' of ' + form.sections.length + ')'));
-      title.appendChild(ns.svg(['M6 9l6 6 6-6'], 20));
-      title.setAttribute('aria-expanded', String(!section.collapsed));
-      if (section.collapsed) {   // as the workspace has it: folded until it is opened
-        content.hidden = true;
-        card.classList.add('folded');
-      }
-      title.addEventListener('click', function () {
-        content.hidden = !content.hidden;
-        card.classList.toggle('folded', content.hidden);
-        title.setAttribute('aria-expanded', String(!content.hidden));
-      });
-      card.appendChild(title);
-      card.appendChild(content);
-      body.appendChild(card);
+      // as the workspace has it: a section it holds folded starts folded
+      part.card = ns.section.make(section.title + ' (' + (index + 1) + ' of ' + form.sections.length + ')', content, { folded: section.collapsed });
+      body.appendChild(part.card);
     });
     if (!formFields.length) body.appendChild(el('p', 'form-empty', t('products.form_empty')));
     applyFormFilters();

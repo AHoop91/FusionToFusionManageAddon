@@ -152,19 +152,11 @@ body { background: #f5f5f5; }
 .form-empty { padding: 24px 0; color: var(--muted); }
 .form-star { color: var(--danger); font-weight: 600; }
 
-.pf-section { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }   /* not clipped: a picker opens over the edge of its section */
-.pf-section:not(.folded) .pf-section-title { border-bottom: 1px solid var(--border); }
-.pf-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; margin: 0; padding: 10px 14px; border: 0; border-radius: 7px 7px 0 0; background: #f4f5f8; color: #3b4450; font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
-.pf-section.folded .pf-section-title { border-radius: 7px; }
-.pf-section-title:hover { background: #eceef3; }
-.pf-section-title:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.pf-section-title svg { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
-.pf-section.folded .pf-section-title svg { transform: rotate(-90deg); }
-.pf-section-body { padding: 12px 14px 14px; }
-.pf-section-body .item-matrix-wrap { margin-top: 6px; }
-
 .pf-field { display: grid; grid-template-columns: minmax(90px, 150px) minmax(0, 1fr) 22px; align-items: center; gap: 4px 14px; padding: 4px 0; }
 .pf-field.top { align-items: start; }
+/* A faint rule between the fields of a section, as the Item panel draws it (the last field of a section has none). */
+.section-body > .pf-field { padding: 6px 0; border-bottom: 1px solid rgba(0, 0, 0, 0.07); }
+.section-body > .pf-field:last-child { border-bottom: 0; }
 .pf-label { text-align: right; font-size: 13px; font-weight: 500; color: #3b4450; overflow-wrap: anywhere; }
 .pf-field.top .pf-label { padding-top: 5px; }
 .pf-value { min-width: 0; }
