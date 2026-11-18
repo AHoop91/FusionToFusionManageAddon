@@ -19,7 +19,8 @@
   let usageSeq = 0;   // numbers the checks, so the answer to an earlier one is dropped
 
   const USAGE_PAGE = 25;   // cards shown at first in each group, and added by each press of Load more
-  const EMPTY_ICON = ['M3 7l9-4 9 4-9 4-9-4z', 'M3 7v10l9 4 9-4V7', 'M12 11v10'];   // an empty box: the design is in no product
+  const EXTERNAL_ICON = ['M15 3h6v6', 'M10 14L21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'];   // a square with an arrow out of it
+  const EMPTY_ICON =['M3 7l9-4 9 4-9 4-9-4z', 'M3 7v10l9 4 9-4V7', 'M12 11v10'];   // an empty box: the design is in no product
   const PICTURE_ICON = ['M3 5h18v14H3z', 'M3 15l5-5 4 4 3-3 6 6'];   // stands in for a picture there is not
   const usagePictures = {};   // picture link -> data uri ('' when there is none)
 
@@ -93,6 +94,7 @@
       const item = el('button', 'products-menu-item', '');
       item.type = 'button';
       item.setAttribute('role', 'menuitem');
+      item.appendChild(ns.svg(entry.icon, 16));
       item.appendChild(el('span', 'products-menu-label', entry.label));
       item.addEventListener('click', entry.run);
       list.appendChild(item);
@@ -115,7 +117,7 @@
     if (variant) meta.appendChild(el('span', '', product.rows > 1 ? t('products.usage_rows', { count: product.rows }) : t('products.usage_row')));
     info.appendChild(meta);
     card.appendChild(info);
-    card.appendChild(usageMenu([{ label: t('products.usage_open'), run: function () { bridge.send('open_url', { url: product.url }); } }]));
+    card.appendChild(usageMenu([{ label: t('products.usage_open'), icon: EXTERNAL_ICON, run: function () { bridge.send('open_url', { url: product.url }); } }]));
     return card;
   }
 
