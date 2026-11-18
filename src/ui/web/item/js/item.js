@@ -11,9 +11,6 @@
   const t = ns.i18n.t;
   const POLL_INTERVAL_MS = 2000;   // Python pushes the item when it is read; this only asks now and then, in case a push is missed
   const UPLOAD_POLL_MS = 2000;   // likewise for the progress of an upload
-  const LABEL_COLUMN_WIDTH = '16%';   // the row labels; the other columns share the rest equally
-  const MIN_COLUMN_PX = 50;
-  const MIN_MATRIX_COLUMN_PX = 120;   // a matrix column is never squeezed below this by a narrow panel
 
   let timer = null;
   let shownSeq = 0;   // the open that is on screen, so a poll for it does not redraw
@@ -188,110 +185,6 @@
   function closeLightbox() {
     $('item-lightbox').hidden = true;
     $('item-lightbox-img').removeAttribute('src');
-  }
-
-  /** Fill ``node`` with a value: text, a picture, or the (sanitised) markup of a formula field. */
-  function fill(node, cell) {
-    if (cell.kind === 'image') {
-      if (!cell.value) return;
-      const img = el('img', 'item-image');
-      img.src = cell.value;
-      img.alt = '';
-      img.title = t('item.enlarge');
-      img.addEventListener('click', function () { openLightbox(cell.value); });
-      node.appendChild(img);
-    } else if (cell.kind === 'links') {
-      cell.value.forEach(function (link, i) {
-        if (i) node.appendChild(document.createTextNode(', '));
-        const a = el('a', 'item-link', link.title);
-        a.href = '#';
-        a.title = t('item.open_in_fusion_manage');
-        a.addEventListener('click', function (event) {
-          event.preventDefault();
-          bridge.send('open_url', { url: link.url });
-        });
-        node.appendChild(a);
-      });
-    } else if (cell.kind === 'html') {
-      ns.safeHtml.render(node, cell.value);
-    } else {
-      node.textContent = cell.value;
-    }
-  }
-
-  /**
-   * Let the user drag the right edge of a column header to resize that column (not below ``MIN_COLUMN_PX``).
-   * Only that column changes. The last column (which has no handle) stretches to fill any space left in the
-   * section, but never shrinks below the width it started with, so widening a column past the section's edge
-   * adds a horizontal scroll bar instead. The first drag fixes every column at its current pixel width.
-   */
-  function makeResizable(table, cols, heads) {
-    const last = heads.length - 1;
-    let lastFloor = 0;   // the last column's width before any drag
-    function freeze() {
-      const widths = heads.map(function (th) { return th.getBoundingClientRect().width; });
-      if (!lastFloor) lastFloor = widths[last];
-      widths.forEach(function (w, i) { cols[i].style.width = w + 'px'; });
-    }
-    function apply() {
-      let others = 0;
-      for (let i = 0; i < last; i++) others += parseFloat(cols[i].style.width);
-      const width = Math.max(lastFloor, table.parentNode.clientWidth - others);
-      cols[last].style.width = width + 'px';
-      table.style.width = (others + width) + 'px';
-    }
-    heads.slice(0, last).forEach(function (th, i) {
-      th.appendChild(ns.itemTree.grip(cols[i], { min: MIN_COLUMN_PX, onResize: apply, beforeDrag: freeze }));
-    });
-  }
-
-  function renderMatrix(matrix) {
-    const table = el('table', 'item-matrix');
-    const cols = [];
-    for (let i = 0; i <= matrix.columns.length; i++) {   // the first is the column of row labels, a little wider
-      const col = el('col');
-      if (i === 0) col.style.width = LABEL_COLUMN_WIDTH;
-      cols.push(col);
-    }
-    table.appendChild(el('colgroup')).append(...cols);
-    const head = el('tr');
-    const heads = [el('th')];   // the column of row labels
-    matrix.columns.forEach(function (c) {
-      const th = el('th', '', c);
-      th.title = c;
-      heads.push(th);
-    });
-    table.style.minWidth = (heads.length * MIN_MATRIX_COLUMN_PX) + 'px';   // never narrower than this: a narrow panel scrolls the grid sideways instead (the table is 100% wide above it)
-    heads.forEach(function (th) { head.appendChild(th); });
-    makeResizable(table, cols, heads);
-    table.appendChild(head);
-    matrix.rows.forEach(function (row, i) {
-      const tr = el('tr');
-      tr.appendChild(el('td', 'item-matrix-label', matrix.labels[i]));
-      row.forEach(function (cell) {
-        const td = el('td');
-        fill(td, cell);
-        tr.appendChild(td);
-      });
-      table.appendChild(tr);
-    });
-    const wrap = el('div', 'item-matrix-wrap');   // a wide grid scrolls sideways
-    wrap.appendChild(table);
-    return wrap;
-  }
-
-  function renderSection(section) {
-    const content = el('div');
-    section.fields.forEach(function (f) {
-      const row = el('div', 'item-field');
-      row.appendChild(el('div', 'item-field-label', f.title));
-      const value = el('div', 'item-field-value');
-      fill(value, f);
-      row.appendChild(value);
-      content.appendChild(row);
-    });
-    section.matrices.forEach(function (m) { content.appendChild(renderMatrix(m)); });
-    return ns.section.make(section.title, content);
   }
 
   function renderHeader(view) {
@@ -516,7 +409,7 @@
     const body = $('item-body');
     body.replaceChildren();
     if (!view.sections.length) { message(t('item.no_fields')); return; }
-    view.sections.forEach(function (section) { body.appendChild(renderSection(section)); });
+    view.sections.forEach(function (section) { body.appendChild(ns.itemSections.section(section, openLightbox)); });
   }
 
   function handle(r) {

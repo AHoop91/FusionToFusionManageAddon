@@ -95,7 +95,7 @@ class FieldsTests(unittest.TestCase):
         found, error = self.fields(field("ZED"), field("TYPE", type={"title": "Single Selection"}, picklist="/api/v3/lookups/KINDS"), {"name": "no id"})
         self.assertEqual(error, "")
         self.assertEqual([f["id"] for f in found], ["TYPE", "ZED"])
-        self.assertEqual(found[0], {"id": "TYPE", "title": "Type", "type": "Single Selection", "picklist": "KINDS", "link_lookup": "", "shown": True, "computed": False})
+        self.assertEqual(found[0], {"id": "TYPE", "title": "Type", "type": "Single Selection", "picklist": "KINDS", "link_lookup": "", "shown": True, "computed": False, "order": 0})
 
     def test_a_field_that_links_to_another_workspace_or_cannot_be_edited_is_text(self):
         found, _ = self.fields(field("LINK", picklist="/api/v3/lookups/WS", picklistFieldDefinition="x"), field("LOCKED", picklist="/api/v3/lookups/L", editability="NEVER"))

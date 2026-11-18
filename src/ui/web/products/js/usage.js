@@ -68,12 +68,19 @@
     return box;
   }
 
-  /** Open the design a product's Primary Component was published from, in Fusion: Python reads the design's id from the component's item, then
-   *  Fusion opens it (``products_open_file``). Not offered on this page, where the design is open already: a menu entry
-   *  (``openInFusion(product.component)``) and the text "Open in Fusion" are all it needs. */
-  function openInFusion(component) {
+  /** Open the design a component was published from, in Fusion: Python reads the design's id from the component's item, then Fusion opens it
+   *  (``products_open_file``). Not offered on this page, where the design is open already; the browse screen uses it (``init`` hands it out).
+   *  ``done`` is called when it is over, opened or not: the button that asked shows it is under way until then. */
+  const opening = [];   // the ``done`` of each design being opened, in the order Fusion answers them
+
+  function openInFusion(component, done) {
     host.ask('products_design_file', { link: component }, function (answer) {
-      if (!answer.ok) { ns.toast.show(t('products.usage_open_failed', { reason: host.failure(answer) }), { tone: 'error' }); return; }
+      if (!answer.ok) {
+        ns.toast.show(t('products.usage_open_failed', { reason: host.failure(answer) }), { tone: 'error' });
+        if (done) done();
+        return;
+      }
+      opening.push(done);
       bridge.send('products_open_file', { file: answer.result.file });
     });
   }
@@ -306,13 +313,15 @@
     });
   }
 
-  /** Wire the screen to the page. Returns ``{load}``: ``load()`` checks where the design is used and shows the answer. */
+  /** Wire the screen to the page. Returns ``{load, openInFusion}``: ``load()`` checks where the design is used and shows the answer. */
   function init(lent) {
     host = lent;
     bridge.on('products_open_file', function (answer) {   // Fusion's own answer: only a failure is said
       if (!answer.ok) ns.toast.show(t('products.usage_open_failed', { reason: answer.error }), { tone: 'error' });
+      const done = opening.shift();
+      if (done) done();
     });
-    return { load: loadUsage };
+    return { load: loadUsage, openInFusion: openInFusion };
   }
 
   ns.usage = { init: init };

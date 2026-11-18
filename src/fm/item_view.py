@@ -200,7 +200,8 @@ def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoade
         if section:
             sections.append(section)
     return {"title": str(item.get("title") or ""), "workspace": str(dig(item, "workspace", "title") or ""),
-            "header": _header(item, header_cells), "url": item_page(base_url, item), "sections": sections}
+            "header": _header(item, header_cells), "state": display_text(item.get("currentState")), "url": item_page(base_url, item),
+            "sections": sections}
 
 
 class ItemViewService:

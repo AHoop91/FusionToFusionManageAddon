@@ -61,13 +61,14 @@ def _field(row: Dict[str, Any], field_id: str) -> Field:
 
     A fixed-list field takes one of its lookup's options. A field that links to another workspace (``picklistFieldDefinition``) and a field
     nobody can edit are left as text; the first keeps its lookup as ``link_lookup``. ``shown`` is whether the field is shown on items and
-    ``computed`` whether Fusion Manage works its value out."""
+    ``computed`` whether Fusion Manage works its value out; ``order`` is where Fusion Manage lays it out (its ``displayOrder``)."""
     lookup_name = last_segment(row.get("picklist"))
     links = bool(row.get("picklistFieldDefinition"))
     return {"id": field_id, "title": str(row.get("name") or field_id),
             "type": str(as_dict(row.get("type")).get("title") or ""),
             "picklist": "" if links or row.get("editability") == "NEVER" else lookup_name,
-            "link_lookup": lookup_name if links else "", "shown": not not_shown(row, set()), "computed": is_computed(row)}
+            "link_lookup": lookup_name if links else "", "shown": not not_shown(row, set()), "computed": is_computed(row),
+            "order": whole(row.get("displayOrder"))}
 
 
 def is_computed(row: Dict[str, Any]) -> bool:

@@ -18,6 +18,8 @@ EXPORT_COMMAND_ID = "MfgToFm_ExportCmd"
 EXPORT_PALETTE_ID = "MfgToFm_ExportPalette"
 PRODUCT_COMMAND_ID = "MfgToFm_AssignProductCmd"
 PRODUCT_PALETTE_ID = "MfgToFm_ProductPalette"
+BROWSE_COMMAND_ID = "MfgToFm_BrowseProductsCmd"   # the button in Fusion's quick access toolbar, which works with no design open
+QUICK_ACCESS_TOOLBAR_ID = "QAT"   # Fusion's own id of that toolbar, the bar at the very top
 
 # Native ribbon. The workspace id is appended to the tab and panel ids.
 RIBBON_TAB_ID = "MfgToFm_Tab"

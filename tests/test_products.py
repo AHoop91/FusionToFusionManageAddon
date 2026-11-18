@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from src.config.workspace_models import PORTFOLIO_KIND, WorkspaceConfig
+from src.config.workspace_models import PORTFOLIO_KIND, VariantsConfig, WorkspaceConfig
 from src.fm.client import FmApiError, SendResult
 from src.fm.components import Candidate
 from src.publish import products
@@ -17,6 +17,10 @@ with fusion_modules_stubbed():
     from src.ui.actions import product_actions
     from src.ui.actions.product_actions import ProductReads
     from src.ui.message_bridge import MessageBridge
+    from src.ui.product_mode import BROWSE, PRODUCT_MODE, USAGE
+
+
+CONTEXTS = SimpleNamespace(attempt=lambda: (SimpleNamespace(stamp="stamp-1"), ""))   # the hub context the Item panel's tabs are asked under
 
 
 class CreateTests(unittest.TestCase):
@@ -185,13 +189,63 @@ class AssignTests(unittest.TestCase):
     def test_inspect_says_how_the_primary_component_and_each_grid_row_stand_to_the_component(self):
         self.held({"link": "/api/v3/lookups/COMPONENTS/options/4", "title": "PN-1 - Axle"})
         self.client.get_json.return_value = self.GRID
-        self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "title": "Variant", "link_lookup": "COMPONENTS"},
-                                                                 {"id": "QTY", "title": "Quantity", "link_lookup": ""}], "")
+        self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "title": "Variant", "link_lookup": "COMPONENTS", "order": 1, "shown": True},
+                                                                 {"id": "QTY", "title": "Quantity", "link_lookup": "", "order": 2, "shown": True}], "")
         info = ProductService(self.client).inspect("77", "901", "PN-1", "PRIMARY", "VARIANT")
         self.assertEqual((info["product"], info["primary_state"], info["component"]), ("24-1 - Gearbox", "revision", self.LINK))
         self.assertEqual([r["state"] for r in info["rows"]], ["same", "revision", "other"])
         self.assertEqual(info["rows"][0]["cells"], {"VARIANT": "PN-1 - Axle", "QTY": "2"})
         self.assertEqual([c["title"] for c in info["columns"]], ["Variant", "Quantity"])
+
+    def test_contents_lists_the_primary_component_and_the_rows_of_the_grid_with_no_design(self):
+        self.held({"link": "/api/v3/workspaces/9/items/4", "title": "PN-1 - Axle"})
+        self.client.get_json.return_value = self.GRID
+        self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "title": "Variant", "link_lookup": "COMPONENTS", "order": 1, "shown": True},
+                                                                 {"id": "QTY", "title": "Quantity", "link_lookup": "", "order": 2, "shown": True}], "")
+        info = ProductService(self.client).contents("77", "901", "PRIMARY", "VARIANT")
+        self.assertEqual((info["product"], info["primary"]), ("24-1 - Gearbox", {"link": "/api/v3/workspaces/9/items/4", "title": "PN-1 - Axle"}))
+        self.assertEqual([(r["title"], r["link"]) for r in info["rows"]], [("PN-1 - Axle", "/api/v3/lookups/COMPONENTS/options/5"),
+                                                                       ("PN-1 - Axle", "/api/v3/lookups/COMPONENTS/options/4"),
+                                                                       ("PN-9 - Gear", "/api/v3/lookups/COMPONENTS/options/8")])
+        self.assertEqual(info["rows"][0]["cells"], {"VARIANT": "PN-1 - Axle", "QTY": "2"})
+
+    def test_a_row_of_the_grid_has_the_page_in_fusion_manage_of_the_component_it_names(self):
+        self.held(None)
+        self.client.base_url, self.client.tenant = "https://acme.autodeskplm360.net", "ACME"
+        self.client.get_json.return_value = {"rows": [
+            {"__self__": "/api/v3/workspaces/77/items/901/views/13/rows/1", "rowData": [
+                {"__self__": "/api/v3/workspaces/77/views/13/fields/VARIANT", "value": {"link": "/api/v3/workspaces/57/items/9", "title": "PN-1 - Axle"}}]}]}
+        self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "title": "Variant", "link_lookup": "COMPONENTS", "order": 1, "shown": True}], "")
+        row = ProductService(self.client).contents("77", "901", "PRIMARY", "VARIANT")["rows"][0]
+        self.assertEqual((row["link"], row["title"]), ("/api/v3/workspaces/57/items/9", "PN-1 - Axle"))
+        self.assertTrue(row["url"].startswith("https://acme.autodeskplm360.net/plm/workspaces/57/items/itemDetails"))
+
+    def test_the_id_of_a_row_is_not_a_column_of_the_grid(self):
+        self.held(None)
+        self.client.get_json.return_value = {"rows": [{"__self__": "/api/v3/workspaces/77/items/901/views/13/rows/5", "rowData": [
+            {"__self__": "/api/v3/workspaces/77/items/901/views/13/rows/5", "title": "Row Id", "value": 5},
+            {"__self__": "/api/v3/workspaces/77/views/13/fields/SKU", "title": "SKU", "value": "A-1"}]}]}
+        self.workspace.return_value.grid_fields.return_value = ([{"id": "SKU", "title": "SKU", "order": 1, "shown": True}], "")
+        info = ProductService(self.client).contents("77", "901", "PRIMARY", "")
+        self.assertEqual(([c["title"] for c in info["columns"]], info["rows"][0]["cells"]), (["SKU"], {"SKU": "A-1"}))
+
+    def test_the_columns_of_the_grid_are_in_the_order_fusion_manage_lays_them_out_whatever_the_rows_hold(self):
+        self.held(None)
+        self.client.get_json.return_value = {"rows": []}
+        self.workspace.return_value.grid_fields.return_value = ([
+            {"id": "BOM", "title": "BOM", "order": 5, "shown": True}, {"id": "TITLE", "title": "Title", "order": 1, "shown": True},
+            {"id": "HIDDEN", "title": "Hidden", "order": 2, "shown": False}, {"id": "REGION", "title": "Region", "order": 3, "shown": True}], "")
+        info = ProductService(self.client).contents("77", "901", "PRIMARY", "BOM")
+        self.assertEqual([c["title"] for c in info["columns"]], ["Title", "Region", "BOM"])
+
+    def test_contents_says_there_is_no_primary_component_and_names_no_component_when_the_column_is_not_set_up(self):
+        self.held(None)
+        self.client.get_json.return_value = self.GRID
+        self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "title": "Variant", "link_lookup": "COMPONENTS", "order": 1, "shown": True}, {"id": "QTY", "title": "Quantity", "link_lookup": "", "order": 2, "shown": True}], "")
+        info = ProductService(self.client).contents("77", "901", "PRIMARY", "")
+        self.assertEqual(info["primary"], None)
+        self.assertEqual([r["link"] for r in info["rows"]], ["", "", ""])
+        self.assertEqual(info["rows"][0]["cells"]["QTY"], "2")
 
     def test_a_row_of_another_revision_is_changed_by_a_put_to_that_row(self):
         self.assertEqual(ProductService(self.client).update_variant("77", "901", "2", "PN-1", "VARIANT")["status"], "updated")
@@ -259,7 +313,7 @@ class ActionTests(unittest.TestCase):
         self.config = SimpleNamespace(config=SimpleNamespace(workspaces={PORTFOLIO_KIND: WorkspaceConfig(workspace_id="77")}),
                                       effective_settings=lambda: object())
         self.queued = []
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, contexts=CONTEXTS)
         self.service = mock.Mock()
         self.tableaus = mock.Mock()
         self.form = mock.Mock()
@@ -382,7 +436,7 @@ class ActionTests(unittest.TestCase):
         cfg.component_field, cfg.variants.link_column = "PRIMARY", "VARIANT"
         design = mock.Mock()
         design.number.return_value = "PN-1"
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         self.service.return_value.assign.return_value = {"status": "assigned"}
         self.reads.assign({"token": "t1", "item": "9", "mode": "variant"})
         self.finish()
@@ -390,7 +444,7 @@ class ActionTests(unittest.TestCase):
 
     def test_assign_needs_a_product_and_the_primary_field_and_for_a_variant_the_column(self):
         design = mock.Mock()
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         cfg = self.config.config.workspaces[PORTFOLIO_KIND]
         for payload in ({"item": ""}, {"item": "9"}):   # no product; no Primary component field set
             self.assertFalse(self.reads.assign(dict(payload, token="t1"))["ok"])
@@ -405,7 +459,7 @@ class ActionTests(unittest.TestCase):
         cfg.component_field, cfg.variants.link_column = "PRIMARY", "VARIANT"
         design = mock.Mock()
         design.number.return_value = "PN-1"
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         self.service.return_value.usage.return_value = {"primary": [], "variants": []}
         self.reads.usage({"token": "t1"})
         self.finish()
@@ -416,7 +470,7 @@ class ActionTests(unittest.TestCase):
         self.config.config.workspaces[PORTFOLIO_KIND].component_field = "PRIMARY"
         design = mock.Mock()
         design.number.side_effect = NoItemNumber("No item number yet.")
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         self.reads.usage({"token": "t1"})
         self.finish()
         answer = self.reads.status({"token": "t1"})
@@ -427,7 +481,7 @@ class ActionTests(unittest.TestCase):
     def test_design_gives_the_data_model_details_and_the_revision_and_state_of_its_item(self):
         design = mock.Mock()
         design.describe.return_value = {"number": "PN-1", "name": "Axle", "thumbnail_url": "https://x/t.png"}
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         with mock.patch.object(product_actions, "ComponentService") as components:
             components.return_value.revision_and_state.return_value = ("B", "Released")
             self.reads.design({"token": "t1"})
@@ -439,7 +493,7 @@ class ActionTests(unittest.TestCase):
     def test_design_with_no_item_in_fusion_manage_still_gives_its_details(self):
         design = mock.Mock()
         design.describe.return_value = {"number": "PN-1", "name": "Axle", "thumbnail_url": ""}
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         with mock.patch.object(product_actions, "ComponentService") as components:
             components.return_value.revision_and_state.return_value = ("", "")
             self.reads.design({"token": "t1"})
@@ -450,7 +504,7 @@ class ActionTests(unittest.TestCase):
     def test_design_that_is_not_saved_gives_blank_details_and_not_an_error(self):
         design = mock.Mock()
         design.describe.side_effect = NoItemNumber("Save the design first.")
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         self.reads.design({"token": "t1"})
         self.finish()
         answer = self.reads.status({"token": "t1"})
@@ -458,7 +512,7 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(answer["result"]["name"], "")
 
     def test_design_file_reads_the_lineage_of_the_component_item(self):
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, mock.Mock())
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, mock.Mock(), contexts=CONTEXTS)
         with mock.patch.object(product_actions, "ComponentService") as components:
             components.return_value.design_file.return_value = "urn:adsk.wipprod:dm.lineage:abc"
             self.reads.design_file({"token": "t1", "link": "/api/v3/workspaces/57/items/15677"})
@@ -468,7 +522,7 @@ class ActionTests(unittest.TestCase):
 
     def test_usage_needs_the_primary_field(self):
         design = mock.Mock()
-        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design)
+        self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         self.assertFalse(self.reads.usage({"token": "t1"})["ok"])
         self.assertEqual(self.queued, [])
 
@@ -482,13 +536,55 @@ class ActionTests(unittest.TestCase):
     def test_the_page_listens_for_the_answer_of_every_action(self):
         """An action the page does not listen for answers into the void: its card or list waits for ever."""
         scripts = Path(product_actions.__file__).parents[1] / "web" / "products" / "js"
-        page = "".join((scripts / name).read_text(encoding="utf-8") for name in ("products-page.js", "usage.js"))
+        page = "".join((scripts / name).read_text(encoding="utf-8") for name in ("products-page.js", "usage.js"))   # the scripts that listen (browse.js only asks)
         bridge = MessageBridge()
         with mock.patch.object(product_actions, "FmClient"):
             product_actions.register_product_actions(bridge, self.config, mock.Mock())
         for action in bridge._handlers:
             with self.subTest(action=action):
                 self.assertIn("'%s'" % action, page)
+
+    def test_a_product_is_read_for_browsing_with_the_fields_of_the_settings(self):
+        self.config.config.workspaces[PORTFOLIO_KIND] = WorkspaceConfig(workspace_id="77", component_field="PRIMARY",
+                                                                        variants=VariantsConfig(link_column="VARIANT"))
+        self.service.return_value.contents.return_value = {"product": "24-1 - Gearbox"}
+        self.reads.contents({"token": "t1", "item": "901"})
+        self.finish()
+        self.service.return_value.contents.assert_called_once_with("77", "901", "PRIMARY", "VARIANT")
+        self.assertEqual(self.reads.status({"token": "t1"})["result"], {"product": "24-1 - Gearbox"})
+
+    def test_a_product_is_not_read_for_browsing_without_one_chosen_or_the_primary_field(self):
+        answer = self.reads.contents({"token": "t1", "item": ""})
+        self.assertEqual(answer["ok"], False)
+        answer = self.reads.contents({"token": "t2", "item": "901"})   # no Primary component field in the settings
+        self.assertEqual(answer["ok"], False)
+
+    def test_a_product_is_read_for_browsing_as_the_item_panel_reads_an_item(self):
+        with mock.patch.object(product_actions, "ItemViewService") as service, mock.patch.object(product_actions, "granted", return_value={"view_items"}), \
+                mock.patch.object(product_actions, "TabService") as tabs:
+            service.return_value.read.return_value = {"title": "24-000002 - Universal Joint", "state": "Proposal", "tabs": {"item": {"label": "Product"}}}
+            tabs.return_value.labels.return_value = {"PART_GRID": "Product Variants"}
+            self.reads.view({"token": "t1", "item": "901"})
+            self.finish()
+        service.return_value.read.assert_called_once_with("77", "901", {"view_items"})
+        result = self.reads.status({"token": "t1"})["result"]
+        self.assertEqual((result["state"], result["stamp"], result["tabs"]["grid"]["label"]), ("Proposal", "stamp-1", "Product Variants"))
+
+    def test_a_product_has_no_grid_tab_when_the_workspace_lists_none(self):
+        with mock.patch.object(product_actions, "ItemViewService") as service, mock.patch.object(product_actions, "granted", return_value=set()),                 mock.patch.object(product_actions, "TabService") as tabs:
+            service.return_value.read.return_value = {"title": "x", "state": "", "tabs": {"item": {"label": "Product"}}}
+            tabs.return_value.labels.return_value = {"ITEM_DETAILS": "Product"}
+            self.reads.view({"token": "t1", "item": "901"})
+            self.finish()
+        self.assertEqual(list(self.reads.status({"token": "t1"})["result"]["tabs"]), ["item"])
+
+    def test_the_window_is_told_which_way_it_was_opened(self):
+        bridge = MessageBridge()
+        with mock.patch.object(product_actions, "FmClient"):
+            product_actions.register_product_actions(bridge, self.config, mock.Mock())
+        for mode in (BROWSE, USAGE):
+            PRODUCT_MODE.mode = mode
+            self.assertEqual(bridge.dispatch("products_mode", "{}")["result"], {"mode": mode})
 
     def test_the_actions_are_registered(self):
         bridge = MessageBridge()

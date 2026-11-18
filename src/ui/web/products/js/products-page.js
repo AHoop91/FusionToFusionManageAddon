@@ -24,7 +24,8 @@
   const waiting = {};        // token -> what to do with the answer
   let rowsToken = '';        // the rows read that counts: an older one that arrives late is dropped
   let started = false;       // the views have been asked for
-  let checked = false;       // the first check of where the design is used has been made
+  let checked = false;       // the window has been opened once (the sign-in is known)
+  let browsing = false;      // the window was opened to browse the products (Browse Product Portfolio), not to see where the open design is used
   let views = [];            // [{id, name}]
   let view = '';             // id of the view shown
   let viewCount = '';        // " (n)": how many records the view holds, once its rows are in
@@ -147,6 +148,7 @@
 
   // The usage screen (usage.js) asks through the page's own request, menu and picture view.
   const usage = ns.usage.init({ ask: ask, failure: failure, openLightbox: openLightbox, menu: menu, forgetMenus: forgetMenus });
+  const browser = ns.browse.init({ ask: ask, failure: failure, open: usage.openInFusion, openLightbox: openLightbox, back: function () { showScreen('list'); } });
 
   // ---- Views ---------------------------------------------------------------------------
 
@@ -158,10 +160,11 @@
     $('products-refresh-view').disabled = busy;
     $('products-view-filter').disabled = busy || !definition;
     $('products-view-columns').disabled = busy || !definition;
-    $('products-new').hidden = !canCreate;
+    $('products-new').hidden = !canCreate || browsing;   // a browser only views
     $('products-new').disabled = busy;
     $('products-edit').disabled = busy || assigning || !selected;
     $('products-assign').disabled = busy || assigning || !selected;
+    $('products-details').disabled = busy || !selected;
     $('products-prev').disabled = busy || page === 1;
     $('products-next').disabled = busy || !more;
   }
@@ -496,6 +499,7 @@
         refreshControls();
       }
       tr.addEventListener('click', function () { choose(); });
+      tr.addEventListener('dblclick', function () { if (browsing && r.id) { selected = r.id; showDetails(); } });
       tr.addEventListener('keydown', function (event) { if (event.target === tr && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); choose(); } });
       body.appendChild(tr);
     });
@@ -1084,11 +1088,32 @@
     showScreen(form ? 'form' : 'list');
   }
 
-  /** Show one of the three screens: ``usage`` (where the open design is used), ``list`` (the products, to assign it to one) or ``form``. */
+  /** Show one of the screens: ``usage`` (where the open design is used), ``list`` (the products, to assign it to one, or to browse), ``form``, or
+   *  ``browse`` (what one product holds). */
   function showScreen(name) {
     $('products-usageview').hidden = name !== 'usage';
+    $('products-browseview').hidden = name !== 'browse';
     document.querySelector('.products').hidden = name !== 'list';
     $('products-formview').hidden = name !== 'form';
+  }
+
+  /** The window is opened (or opened again) the way Python says: to browse the products, or to see where the open design is used. */
+  function enter(mode) {
+    browsing = mode === 'browse';
+    ['products-back', 'products-edit', 'products-assign'].forEach(function (id) { $(id).hidden = browsing; });   // a browser has no design to assign
+    $('products-details').hidden = !browsing;
+    refreshControls();   // Create New Product is not offered to a browser
+    if (browsing) { showScreen('list'); loadViews(); return; }
+    showScreen('usage');
+    usage.load();
+    if (started) loadViews();
+  }
+
+  /** What is held of a product, shown on the browse screen. */
+  function showDetails() {
+    if (!selected) return;
+    showScreen('browse');
+    browser.show(selected);
   }
 
   /** The list of products: asked for the first time it is shown. */
@@ -1757,7 +1782,7 @@
   /** The sign-in state is known: the page is ready, or the sign-in screen is shown. */
   function signInKnown(signedIn) {
     $('products-ready').hidden = true;
-    if (signedIn && !checked) { checked = true; showScreen('usage'); usage.load(); }
+    if (signedIn && !checked) { checked = true; bridge.send('products_mode'); }
   }
 
   (function start() {
@@ -1771,8 +1796,9 @@
     ns.account.init();
     ns.auth.init();
 
-    ['products_views', 'products_columns', 'products_fields', 'products_image', 'products_picture', 'products_filter', 'products_create_view', 'products_rename_view', 'products_delete_view', 'products_rows', 'products_form', 'products_variant_form', 'products_inspect', 'products_usage', 'products_design', 'products_design_file', 'products_options', 'products_create', 'products_item', 'products_update', 'products_assign', 'products_status'].forEach(function (action) { bridge.on(action, onAnswer); });
-    bridge.on('palette_opened', function () { if (started) loadViews(); if (checked) { showScreen('usage'); usage.load(); } ns.auth.refresh(); });
+    ['products_views', 'products_columns', 'products_fields', 'products_image', 'products_picture', 'products_filter', 'products_create_view', 'products_rename_view', 'products_delete_view', 'products_rows', 'products_form', 'products_variant_form', 'products_inspect', 'products_usage', 'products_view', 'products_contents', 'products_design', 'products_design_file', 'products_options', 'products_create', 'products_item', 'products_update', 'products_assign', 'products_status'].forEach(function (action) { bridge.on(action, onAnswer); });
+    bridge.on('products_mode', function (answer) { if (answer.ok) enter(answer.result.mode); });
+    bridge.on('palette_opened', function () { if (checked) bridge.send('products_mode'); ns.auth.refresh(); });
 
     $('products-refresh-view').addEventListener('click', function () { loadRows(page); });
     menu($('products-actions'), $('products-actions-list'));
@@ -1783,6 +1809,7 @@
     $('products-new').addEventListener('click', function () { openForm(''); });
     $('products-edit').addEventListener('click', function () { openForm(selected); });
     $('products-assign').addEventListener('click', startAssign);
+    $('products-details').addEventListener('click', showDetails);
     $('products-usage-assign').addEventListener('click', openList);
     $('products-back').addEventListener('click', function () { showScreen('usage'); });
     $('products-usage-recheck').addEventListener('click', usage.load);

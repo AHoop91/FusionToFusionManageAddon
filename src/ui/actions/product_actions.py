@@ -8,17 +8,21 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
+from ...config.hub_context import HubContexts
 from ...config.workspace_models import KINDS_BY_ID, PORTFOLIO_KIND, WorkspaceConfig, kind_texts
 from ...core.i18n import t
 from ...core.shapes import whole
 from ...fm.client import FmClient
 from ...fm.components import LINEAGE, ComponentService
-from ...fm.permissions import ADD_ITEMS, may
+from ...fm.item_view import ItemViewService
+from ...fm.permissions import ADD_ITEMS, granted, may
+from ...fm.tabs import GRID_TAB, TabService
 from ...fm.workspace_form import WorkspaceFormService
 from ...fm.tableaus import TableauService
 from ...publish.products import REPLACE, REPLACE_MOVE, VARIANT, VARIANT_UPDATE, NotAllowed, ProductService
 from ..item_number_error import NoItemNumber
 from ..message_bridge import MessageBridge
+from ..product_mode import PRODUCT_MODE
 from .background import Runner, in_thread, why
 from .design_number import OpenDesign
 from .search_actions import PickerReads, answer_for, token_of
@@ -49,8 +53,10 @@ NO_DESIGN = {"number": "", "name": "", "thumbnail_url": "", "revision": "", "sta
 class ProductReads(PickerReads):
     """The reads and the create of the Assign Product panel, one answer for each request token."""
 
-    def __init__(self, config: ConfigService, make_client: Callable[[], FmClient], run: Runner = in_thread, design: Any = None) -> None:
+    def __init__(self, config: ConfigService, make_client: Callable[[], FmClient], run: Runner = in_thread, design: Any = None, *,
+                 contexts: HubContexts) -> None:
         super().__init__(config, make_client, run)
+        self._contexts = contexts   # gives the ``stamp`` the Item panel's tabs ask for
         self._design = design or OpenDesign()   # which design is open, and its item number
 
     def _cfg(self) -> Optional[WorkspaceConfig]:
@@ -185,6 +191,39 @@ class ProductReads(PickerReads):
         return self._in_workspace(payload, lambda client, workspace: ProductService(client).inspect(
             workspace, item, self._design.number(ref), field, column))
 
+    def view(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """One product as the Item panel shows an item: its title, workflow state, tabs and every section of fields, read by ``ItemViewService``.
+        ``stamp`` is what the page sends with the look-ups of the tabs (the Item panel's own); ``tabs["grid"]`` is the Grid tab, named as the
+        workspace names it, when it has one."""
+        item = str(payload.get("item") or "")
+        if not item:
+            return answer_for(token_of(payload), message=t("app.product_choose_first"))
+
+        def look(client: FmClient, workspace: str) -> Dict[str, Any]:
+            context, reason = self._contexts.attempt()
+            if context is None:
+                raise ValueError(reason)
+            view = ItemViewService(client).read(workspace, item, granted(client, workspace))
+            view["stamp"] = context.stamp
+            label = TabService(client).labels(workspace).get(GRID_TAB)
+            if label:
+                view["tabs"]["grid"] = {"label": label, "count": 0, "allowed": True}
+            return view
+
+        return self._in_workspace(payload, look)
+
+    def contents(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """What one product holds of components, for browsing: its Primary Component and the rows of its Variants grid (see ``ProductService.contents``)."""
+        item = str(payload.get("item") or "")
+        cfg = self._cfg()
+        token = token_of(payload)
+        if not item:
+            return answer_for(token, message=t("app.product_choose_first"))
+        if not cfg or not cfg.component_field:
+            return answer_for(token, message=t("app.product_no_primary_field"))
+        field, column = cfg.component_field, cfg.variants.link_column
+        return self._in_workspace(payload, lambda client, workspace: ProductService(client).contents(workspace, item, field, column))
+
     def usage(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Where the open design is used in the portfolio: as a Primary Component, as a variant, or not at all (see ``ProductService.usage``).
         A design with no item number is answered ``{"unpublished": True, "message"}``: it is not in Fusion Manage, which is not an error."""
@@ -263,7 +302,7 @@ def _values(payload: Dict[str, Any], key: str = "values") -> Dict[str, Any]:
 def register_product_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService) -> None:
     """Register the actions of the panel: ``products_*`` for views, columns, fields (every field a view can be filtered by), filter (save), rows, form, options (a page
     of the items a linked field may take), create, item (the values of one product), update and assign (the open design to a product), and ``products_status`` to poll for an answer."""
-    reads = ProductReads(config, lambda: FmClient(config.effective_settings(), auth))
+    reads = ProductReads(config, lambda: FmClient(config.effective_settings(), auth), contexts=HubContexts(config, auth.session))
     bridge.register("products_views", reads.views)
     bridge.register("products_columns", reads.columns)
     bridge.register("products_fields", reads.fields)
@@ -282,6 +321,9 @@ def register_product_actions(bridge: MessageBridge, config: ConfigService, auth:
     bridge.register("products_variant_form", reads.variant_form)
     bridge.register("products_inspect", reads.inspect)
     bridge.register("products_usage", reads.usage)
+    bridge.register("products_view", reads.view)
+    bridge.register("products_contents", reads.contents)
+    bridge.register("products_mode", lambda _payload: {"mode": PRODUCT_MODE.mode})   # the way the window was opened: see ``product_mode``
     bridge.register("products_create", reads.create)
     bridge.register("products_item", reads.item)
     bridge.register("products_update", reads.update)

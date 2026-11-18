@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Sequence
 
 import adsk.core
 
-from ..core.constants import RIBBON_TAB_ID, RIBBON_TAB_NAME
+from ..core.constants import QUICK_ACCESS_TOOLBAR_ID, RIBBON_TAB_ID, RIBBON_TAB_NAME
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
 
@@ -44,12 +44,24 @@ class RibbonCommand:
     needs_drawing: bool = False   # greyed out until the open drawing has loaded enough to say which item it is of (see ``SetupGate``)
     needs_portfolio: bool = False   # greyed out until the Portfolio Management workspace is set (see ``SetupGate``)
     needs_destination: bool = False   # greyed out while nothing can be exported to: no destination is set up (see ``SetupGate``)
+    run_when_created: bool = False   # run as soon as Fusion starts the command, not on its execute: with no document open Fusion starts a command but never executes it
     context: str = ""   # a right-click entry offered only in "design" or "drawing" documents; "" in either
 
 
 # Run before every command, on the main thread: the add-in sets it to look at which hub is active, so a command never uses
 # the settings of the hub that was active before.
 before_command: Callable[[], None] = lambda: None
+
+
+def _run(ui: adsk.core.UserInterface, command: RibbonCommand) -> None:
+    """Run a button's action, telling the user when it fails (it is Fusion's thread: nothing may be raised into it)."""
+    try:
+        log.info("Command executed: %s", command.command_id)
+        before_command()
+        command.on_click()
+    except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
+        log.exception("Ribbon action failed: %s", command.command_id)
+        ui.messageBox(t("app.command_failed", name=command.name, details=traceback.format_exc()))
 
 
 class _ExecuteHandler(adsk.core.CommandEventHandler):
@@ -61,13 +73,7 @@ class _ExecuteHandler(adsk.core.CommandEventHandler):
         self._command = command
 
     def notify(self, args) -> None:
-        try:
-            log.info("Command executed: %s", self._command.command_id)
-            before_command()
-            self._command.on_click()
-        except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
-            log.exception("Ribbon action failed: %s", self._command.command_id)
-            self._ui.messageBox(t("app.command_failed", name=self._command.name, details=traceback.format_exc()))
+        _run(self._ui, self._command)
 
 
 class _CreatedHandler(adsk.core.CommandCreatedEventHandler):
@@ -82,6 +88,9 @@ class _CreatedHandler(adsk.core.CommandCreatedEventHandler):
 
     def notify(self, args) -> None:
         try:
+            if self._command.run_when_created:
+                _run(self._ui, self._command)
+                return
             instance = adsk.core.CommandCreatedEventArgs.cast(args).command
             handler = _ExecuteHandler(self._ui, self._command)
             instance.execute.add(handler)
@@ -128,10 +137,14 @@ class Ribbon:
     """Creates and removes the add-in's ribbon panels for each workspace (a drawing does not get what a design does).
 
     The panels are put in Fusion's own tab called ``host_tab_name``; a workspace with no such tab gets a tab of the add-in's own instead.
+    ``toolbar_commands`` are buttons in Fusion's quick access toolbar, the bar at the very top, which shows whatever workspace or document
+    is open (or none).
     """
 
-    def __init__(self, ui: adsk.core.UserInterface, panels_by_workspace: Dict[str, Sequence[RibbonPanel]], host_tab_name: str = "") -> None:
+    def __init__(self, ui: adsk.core.UserInterface, panels_by_workspace: Dict[str, Sequence[RibbonPanel]], host_tab_name: str = "",
+                 toolbar_commands: Sequence[RibbonCommand] = ()) -> None:
         self._ui = ui
+        self._toolbar_commands = list(toolbar_commands)
         self._panels_by_workspace = {workspace_id: list(panels) for workspace_id, panels in panels_by_workspace.items()}
         self._host_tab_name = host_tab_name
         self._handlers: List[object] = []
@@ -162,7 +175,7 @@ class Ribbon:
 
     def commands(self) -> List[RibbonCommand]:
         """Every command of every workspace, each once (one definition serves a button in several workspaces)."""
-        found: Dict[str, RibbonCommand] = {}
+        found: Dict[str, RibbonCommand] = {command.command_id: command for command in self._toolbar_commands}
         for panels in self._panels_by_workspace.values():
             for panel in panels:
                 for command in panel.commands:
@@ -186,6 +199,23 @@ class Ribbon:
                 panel_id = self._panel_id(ribbon_panel, workspace_id)
                 panel = tab.toolbarPanels.itemById(panel_id) or tab.toolbarPanels.add(panel_id, ribbon_panel.name)
                 self._add_groups(panel, panel_id, ribbon_panel, definitions)
+        self._add_to_toolbar(definitions)
+
+    def _add_to_toolbar(self, definitions: Dict[str, Any]) -> None:
+        """The ``toolbar_commands`` at the end of the quick access toolbar."""
+        if not self._toolbar_commands:
+            return
+        toolbar = self._toolbar()
+        for command in self._toolbar_commands:
+            definition = definitions[command.command_id]
+            toolbar.controls.itemById(definition.id) or toolbar.controls.addCommand(definition)
+
+    def _toolbar(self) -> Any:
+        """Fusion's quick access toolbar. Raises when Fusion has none by that id."""
+        toolbar = self._ui.toolbars.itemById(QUICK_ACCESS_TOOLBAR_ID)
+        if toolbar is None:
+            raise RuntimeError(f"Fusion has no toolbar with the id '{QUICK_ACCESS_TOOLBAR_ID}'")
+        return toolbar
 
     def _add_groups(self, panel: Any, panel_id: str, ribbon_panel: RibbonPanel, definitions: Dict[str, Any]) -> None:
         """The groups of ``ribbon_panel`` in ``panel``, a separator between them."""
@@ -239,6 +269,10 @@ class Ribbon:
                         panel.deleteMe()
             if own is not None:
                 own.deleteMe()
+        for command in self._toolbar_commands:
+            control = self._toolbar().controls.itemById(command.command_id)
+            if control:
+                control.deleteMe()
         for command in self.commands():
             definition = self._ui.commandDefinitions.itemById(command.command_id)
             if definition:

@@ -21,7 +21,7 @@ from ..fm.bom import split_title
 from ..fm.components import Candidate, ComponentService, is_working, number_matches
 from ..fm.items import ItemService, display_text
 from ..fm.permissions import REFUSED
-from ..fm.pages import page_url
+from ..fm.pages import link_page, page_url
 from ..fm.tableaus import PICTURE_LINK
 from ..fm.v1_search import GRIDVIEW, Field, Sort, V1SearchService
 from ..fm.v3_search import number_key
@@ -210,21 +210,37 @@ class ProductService:
         return {"product": product, "number": number, "component": chosen.link, "revision": chosen.version, "title": chosen.title,
                 "primary": primary, "primary_state": primary["state"] if primary else "", "link_column": link_column, "columns": columns, "rows": rows}
 
+    def contents(self, workspace_id: str, item_id: str, field_id: str, link_column: str) -> Dict[str, Any]:
+        """What the product holds of components, for browsing, with no design involved: ``{"product", "primary", "link_column", "columns", "rows"}``.
+        ``primary`` is ``{"link", "title"}`` or None when it has none; ``columns`` and each of the ``rows`` of the Variants grid are as in ``inspect``,
+        a row's ``link``, ``title`` and ``url`` (its page in Fusion Manage) being the component it names ("" when it names none, or when
+        ``link_column`` is "": the Variants column is not set up). Raises ``FmApiError`` with the reason."""
+        product, values = ItemService(self._client).read_named(workspace_id, item_id)
+        current = values.get(field_id)
+        primary = None
+        if _has_value(current):
+            primary = {"link": _link_of(current), "title": display_text(current).strip()}
+        client = self._client
+        columns, rows = self._grid(workspace_id, item_id, link_column,
+                                   lambda link, title: {"link": link, "title": title, "url": link_page(client.base_url, client.tenant, link)})
+        return {"product": product, "primary": primary, "link_column": link_column, "columns": columns, "rows": rows}
+
     def _grid(self, workspace_id: str, item_id: str, link_column: str, stand: Any) -> Any:
         """The Grid tab of the product as ``(columns, rows)`` (see ``inspect``). How a grid is laid out is read loosely, and written to the log."""
         base = f"{WORKSPACES}/{workspace_id}"
         data = self._client.get_json(f"{base}/items/{item_id}/views/{GRID_VIEW}/rows")
         log.info("Grid of item %s: %.3000s", item_id, data)
-        titles = {f["id"]: f["title"] for f in WorkspaceService(self._client).grid_fields(base)[0]}
-        columns: List[Dict[str, str]] = []
+        laid_out = sorted(WorkspaceService(self._client).grid_fields(base)[0], key=lambda f: f["order"])   # as Fusion Manage lays the columns out
+        titles = {f["id"]: f["title"] for f in laid_out}
+        columns: List[Dict[str, str]] = [{"id": f["id"], "title": f["title"]} for f in laid_out if f["shown"]]
         rows: List[Dict[str, Any]] = []
         for row in rows_in(data, "rows"):
             cells: Dict[str, str] = {}
             link = title = ""
             for cell in dict_rows(as_list(row.get("rowData"))):
-                column = last_segment(cell.get("__self__"))
-                if not column:
+                if "/fields/" not in str(cell.get("__self__")):   # a cell that is not a column of the grid: the row's own id ("Row Id")
                     continue
+                column = last_segment(cell.get("__self__"))
                 value = cell.get("value")
                 cells[column] = display_text(value).strip()
                 if column == link_column and isinstance(value, dict):
@@ -232,8 +248,6 @@ class ProductService:
                 if column not in (c["id"] for c in columns):
                     columns.append({"id": column, "title": titles.get(column) or str(cell.get("title") or column)})
             rows.append({"id": last_segment(row.get("__self__")), "cells": cells, **stand(link, title)})
-        if not columns:
-            columns = [{"id": i, "title": title} for i, title in titles.items()]
         return columns, rows
 
     def usage(self, workspace_id: str, number: str, field_id: str, link_column: str) -> Dict[str, Any]:

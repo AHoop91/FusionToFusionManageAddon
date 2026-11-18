@@ -17,6 +17,8 @@ TAB_PERMISSIONS = {"item": "view_items", "files": "view_attachments", "bom": "vi
 # the tabs the page shows, by the name Fusion Manage gives them
 TABS = {"item": "ITEM_DETAILS", "files": "PART_ATTACHMENTS", "bom": "BOM_LIST", "whereused": "BOM_WHERE_USED", "workflows": "WORKFLOW_REFERENCES",
         "changelog": "PART_HISTORY"}
+# the Grid tab of a workspace, which the page of a product shows but the Item panel does not
+GRID_TAB = "PART_GRID"
 # a tab counts only the entries it lists: the Files tab lists the item's own files, not the ones related items bring (those are in the total)
 COUNTED = {"PART_ATTACHMENTS": "PART_ATTACHMENTS/DIRECT_ATTACHMENTS"}
 

@@ -3,6 +3,7 @@
 :root {
   --item-gutter: 12px;   /* space left and right of the section cards */
   --item-inset: 10px;    /* where text starts inside a card (its padding); the header and tabs line up with it */
+  --detail-bg: #eeeeee;    /* the head of an item (its name and state) and the bar of each section: a shade apart from the tabs and the content */
 }
 
 .item-bar {
@@ -11,7 +12,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px var(--item-gutter) 14px calc(var(--item-gutter) + var(--item-inset));
-  background: var(--surface);
+  background: var(--detail-bg);
 }
 
 .item-bar-text { min-width: 0; }
@@ -46,25 +47,29 @@
 .item-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 0 var(--item-gutter) 0 calc(var(--item-gutter) + var(--item-inset) - 10px);
+  gap: 0;
+  padding: 0 var(--item-gutter) 0 calc(var(--item-gutter) + var(--item-inset) - 20px);   /* a tab's own padding is 20px: its text lines up with the title */
   background: var(--surface);
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 
+/* The tabs of an item and of a product are these: Fusion Manage's own look, plain text with room around it, bold when chosen, a thin grey line under the one the pointer is on. */
 .item-tab {
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  padding: 11px 20px 9px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
   background: none;
   border: 0;
   border-bottom: 2px solid transparent;
   cursor: pointer;
 }
 
+.item-tab:hover:not(:disabled) { border-bottom-color: #b8b8b8; }
+.item-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .item-tab:disabled { cursor: default; opacity: 0.6; }
-.item-tab-active { color: var(--text); border-bottom-color: var(--accent); }
+.item-tab-active, .item-tab-active:hover:not(:disabled) { font-weight: 600; border-bottom-color: var(--accent); }
 
 #item-body {
   padding: 12px var(--item-gutter) 24px;
@@ -77,6 +82,8 @@
 /* A section is the shared card (shared/css/section.css); a narrow panel scrolls it sideways rather than crushing it. */
 #item-body .section { min-width: 460px; }
 #item-body .section + .section { margin-top: 10px; }
+#item-body .section-title { background: var(--detail-bg); }
+#item-body .section-title:hover { background: #e4e4e4; }
 
 /* A field is a label and its value side by side; empty values stay so the layout matches Fusion Manage. */
 .item-field {
@@ -215,11 +222,24 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: var(--bg);
+  background: var(--header-bg);   /* the grey of the bar at the top, with the avatar */
+  border-bottom-color: #b4b4b4;   /* darker than the grey it is on, or the line is not seen */
 }
 
+.item-matrix-label { font-weight: 600; background: var(--header-bg); }
 
-.item-matrix-label { font-weight: 600; background: var(--bg); }
+/* The line between two column headings of a matrix, which is also where the handle is: drag it to resize, double click it to fit the content. */
+.item-matrix th:not(:last-child)::after { content: ""; position: absolute; right: 0; top: 25%; width: 1px; height: 50%; background: #a8a8a8; pointer-events: none; }
+.item-matrix td.item-matrix-label { border-right: 1px solid #b4b4b4; border-bottom-color: #b4b4b4; }   /* the lines are on the row labels too */
+.item-matrix .item-grip, .item-matrix .item-grip:hover, .item-matrix .item-grip.item-grip-active { right: 0; width: 9px; background: none; opacity: 1; }   /* not the blue block of the other tables */
+.item-matrix .item-grip::after { content: ""; position: absolute; top: 15%; bottom: 15%; left: 4px; width: 1px; background: transparent; }
+.item-matrix .item-grip:hover::after { background: #6b7280; width: 2px; left: 3px; }   /* a plain dark line when the pointer is on it, not a blue block */
+.item-matrix .item-grip-active::after { background: #4b5563; width: 2px; left: 3px; }
+/* The button in the corner: goes back to the widths the matrix was drawn with. */
+.item-fit-btn { position: absolute; top: 50%; right: 8px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 4px; background: none; color: #4b5563; transform: translateY(-50%); cursor: pointer; }
+.item-fit-btn:hover { background: rgba(0, 0, 0, 0.08); color: var(--text); }
+.item-fit-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.item-fit-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* The drag handle on a header's right edge. */
 .item-grip {
@@ -347,10 +367,10 @@
 
 /* Files, Bill of Materials, Where Used and Associated Workflows: the tab is a column and its table scrolls inside it, so the heading row stays fixed
    at the top while the rows move under it (a heading can only stick to the box that scrolls it). */
-:is(#item-files, #item-bom, #item-whereused, #item-workflows):not(.item-centred) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
-:is(#item-files, #item-bom, #item-whereused, #item-workflows)[hidden] { display: none; }
-:is(#item-files, #item-bom, #item-whereused, #item-workflows):not(.item-centred) .item-files-wrap { flex: 1; min-height: 0; overflow: auto; }
-:is(#item-files, #item-bom, #item-whereused, #item-workflows).item-files-stack .item-files-wrap { flex: none; }   /* nothing to list: just the heading row */
+:is(#item-files, #item-grid, #item-bom, #item-whereused, #item-workflows):not(.item-centred) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+:is(#item-files, #item-grid, #item-bom, #item-whereused, #item-workflows)[hidden] { display: none; }
+:is(#item-files, #item-grid, #item-bom, #item-whereused, #item-workflows):not(.item-centred) .item-files-wrap { flex: 1; min-height: 0; overflow: auto; }
+:is(#item-files, #item-grid, #item-bom, #item-whereused, #item-workflows).item-files-stack .item-files-wrap { flex: none; }   /* nothing to list: just the heading row */
 /* Borders of a collapsed table stay behind when a cell sticks, so these tables keep each cell's own borders (separate, with no gap). */
 :is(.item-files-wrap, .item-log-scroll) .item-files-table { border-collapse: separate; border-spacing: 0; }
 :is(.item-files-wrap, .item-log-scroll) .item-files-table th { position: sticky; top: 0; z-index: 2; }
@@ -403,7 +423,7 @@
 .item-tree-pn + .item-tree-name::before { content: " - "; }
 
 /* The Files tab lines up with the Item tab. */
-#item-files { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
+#item-files, #item-grid { padding: 12px var(--item-gutter) 24px; background: var(--surface); }
 
 .item-tree-table td { padding-top: 2px; padding-bottom: 2px; }
 .item-tree-seq { flex: none; min-width: 14px; margin: 0 0 0 8px; font-weight: 600; }

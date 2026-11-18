@@ -41,6 +41,15 @@ def products_tooltip() -> str:
     return t("app.products_tooltip")
 
 
+def browse_title() -> str:
+    """The name of the Browse Product Portfolio button in the quick access toolbar."""
+    return t("app.browse_title")
+
+
+def browse_tooltip() -> str:
+    return t("app.browse_tooltip")
+
+
 def upload_title() -> str:
     return t("app.upload_title")
 

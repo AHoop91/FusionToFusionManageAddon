@@ -63,6 +63,32 @@
       </section>
       <div id="products-usage-body" class="pu-body" aria-live="polite"></div>
     </div>
+    <!-- The details of one product, from the list when the window is opened to browse, laid out as the Item panel is (browse.js): the
+         header and the tabs the workspace has (the Item panel's own, and a Grid tab with a button on each row to open its component in Fusion). -->
+    <div id="products-browseview" class="products-browseview" hidden>
+      <nav class="pb-crumbs" aria-label="Breadcrumb">
+        <button id="products-browse-crumb" class="pb-crumb" type="button" data-i18n="products.heading">Products</button>
+        <svg class="pb-crumb-sep" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        <span id="products-browse-crumb-here" class="pb-crumb-here" aria-current="page"></span>
+      </nav>
+      <header class="item-bar">
+        <div class="item-bar-text">
+          <h1 id="products-browse-title" class="item-title"></h1>
+          <p id="products-browse-status" class="item-status"></p>
+        </div>
+        <div class="item-actions">
+          <button id="products-browse-design" class="btn btn-secondary pb-design" type="button" hidden data-i18n="products.browse_open_design">Open Design</button>
+          <button id="products-browse-open" class="item-icon-btn" type="button" hidden title="Open in browser" aria-label="Open this product in Fusion Manage in your browser" data-i18n-attr="title:item.open_title;aria-label:products.browse_open_label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+          </button>
+          <button id="products-browse-refresh" class="item-icon-btn" type="button" title="Refresh" aria-label="Read the product again from Fusion Manage" data-i18n-attr="title:item.refresh_title;aria-label:products.browse_refresh_label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg>
+          </button>
+        </div>
+      </header>
+      <nav id="products-browse-tabs" class="item-tabs" role="tablist"></nav>
+      <div id="products-browse-panes" class="view"></div>   <!-- the tabs are drawn into it by browse.js, under the ids the Item panel styles know them by -->
+    </div>
     <div class="products" hidden>
       <!-- As the list of a workspace is in Fusion Manage: the way back, a button to add, and the view chosen, over a full-width table. -->
       <div class="products-bar">
@@ -124,6 +150,7 @@
           <button id="products-back" class="btn btn-secondary" type="button" data-i18n="products.assign_back">Back</button>
           <button id="products-edit" class="btn btn-secondary" type="button" disabled data-i18n="products.edit">Edit</button>
           <button id="products-assign" class="btn" type="button" disabled data-i18n="products.assign">Assign Product</button>
+          <button id="products-details" class="btn" type="button" disabled hidden data-i18n="products.browse_details">View details</button>   <!-- instead of Edit and Assign, when browsing -->
         </div>
       </footer>
       <!-- The panel of the whole view, from the funnel and the columns button on the bar: its filters, and its columns. -->
@@ -383,10 +410,18 @@
   <script src="../shared/js/section.js"></script>
   <script src="../shared/js/toast.js"></script>
   <script src="../item/js/safe-html.js"></script>
+  <script src="../item/js/tree.js"></script>
+  <script src="../item/js/item-sections.js"></script>
+  <script src="../item/js/files.js"></script>
+  <script src="../item/js/bom.js"></script>
+  <script src="../item/js/where-used.js"></script>
+  <script src="../item/js/associated-workflows.js"></script>
+  <script src="../item/js/change-log.js"></script>
   <script src="js/validators.js"></script>
   <script src="js/sortable.js"></script>
   <script src="js/filters.js"></script>
   <script src="js/usage.js"></script>
+  <script src="js/browse.js"></script>
   <script src="js/products-page.js"></script>
 </body>
 </html>

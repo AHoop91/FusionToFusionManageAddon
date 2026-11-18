@@ -23,6 +23,15 @@ def view(item, layouts=None, hidden=None):
     return build_view(item, layouts or {}, no_image, "https://acme.autodeskplm360.net", hidden)
 
 
+class StateTests(unittest.TestCase):
+    def test_the_workflow_state_of_an_item_is_in_the_view(self):
+        item = {"title": "24-000002 - Universal Joint", "currentState": {"title": "Proposal"}, "sections": [section("Basic", field("NUMBER", "24-000002"))]}
+        self.assertEqual(view(item)["state"], "Proposal")
+
+    def test_an_item_with_no_workflow_state_has_a_blank_one(self):
+        self.assertEqual(view({"title": "x", "sections": [section("Basic", field("NUMBER", "1"))]})["state"], "")
+
+
 class CellTests(unittest.TestCase):
     def cell(self, node, images=no_image, pages=no_page):
         return cell_of(node, images, pages)

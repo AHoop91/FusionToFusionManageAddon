@@ -20,8 +20,32 @@ body { background: #f5f5f5; }
 .products-usage { display: flex; align-items: center; gap: 16px; margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .pu-body { display: flex; flex: 1 0 auto; flex-direction: column; margin-top: 12px; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
 .pu-body p { margin: 2px 0; }
-.pu-body .pu-bad { color: var(--danger); }
-.pu-body .pu-muted { color: var(--muted); }
+.pu-body .pu-bad, .products-browseview .pu-bad { color: var(--danger); }
+.pu-body .pu-muted, .products-browseview .pu-muted { color: var(--muted); }
+.products-browseview { display: flex; flex: 1; flex-direction: column; min-height: 0; background: var(--bg); }
+.products-browseview[hidden] { display: none; }
+.pb-crumbs { display: flex; align-items: center; gap: 10px; padding: 16px var(--item-gutter) 0 calc(var(--item-gutter) + var(--item-inset)); background: var(--detail-bg); font-size: 14px; color: var(--text); }
+.pb-crumb { padding: 0; border: 0; background: none; font: inherit; color: var(--text); cursor: pointer; }
+.pb-crumb:hover { text-decoration: underline; }
+.pb-crumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pb-crumb-sep { flex: none; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pb-crumb-here { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.products-browseview .item-bar { padding-top: 8px; align-items: flex-end; }
+.products-browseview .item-status { display: flex; align-items: center; margin-top: 10px; font-size: 14px; }
+#item-grid .item-files-table th, #item-grid .item-files-table td { padding-top: 5px; padding-bottom: 5px; }   /* closer rows than the Attachments tab */
+#item-grid .item-files-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line a cell, cut with an ellipsis: the whole text is its tooltip */
+.pb-open, .pb-design { transition: transform .08s ease, background-color .15s ease; }
+.pb-open { padding: 2px 12px; font-size: 12px; white-space: nowrap; }
+.pb-open:active:not(:disabled), .pb-design:active:not(:disabled) { transform: translateY(1px) scale(0.97); }   /* pressed in */
+.pb-open.busy, .pb-design.busy { display: inline-flex; align-items: center; gap: 6px; opacity: 1; cursor: progress; }   /* under way: not greyed out, a ring turns */
+.pb-open.busy::before, .pb-design.busy::before { content: ""; flex: none; width: 10px; height: 10px; box-sizing: border-box; border: 2px solid rgba(6, 150, 215, .3); border-top-color: var(--accent); border-radius: 50%; animation: pb-spin .7s linear infinite; }
+@keyframes pb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pb-open.busy::before, .pb-design.busy::before { animation-duration: 2s; } }
+.pb-pin { flex: none; width: 16px; height: 16px; margin-right: 8px; fill: currentColor; stroke: none; }
+.products-browseview.reading .pb-crumbs, .products-browseview.reading .item-bar, .products-browseview.reading .item-tabs { display: none; }   /* nothing of the product's head until it is read */
+.products-browseview.failed .item-bar, .products-browseview.failed .item-tabs, .products-browseview.failed .pb-crumb-sep, .products-browseview.failed .pb-crumb-here { display: none; }   /* and when it could not be: only the way back */
+.pb-design { margin-right: 4px; background: transparent; border: 1px solid #b8bec4; }   /* the colour of the head it sits on, with just a border */
+.pb-design:hover:not(:disabled) { background: rgba(0, 0, 0, 0.05); }
 .pu-actions { display: flex; flex: none; gap: 8px; }
 .products-usage .pu-text { flex: 1; min-width: 0; }
 .pu-title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
@@ -75,6 +99,7 @@ body { background: #f5f5f5; }
 .pu-badge.variant { background: #6f42c1; }
 .products-alert { margin: 0 16px 8px; padding: 10px 14px; border: 1px solid #f3c1c5; border-left: 4px solid var(--danger); border-radius: 2px; color: var(--danger); background: #fff5f5; overflow-wrap: anywhere; }
 
+.products-add[hidden] ~ .products-actions { margin-left: auto; }   /* Create New Product normally pushes the rest to the right; without it, the actions still go to the right edge */
 .products-add { display: inline-flex; align-items: center; justify-content: center; margin-right: auto; border: 0; background: #0696d7; color: #fff; font: inherit; cursor: pointer; }
 .products-add:hover { background: #0580b8; }
 .products-add:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }

@@ -41,6 +41,7 @@ from src.ui.jobs_badge import JobsBadge  # noqa: E402
 from src.ui.palette_host import PaletteHost  # noqa: E402
 from src.ui.ui_thread import UiThread  # noqa: E402
 from src.core.constants import (  # noqa: E402
+    BROWSE_COMMAND_ID,
     COMMAND_ID,
     EXPORT_COMMAND_ID,
     EXPORT_HEIGHT,
@@ -75,8 +76,11 @@ from src.core.constants import (  # noqa: E402
     UPLOAD_PROGRESS_PALETTE_ID,
     UPLOAD_PROGRESS_WIDTH,
 )
+from src.ui.product_mode import BROWSE, PRODUCT_MODE, USAGE  # noqa: E402
 from src.ui.ribbon import Ribbon, RibbonCommand, RibbonGroup, RibbonPanel  # noqa: E402
 from src.ui.ui_text import (  # noqa: E402
+    browse_title,
+    browse_tooltip,
     export_step_name,
     export_step_tooltip,
     export_title,
@@ -228,6 +232,13 @@ def _unregister_rebuild() -> None:
         pass
     _rebuild_handler = None
 
+
+def _show_products(mode: str) -> None:
+    """Open the Product Portfolio window the way ``mode`` says (see ``product_mode``)."""
+    PRODUCT_MODE.mode = mode
+    _product_host.show()
+
+
 def _close_settings(_payload) -> dict:
     """Close the settings panel: a member who does not pick a Configuration File has nothing to set up."""
     if _tasks and _palette_host:
@@ -292,8 +303,12 @@ def _run(context) -> None:
         # Held back until the Portfolio Management workspace is set; the Items workspace is not needed to choose a product.
         assign_product = RibbonCommand(PRODUCT_COMMAND_ID, products_title(),
                                        products_tooltip(),
-                                       _product_host.show,
+                                       lambda: _show_products(USAGE),
                                        _icon("products"), needs_portfolio=True)
+        # The button at the top, in the quick access toolbar: it works with no design open, so it is the way to the products from the start.
+        browse_products = RibbonCommand(BROWSE_COMMAND_ID, browse_title(), browse_tooltip(),
+                                        lambda: _show_products(BROWSE),
+                                        _icon("products"), needs_portfolio=True, run_when_created=True)
         # Held back only while no destination is set up; with one set up, the Export window says what is missing for the other.
         export = RibbonCommand(EXPORT_COMMAND_ID, export_title(),
                                ribbon_export_tooltip(),
@@ -316,7 +331,7 @@ def _run(context) -> None:
             RIBBON_DESIGN_WORKSPACE: [export_panel, item_panel],
             RIBBON_DRAWING_WORKSPACE: [export_panel, drawing_item_panel],
         }
-        _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME)
+        _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME, [browse_products])
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
