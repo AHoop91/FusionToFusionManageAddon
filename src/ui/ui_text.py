@@ -41,6 +41,11 @@ def products_tooltip() -> str:
     return t("app.products_tooltip")
 
 
+def quick_access_menu_name() -> str:
+    """The name of the add-in's drop-down in the quick access toolbar."""
+    return t("app.quick_access_menu")
+
+
 def browse_title() -> str:
     """The name of the Browse Product Portfolio button in the quick access toolbar."""
     return t("app.browse_title")

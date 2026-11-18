@@ -1070,6 +1070,7 @@
     "app.product_refused": "Fusion Manage did not accept the product.",
     "app.products_not_set_up": "The Portfolio Management workspace is not set up. Choose it in Preferences.",
     "app.products_title": "View Product Portfolio",
+    "app.quick_access_menu": "Fusion Manage Item Management",
     "app.browse_title": "Browse Product Portfolio",
     "app.browse_tooltip": "Browse the products in Portfolio Management, see what each holds and open its designs in Fusion.",
     "app.products_tooltip": "Choose the product in Portfolio Management that this design belongs to, or create a new one.",

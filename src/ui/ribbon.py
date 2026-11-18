@@ -14,7 +14,7 @@ garbage-collects them and the button silently stops working.
 
 import traceback
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import adsk.core
 
@@ -112,6 +112,17 @@ def define_command(ui: adsk.core.UserInterface, command: RibbonCommand, handlers
 
 
 @dataclass(frozen=True)
+class ToolbarMenu:
+    """A drop-down in Fusion's quick access toolbar, the bar at the very top, which shows whatever workspace or document is open (or none).
+    ``resource_folder`` holds its icon (``16x16.svg``, ``32x32.svg``)."""
+
+    menu_id: str
+    name: str
+    resource_folder: str
+    commands: Sequence[RibbonCommand]
+
+
+@dataclass(frozen=True)
 class RibbonGroup:
     """Commands of a panel that go together: apart from the others by a separator, and under one name as a submenu if ``submenu_icon`` is set."""
 
@@ -137,14 +148,13 @@ class Ribbon:
     """Creates and removes the add-in's ribbon panels for each workspace (a drawing does not get what a design does).
 
     The panels are put in Fusion's own tab called ``host_tab_name``; a workspace with no such tab gets a tab of the add-in's own instead.
-    ``toolbar_commands`` are buttons in Fusion's quick access toolbar, the bar at the very top, which shows whatever workspace or document
-    is open (or none).
+    ``toolbar_menu`` is the add-in's drop-down in Fusion's quick access toolbar.
     """
 
     def __init__(self, ui: adsk.core.UserInterface, panels_by_workspace: Dict[str, Sequence[RibbonPanel]], host_tab_name: str = "",
-                 toolbar_commands: Sequence[RibbonCommand] = ()) -> None:
+                 toolbar_menu: Optional[ToolbarMenu] = None) -> None:
         self._ui = ui
-        self._toolbar_commands = list(toolbar_commands)
+        self._toolbar_menu = toolbar_menu
         self._panels_by_workspace = {workspace_id: list(panels) for workspace_id, panels in panels_by_workspace.items()}
         self._host_tab_name = host_tab_name
         self._handlers: List[object] = []
@@ -175,7 +185,7 @@ class Ribbon:
 
     def commands(self) -> List[RibbonCommand]:
         """Every command of every workspace, each once (one definition serves a button in several workspaces)."""
-        found: Dict[str, RibbonCommand] = {command.command_id: command for command in self._toolbar_commands}
+        found: Dict[str, RibbonCommand] = {command.command_id: command for command in (self._toolbar_menu.commands if self._toolbar_menu else [])}
         for panels in self._panels_by_workspace.values():
             for panel in panels:
                 for command in panel.commands:
@@ -202,13 +212,15 @@ class Ribbon:
         self._add_to_toolbar(definitions)
 
     def _add_to_toolbar(self, definitions: Dict[str, Any]) -> None:
-        """The ``toolbar_commands`` at the end of the quick access toolbar."""
-        if not self._toolbar_commands:
+        """The ``toolbar_menu`` at the end of the quick access toolbar, with its commands in the list it drops down."""
+        menu = self._toolbar_menu
+        if menu is None:
             return
-        toolbar = self._toolbar()
-        for command in self._toolbar_commands:
+        controls = self._toolbar().controls
+        dropdown = controls.itemById(menu.menu_id) or controls.addDropDown(menu.name, menu.resource_folder, menu.menu_id)
+        for command in menu.commands:
             definition = definitions[command.command_id]
-            toolbar.controls.itemById(definition.id) or toolbar.controls.addCommand(definition)
+            dropdown.controls.itemById(definition.id) or dropdown.controls.addCommand(definition)
 
     def _toolbar(self) -> Any:
         """Fusion's quick access toolbar. Raises when Fusion has none by that id."""
@@ -269,10 +281,10 @@ class Ribbon:
                         panel.deleteMe()
             if own is not None:
                 own.deleteMe()
-        for command in self._toolbar_commands:
-            control = self._toolbar().controls.itemById(command.command_id)
-            if control:
-                control.deleteMe()
+        if self._toolbar_menu is not None:
+            dropdown = self._toolbar().controls.itemById(self._toolbar_menu.menu_id)
+            if dropdown:
+                dropdown.deleteMe()
         for command in self.commands():
             definition = self._ui.commandDefinitions.itemById(command.command_id)
             if definition:

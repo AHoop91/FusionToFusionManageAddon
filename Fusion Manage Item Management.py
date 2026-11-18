@@ -42,6 +42,7 @@ from src.ui.palette_host import PaletteHost  # noqa: E402
 from src.ui.ui_thread import UiThread  # noqa: E402
 from src.core.constants import (  # noqa: E402
     BROWSE_COMMAND_ID,
+    BROWSE_MENU_ID,
     COMMAND_ID,
     EXPORT_COMMAND_ID,
     EXPORT_HEIGHT,
@@ -77,13 +78,14 @@ from src.core.constants import (  # noqa: E402
     UPLOAD_PROGRESS_WIDTH,
 )
 from src.ui.product_mode import BROWSE, PRODUCT_MODE, USAGE  # noqa: E402
-from src.ui.ribbon import Ribbon, RibbonCommand, RibbonGroup, RibbonPanel  # noqa: E402
+from src.ui.ribbon import Ribbon, RibbonCommand, RibbonGroup, RibbonPanel, ToolbarMenu  # noqa: E402
 from src.ui.ui_text import (  # noqa: E402
     browse_title,
     browse_tooltip,
     export_step_name,
     export_step_tooltip,
     export_title,
+    quick_access_menu_name,
     item_command_name,
     item_title,
     jobs_title,
@@ -305,7 +307,8 @@ def _run(context) -> None:
                                        products_tooltip(),
                                        lambda: _show_products(USAGE),
                                        _icon("products"), needs_portfolio=True)
-        # The button at the top, in the quick access toolbar: it works with no design open, so it is the way to the products from the start.
+        # The add-in's drop-down at the top, in the quick access toolbar, with the button in it: it works with no design open, so it is the way to the
+        # products from the start.
         browse_products = RibbonCommand(BROWSE_COMMAND_ID, browse_title(), browse_tooltip(),
                                         lambda: _show_products(BROWSE),
                                         _icon("products"), needs_portfolio=True, run_when_created=True)
@@ -331,7 +334,7 @@ def _run(context) -> None:
             RIBBON_DESIGN_WORKSPACE: [export_panel, item_panel],
             RIBBON_DRAWING_WORKSPACE: [export_panel, drawing_item_panel],
         }
-        _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME, [browse_products])
+        _ribbon = Ribbon(_ui, panels, RIBBON_HOST_TAB_NAME, ToolbarMenu(BROWSE_MENU_ID, quick_access_menu_name(), _icon("logo"), [browse_products]))
         _ribbon.register()
         # Everything but Preferences needs the Items workspace set up; it stays greyed out until it is. The drawing's PDF also
         # needs the drawing loaded: looked at again on Fusion's document and workspace events, and every few seconds while a drawing loads.
