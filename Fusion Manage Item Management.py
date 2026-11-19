@@ -270,7 +270,7 @@ def _run(context) -> None:
 
         _palette_host = PaletteHost(_ui, bridge, SETTINGS_PALETTE_ID, settings_title(), "settings")
         bridge.register("close_settings", _close_settings)
-        _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, publish_title(), "publish", False, PUBLISH_WIDTH, PUBLISH_HEIGHT, fresh=True)
+        _publish_host = PaletteHost(_ui, bridge, PUBLISH_PALETTE_ID, publish_title(), "publish", False, PUBLISH_WIDTH, PUBLISH_HEIGHT)
         _jobs_host = PaletteHost(_ui, bridge, JOBS_PALETTE_ID, jobs_title(), "jobs", False, JOBS_WIDTH, JOBS_HEIGHT)
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, item_title(), "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, upload_title(), "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)

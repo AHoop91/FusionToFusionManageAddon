@@ -15,7 +15,7 @@ from .message_bridge import MessageBridge
 
 log = get_logger("palette")
 
-OPENED_ACTION = "palette_opened"   # sent to a page that is shown again; its ``bridge.on("palette_opened")`` callback runs
+OPENED_ACTION = "palette_opened"   # sent to a page that is open already when it is shown again; its ``bridge.on("palette_opened")`` callback runs
 
 
 _last_area: Optional[Tuple[int, int, int, int]] = None   # (screen x, screen y, width, height) of Fusion's viewport, as last seen
@@ -56,7 +56,8 @@ class _IncomingHandler(adsk.core.HTMLEventHandler):
 
 
 class PaletteHost:
-    """Creates, shows and disposes one palette.
+    """Creates, shows and disposes one palette. A palette that was closed is removed, and the next ``show`` creates it again, so its page
+    opens as new: nothing of what it showed is kept.
 
     Each panel is a folder under ``web/`` (its ``index.html`` plus its own
     scripts) that reuses ``web/shared``. Create one host per panel.
@@ -64,7 +65,7 @@ class PaletteHost:
 
     def __init__(self, ui: adsk.core.UserInterface, bridge: MessageBridge,
                  palette_id: str, title: str, page: str, docked: bool = True,
-                 width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT, fresh: bool = False) -> None:
+                 width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT) -> None:
         self._ui = ui
         self._bridge = bridge
         self._palette_id = palette_id
@@ -72,7 +73,6 @@ class PaletteHost:
         self._page = page
         self._docked = docked   # False: a floating window the user can place anywhere
         self._size = (width, height)
-        self._fresh = fresh   # True: closing the palette unloads its page, so it opens again as new (nothing of what it showed is kept)
         self._handler = None  # Kept referenced or Fusion garbage-collects it.
         self._palette = None
         try:
@@ -81,14 +81,15 @@ class PaletteHost:
             log.exception("Could not read the viewport")
 
     def show(self) -> None:
-        """Show the palette, creating it on first use.
+        """Show the palette, creating it on first use, or again after it was closed (a closed palette is only hidden, so it is removed first and
+        its page loads as new). A palette that is open is not removed: its page is told it was opened again.
 
         A docked palette opens in its dock. A floating one opens in the middle of Fusion's viewport (it would otherwise open wherever
         Fusion last put one), so every floating panel is placed the same way. An existing palette is placed while hidden and shown
         afterwards, as the API documents, so it opens in place. A new one has to be created showing (a palette created hidden loads its
         page without drawing it), so it is moved at once instead. Only the Fusion API is used, so this behaves the same on Windows and Mac.
         """
-        if self._fresh and not self.visible:
+        if not self.visible:
             self.dispose()   # a closed palette is only hidden: unload what it left, but never one that is open
         is_new = self._ui.palettes.itemById(self._palette_id) is None
         if self._docked:
@@ -101,7 +102,7 @@ class PaletteHost:
                 log.exception("Could not centre the palette")
         palette.isVisible = True
         log.info("Palette shown (visible=%s)", palette.isVisible)
-        if not is_new:   # a page that was only hidden is still loaded: tell it it was opened again (a new page loads fresh anyway)
+        if not is_new:   # a page that is open already: tell it it was opened again (a new page loads fresh anyway)
             palette.sendInfoToHTML(OPENED_ACTION, "{}")
 
     def _get_or_create(self, visible: bool):
@@ -138,7 +139,7 @@ class PaletteHost:
                  self._title, palette.width, palette.height, left, top, width, height, x, y)
 
     def hide(self) -> None:
-        """Close the palette on screen (its page stays loaded, as when the user closes it). Main thread only."""
+        """Close the palette on screen (its page stays loaded until the palette is shown again, as when the user closes it). Main thread only."""
         palette = self._ui.palettes.itemById(self._palette_id)
         if palette:
             palette.isVisible = False
