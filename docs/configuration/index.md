@@ -378,6 +378,8 @@ If two files have the same code, yours is used first, then your hub's, then the 
 
 If your language is not in the list, you can create it:
 
+When the Items workspace is turned off or has no workspace ID, **Item** is greyed out and every format is set to **Component**. Your earlier choices come back when the Items workspace is set up again.
+
 1. On the **Language** tab, enter a **Language code** (for example `de` or `pt-BR`) and a **Language name**, written in that language (for example `Deutsch`), then choose **Create**. Both are required. This makes a file that starts with the English text.
 2. Choose **Open folder** and open the new file in a text editor. Translate the text on the right of each line. Keep the names on the left and any `{placeholders}` as they are, then save the file.
 3. Choose **Reload**. The language appears under **Your languages**.

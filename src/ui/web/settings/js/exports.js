@@ -33,8 +33,10 @@
     return [{ key: 'component', label: t('settings.dest_component') }, { key: 'item', label: t('settings.dest_item') }];
   }
 
-  /** One row: the format, what it is, and the radio buttons for where it goes. */
-  function row(f, chosen) {
+  let wanted = {};   // the destination the user set for each format, kept while Item is not offered so it is back when the Items workspace is
+
+  /** One row: the format, what it is, and the radio buttons for where it goes. Without the Items workspace, Item is off and Component is on. */
+  function row(f, chosen, itemOn) {
     const wrap = el('div', 'ex-row');
     const name = el('span', 'ex-name', f.label);
     name.appendChild(el('span', 'ex-desc', describe(f.key)));
@@ -46,7 +48,13 @@
       input.type = 'radio';
       input.name = 'ex-' + f.key;
       input.value = d.key;
-      input.checked = d.key === chosen;
+      const off = d.key === 'item' && !itemOn;
+      input.disabled = off;
+      input.checked = d.key === (itemOn ? chosen : DEFAULT_DESTINATION);
+      if (off) {
+        label.classList.add('ex-off');
+        label.title = t('settings.export_item_off');
+      }
       label.appendChild(input);
       label.appendChild(el('span', '', d.label));
       choice.appendChild(label);
@@ -55,23 +63,36 @@
     return wrap;
   }
 
-  /** Show the destinations Python has saved. */
-  function render(settings) {
-    const where = (settings.exports || {}).destinations || {};
+  /** Draw the rows for what the user wants, with Item offered only if the Items workspace is. */
+  function draw() {
     const box = $('export-rows');
+    const itemOn = ns.workspaces.itemsAvailable();
     box.replaceChildren();
-    FORMATS.forEach(function (f) { box.appendChild(row(f, where[f.key] || DEFAULT_DESTINATION)); });
+    FORMATS.forEach(function (f) {
+      const tile = row(f, wanted[f.key] || DEFAULT_DESTINATION, itemOn);
+      tile.addEventListener('change', function (e) { wanted[f.key] = e.target.value; });
+      box.appendChild(tile);
+    });
   }
 
-  /** The destinations as they are set on the page, in the shape Python saves. */
+  /** Show the destinations Python has saved. */
+  function render(settings) {
+    wanted = Object.assign({}, (settings.exports || {}).destinations);
+    draw();
+  }
+
+  /** The Items workspace is set on another tab, so draw the rows again when this one is opened. */
+  function init() {
+    document.querySelector('.tab[data-tab="export"]').addEventListener('click', draw);
+  }
+
+  /** The destinations in the shape Python saves. Without the Items workspace every one is the component. */
   function read() {
+    const itemOn = ns.workspaces.itemsAvailable();
     const destinations = {};
-    FORMATS.forEach(function (f) {
-      const picked = document.querySelector('input[name="ex-' + f.key + '"]:checked');
-      destinations[f.key] = picked ? picked.value : DEFAULT_DESTINATION;
-    });
+    FORMATS.forEach(function (f) { destinations[f.key] = itemOn && wanted[f.key] || DEFAULT_DESTINATION; });
     return { destinations: destinations };
   }
 
-  ns.exports = { render: render, read: read };
+  ns.exports = { init: init, render: render, read: read };
 })(window.MfgUi);

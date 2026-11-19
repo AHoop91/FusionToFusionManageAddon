@@ -13,4 +13,6 @@
 .ex-opt:hover { background: #f2f9fd; }
 .ex-opt input { position: absolute; opacity: 0; pointer-events: none; }
 .card .ex-choice label.ex-opt:has(input:checked) { background: var(--accent); color: #fff; }
+.card .ex-choice label.ex-opt.ex-off { cursor: not-allowed; color: #9aa0a6; background: var(--bg); }
+.ex-opt.ex-off:hover { background: var(--bg); }
 .ex-opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }

@@ -163,6 +163,7 @@
     "settings.format_dxf": "The open drawing, for CAM and laser cutting.",
     "settings.dest_component": "Component",
     "settings.dest_item": "Item",
+    "settings.export_item_off": "The Items workspace is turned off or not set. Files go to the component.",
     "settings.working_label": "Working",
     "settings.done": "Done",
     "settings.close": "Close",

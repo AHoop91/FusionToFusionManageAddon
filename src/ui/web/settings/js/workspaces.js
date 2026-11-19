@@ -824,6 +824,12 @@
     return result;
   }
 
+  /** Whether the Items workspace can be used, as the form has it (saved or not): its switch is on and it has an id. */
+  function itemsAvailable() {
+    const card = document.querySelector('#workspace-cards .ws-kind[data-kind="items"]');   // as ``ITEMS_KIND`` in ``workspace_models``
+    return !!card && card.querySelector('.ws-enabled').checked && card.querySelector('.ws-id').value.trim() !== '';
+  }
+
   /** Show the workspaces as defined, without checking any of them (a member of the hub); false returns to the Hub Admin's editing. */
   function setViewOnly(on) {
     if (viewOnly === on) return;
@@ -833,5 +839,6 @@
     });
   }
 
-  ns.workspaces = { init: init, render: render, read: read, setViewOnly: setViewOnly, offerRefused: offerRefused };
+  ns.workspaces = { init: init, render: render, read: read, setViewOnly: setViewOnly, offerRefused: offerRefused,
+    itemsAvailable: itemsAvailable };
 })(window.MfgUi);

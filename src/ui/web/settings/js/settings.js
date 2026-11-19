@@ -517,6 +517,7 @@
   function init() {
     ns.auth.onChange(placeForm);
     ns.workspaces.init();
+    ns.exports.init();
     initWizard();
     initTenantStep();
     initMemberFlow();
