@@ -16,6 +16,8 @@
     { key: 'dxf', label: 'DXF' },
   ];
 
+  const DEFAULT_DESTINATION = 'component';   // as in ``export_models.DEFAULT_DESTINATION``
+
   /** What a file format is, in the language in use. */
   function describe(key) {
     switch (key) {
@@ -58,7 +60,7 @@
     const where = (settings.exports || {}).destinations || {};
     const box = $('export-rows');
     box.replaceChildren();
-    FORMATS.forEach(function (f) { box.appendChild(row(f, where[f.key] || 'item')); });
+    FORMATS.forEach(function (f) { box.appendChild(row(f, where[f.key] || DEFAULT_DESTINATION)); });
   }
 
   /** The destinations as they are set on the page, in the shape Python saves. */
@@ -66,7 +68,7 @@
     const destinations = {};
     FORMATS.forEach(function (f) {
       const picked = document.querySelector('input[name="ex-' + f.key + '"]:checked');
-      destinations[f.key] = picked ? picked.value : 'item';
+      destinations[f.key] = picked ? picked.value : DEFAULT_DESTINATION;
     });
     return { destinations: destinations };
   }

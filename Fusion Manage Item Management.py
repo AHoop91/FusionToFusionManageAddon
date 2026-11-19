@@ -9,6 +9,7 @@ import importlib
 import os
 import sys
 import traceback
+from typing import Callable
 
 import adsk.core
 
@@ -161,6 +162,15 @@ def setup_problem() -> str:
     return _config.items_setup_problem()
 
 
+def _menu_upload(to_item: Callable[[], None]) -> None:
+    """The right-click upload: straight to the item when the Items workspace can be used; otherwise the Export window, where the file can still go to the
+    component (the command is held back only while no destination at all is set up)."""
+    if setup_problem():
+        _export_dialog.show()
+    else:
+        to_item()
+
+
 def portfolio_problem() -> str:
     """Why the Portfolio Management workspace is not set up (the active hub is looked at first)."""
     sync_hub()
@@ -290,12 +300,12 @@ def _run(context) -> None:
                           _icon("publish"), needs_setup=True, root_only=True, context="design"),
             RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, export_step_name(),
                           export_step_tooltip(),
-                          _item_panel.upload_selected_step,
-                          _icon("upload_step"), needs_setup=True, context="design"),
+                          lambda: _menu_upload(_item_panel.upload_selected_step),
+                          _icon("upload_step"), needs_destination=True, context="design"),
             RibbonCommand(MENU_UPLOAD_DRAWING_COMMAND_ID, upload_drawing_name(),
                           upload_drawing_tooltip(),
-                          _item_panel.upload_drawing,
-                          _icon("upload_drawing"), needs_setup=True, needs_drawing=True, root_only=True, context="drawing"),
+                          lambda: _menu_upload(_item_panel.upload_drawing),
+                          _icon("upload_drawing"), needs_destination=True, needs_drawing=True, root_only=True, context="drawing"),
         ]
         _item_menu = ItemContextMenu(_ui, menu_commands)
         open_item = RibbonCommand(ITEM_COMMAND_ID, item_command_name(),

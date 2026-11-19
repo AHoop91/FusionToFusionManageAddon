@@ -115,7 +115,7 @@
 
 /* ---- Flat layout: sections on the page, divided by thin rules, not boxed ---- */
 .ws-card.card { margin-bottom: 14px; padding: 20px 22px 22px; }
-.ws-card-head { margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.ws-card-head { display: flex; align-items: center; gap: 16px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .ws-card .ws-card-head h2 { margin: 0; font-size: 16px; line-height: 1.25; }
 .ws-body { padding: 0; }
 .ws-tabs { padding: 0; margin-bottom: 14px; }
@@ -129,7 +129,8 @@
 .ws-block-title + .ws-sub { margin-top: -6px; }
 
 /* ---- Portfolio Management tab: the same flat sections as the Items tab, plus on/off switches ---- */
-.ws-body .pf-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; cursor: pointer; }   /* more specific than `.ws-body label` */
+.ws-enabled-group { display: flex; flex: none; align-items: center; gap: 10px; margin-left: auto; }   /* at the right of the header */
+.ws-body .pf-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; margin: 0; cursor: pointer; }   /* more specific than `.ws-body label` */
 .pf-switch input { position: absolute; left: 0; top: 0; width: 38px; height: 22px; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
 .pf-switch-track { position: relative; display: block; flex: none; width: 38px; height: 22px; border-radius: 11px; background: #c4cbd1; transition: background 0.15s; }
 .pf-switch-track::after {
@@ -142,8 +143,8 @@
 .pf-switch input:disabled, .pf-switch input:disabled ~ * { cursor: not-allowed; }
 .pf-switch-label { font-size: 13px; font-weight: 500; }
 
-/* Everything but the Enable switch: greyed out and not usable while Product Portfolio Management is off. */
-.pf-rest { min-width: 0; margin: 20px 0 0; padding: 4px 0 0; border: 0; border-top: 1px solid var(--border); transition: opacity 0.15s; }
+/* Everything but the Enabled switch in the header: greyed out and not usable while the feature is off. */
+.pf-rest { min-width: 0; margin: 0; padding: 0; border: 0; transition: opacity 0.15s; }
 .pf-rest:disabled { opacity: 0.45; }
 .pf-rest:disabled .ws-locked:disabled { opacity: 1; }
 .pf-rest:disabled * { cursor: not-allowed; }

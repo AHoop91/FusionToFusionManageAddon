@@ -37,6 +37,11 @@ class HubContext:
         return self.settings.tenant
 
     @property
+    def items_off(self) -> bool:
+        """Whether the Items workspace is turned off in the settings."""
+        return self.cfg is not None and not self.cfg.enabled
+
+    @property
     def items_problem(self) -> str:
         """Why the Items workspace cannot be used yet ("" when its settings are complete)."""
         title = kind_texts(KINDS_BY_ID[ITEMS_KIND])[0]

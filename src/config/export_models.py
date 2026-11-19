@@ -10,7 +10,7 @@ ITEM, COMPONENT = "item", "component"
 
 EXPORT_FORMATS = (STEP, PDF, DWG, DXF)   # in the order the Export tab lists them
 DESTINATIONS = (ITEM, COMPONENT)
-DEFAULT_DESTINATION = ITEM
+DEFAULT_DESTINATION = COMPONENT   # a first install attaches to the component; a saved or shared configuration that says item keeps it
 
 
 @dataclass

@@ -150,8 +150,7 @@ class ConfigService:
     def portfolio_setup_problem(self) -> str:
         """Why Portfolio Management cannot be used ("" when it is on and its workspace is set)."""
         kind = KINDS_BY_ID[PORTFOLIO_KIND]
-        cfg = self.config.workspaces.get(kind.kind_id)
-        return cfg.setup_problem(kind_texts(kind)[0], kind.mapped) if cfg.enabled else t("data.portfolio_off")
+        return self.config.workspaces.get(kind.kind_id).setup_problem(kind_texts(kind)[0], kind.mapped)
 
     def _read(self) -> None:
         """Read config from disk. A missing file is a first run (defaults); an unreadable one is an error, because

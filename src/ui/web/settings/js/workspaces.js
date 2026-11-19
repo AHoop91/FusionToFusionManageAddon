@@ -596,32 +596,28 @@
     return section;
   }
 
-  /** A section with an on/off switch (the checkbox has class ``cls``). */
-  function buildSwitchSection(title, text, label, cls, checked) {
-    const section = el('div', 'ws-section');
-    section.appendChild(heading(title));
-    section.appendChild(describe(text));
+  /** The Enabled switch of a workspace's feature, for the right of its header: an info icon saying what off does, then the switch. */
+  function buildEnabledSwitch(kind, enabled) {
+    const group = el('div', 'ws-enabled-group');
+    const info = infoTip(t(kind.assign ? 'settings.ws_enable_tip' : 'settings.ws_enable_tip_items'));
+    info.querySelector('.tip').classList.add('tip-end');   // opens leftwards: the icon is at the right edge of the card
+    group.appendChild(info);
     const toggle = el('label', 'pf-switch');
-    const box = el('input', cls);
+    const box = el('input', 'ws-enabled');
     box.type = 'checkbox';
-    box.checked = checked;
+    box.checked = enabled;
+    box.setAttribute('aria-label', t('settings.ws_enable_aria', { title: kind.title }));
     toggle.appendChild(box);
     toggle.appendChild(el('span', 'pf-switch-track'));
-    toggle.appendChild(el('span', 'pf-switch-label', label));
-    section.appendChild(toggle);
-    return section;
+    toggle.appendChild(el('span', 'pf-switch-label', t('settings.ws_enabled')));
+    group.appendChild(toggle);
+    return group;
   }
 
   /** The Variants grid: the column that links each row to its component. */
   function buildVariantsSection(config) {
     return buildFieldSection(t('settings.ws_variants_title'), t('settings.ws_variants_tip'), t('settings.ws_variants_link'),
       t('settings.ws_variants_link_tip'), makePicker(gridLinkCfg, config.variants.link_column));
-  }
-
-  /** Whether Product Portfolio Management is on at all. */
-  function buildEnabledSection(config) {
-    return buildSwitchSection(t('settings.ws_enable_title'), t('settings.ws_enable_tip'), t('settings.ws_enable_allow'),
-      'ws-enabled', config.enabled !== false);
   }
 
   /** Source field -> FM field id rows, then the static values. */
@@ -685,20 +681,23 @@
   // One card holds a tab per workspace kind ("Items", ...). Each tab shows
   // that workspace's sections.
 
-  function buildKindPanel(kind, config) {
+  /** ``titled``: the workspace is alone on its card, so the panel opens with the card's header (the title, as on the Connection card). */
+  function buildKindPanel(kind, config, titled) {
     const panel = el('div', 'ws-kind ws-panel');
     panel.dataset.kind = kind.id;
+    // The Enabled switch sits at the right of the header. It is inside the panel, so the panel's settings are read back with it.
+    const on = config.enabled !== false;
+    const enabled = buildEnabledSwitch(kind, on);
+    const head = el('header', 'ws-card-head');
+    if (titled) head.appendChild(el('h2', '', t('settings.ws_kind_workspace', { title: kind.title })));
+    head.appendChild(enabled);
+    panel.appendChild(head);
     panel.appendChild(el('p', 'ws-desc muted', kind.description));
-    // Every section but the on/off switch sits in `rest`, which is greyed out and disabled while the feature is off.
-    let rest = panel;
-    if (kind.assign) {
-      const enabled = buildEnabledSection(config);
-      panel.appendChild(enabled);
-      rest = el('fieldset', 'pf-rest');
-      rest.disabled = config.enabled === false;
-      enabled.querySelector('.ws-enabled').addEventListener('change', function (e) { rest.disabled = !e.target.checked; });
-      panel.appendChild(rest);
-    }
+    // Every section sits in `rest`, which is greyed out and disabled while the feature is off.
+    const rest = el('fieldset', 'pf-rest');
+    rest.disabled = !on;
+    enabled.querySelector('.ws-enabled').addEventListener('change', function (e) { rest.disabled = !e.target.checked; });
+    panel.appendChild(rest);
     rest.appendChild(buildIdSection(kind, config));
     if (kind.component_lookup || kind.assign) rest.appendChild(buildComponentSection(kind, config));
     if (kind.assign) rest.appendChild(buildVariantsSection(config));
@@ -719,11 +718,6 @@
   /** Build the card: a tab strip of workspace kinds over their panels. */
   function buildCard(kinds, settings) {
     const card = el('section', 'card ws-card');
-    if (kinds.length === 1) {
-      const head = el('header', 'ws-card-head');   // styled like the Connection card's title
-      head.appendChild(el('h2', '', t('settings.ws_kind_workspace', { title: kinds[0].title })));
-      card.appendChild(head);
-    }
     const strip = el('div', 'ws-tabs');
     strip.setAttribute('role', 'tablist');
     strip.hidden = kinds.length < 2;   // a lone workspace needs no tab
@@ -735,7 +729,7 @@
       tab.type = 'button';
       tab.setAttribute('role', 'tab');
       const panel = buildKindPanel(kind, settings.workspaces[kind.id] ||
-        { workspace_id: '', mappings: [], static_values: [] });
+        { workspace_id: '', mappings: [], static_values: [] }, kinds.length === 1);
       panel.hidden = i !== 0;
       panels.push(panel);
       tab.addEventListener('click', function () {
@@ -818,7 +812,7 @@
           };
         }),
         variants: { link_column: (card.querySelector('.ws-grid-link') || { value: '' }).value },
-        enabled: (card.querySelector('.ws-enabled') || { checked: true }).checked,
+        enabled: card.querySelector('.ws-enabled').checked,   // every workspace has its switch
         static_values: Array.prototype.map.call(card.querySelectorAll('.ws-static-row'), function (row) {
           return {
             fm_field_id: row.querySelector('.ws-fm-field').value,

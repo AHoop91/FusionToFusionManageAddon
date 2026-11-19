@@ -86,12 +86,19 @@ class ExportDialog:
         if context is None:
             return {key: reason for key in (ITEM, COMPONENT)}, None
         connection = " ".join(context.settings.validate())
-        return {ITEM: t("app.item_not_configured") if context.items_problem else "",
+        return {ITEM: t("app.item_not_configured") if context.items_problem else "",   # also when it is turned off: see ``_offered``
                 COMPONENT: t("app.complete_in_preferences", problem=connection) if connection else ""}, context
+
+    @staticmethod
+    def _offered(context: Optional[HubContext]) -> Tuple[str, ...]:
+        """The destinations the window offers: with the Items workspace turned off, files can only go to the component, so the item is not offered
+        (and nothing is said about it)."""
+        return (COMPONENT,) if context is not None and context.items_off else (ITEM, COMPONENT)
 
     def problem(self) -> str:
         """Why nothing can be exported to when no destination is set up, and nothing when one is: for the ribbon button. UI thread."""
-        reasons = list(self._setup()[0].values())
+        setup, context = self._setup()
+        reasons = [setup[key] for key in self._offered(context)]
         return "" if "" in reasons else reasons[0]
 
     @staticmethod
@@ -177,11 +184,13 @@ class ExportDialog:
             threading.Thread(target=self._check_access, args=(setup, context), daemon=True).start()
             if document and not problem:
                 self._panel.warm_export_target(self._item_found, self._thumbnail_found)   # while the user chooses, so Find item has nothing left to read
+        offered = self._offered(context)
         destinations = []
         for key in (ITEM, COMPONENT):
             reason = setup[key] or self._access.get(key, "")
             destinations.append({"key": key, "label": _label(key), "reason": reason,
-                                 "checking": not reason and key not in self._access})
+                                 "checking": not reason and key not in self._access,
+                                 "hidden": key not in offered})
         usable = [d["key"] for d in destinations if not d["reason"] and not d["checking"]]
         exports = self._config.config.exports
         name, description = self._panel.export_names() if number else ("", "")

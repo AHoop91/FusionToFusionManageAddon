@@ -227,7 +227,7 @@ class WorkspaceConfig:
     component_field: str = ""
     # The Variants grid of a product (only a workspace of a kind that is assigned uses it).
     variants: VariantsConfig = field(default_factory=VariantsConfig)
-    # Whether the feature of the workspace's kind is on at all (only the Portfolio Management kind can be turned off).
+    # Whether the feature of the workspace's kind is on at all (both the Items and the Portfolio Management kinds can be turned off).
     enabled: bool = True
 
     def maps_physical(self) -> bool:
@@ -236,7 +236,9 @@ class WorkspaceConfig:
 
     def setup_problem(self, title: str, mapped: bool = True) -> str:
         """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and, unless ``mapped`` is False
-        (a workspace only chosen by its id), valid mappings."""
+        (a workspace only chosen by its id), valid mappings. A workspace that is turned off cannot be used either."""
+        if not self.enabled:
+            return t("data.ws_off", title=title)
         if not self.workspace_id:
             return t("data.ws_id_not_set", title=title)
         problems = self.validate(mapped)

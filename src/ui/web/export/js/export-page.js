@@ -99,8 +99,11 @@
   function renderDestinationNote() {
     const box = $('export-destination-note');
     box.replaceChildren();
-    context.destinations.filter(function (d) { return d.reason; }).forEach(function (d) {
-      box.appendChild(el('span', 'export-note is-off', t('export.destination_off', { label: d.label, reason: d.reason })));
+    context.destinations.filter(function (d) { return d.reason && !d.hidden; }).forEach(function (d) {
+      const note = el('span', 'export-note is-off');
+      note.appendChild(el('strong', 'export-note-label', d.label));   // which destination it is about, then why it cannot be used
+      note.appendChild(el('span', 'export-note-reason', d.reason));
+      box.appendChild(note);
     });
     if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton(t('export.checking_permissions')));
   }
@@ -117,7 +120,10 @@
   function renderDestinations() {
     const box = $('export-destinations');
     box.replaceChildren();
-    context.destinations.forEach(function (d) {
+    // A destination that is turned off is not offered. With only one left, and nothing to say about it, there is no choice to make: the whole group is hidden.
+    const offered = context.destinations.filter(function (d) { return !d.hidden; });
+    $('export-destination-group').hidden = offered.length < context.destinations.length && offered.every(function (d) { return !d.reason; });
+    offered.forEach(function (d) {
       box.appendChild(segment(d, 'export-destination', d.key === destination, !!d.reason || d.checking, function (key) {
         destination = key;
         summarizeDestination();

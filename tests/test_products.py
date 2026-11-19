@@ -602,6 +602,10 @@ class SetupProblemTests(unittest.TestCase):
         self.assertIn("not set", WorkspaceConfig().setup_problem("Portfolio Management", False))
         self.assertNotEqual(WorkspaceConfig(workspace_id="77").setup_problem("Items"), "")   # the Items workspace still needs its mapping
 
+    def test_a_workspace_turned_off_cannot_be_used(self):
+        self.assertIn("turned off", WorkspaceConfig(workspace_id="77", enabled=False).setup_problem("Items"))
+        self.assertIn("turned off", WorkspaceConfig(workspace_id="77", enabled=False).setup_problem("Portfolio Management", False))
+
 
 if __name__ == "__main__":
     unittest.main()

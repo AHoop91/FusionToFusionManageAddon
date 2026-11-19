@@ -59,6 +59,25 @@ class SetupReasonTests(Setup):
         self.assertEqual(self.dialog.problem(), "shared file unreadable")
 
 
+class ItemTurnedOffTests(Setup):
+    def test_the_item_is_not_offered_and_only_the_component_counts_for_the_ribbon_button(self):
+        self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="999", enabled=False)}
+        with mock.patch("threading.Thread"):
+            shown = self.dialog._context({})
+        self.assertEqual({d["key"]: d["hidden"] for d in shown["destinations"]}, {"item": True, "component": False})
+        self.assertEqual(self.dialog.problem(), "")
+
+    def test_the_ribbon_button_gives_the_reason_of_the_component_not_of_the_item_turned_off(self):
+        setup = {"item": "turned off", "component": "complete the connection"}
+        with mock.patch.object(self.dialog, "_setup", return_value=(setup, mock.Mock(items_off=True))):
+            self.assertEqual(self.dialog.problem(), "complete the connection")
+
+    def test_the_item_is_offered_when_it_is_on(self):
+        with mock.patch("threading.Thread"):
+            shown = self.dialog._context({})
+        self.assertFalse(any(d["hidden"] for d in shown["destinations"]))
+
+
 class AppRefusedTests(Setup):
     def client(self, error=None):
         client = mock.Mock()

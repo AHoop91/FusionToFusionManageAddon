@@ -42,9 +42,11 @@ body { background: var(--bg); }
 .export-group h2 { margin: 0 0 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 
 /* Under the destination: what it is, and why one that is off is off (or a grey bar while the permissions are read). */
-.export-notes { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.export-notes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .export-note { font-size: 12px; color: var(--muted); }
-.export-note.is-off { color: var(--danger); }
+/* A destination that cannot be used: a soft callout, the destination in bold and the reason under it. */
+.export-note.is-off { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-left: 3px solid var(--danger); border-radius: 4px; background: #fdf3f3; color: var(--text); font-size: 13px; line-height: 1.4; }
+.export-note.is-off .export-note-label { color: var(--danger); font-weight: 600; }
 .export-denied { display: none; }
 .export-body.is-denied .export-denied { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 320px; }
 .export-body.is-denied .export-group { display: none; }
