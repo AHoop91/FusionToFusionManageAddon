@@ -212,6 +212,13 @@ class ItemViewService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
+    @classmethod
+    def forget(cls) -> None:
+        """Drop the layout kept of every workspace (sections, hidden fields, tab names): the next read asks Fusion Manage again."""
+        SectionService.forget()
+        TabService.forget()
+        cls._hidden_cache.clear()
+
     def prepare(self, workspace_id: str) -> None:
         """Read what a workspace shares between its items (section layouts, hidden fields, tab names) all at once, so a ``read`` finds it
         cached. It needs no item, so it can run while the item is still being found. A failure is left for ``read`` to report."""

@@ -408,7 +408,7 @@ class ItemPanel:
 
     def open_selected(self) -> None:
         """Show the item of the selected component, or of the open design when nothing is selected. UI thread."""
-        self._find(_selected_part_number(), lambda subject: self._open(subject))
+        self._find(_selected_part_number(), lambda subject: self._open(subject), fresh=True)
 
     def _follow_selection(self) -> None:
         """While the panel is open, show the item of a component just selected. A selection with no component leaves the panel as it is."""
@@ -426,14 +426,18 @@ class ItemPanel:
         return self._export_refs[number]
 
     def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False, fail: Optional[Callable[[str], None]] = None,
-              cancel: Optional[CancelToken] = None, ref: Optional[DesignRef] = None) -> None:
+              cancel: Optional[CancelToken] = None, ref: Optional[DesignRef] = None, fresh: bool = False) -> None:
         """Read the item number of the component with ``part_number`` from the Data Model (a worker thread), then call ``then`` with it on the
         UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log; ``fail`` is
-        given the reason instead of a message box showing it). UI thread."""
+        given the reason instead of a message box showing it). ``fresh`` reads the workspace's layout again instead of using what was kept: the
+        panel is being opened, not following a selection. UI thread."""
         if not self._has_number(part_number, quiet):
             return
         ref = ref or _part_ref(part_number)
         context, _reason = self._contexts.attempt()   # only an optimisation: what is asked for reports the settings it cannot read
+
+        if fresh:
+            ItemViewService.forget()
 
         def work() -> None:
             self._warm(context)   # the workspace's layouts are read while the Data Model answers
@@ -464,7 +468,7 @@ class ItemPanel:
 
     def open_from_menu(self) -> None:
         """Show the item of the component the right-click menu was opened on. UI thread."""
-        self._find(_selected_part_number(from_menu=True), lambda subject: self._open(subject))
+        self._find(_selected_part_number(from_menu=True), lambda subject: self._open(subject), fresh=True)
 
     def _open(self, subject: Subject, show: bool = True) -> None:
         self._number = subject.item_number
@@ -501,8 +505,9 @@ class ItemPanel:
         return {"chosen": True}
 
     def _refresh(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Read the item shown again (the page's Refresh button)."""
+        """Read the item shown again (the page's Refresh button), and the layout of its workspace with it."""
         if self._number:
+            ItemViewService.forget()
             self._start()
         return self._status({})
 

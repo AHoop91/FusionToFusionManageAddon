@@ -2,7 +2,9 @@
 
 import unittest
 
-from src.fm.item_view import build_view, cell_of, no_image, no_page, not_shown
+from src.fm.item_view import ItemViewService, build_view, cell_of, no_image, no_page, not_shown
+from src.fm.sections import SectionService
+from src.fm.tabs import TabService
 
 FIELD = "/api/v3/workspaces/1/views/1/fields/"
 
@@ -128,6 +130,17 @@ class BuildViewTests(unittest.TestCase):
         for item in (None, "x", [], {"sections": "x"}, {"sections": ["x", {"fields": "x"}]}):
             with self.subTest(item=item):
                 self.assertEqual(view(item)["sections"], [])
+
+
+class ForgetTests(unittest.TestCase):
+    def test_forget_drops_the_layout_kept_of_a_workspace(self):
+        key = ("acme", "1")
+        kept = (SectionService._cache, SectionService._details_cache, TabService._labels_cache, ItemViewService._hidden_cache)
+        for cache in kept:
+            cache.put(key, {"kept": True})
+        ItemViewService.forget()
+        for cache in kept:
+            self.assertIsNone(cache.get(key))
 
 
 if __name__ == "__main__":

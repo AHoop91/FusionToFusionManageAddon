@@ -194,7 +194,7 @@ class ProductReads(PickerReads):
     def view(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """One product as the Item panel shows an item: its title, workflow state, tabs and every section of fields, read by ``ItemViewService``.
         ``stamp`` is what the page sends with the look-ups of the tabs (the Item panel's own); ``tabs["grid"]`` is the Grid tab, named as the
-        workspace names it, when it has one."""
+        workspace names it, when it has one. The workspace's layout is read again each time, as for the Item panel."""
         item = str(payload.get("item") or "")
         if not item:
             return answer_for(token_of(payload), message=t("app.product_choose_first"))
@@ -203,6 +203,7 @@ class ProductReads(PickerReads):
             context, reason = self._contexts.attempt()
             if context is None:
                 raise ValueError(reason)
+            ItemViewService.forget()   # opening a product, or reading it again, asks for the workspace's layout again, as the Item panel does
             view = ItemViewService(client).read(workspace, item, granted(client, workspace))
             view["stamp"] = context.stamp
             label = TabService(client).labels(workspace).get(GRID_TAB)

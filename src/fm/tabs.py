@@ -73,6 +73,11 @@ class TabService:
         counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
         return {key: _count_of(counts, name) for key, name in TABS.items()}
 
+    @classmethod
+    def forget(cls) -> None:
+        """Drop the kept tab names, so the next read asks Fusion Manage again."""
+        cls._labels_cache.clear()
+
     def labels(self, workspace_id: str) -> Dict[str, str]:
         """``{workspaceTabName: label}`` of the workspace's tabs (read once, then kept for a while). Raises ``FmApiError`` when they cannot be read."""
         key = (self._client.tenant, workspace_id)

@@ -567,6 +567,7 @@ class ActionTests(unittest.TestCase):
             self.reads.view({"token": "t1", "item": "901"})
             self.finish()
         service.return_value.read.assert_called_once_with("77", "901", {"view_items"})
+        service.forget.assert_called_once_with()   # the layout is read again, as the Item panel does on refresh
         result = self.reads.status({"token": "t1"})["result"]
         self.assertEqual((result["state"], result["stamp"], result["tabs"]["grid"]["label"]), ("Proposal", "stamp-1", "Product Variants"))
 

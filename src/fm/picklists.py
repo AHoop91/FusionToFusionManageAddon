@@ -16,7 +16,6 @@ from ..core.logging_setup import get_logger
 from ..core.shapes import rows_in
 from ..core.units import convert
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
-from .ttl_cache import TtlCache
 from .workspace import WorkspaceService
 
 log = get_logger("fm.picklists")
@@ -28,9 +27,6 @@ class FieldFacts(NamedTuple):
     lookups: Dict[str, str]   # the lookup behind a fixed-list field
     precisions: Dict[str, int]   # the most decimal digits a number field takes
     units: Dict[str, str]   # the unit of measure a field is set to
-
-
-_facts_cache = TtlCache()   # workspace id -> FieldFacts, so the panel and a run read the fields once
 
 
 def parse_fields(data: Any) -> FieldFacts:
@@ -53,26 +49,28 @@ def parse_fields(data: Any) -> FieldFacts:
 
 class PicklistResolver:
     """Fits values to the fields of one workspace: the options of its picklists (each read once), the units and precision of its numbers.
-    The resolver is shared by a run's threads."""
+    The resolver is shared by a run's threads. What it reads is kept only as long as the resolver is, so each run (or check) reads the fields
+    afresh."""
 
     def __init__(self, client: FmClient, workspace_id: str) -> None:
         self._client = client
         self._workspace_id = workspace_id
         self._lock = threading.Lock()
         self._options: Dict[str, List[Dict[str, str]]] = {}   # lookup name -> [{value: link, title}]
+        self._known: Optional[FieldFacts] = None   # what the field list says, once it has been read
 
     def _facts(self) -> FieldFacts:
         """The facts about the workspace's fields, read once. Empty when they cannot be read, and then not remembered, so the next
         field tries again."""
-        known = _facts_cache.get(self._workspace_id)
-        if known is not None:
-            return known
+        if self._known is not None:
+            return self._known
         try:
             data = self._client.get_json(f"{WORKSPACES}/{self._workspace_id}/fields")
         except (FmApiError, AuthError) as exc:
             log.warning("Could not read the fields of workspace %s: %s", self._workspace_id, exc)
             return FieldFacts({}, {}, {})
-        return _facts_cache.put(self._workspace_id, parse_fields(data))
+        self._known = parse_fields(data)
+        return self._known
 
     def link(self, field_id: str, text: str) -> Optional[str]:
         """The link of the option titled ``text`` (ignoring case) in the field's picklist.

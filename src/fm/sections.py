@@ -58,6 +58,12 @@ class SectionService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
+    @classmethod
+    def forget(cls) -> None:
+        """Drop what was kept, so the next read asks Fusion Manage again."""
+        cls._cache.clear()
+        cls._details_cache.clear()
+
     def field_sections(self, workspace_id: str) -> Dict[str, str]:
         """``{field id: section link}`` for every field of the workspace."""
         key = (self._client.tenant, workspace_id)
