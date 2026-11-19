@@ -386,7 +386,7 @@
 #item-changelog.item-log-ready { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
 #item-changelog[hidden] { display: none; }
 .item-log-scroll { flex: 1; min-height: 0; overflow: auto; }
-.item-log-spacer td { padding: 0; border: 0; }
+.item-changelog .item-log-spacer td { padding: 0; border: 0; }   /* as specific as the row padding above, or an empty spacer is 20px tall */
 .item-log-spacer:hover { background: none; }
 /* The footer is a slim bar in the heading's grey: how far the log has been read on the left, the progress of the next page on the right. */
 .item-log-foot { display: flex; align-items: center; gap: 12px; flex: none; min-height: 36px; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 12px; font-weight: 600; }
