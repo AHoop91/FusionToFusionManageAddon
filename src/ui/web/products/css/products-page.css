@@ -99,7 +99,7 @@ body { background: #f5f5f5; }
 .pu-badge.variant { background: #6f42c1; }
 .products-alert { margin: 0 16px 8px; padding: 10px 14px; border: 1px solid #f3c1c5; border-left: 4px solid var(--danger); border-radius: 2px; color: var(--danger); background: #fff5f5; overflow-wrap: anywhere; }
 
-.products-add[hidden] ~ .products-actions { margin-left: auto; }   /* Create New Product normally pushes the rest to the right; without it, the actions still go to the right edge */
+.products-add[hidden] ~ #products-view { margin-left: auto; }   /* Create New Product normally pushes the rest to the right; without it, the view picker and the buttons after it still go to the right edge */
 .products-add { display: inline-flex; align-items: center; justify-content: center; margin-right: auto; border: 0; background: #0696d7; color: #fff; font: inherit; cursor: pointer; }
 .products-add:hover { background: #0580b8; }
 .products-add:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
