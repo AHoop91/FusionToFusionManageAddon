@@ -4,7 +4,7 @@ They are read and written on a worker thread and the panel polls ``products_stat
 (``PickerReads``): Fusion's palette handler never waits on the network.
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Tuple
 
 from ...auth.auth_service import AuthService
 from ...config.config_service import ConfigService
@@ -16,7 +16,6 @@ from ...fm.client import FmClient
 from ...fm.components import LINEAGE, ComponentService
 from ...fm.item_view import ItemViewService
 from ...fm.permissions import ADD_ITEMS, granted, may
-from ...fm.tabs import GRID_TAB, TabService
 from ...fm.workspace_form import WorkspaceFormService
 from ...fm.tableaus import TableauService
 from ...publish.products import REPLACE, REPLACE_MOVE, VARIANT, VARIANT_UPDATE, NotAllowed, ProductService
@@ -26,6 +25,14 @@ from ..product_mode import PRODUCT_MODE
 from .background import Runner, in_thread, why
 from .design_number import OpenDesign
 from .search_actions import PickerReads, answer_for, token_of
+
+if TYPE_CHECKING:   # only for the type: importing it loads Fusion's modules
+    from ..item_numbers import DesignRef
+
+
+def _text(payload: Dict[str, Any], key: str) -> str:
+    """What the page sent under ``key``, as text ("" when it sent none)."""
+    return str(payload.get(key) or "")
 
 
 def _fusion_app() -> Any:
@@ -53,13 +60,14 @@ NO_DESIGN = {"number": "", "name": "", "thumbnail_url": "", "revision": "", "sta
 class ProductReads(PickerReads):
     """The reads and the create of the Assign Product panel, one answer for each request token."""
 
-    def __init__(self, config: ConfigService, make_client: Callable[[], FmClient], run: Runner = in_thread, design: Any = None, *,
+    def __init__(self, config: ConfigService, make_client: Callable[[], FmClient], run: Runner = in_thread, design: Optional[OpenDesign] = None, *,
                  contexts: HubContexts) -> None:
         super().__init__(config, make_client, run)
         self._contexts = contexts   # gives the ``stamp`` the Item panel's tabs ask for
         self._design = design or OpenDesign()   # which design is open, and its item number
 
     def _cfg(self) -> Optional[WorkspaceConfig]:
+        """The settings of the Portfolio Management workspace, or None when none are set."""
         return self._config.config.workspaces.get(PORTFOLIO_KIND)
 
     def _in_workspace(self, payload: Dict[str, Any], work: Callable[[FmClient, str], Any], alongside: bool = False) -> Dict[str, Any]:
@@ -73,7 +81,7 @@ class ProductReads(PickerReads):
             return answer_for(token, message=t("app.products_not_set_up"))
         return self._start(token, lambda client: work(client, workspace), alongside)
 
-    def _automatic(self) -> set:
+    def _automatic(self) -> Set[str]:
         """The ids of the fields the add-in fills in when a product is assigned: the Primary Component field."""
         cfg = self._cfg()
         return {cfg.component_field} if cfg and cfg.component_field else set()
@@ -85,7 +93,7 @@ class ProductReads(PickerReads):
 
     def columns(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The columns of a view, for the header to show before its rows arrive."""
-        view = str(payload.get("view") or "")
+        view = _text(payload, "view")
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).columns(workspace, view))
 
     def fields(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -94,40 +102,40 @@ class ProductReads(PickerReads):
 
     def image(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The picture in an image field of one product, for a cell of the list."""
-        item, field, number = (str(payload.get(key) or "") for key in ("item", "field", "number"))
+        item, field, number = (_text(payload, key) for key in ("item", "field", "number"))
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).image(workspace, item, field, number), alongside=True)
 
     def picture(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """A picture a product holds, from the link its item gave for it (the form of an edit has the item already, so no read of it is repeated)."""
-        link = str(payload.get("link") or "")
+        link = _text(payload, "link")
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).picture(workspace, link), alongside=True)
 
     def save_filters(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Save the filters of columns of a view: ``changes`` is ``[{"column", "match", "filters"}]``."""
-        view = str(payload.get("view") or "")
+        view = _text(payload, "view")
         changes = payload.get("changes") if isinstance(payload.get("changes"), list) else []
         columns = payload.get("columns") if isinstance(payload.get("columns"), list) else None   # the columns to show, in order; none: as they are
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).save_view_filters(workspace, view, changes, columns))
 
     def create_view(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Make a view: ``name`` and the ``columns`` (field keys) it shows."""
-        name = str(payload.get("name") or "")
+        name = _text(payload, "name")
         columns = payload.get("columns") if isinstance(payload.get("columns"), list) else []
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).create_view(workspace, name, columns))
 
     def rename_view(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Give a view a new name."""
-        view, name = str(payload.get("view") or ""), str(payload.get("name") or "")
+        view, name = _text(payload, "view"), _text(payload, "name")
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).rename_view(workspace, view, name))
 
     def delete_view(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Delete a view."""
-        view = str(payload.get("view") or "")
+        view = _text(payload, "view")
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).delete_view(workspace, view))
 
     def rows(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """A page of the rows of a view."""
-        view, page, size = str(payload.get("view") or ""), whole(payload.get("page")), whole(payload.get("size"))
+        view, page, size = _text(payload, "view"), whole(payload.get("page")), whole(payload.get("size"))
         return self._in_workspace(payload, lambda client, workspace: TableauService(client).rows(workspace, view, page, size))
 
     def form(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -136,27 +144,35 @@ class ProductReads(PickerReads):
 
     def item(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The values of one product, to fill the form of an edit."""
-        item = str(payload.get("item") or "")
+        item = _text(payload, "item")
         return self._in_workspace(payload, lambda client, workspace: ProductService(client).read(workspace, item))
 
     def update(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Change a product to the values in the form."""
-        item = str(payload.get("item") or "")
+        item = _text(payload, "item")
         values = _values(payload)
         if not item or not values:
             return answer_for(token_of(payload), message=t("app.product_no_values"))
         return self._in_workspace(payload, lambda client, workspace: ProductService(client).update(workspace, item, values))
 
+    def _refusal(self, payload: Dict[str, Any], item: bool = True) -> Optional[Dict[str, Any]]:
+        """The answer that says why a request about a product cannot start (no product chosen, or no Primary Component field set), or None."""
+        if item and not _text(payload, "item"):
+            return answer_for(token_of(payload), message=t("app.product_choose_first"))
+        cfg = self._cfg()
+        if not cfg or not cfg.component_field:
+            return answer_for(token_of(payload), message=t("app.product_no_primary_field"))
+        return None
+
     def assign(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Make the open design the Primary Component of a product (its latest released revision, else its working version), or, once the person
         has said so, replace the one it has or add it as a variant."""
         token = token_of(payload)
-        item, mode = (str(payload.get(key) or "") for key in ("item", "mode"))
+        item, mode = _text(payload, "item"), _text(payload, "mode")
+        refusal = self._refusal(payload)
+        if refusal:
+            return refusal
         cfg = self._cfg()
-        if not item:
-            return answer_for(token, message=t("app.product_choose_first"))
-        if not cfg or not cfg.component_field:
-            return answer_for(token, message=t("app.product_no_primary_field"))
         if mode in (VARIANT, REPLACE_MOVE, VARIANT_UPDATE) and not cfg.variants.link_column:
             return answer_for(token, message=t("app.product_no_variants_column"))
         if mode not in ("", REPLACE, VARIANT, REPLACE_MOVE, VARIANT_UPDATE):
@@ -166,7 +182,7 @@ class ProductReads(PickerReads):
             return failed
         field, column = cfg.component_field, cfg.variants.link_column
         if mode == VARIANT_UPDATE:   # the revision of a row that holds the component already
-            row_id = str(payload.get("row_id") or "")
+            row_id = _text(payload, "row_id")
             if not row_id:
                 return answer_for(token, message=t("app.unknown_request"))
             return self._in_workspace(payload, lambda client, workspace: ProductService(client).update_variant(
@@ -177,16 +193,13 @@ class ProductReads(PickerReads):
 
     def inspect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """What the product holds of components, and how the open design stands to it (its Primary Component and each row of the Variants grid)."""
-        item = str(payload.get("item") or "")
-        cfg = self._cfg()
-        token = token_of(payload)
-        if not item:
-            return answer_for(token, message=t("app.product_choose_first"))
-        if not cfg or not cfg.component_field:
-            return answer_for(token, message=t("app.product_no_primary_field"))
-        ref, failed = self._open_design(token)
+        refusal = self._refusal(payload)
+        if refusal:
+            return refusal
+        ref, failed = self._open_design(token_of(payload))
         if failed:
             return failed
+        item, cfg = _text(payload, "item"), self._cfg()
         field, column = cfg.component_field, cfg.variants.link_column
         return self._in_workspace(payload, lambda client, workspace: ProductService(client).inspect(
             workspace, item, self._design.number(ref), field, column))
@@ -195,7 +208,7 @@ class ProductReads(PickerReads):
         """One product as the Item panel shows an item: its title, workflow state, tabs and every section of fields, read by ``ItemViewService``.
         ``stamp`` is what the page sends with the look-ups of the tabs (the Item panel's own); ``tabs["grid"]`` is the Grid tab, named as the
         workspace names it, when it has one. The workspace's layout is read again each time, as for the Item panel."""
-        item = str(payload.get("item") or "")
+        item = _text(payload, "item")
         if not item:
             return answer_for(token_of(payload), message=t("app.product_choose_first"))
 
@@ -204,37 +217,31 @@ class ProductReads(PickerReads):
             if context is None:
                 raise ValueError(reason)
             ItemViewService.forget()   # opening a product, or reading it again, asks for the workspace's layout again, as the Item panel does
-            view = ItemViewService(client).read(workspace, item, granted(client, workspace))
+            view = ItemViewService(client).read(workspace, item, granted(client, workspace), with_grid=True, pictures=False)
             view["stamp"] = context.stamp
-            label = TabService(client).labels(workspace).get(GRID_TAB)
-            if label:
-                view["tabs"]["grid"] = {"label": label, "count": 0, "allowed": True}
             return view
 
-        return self._in_workspace(payload, look)
+        return self._in_workspace(payload, look, alongside=True)   # with the contents: the product's head and its grid are read together
 
     def contents(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """What one product holds of components, for browsing: its Primary Component and the rows of its Variants grid (see ``ProductService.contents``)."""
-        item = str(payload.get("item") or "")
-        cfg = self._cfg()
-        token = token_of(payload)
-        if not item:
-            return answer_for(token, message=t("app.product_choose_first"))
-        if not cfg or not cfg.component_field:
-            return answer_for(token, message=t("app.product_no_primary_field"))
+        refusal = self._refusal(payload)
+        if refusal:
+            return refusal
+        item, cfg = _text(payload, "item"), self._cfg()
         field, column = cfg.component_field, cfg.variants.link_column
-        return self._in_workspace(payload, lambda client, workspace: ProductService(client).contents(workspace, item, field, column))
+        return self._in_workspace(payload, lambda client, workspace: ProductService(client).contents(workspace, item, field, column), alongside=True)
 
     def usage(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Where the open design is used in the portfolio: as a Primary Component, as a variant, or not at all (see ``ProductService.usage``).
         A design with no item number is answered ``{"unpublished": True, "message"}``: it is not in Fusion Manage, which is not an error."""
-        token = token_of(payload)
-        cfg = self._cfg()
-        if not cfg or not cfg.component_field:
-            return answer_for(token, message=t("app.product_no_primary_field"))
-        ref, failed = self._open_design(token)
+        refusal = self._refusal(payload, item=False)
+        if refusal:
+            return refusal
+        ref, failed = self._open_design(token_of(payload))
         if failed:
             return failed
+        cfg = self._cfg()
         field, column = cfg.component_field, cfg.variants.link_column
 
         def look(client: FmClient, workspace: str) -> Dict[str, Any]:
@@ -251,7 +258,7 @@ class ProductReads(PickerReads):
 
     def design_file(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The lineage id of the design a component item was published from (see ``ComponentService.design_file``), for ``products_open_file``."""
-        link = str(payload.get("link") or "")
+        link = _text(payload, "link")
         return self._start(token_of(payload), lambda client: {"file": ComponentService(client).design_file(link)}, alongside=True)
 
     def design(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -267,12 +274,13 @@ class ProductReads(PickerReads):
                 details = dict(self._design.describe(ref))
             except NoItemNumber:
                 return dict(NO_DESIGN)
-            revision, state = ComponentService(client).revision_and_state(details["number"]) if details["number"] else ("", "")
+            link = self._design.record_link(ref)
+            revision, state = ComponentService(client).revision_and_state(link) if link else ("", "")
             return {**details, "revision": revision, "state": state}
 
         return self._start(token, look, alongside=True)
 
-    def _open_design(self, token: str) -> Tuple[Any, Optional[Dict[str, Any]]]:
+    def _open_design(self, token: str) -> Tuple[Optional["DesignRef"], Optional[Dict[str, Any]]]:
         """``(reference of the open design, None)``, or ``(None, the answer that says it could not be read)``. Fusion's thread."""
         try:
             return self._design.ref(), None

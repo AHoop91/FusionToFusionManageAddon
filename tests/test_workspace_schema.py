@@ -73,7 +73,7 @@ class ReadLayoutTests(unittest.TestCase):
 
 
 class ValidateTests(unittest.TestCase):
-    KIND = WorkspaceKind("portfolio", "Portfolio Management", "", ("view_items",), mapped=False, schema=SCHEMA)
+    KIND = WorkspaceKind("portfolio", ("view_items",), mapped=False, schema=SCHEMA)
 
     def _service(self, layout):
         service = WorkspaceService(mock.Mock())

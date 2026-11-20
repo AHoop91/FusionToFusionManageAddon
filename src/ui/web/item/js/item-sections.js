@@ -1,7 +1,10 @@
 /**
  * How an item's section is drawn, shared by the Item panel and the details of a product in the Product Portfolio window: a card for the section,
  * its fields as label and value (a picture, links, the sanitised markup of a formula field, or text) and its matrices as grids whose columns
- * can be resized. ``ns.itemSections.section(section, enlarge)`` returns the card; ``enlarge(src)`` is what a click on a picture does.
+ * can be resized. ``ns.itemSections.section(section, enlarge, load)`` returns the card; ``enlarge(src)`` is what a click on a picture does.
+ * A picture the view did not carry (a ``link`` and no ``value``) is a skeleton until ``load(link, done)``, when it is given, calls ``done(src)``
+ * with the picture (``''`` when there is none). A section the workspace lays out folded (``section.collapsed``) starts folded, and asks for the
+ * pictures in it only when it is first unfolded.
  * Needs ``tree.js`` (the column grips), ``safe-html.js`` and ``section.js``.
  */
 (function (ns) {
@@ -15,16 +18,28 @@
   const FIT_SLACK_PX = 24;   // room for the cell's padding and the handle when a column is fitted to its content
   const MIN_MATRIX_COLUMN_PX = 120;   // a matrix column is never squeezed below this by a narrow panel
 
+  /** A picture in ``node``; it enlarges when clicked. */
+  function showPicture(node, src, enlarge) {
+    const img = el('img', 'item-image');
+    img.src = src;
+    img.alt = '';
+    img.title = t('item.enlarge');
+    img.addEventListener('click', function () { enlarge(src); });
+    node.appendChild(img);
+  }
+
   /** Fill ``node`` with a value: text, a picture, or the (sanitised) markup of a formula field. */
-  function fill(node, cell, enlarge) {
+  function fill(node, cell, enlarge, load) {
     if (cell.kind === 'image') {
-      if (!cell.value) return;
-      const img = el('img', 'item-image');
-      img.src = cell.value;
-      img.alt = '';
-      img.title = t('item.enlarge');
-      img.addEventListener('click', function () { enlarge(cell.value); });
-      node.appendChild(img);
+      if (cell.value) { showPicture(node, cell.value, enlarge); return; }
+      if (!cell.link || !load) return;
+      const skeleton = el('div', 'item-image item-image-skeleton');
+      node.appendChild(skeleton);
+      load(cell.link, function (src) {
+        if (!skeleton.isConnected) return;   // the page moved on to another product
+        skeleton.remove();
+        if (src) showPicture(node, src, enlarge);
+      });
     } else if (cell.kind === 'links') {
       cell.value.forEach(function (link, i) {
         if (i) node.appendChild(document.createTextNode(', '));
@@ -114,7 +129,7 @@
     });
   }
 
-  function renderMatrix(matrix, enlarge) {
+  function renderMatrix(matrix, enlarge, load) {
     const table = el('table', 'item-matrix');
     const cols = [];
     for (let i = 0; i <= matrix.columns.length; i++) {   // the first is the column of row labels, a little wider
@@ -139,7 +154,7 @@
       tr.appendChild(el('td', 'item-matrix-label', matrix.labels[i]));
       row.forEach(function (cell) {
         const td = el('td');
-        fill(td, cell, enlarge);
+        fill(td, cell, enlarge, load);
         tr.appendChild(td);
       });
       table.appendChild(tr);
@@ -149,18 +164,24 @@
     return wrap;
   }
 
-  function renderSection(section, enlarge) {
+  function renderSection(section, enlarge, load) {
     const content = el('div');
+    const folded = section.collapsed === true;
+    const waiting = [];   // what a folded section asked for, until it is opened
+    const ask = load && folded ? function (link, done) { waiting.push([link, done]); } : load;
     section.fields.forEach(function (f) {
       const row = el('div', 'item-field');
       row.appendChild(el('div', 'item-field-label', f.title));
       const value = el('div', 'item-field-value');
-      fill(value, f, enlarge);
+      fill(value, f, enlarge, ask);
       row.appendChild(value);
       content.appendChild(row);
     });
-    section.matrices.forEach(function (m) { content.appendChild(renderMatrix(m, enlarge)); });
-    return ns.section.make(section.title, content);
+    section.matrices.forEach(function (m) { content.appendChild(renderMatrix(m, enlarge, ask)); });
+    return ns.section.make(section.title, content, {
+      folded: folded,
+      onOpen: function () { waiting.splice(0).forEach(function (call) { load(call[0], call[1]); }); },
+    });
   }
 
   ns.itemSections = { section: renderSection };

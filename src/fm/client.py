@@ -6,6 +6,7 @@ rest) take an ``FmClient`` instead of building URLs and headers themselves.
 
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -28,18 +29,24 @@ DEBUG_BODY = 20000   # bytes of a request or answer kept in a verbose log
 ANSWER_LOG_BYTES = 500   # bytes of a write's answer kept in the normal log
 ERROR_BODY_BYTES = 8000   # bytes of a refusal read, for the log and for a form that shows what was refused
 ERROR_MESSAGE_CHARS = 300   # characters of it that go into the message the user can see
+NOT_JSON_LOG_BYTES = 300   # bytes of an answer that was not JSON kept in the log
+EMBEDDED_FILE_LOG_CHARS = 40   # characters of each file embedded in a request kept in the log
 REQUEST_TIMEOUT_SECONDS = 15
 WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
 UPLOAD_TIMEOUT_SECONDS = 300   # a STEP of an assembly can be large
 UPLOAD_CHUNK_BYTES = 64 * 1024   # a file goes out in pieces this big, so progress can be shown
 READ_ATTEMPTS = 3
 NO_RESPONSE = 0   # the ``status`` of an error that had no HTTP response
+NO_CONTENT = 204   # the status of an answer with nothing in it, e.g. a search with no hits
 RETRY_STATUSES = (429, 502, 503, 504, NO_RESPONSE)   # worth another try: a busy or failing gateway, a timeout or a lost connection
 RETRY_SECONDS = 2   # wait before the second try, twice that before the third
+_ENCODED_SEPARATORS = ("%2e", "%2f", "%5c")   # an encoded dot, slash or backslash
+_DATA_URI = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]+")   # a file embedded in a request body (an image field)
 
 # Path roots of the REST API, shared by every feature that builds a url.
 WORKSPACES = "/api/v3/workspaces"
 LOOKUPS = "/api/v3/lookups"
+VIEW = "views/1"   # the view whose fields and sections an item is written through
 
 
 class FmApiError(Exception):
@@ -62,9 +69,22 @@ def _clip(data: bytes) -> str:
     return data[:DEBUG_BODY].decode("utf-8", "replace")
 
 
+def _readable(payload: Optional[bytes]) -> str:
+    """A request body for the log with each embedded file (a ``data:`` uri) cut to its start, so the fields can be read."""
+    return _DATA_URI.sub(lambda match: match.group(0)[:EMBEDDED_FILE_LOG_CHARS] + "...", (payload or b"").decode("utf-8", "replace"))
+
+
 def _said(exc: urllib.error.HTTPError) -> str:
     """What Fusion Manage said in a refusal (the start of it)."""
     return exc.read()[:ERROR_BODY_BYTES].decode("utf-8", "replace")
+
+
+def _read_failure(exc: OSError, path: str) -> FmApiError:
+    """The error for a read of ``path`` that failed: a refusal (``HTTPError``, logged with what Fusion Manage said) or no answer at all."""
+    if isinstance(exc, urllib.error.HTTPError):
+        log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path, _said(exc))
+        return FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code)
+    return FmApiError(t("data.fm_request_failed", path=path, reason=exc))
 
 
 def last_segment(link: Any) -> str:
@@ -92,9 +112,14 @@ def signed_headers(extra: Dict[str, str]) -> Dict[str, str]:
 def checked_path(path: str) -> str:
     """``path`` if it stays inside the API: ids reach a path from the page, so one that climbs out of its place (``..``, an encoded
     slash or dot, a backslash) or breaks the request line is refused here, for every request."""
-    base = path.split("?", 1)[0]
-    if (not path.startswith("/") or "#" in path or "\\" in path or any(ord(c) <= 32 or ord(c) == 127 for c in base)
-            or ".." in base.split("/") or any(code in base.lower() for code in ("%2e", "%2f", "%5c"))):
+    base = path.split("?", 1)[0]   # the query string may hold what the path may not
+    refused = (
+        not path.startswith("/")
+        or "#" in path or "\\" in path
+        or any(ord(c) <= 32 or ord(c) == 127 for c in base)   # a space or a control character breaks the request line
+        or ".." in base.split("/")
+        or any(code in base.lower() for code in _ENCODED_SEPARATORS))
+    if refused:
         raise FmApiError(t("data.fm_bad_address"))
     return path
 
@@ -128,6 +153,7 @@ class FmClient:
 
     @property
     def tenant(self) -> str:
+        """The tenant name of the connection settings, without surrounding space (it may be empty: ``base_url`` refuses that)."""
         return self._settings.tenant.strip()
 
     @property
@@ -179,6 +205,7 @@ class FmClient:
         return urllib.request.Request(url, data=data, headers=headers, method=method)
 
     def _get_once(self, url: str, path: str, accept: str) -> Any:
+        """One GET of ``url``: the parsed JSON, or None when the answer has no content. Raises ``FmApiError`` when it fails or is not JSON."""
         self.cancel.check()
         watch = Stopwatch()
         request = self._request(url, accept)
@@ -190,19 +217,16 @@ class FmClient:
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug("GET %s -> %s (token %.2fs, first byte %.2fs, download %.2fs, %d bytes): %s", path, response.status,
                               token_seconds, first_byte_seconds, watch.lap(), len(body), _clip(body))
-                if response.status == 204 or not body.strip():   # no content, e.g. a search with no hits
+                if response.status == NO_CONTENT or not body.strip():
                     return None
                 try:
                     return json.loads(body)
-                except ValueError:
+                except ValueError as exc:
                     log.error("Fusion Manage HTTP %s for %s was not JSON (%s): %r", response.status, path,
-                              response.headers.get("Content-Type"), body[:300])
-                    raise
-        except urllib.error.HTTPError as exc:
-            log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path, _said(exc))
-            raise FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code) from exc
-        except (OSError, ValueError) as exc:
-            raise FmApiError(t("data.fm_request_failed", path=path, reason=exc)) from exc
+                              response.headers.get("Content-Type"), body[:NOT_JSON_LOG_BYTES])
+                    raise FmApiError(t("data.fm_request_failed", path=path, reason=exc)) from exc
+        except OSError as exc:
+            raise _read_failure(exc, path) from exc
 
     def get_bytes(self, path: str, timeout: int = REQUEST_TIMEOUT_SECONDS) -> Tuple[bytes, str]:
         """GET ``path`` (an image or a file) and return ``(body, content type)``. Raises ``FmApiError`` on failure.
@@ -211,13 +235,15 @@ class FmClient:
         """
         self.cancel.check()
         request = self._request(self._url(path), "*/*")
+        watch = Stopwatch()
         try:
             with open_url(request, timeout, self.cancel) as response:
-                return response.read(), str(response.headers.get("Content-Type") or "")
-        except urllib.error.HTTPError as exc:
-            raise FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code) from exc
+                body = response.read()
+                if log.isEnabledFor(logging.DEBUG):
+                    log.debug("GET %s -> %s (%.2fs, %d bytes)", path, response.status, watch.lap(), len(body))
+                return body, str(response.headers.get("Content-Type") or "")
         except OSError as exc:
-            raise FmApiError(t("data.fm_request_failed", path=path, reason=exc)) from exc
+            raise _read_failure(exc, path) from exc
 
     def put_bytes(self, url: str, content: bytes, headers: Optional[Dict[str, str]] = None, timeout: int = UPLOAD_TIMEOUT_SECONDS,
                   progress: Optional[Callable[[float], None]] = None) -> int:
@@ -264,9 +290,9 @@ class FmClient:
                 raw = response.read()
                 try:
                     data = json.loads(raw) if raw.strip() else None
-                except ValueError:
-                    log.warning("The answer to %s %s was not JSON; it is read as no answer", method, path)
-                    data = None
+                except ValueError as exc:
+                    log.error("Fusion Manage HTTP %s for %s %s was not JSON: %r", response.status, method, path, raw[:NOT_JSON_LOG_BYTES])
+                    raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc), response.status) from exc
                 result = SendResult(response.status, dict(response.headers.items()), data)
                 log.info("Fusion Manage %s %s -> %s %s", method, path, result.status, raw[:ANSWER_LOG_BYTES].decode("utf-8", "replace"))
                 if log.isEnabledFor(logging.DEBUG):
@@ -274,7 +300,7 @@ class FmClient:
                 return result
         except urllib.error.HTTPError as exc:
             said = _said(exc)
-            log.error("Fusion Manage HTTP %s for %s %s: %s", exc.code, method, path, said)
+            log.error("Fusion Manage HTTP %s for %s %s: %s; it sent: %s", exc.code, method, path, said, _readable(payload))
             raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code, said) from exc
         except OSError as exc:
             raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc)) from exc

@@ -310,6 +310,47 @@ If your Items workspace has a field that links an item to a record in the Fusion
 
 ![Component linking field](../images/component-linking.png){ width="560" height="128" }
 
+#### Add the fields in Fusion Manage
+
+To link an item back to its original component, the Items workspace needs a picklist field that points at the components workspace. A Fusion Manage administrator adds it to the workspace's fields.
+
+| Setting | Value |
+|---|---|
+| Field name | `Component` (the field ID, `COMPONENT`, is made from the name and cannot be changed later) |
+| Data Type | Pick List |
+| Pick List Options | The components picklist, for example **[WS] Components (All including working)**, showing **Item Descriptor** |
+| Display as link | Selected |
+| Type | **Latest Version** |
+
+![The Component picklist field](../images/component-field.png){ width="560" }
+
+Then choose this field under **Component linking** in the add-in's preferences.
+
+#### Multi-manufacturing bill of materials
+
+!!! note "Only needed for more than one manufacturing bill of materials per design"
+    Skip this step if each design has a single manufacturing bill of materials (MBOM).
+
+When one design can have several MBOM items, each its own item in the Items workspace, the add-in uses the **lineage ID** of the design to find all of them. Every MBOM item made from a design carries that design's lineage ID, so searching on it returns every instance. The lineage ID stays the same across every version of a design, and it does not depend on the item number, which can differ between MBOMs (for example `{number}-{site}`). Fusion Manage can read it from the linked component, so nothing is typed in. Add a second field to the Items workspace that copies it:
+
+| Setting | Value |
+|---|---|
+| Field name | `Component Lineage Urn` |
+| Field ID | **`COMPONENT_LINEAGE_URN`**, made by Fusion Manage from the field name. The add-in finds the MBOM items by this ID, so it must be exactly this. |
+| Data Type | Derived |
+| Visibility | Never |
+| Derived Field Source | The linking picklist, **Component**, then the component field **Lineage URN** |
+
+![The Component Lineage Urn derived field](../images/component-lineage-field.png){ width="560" }
+
+!!! important "The field ID must be COMPONENT_LINEAGE_URN"
+    The matching depends on the field ID, not the field name. Check the ID after saving: it cannot be changed later. If the ID is different, the add-in will not find the MBOM items.
+
+The field only has a value once the item's **Component** picklist is set, so link every MBOM item to its component.
+
+!!! info "Manufacturing bills of materials only"
+    Only the traditional MBOM is covered. Other bill of materials types are not part of this setup.
+
 ### When the buttons light up
 
 The ribbon and context-menu buttons, other than **Preferences** and **Export**, stay disabled until the Items workspace is usable: a workspace is chosen, and the mappings are valid. The tooltip says what is still missing. The **Export** window opens either way; it turns off only its **Item** destination, and says why.
@@ -336,6 +377,8 @@ Each format has two choices:
 | **Component** | The component record | Components |
 
 Every format starts on **Item**. Click **Save** after changing one.
+
+When the Items workspace is turned off or has no workspace ID, **Item** is greyed out and every format is set to **Component**. Your earlier choices come back when the Items workspace is set up again.
 
 </div>
 <div markdown="1">
@@ -377,8 +420,6 @@ If two files have the same code, yours is used first, then your hub's, then the 
 ### Add a language
 
 If your language is not in the list, you can create it:
-
-When the Items workspace is turned off or has no workspace ID, **Item** is greyed out and every format is set to **Component**. Your earlier choices come back when the Items workspace is set up again.
 
 1. On the **Language** tab, enter a **Language code** (for example `de` or `pt-BR`) and a **Language name**, written in that language (for example `Deutsch`), then choose **Create**. Both are required. This makes a file that starts with the English text.
 2. Choose **Open folder** and open the new file in a text editor. Translate the text on the right of each line. Keep the names on the left and any `{placeholders}` as they are, then save the file.

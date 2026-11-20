@@ -47,50 +47,7 @@ class WorkspaceOfComponentsTests(unittest.TestCase):
         self.assertEqual(ComponentService(_Client(None, base_url="https://tenant-d")).workspace_id(), "")
 
 
-WORKSPACES = {"items": [{"link": "/api/v3/workspaces/8", "title": "Items and BOMs"}, {"link": "/api/v3/workspaces/57", "title": "Components"}]}
-
-
-def _search(*results):
-    """The answer of the V3 search: each result is ``(item id, descriptor, version)``."""
-    return {"totalCount": len(results), "items": [{"__self__": f"/api/v3/workspaces/57/items/{item}", "descriptor": descriptor, "version": version}
-                                                   for item, descriptor, version in results]}
-
-
 class WorkingVersionTests(unittest.TestCase):
-    def setUp(self):
-        components._WORKSPACES.clear()
-
-    def find(self, *results):
-        client = _Client(WORKSPACES, _search(*results))
-        return ComponentService(client).find_working("PN-000701"), client
-
-    def test_the_working_version_is_the_search_result(self):
-        (link, reason), client = self.find((15745, "PN-000701 - Universal Joint", "[REV:w]"))
-        self.assertEqual((link, reason), ("/api/v3/workspaces/57/items/15745", ""))
-        asked = client.paths[1]   # the search, after the list of workspaces that says which is the Components
-        self.assertTrue(asked.startswith("/api/v3/search-results?"))
-        self.assertIn("query=itemDescriptor%3D%22PN-000701%22+AND+(workspaceId%3D57)", asked)
-        self.assertIn("revision=3", asked)
-
-    def test_a_result_for_a_longer_number_is_not_it(self):
-        (link, _reason), _ = self.find((1, "PN-0007011 - Other", "[REV:w]"), (2, "PN-000701 - Universal Joint", "[REV:w]"))
-        self.assertEqual(link, "/api/v3/workspaces/57/items/2")
-
-    def test_no_working_version_is_said_so(self):
-        (link, reason), _ = self.find()
-        self.assertEqual(link, "")
-        self.assertIn("No working version of the component PN-000701", reason)
-
-    def test_two_working_versions_are_refused_naming_them(self):
-        (link, reason), _ = self.find((1, "PN-000701 - A", "[REV:w]"), (2, "PN-000701 - B", "[REV:w]"))
-        self.assertEqual(link, "")
-        self.assertIn("2 working versions match", reason)
-
-    def test_no_workspace_called_components_is_said_so(self):
-        link, reason = ComponentService(_Client({"items": [{"link": "/api/v3/workspaces/8", "title": "Items and BOMs"}]}, base_url="https://nobody")).find_working("PN-000701")
-        self.assertEqual(link, "")
-        self.assertIn("No workspace called Components", reason)
-
     def test_the_version_names_the_working_one(self):
         self.assertTrue(is_working("[REV:w]"))
         self.assertTrue(is_working("[REV: W ]"))

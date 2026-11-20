@@ -60,18 +60,22 @@ class TabService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
-    def read(self, workspace_id: str, item_id: str, held: Set[str]) -> Dict[str, Dict[str, Any]]:
+    def read(self, workspace_id: str, item_id: str, held: Set[str], with_grid: bool = False) -> Dict[str, Dict[str, Any]]:
         """``{"files": {"label", "count", "allowed"}, ...}`` for each tab the page shows that the workspace has; ``allowed`` is whether
-        the user's permissions (``held``) let them see it. Raises ``FmApiError`` when the names or counts cannot be read."""
+        the user's permissions (``held``) let them see it. ``with_grid`` adds the Grid tab as ``"grid"`` when the workspace has one (a product's
+        page shows it; the Item panel does not). Raises ``FmApiError`` when the names or counts cannot be read."""
         labels = self.labels(workspace_id)
         counts = self.counts(workspace_id, item_id)
-        return {key: {"label": labels[name], "count": counts.get(key, 0), "allowed": TAB_PERMISSIONS[key] in held}
+        tabs = {key: {"label": labels[name], "count": counts.get(key, 0), "allowed": TAB_PERMISSIONS[key] in held}
                 for key, name in TABS.items() if name in labels}
+        if with_grid and GRID_TAB in labels:
+            tabs["grid"] = {"label": labels[GRID_TAB], "count": counts["grid"], "allowed": True}
+        return tabs
 
     def counts(self, workspace_id: str, item_id: str) -> Dict[str, int]:
-        """``{"files": count, ...}``: how many entries each tab the page shows holds now (read afresh, not kept)."""
+        """``{"files": count, ...}``: how many entries each tab the page shows holds now (read afresh, not kept), and the Grid tab's as ``"grid"``."""
         counts = parse_counts(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}/tabs"))
-        return {key: _count_of(counts, name) for key, name in TABS.items()}
+        return {**{key: _count_of(counts, name) for key, name in TABS.items()}, "grid": _count_of(counts, GRID_TAB)}
 
     @classmethod
     def forget(cls) -> None:

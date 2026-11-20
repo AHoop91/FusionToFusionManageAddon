@@ -5,7 +5,15 @@ worker threads, so Fusion's UI thread is never blocked. Loaded sections are kept
 again unless it is forced.
 
 The panel's "structure" is the first level of the Bill of Materials only. "children" is the level under one assembly (a slot of its own
-for each), and "tree" is the whole tree (Expand all, and publishing, which needs every line).
+for each), and "tree" is the whole tree (Expand all, and publishing, which needs every line). "mbom" is the manufacturing bills of
+materials of the design that Fusion Manage already holds, found by the design's lineage id and the asset id of its Components record,
+and "mbom_number" whether an item number is taken by an item already (for a new one).
+
+The panel may name one of those items as the ``target`` of the sections that compare the design with Fusion Manage (its own properties and
+its Bill of Materials): they then use the item number of the target, not the design's own. ``mbom_number`` is asked about the item number
+it is given as its target. The target carries the item's id too (``target_id``) when Fusion Manage holds the item: that item is read, not
+searched for by its number, which may have been changed. A target is part of what a slot was read for, so another target is read afresh and
+a design's other slots are left alone.
 """
 
 import threading
@@ -21,9 +29,11 @@ from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..fm.client import FmClient
+from ..fm.components import manage_link
+from ..fm.mbom import MbomService
 from ..fm.permissions import denial
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
-from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_section
+from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_manage_item, read_section
 from ..sync.bom_levels import compare_design_bom, compare_level, search_design
 from ..sync.item_compare import read_and_compare
 from ..sync.item_number import item_number_of
@@ -31,8 +41,10 @@ from ..config.hub_context import HubContext, HubContexts
 
 log = get_logger("panel_sections")
 
-SUMMARY, PROPERTIES, COMPONENT, STRUCTURE_VIEW, TREE, CHILDREN = "summary", "properties", "component", "structure", "tree", "children"
-PANEL_SECTIONS = (*SECTION_NAMES, TREE, CHILDREN)
+SUMMARY, PROPERTIES, COMPONENT, STRUCTURE_VIEW, TREE, CHILDREN, MBOM = "summary", "properties", "component", "structure", "tree", "children", "mbom"
+MBOM_NUMBER = "mbom_number"
+PANEL_SECTIONS = (*SECTION_NAMES, TREE, CHILDREN, MBOM, MBOM_NUMBER)
+TARGETED = (PROPERTIES, STRUCTURE_VIEW, TREE, MBOM_NUMBER)   # sections about one item of Fusion Manage: they read the target's
 PER_COMPONENT = (COMPONENT, "thumbnail", CHILDREN)   # sections with a slot for each component
 READS = {STRUCTURE_VIEW: LEVEL, TREE: STRUCTURE, CHILDREN: LEVEL}   # what the Data Model is asked for, where it is not the section's own name
 COMPONENT_KEYS = ("id", "item_number", "part_number", "description",
@@ -56,7 +68,9 @@ def entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     state: Dict[str, Any] = {"section": section, "pending": False, "ok": False, "data": None, "message": "", "denied": "", "key": "",
                              "progress": 0,   # while pending: how many relations of the structure are read so far (of a structure of several pages)
                              "stage": "",     # while pending: "comparing" once the structure is read and Fusion Manage is being asked
-                             "stamp": ""}     # what it was read under (``HubContext.stamp``): a publish made from it, or a reuse of it, needs it unchanged
+                             "stamp": "",     # what it was read under (``HubContext.stamp``): a publish made from it, or a reuse of it, needs it unchanged
+                             "target": "",    # and the target it was read for (its item number, and its item id when Fusion Manage holds it)
+                             "target_id": ""}
     state.update(changes)
     return state
 
@@ -72,17 +86,19 @@ class _Load:
     model_id: str
     timestamp: str
     component: Dict[str, str]
-    context: Optional[HubContext] = None
+    context: HubContext
+    target: str = ""   # the item number of the item to compare the design with ("" is the design's own)
+    target_id: str = ""   # the id of that item, when Fusion Manage holds it (found by lineage and asset): it is used, not a search by the number
     client: Optional[FusionGraphQlClient] = None
     fm: Optional[FmClient] = None
 
     @property
     def stamp(self) -> str:
-        return self.context.stamp if self.context else ""
+        return self.context.stamp
 
     @property
-    def cfg(self) -> Optional[WorkspaceConfig]:
-        return self.context.cfg if self.context else None
+    def cfg(self) -> WorkspaceConfig:
+        return self.context.cfg
 
 
 class PublishSections:
@@ -111,22 +127,24 @@ class PublishSections:
         if not model_id:
             return entry(slot, message=t("run.section_no_model"))
         key = f"{model_id}|{timestamp}"
+        target = str(payload.get("target") or "") if name in TARGETED else ""
+        target_id = str(payload.get("target_id") or "") if target else ""
         context, reason = self._contexts.attempt()   # taken now, on Fusion's thread: a hub opened or a user signed in meanwhile is not mixed in
         if context is None:
             return entry(slot, message=reason)
         with self._lock:
             self._forget_other_designs(key)
             current = self._slots.get(slot) or entry(slot)
-            if not payload.get("force") and self._holds(current, key, context.stamp) and (current["pending"] or current["ok"]):
+            if not payload.get("force") and self._holds(current, key, context.stamp, target, target_id) and (current["pending"] or current["ok"]):
                 log.debug("%s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
                 return dict(current)
             log.debug("%s requested: starting", slot)
             if slot in self._tokens:
                 self._tokens[slot].cancel()   # what the slot was still reading for an earlier design (or the last try) is not wanted
             token = self._tokens[slot] = ADDIN.child(f"loading {slot} for the Publish panel")
-            self._slots[slot] = entry(slot, pending=True, key=key, stamp=context.stamp)
+            self._slots[slot] = entry(slot, pending=True, key=key, stamp=context.stamp, target=target, target_id=target_id)
             snapshot = dict(self._slots[slot])
-        threading.Thread(target=self._run, args=(_Load(slot, name, key, token, model_id, timestamp, component, context),), daemon=True).start()
+        threading.Thread(target=self._run, args=(_Load(slot, name, key, token, model_id, timestamp, component, context, target, target_id),), daemon=True).start()
         return snapshot
 
     def status(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -136,10 +154,10 @@ class PublishSections:
             return dict(self._slots.get(slot) or entry(slot, message=t("run.section_unknown", name=slot)))
 
     @staticmethod
-    def _holds(state: Dict[str, Any], key: str, stamp: str) -> bool:
-        """Whether a slot was filled, or is being filled, for this design under these settings (a changed hub, tenant or workspace setting
-        makes what was read, and compared with Fusion Manage, no longer right)."""
-        return state["key"] == key and state["stamp"] == stamp
+    def _holds(state: Dict[str, Any], key: str, stamp: str, target: str = "", target_id: str = "") -> bool:
+        """Whether a slot was filled, or is being filled, for this design and target under these settings (a changed hub, tenant or workspace
+        setting makes what was read, and compared with Fusion Manage, no longer right)."""
+        return state["key"] == key and state["stamp"] == stamp and state["target"] == target and state["target_id"] == target_id
 
     def _forget_other_designs(self, key: str) -> None:
         """Drop the slots of components made for another design, and end what they were still reading (called with the lock held): they are
@@ -170,7 +188,7 @@ class PublishSections:
             data = self._load(load)
             log.info("Loaded %s of %s", load.slot, load.model_id)
             log.debug("TIMING %s: %.2fs in all", load.slot, overall.lap())
-            outcome = entry(load.slot, ok=True, data=data, key=load.key, stamp=load.stamp)
+            outcome = entry(load.slot, ok=True, data=data, key=load.key, stamp=load.stamp, target=load.target, target_id=load.target_id)
         except Cancelled:   # a newer load replaced this one (another design, or a reload): the slot is left for that to fill
             log.info("Loading %s was cancelled", load.slot)
             return
@@ -187,7 +205,7 @@ class PublishSections:
     def _waits_for(self, load: _Load) -> bool:
         """Whether the slot of ``load`` is still waiting for it, not for a newer load or another design (called with the lock held)."""
         slot = self._slots.get(load.slot)
-        return slot is not None and self._holds(slot, load.key, load.stamp) and slot["pending"]
+        return slot is not None and self._holds(slot, load.key, load.stamp, load.target, load.target_id) and slot["pending"]
 
     def _note(self, load: _Load, **changes: Any) -> None:
         """Say how far a load is (while it is still the one the slot waits for)."""
@@ -196,15 +214,30 @@ class PublishSections:
                 self._slots[load.slot].update(changes)
 
     def _summary_of(self, load: _Load) -> Dict[str, Any]:
-        """The summary read for this design: the sections after it need the design's component id, composition and item number."""
+        """The summary read for this design: the sections after it need the design's component id, composition and item number (the target's,
+        when the load is for one)."""
         with self._lock:
             summary = self._slots[SUMMARY]
-            return dict(summary["data"] or {}) if self._holds(summary, load.key, load.stamp) else {}
+            data = dict(summary["data"] or {}) if self._holds(summary, load.key, load.stamp) else {}
+        return {**data, "item_number": load.target} if load.target else data
+
+    @staticmethod
+    def _mbom(load: _Load, summary: Dict[str, Any]) -> Any:
+        """``mbom``: the MBOM items Fusion Manage holds for the design. ``mbom_number``: whether the target's item number is taken already."""
+        if not load.cfg.workspace_id:
+            raise ValueError(t("run.compare_no_workspace"))
+        if load.name == MBOM_NUMBER:
+            return {"taken": MbomService(load.fm).number_taken(load.cfg.workspace_id, load.target)}
+        record = read_manage_item(load.client, summary, summary.get("component_id", ""), load.timestamp)   # the design's record in the Components workspace
+        link = manage_link(record["urn"], record["url"])
+        if not link:
+            raise ValueError(t("data.fm_mbom_not_linked"))
+        return MbomService(load.fm).find(load.cfg.workspace_id, summary.get("lineage", ""), link, load.cfg.item_number_field())
 
     def _load(self, load: _Load) -> Any:
         """What the section holds: read from the Data Model, and compared with Fusion Manage where the panel shows the comparison."""
         summary = self._summary_of(load)
-        physical = load.cfg.maps_physical() if load.cfg else False
+        physical = load.cfg.maps_physical()
         watch = Stopwatch()
 
         def read() -> Any:
@@ -214,17 +247,21 @@ class PublishSections:
             return result["properties"] if load.name == COMPONENT else result
 
         if load.name in (PROPERTIES, COMPONENT):
-            properties, compared = read_and_compare(read, load.component if load.name == COMPONENT else summary, load.cfg, load.fm)
+            properties, compared = read_and_compare(read, load.component if load.name == COMPONENT else summary, load.cfg, load.fm,
+                                                    load.target_id if load.name == PROPERTIES else "")
             return {"compare": compared, **({"count": len(properties)} if load.name == PROPERTIES else {})}
+        if load.name in (MBOM, MBOM_NUMBER):
+            return self._mbom(load, summary)
         if load.name == CHILDREN:
             c = load.component
             return compare_level(read(), c["item_number"], bool(c["skip"]), bool(c["compared"]), load.cfg, load.fm)
         if load.name in (STRUCTURE_VIEW, TREE):
+            known = [{"id": load.target_id}] if load.target_id else None   # found by lineage and asset: the number may have been changed since
             with ThreadPoolExecutor(max_workers=1) as pool:
-                searching = pool.submit(search_design, load.fm, load.cfg, summary)   # the design's number is searched while its structure is read
+                searching = None if known else pool.submit(search_design, load.fm, load.cfg, summary)   # else the number is searched while it is read
                 rows = read()
                 self._note(load, stage="comparing")
-                hits = searching.result()
+                hits = known or searching.result()
             return compare_design_bom(rows, summary, load.cfg, load.fm, hits)
         data = read()
         if load.name == SUMMARY and not item_number_of(data):   # no item number: never published, so nothing here applies

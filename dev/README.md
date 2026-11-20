@@ -22,6 +22,7 @@ Before you write a new form, field control, list, view table, error display or d
 | [validation.md](validation.md) | A place that shows what Fusion Manage refused, or checks a value before it is sent |
 | [permissions.md](permissions.md) | A control that depends on what the user may do in a workspace, or on being a Hub Admin |
 | [manufacturing-data-model.md](manufacturing-data-model.md) | Anything that reads a design from the Manufacturing Data Model: components, properties, the BOM, thumbnails, hubs |
+| [publish-item-flow.md](publish-item-flow.md) | Anything in the Publish Item panel or a publish run: the order sections load in, what Publish sends, and where the order is uneven |
 | [finding-items.md](finding-items.md) | Any search for an item or component in Fusion Manage, or any code that needs an item number |
 
 ## Keeping the notes true

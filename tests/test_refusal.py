@@ -2,7 +2,7 @@ import json
 import unittest
 
 from src.fm.client import FmApiError
-from src.fm.refusal import FmRefused, read_refusal
+from src.fm.refusal import FmRefused, read_refusal, refusal_text
 
 KNOWN = {"TITLE", "PLANNED_DATE_1", "PLANNED_DATE_10", "SINGLE_LINE_TEXT_FIELD"}
 
@@ -38,6 +38,19 @@ class ReadRefusalTests(unittest.TestCase):
     def test_an_id_inside_a_longer_word_is_not_a_field(self):
         found = read_refusal(refused({"message": "MY_TITLE_2 is wrong"}), KNOWN, "General")
         self.assertEqual(found.fields, {})
+
+
+class RefusalTextTests(unittest.TestCase):
+    BODY = json.dumps([{"message": "Derived value {0} does not match the source field value.", "arguments": ["A1"], "field": {"title": "Asset"}},
+                       {"message": "Derived value {0} does not match the source field value.", "arguments": ["L1"], "field": {"title": "Lineage"}}])
+
+    def test_every_message_is_given_with_its_field_and_arguments_whatever_the_length(self):
+        text = refusal_text(FmApiError("clipped", 400, self.BODY))
+        self.assertEqual(text, "Asset: Derived value A1 does not match the source field value. Lineage: Derived value L1 does not match the source field value.")
+
+    def test_a_refusal_with_nothing_to_read_gives_the_errors_own_text(self):
+        self.assertEqual(refusal_text(FmApiError("no answer", 500)), "no answer")
+        self.assertEqual(refusal_text(FmApiError("odd", 400, "not json")), "odd")
 
 
 if __name__ == "__main__":

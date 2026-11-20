@@ -2,7 +2,8 @@
 
 import unittest
 
-from src.fm.components import SHOWN, ComponentService, manage_link, parse_workspace_id
+from src.fm.client import FmApiError
+from src.fm.components import ComponentService, manage_link, parse_workspace_id
 
 
 class Client:
@@ -20,37 +21,30 @@ def option(link, title, version=""):
     return {"link": link, "title": title, "version": version}
 
 
-def find(number, *options, lookup="LOOKUP"):
-    return ComponentService(Client({"items": list(options)})).find(lookup, number)
+def matching(number, *options, lookup="LOOKUP"):
+    return ComponentService(Client({"items": list(options)})).matching(lookup, number)
 
 
-class FindTests(unittest.TestCase):
-    def test_the_one_option_for_the_number_is_its_link(self):
-        link, reason = find("PN-1", option("/api/v3/workspaces/57/items/9", "PN-1 - Axle"), option("/x/10", "PN-10 - Other"))
-        self.assertEqual((link, reason), ("/api/v3/workspaces/57/items/9", ""))
+class MatchingTests(unittest.TestCase):
+    def test_the_options_for_the_number_are_listed_and_a_longer_number_is_not(self):
+        hits = matching("PN-1", option("/api/v3/workspaces/57/items/9", "PN-1 - Axle"), option("/x/10", "PN-10 - Other"))
+        self.assertEqual([h.link for h in hits], ["/api/v3/workspaces/57/items/9"])
 
     def test_no_number_is_not_looked_up(self):
         client = Client({})
-        self.assertEqual(ComponentService(client).find("LOOKUP", ""), ("", "The item has no number to look up."))
+        with self.assertRaisesRegex(FmApiError, "The item has no number to look up."):
+            ComponentService(client).matching("LOOKUP", "")
         self.assertEqual(client.asked, [])
 
     def test_no_match_says_how_many_options_came_back(self):
-        link, reason = find("PN-1", option("/x/1", "PN-2 - Gear"))
-        self.assertEqual(link, "")
-        self.assertIn("No component matching PN-1", reason)
-        self.assertIn("1 option(s)", reason)
-
-    def test_several_matches_are_named_but_only_the_first_few(self):
-        options = [option(f"/x/{i}", f"PN-1 - Axle {i}", "[REV:w]") for i in range(SHOWN + 3)]
-        link, reason = find("PN-1", *options)
-        self.assertEqual(link, "")
-        self.assertIn(f"{SHOWN + 3} components match PN-1", reason)
-        self.assertIn(f"Axle {SHOWN - 1} [REV:w] ({SHOWN - 1})", reason)
-        self.assertNotIn(f"Axle {SHOWN} ", reason)
+        with self.assertRaises(FmApiError) as raised:
+            matching("PN-1", option("/x/1", "PN-2 - Gear"))
+        self.assertIn("No component matching PN-1", str(raised.exception))
+        self.assertIn("1 option(s)", str(raised.exception))
 
     def test_an_option_with_no_link_or_a_wrong_shape_is_left_out(self):
-        link, _ = find("PN-1", {"title": "PN-1 - No link"}, "x", option("/x/2", "PN-1 - Axle"))
-        self.assertEqual(link, "/x/2")
+        hits = matching("PN-1", {"title": "PN-1 - No link"}, "x", option("/x/2", "PN-1 - Axle"))
+        self.assertEqual([h.link for h in hits], ["/x/2"])
 
 
 class WorkspaceIdTests(unittest.TestCase):

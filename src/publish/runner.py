@@ -14,14 +14,16 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..auth.errors import AuthError
-from ..config.workspace_models import KINDS_BY_ID, WorkspaceConfig
+from ..config.workspace_models import WorkspaceConfig
 from ..core.cancel import Cancelled
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
 from ..fm.client import LOOKUPS, FmApiError, FmClient
-from ..fm.components import ComponentService, manage_link
+from ..fm.components import link_ids, manage_link
 from ..fm.picklists import PicklistResolver
+from ..fm.pivots import Derived, PivotService
+from ..fm.refusal import refusal_text
 from ..fm.v3_search import WORKING
 from ..fm.sections import SectionService
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
@@ -87,6 +89,7 @@ class PublishRun(JobState):
 
     kind = "publish"
     stage = VALIDATING   # then ITEMS, then BOM: the run looks up every item number before it writes anything
+
     @property
     def unreached(self) -> str:
         return t("run.publish_not_published")
@@ -171,6 +174,7 @@ class PublishRun(JobState):
                 "bom": {"done": sent, "total": self._bom_total}}
 
     def _counts(self) -> Dict[str, int]:
+        """The counts the panel shows beside the rows."""
         return {SKIPPED_COUNT: self._skipped}
 
     def _leave_out(self, row: Dict[str, Any], detail: str) -> None:
@@ -192,12 +196,13 @@ class PublishRun(JobState):
             return
         row = self._bom_row_of[parent]
         row["status"] = RUNNING
-        sent = [0]
+        sent = 0
 
         def progress() -> None:   # called from the threads that send the parent's requests together
+            nonlocal sent
             with self._lock:
-                sent[0] += 1
-                row["detail"] = t("run.bom_progress", sent=sent[0], count=len(lines))
+                sent += 1
+                row["detail"] = t("run.bom_progress", sent=sent, count=len(lines))
                 self._bom_done += 1
 
         try:
@@ -257,31 +262,25 @@ class PublishRun(JobState):
     def _item(self, item: Dict[str, Any], number: str) -> bool:
         """Prepare, and with ``sends`` send, one item. True when Fusion Manage could not say which item it is, so nothing was done for it."""
         folder = self.folder.item_dir(number)
-        began, watch = time.monotonic(), Stopwatch()
+        began = time.monotonic()
         component_id = component_id_of(item, self.job["summary"])
         read, result = self._compare(item, number, component_id)
-        compared = watch.lap()
         link = self._component(number, result["fm"], read["link"])
         rows = self._option_rows(number, result["rows"])
         self._record_blank(number, rows)
-        linked = watch.lap()
         request, reason = self._request(number, folder, component_id, read["thumbnail_url"], result, rows, link)
         request_file = self._write_request(number, folder, request, reason)
         state = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""), "request": request_file}
         self.folder.set_item(number, state)
-        built = watch.lap()
         if self._dispatcher:
             self._dispatcher.learn(number, state["id"])
             if request is not None:
                 self._send_item(number, request)
-        log.debug("Item %s: Fusion Manage is %s (id %s); request: %s", number, state["state"] or "unknown", state["id"] or "none",
-                  reason if request is None else request["method"] + " " + request["url"])
-        log.info("Prepared %s in %.1fs (read and compare %.1fs, component link %.1fs, request and thumbnail %.1fs, send %.1fs)", number,
-                 time.monotonic() - began, compared, linked, built, watch.lap())
+        log.info("Prepared %s in %.1fs", number, time.monotonic() - began)
         return request is None and state["state"] != FOUND
 
     def _request(self, number: str, folder: str, component_id: str, thumbnail_url: str, result: Dict[str, Any],
-                 rows: List[Dict[str, Any]], link: Optional[Tuple[str, str]]) -> Tuple[Optional[Dict[str, Any]], str]:
+                 rows: List[Dict[str, Any]], link: Optional[Tuple[str, str, List[Derived]]]) -> Tuple[Optional[Dict[str, Any]], str]:
         """``(request, reason)`` of the item (see ``item_request``). The thumbnail is sent with every item that is created or updated: a picture
         cannot be compared with the one Fusion Manage holds, so an item whose other values match gets it too."""
         fields = [m.fm_field_id for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id]
@@ -297,6 +296,7 @@ class PublishRun(JobState):
                             result["values"], link)   # the values tell which static values an existing item lacks
 
     def _record_blank(self, number: str, rows: List[Dict[str, Any]]) -> None:
+        """Record the mapped fields that are new and have no value, which are left out of the request."""
         blank = [f"{r['name']} (-> {r['fm_field']})" for r in rows if r["fm_field"] and r["status"] == NEW and r["value"] == ""]
         if blank:
             self.folder.record(number, "blank fields", SKIPPED, t("run.blank_fields", fields=", ".join(blank)))
@@ -332,35 +332,35 @@ class PublishRun(JobState):
                 self.folder.record(number, "picklist " + row["fm_field"], SKIPPED, t("run.picklist_no_option", value=value, field=row["fm_field"]))
         return out
 
-    def _component(self, number: str, fm_info: Dict[str, Any], linked: Dict[str, str]) -> Optional[Tuple[str, str]]:
-        """``(field id, link)`` of the Components item for this part, or None (and the reason recorded) when it cannot be found.
+    def _component(self, number: str, fm_info: Dict[str, Any], linked: Dict[str, str]) -> Optional[Tuple[str, str, List[Derived]]]:
+        """``(field id, link, derived fields)`` of the Components item for this part, or None (and the reason recorded) when it cannot be found.
+        The derived fields are what Fusion Manage copies from the linked item into the item's own fields: it refuses the item without them.
 
         ``linked`` is the link the Data Model gave on the component's Item Number in Fusion (``urn`` and ``url``, empty when it is not linked)."""
         field_id = self.cfg.component_field
         if not field_id or fm_info.get("state") not in (FOUND, NEW):
             return None
         link = manage_link(linked["urn"], linked["url"])
-        log.debug("Data Model link of %s: urn %r, url %r -> %s", number, linked["urn"], linked["url"], link or "none")
-        reason = ""
-        if not link:   # not linked in the Data Model: look for it in the component picklist
-            try:
-                link, reason = ComponentService(self._fm).find(KINDS_BY_ID["items"].component_lookup, number)
-            except (FmApiError, AuthError) as exc:
-                link, reason = "", str(exc)
         if not link:
-            self.folder.record(number, "component link", FAILED, reason)
+            self.folder.record(number, "component link", FAILED, t("run.component_not_linked"))
             return None
-        self.folder.record(number, "component link", OK, f"{field_id} -> {link}")
-        return field_id, link
+        try:
+            derived = PivotService(self._fm).derived(self.cfg.workspace_id, field_id, link_ids(link)[1])
+        except (FmApiError, AuthError) as exc:
+            self.folder.record(number, "component link", FAILED, refusal_text(exc))
+            return None
+        self.folder.record(number, "component link", OK, f"{field_id} -> {link}; " + ", ".join(f"{d.field_id} = {d.value}" for d in derived))
+        return field_id, link, derived
 
     def _send_item(self, number: str, request: Dict[str, Any]) -> None:
+        """Send the item's request and record the outcome; a cancel is recorded as cut off and then ends the item."""
         try:
             self.folder.record(number, SENT, OK, self._dispatcher.send_item(number, request))
         except Cancelled:
             self.folder.record(number, SENT, FAILED, cut_off_text())
             raise
         except (FmApiError, AuthError) as exc:
-            self.folder.record(number, SENT, FAILED, str(exc))
+            self.folder.record(number, SENT, FAILED, refusal_text(exc))
 
     def _download_thumbnail(self, component_id: str, url: str) -> bytes:
         """The thumbnail at ``url``. The signed url expires soon and an item may wait for its turn, so when it will no longer serve, a fresh one is asked for."""
@@ -394,6 +394,7 @@ class PublishRun(JobState):
             return ""
 
     def _write_boms(self) -> None:
+        """Write each parent's Bill of Materials requests to the folder."""
         for parent, lines in self._bom_requests.items():
             relative = os.path.join("bom", safe_name(parent) + ".bom.request.json")
             self.folder.record(parent, "bom requests", OK, t("run.bom_requests_written", count=len(lines)),
@@ -404,6 +405,7 @@ class PublishRun(JobState):
     # ---- Any thread -------------------------------------------------------------
 
     def _save_manifest(self, message: str) -> None:
+        """Write the run's manifest, which a retry reads."""
         self.folder.save_manifest({"root": self.job.get("root_number", ""), "workspace_id": self.cfg.workspace_id, "tenant": self._fm.tenant,
                                    "model": f"{self._model_id}|{self._time}", "cancelled": self.cancelled, "message": message})
 

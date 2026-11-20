@@ -101,6 +101,7 @@
 .item-link:hover { text-decoration: underline; }
 
 .item-image { display: block; max-width: 100px; max-height: 100px; border: 1px solid var(--border); cursor: zoom-in; }
+.item-image-skeleton { width: 100px; height: 100px; box-sizing: border-box; cursor: default; }
 
 /* A clicked image, enlarged over the whole panel. */
 .item-lightbox {

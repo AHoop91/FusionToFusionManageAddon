@@ -27,6 +27,7 @@ from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict, as_list
 from ..fm.client import FmApiError, FmClient, SendResult
+from ..fm.refusal import refusal_text
 from ..fm.v3_search import WORKING, ItemFinder
 from .job_state import JobState
 from .placeholders import ITEM, TENANT, VERSION, Key, Unresolved, key_of, markers, resolve
@@ -55,6 +56,7 @@ def was_cancelled(detail: str) -> bool:
 
 
 def _read(path: str) -> Any:
+    """The JSON in a file of the folder. Raises ``FolderError`` when it cannot be read."""
     try:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
@@ -166,21 +168,18 @@ class Dispatcher:
         key, method = "item:" + number, request["method"]
         with self._lock:
             if self._sent.done(key):
-                log.debug("Item %s was sent before, skipped", number)
                 self.learn(number, str(self._sent.entry(key).get("id") or ""))
                 return t("run.send_already_sent")
             doubtful = self._sent.in_doubt(key)
         if doubtful and method == "POST":   # an update can be sent again; a create may have made the item
             existing = self._created_before(number)
             if existing:
-                with self._lock:
-                    self.learn(number, existing)
+                self.learn(number, existing)
                 self._sent.accept(key, {"id": existing})
                 return t("run.send_already_created")
         intended = method == "POST" and not doubtful   # an entry of its own is logged first: a crash while the create is under way leaves it in doubt
         if intended:
             self._sent.intend(key)
-        log.debug("Sending item %s: %s %s", number, method, request["url"])
         try:   # outside the lock, so the items go out at the same time
             with self._slots:
                 result = self._fm.send_json(method, request["url"], request.get("body"))
@@ -189,8 +188,6 @@ class Dispatcher:
             raise
         except (FmApiError, AuthError) as exc:
             log.warning("Sending item %s failed: %s", number, exc)
-            if method == "PATCH" and isinstance(exc, FmApiError) and exc.status == 400:
-                self._diagnose(request["url"])
             if method == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
                 with self._lock:
                     self._failed.add(number.casefold())
@@ -201,21 +198,9 @@ class Dispatcher:
             raise
         match = _ITEM_ID.search(request["url"])
         new_id = created_id(result) if method == "POST" else (match.group(1) if match else "")
-        with self._lock:
-            self.learn(number, new_id)
+        self.learn(number, new_id)
         self._sent.accept(key, {"id": new_id})
         return f"{method} {result.status}" if new_id else t("run.send_no_new_id", method=method, status=result.status)
-
-    def _diagnose(self, url: str) -> None:
-        """After a refused update, log what the item itself says about its sections and state, to see why the request was refused."""
-        try:
-            data = self._fm.get_json(url)
-        except (FmApiError, AuthError) as exc:
-            log.warning("Could not read %s to explain the refusal: %s", url, exc)
-            return
-        if isinstance(data, dict):
-            shown = {k: v for k, v in data.items() if k not in ("fields", "metaData")}
-            log.warning("The refused item %s says: %s", url, json.dumps(shown)[:3000])
 
     # ---- Bill of Materials -----------------------------------------------------------
 
@@ -262,12 +247,10 @@ class Dispatcher:
         try:
             with self._lock:   # the ids it needs may be searched for, once, and shared
                 if self._sent.done(key):
-                    log.debug("BOM request %d of %s was sent before, skipped", index + 1, parent)
                     progress()
                     return False
                 doubtful = self._sent.in_doubt(key)
                 final = resolve(request, self._values(request))
-            log.debug("BOM request %d of %s: %s %s", index + 1, parent, final["method"], final["url"])
             try:   # outside the lock, so the others go out at the same time
                 with self._slots:
                     self._fm.send_json(final["method"], final["url"], final.get("body"))
@@ -287,7 +270,7 @@ class Dispatcher:
             failed.set()
             log.warning("Sending the Bill of Materials of %s failed at request %d: %s", parent, index + 1, exc)
             if isinstance(exc, FmApiError):   # which request, and the status it was refused with
-                raise FmApiError(t("run.send_request_failed", number=index + 1, count=count, error=exc), exc.status) from exc
+                raise FmApiError(t("run.send_request_failed", number=index + 1, count=count, error=refusal_text(exc)), exc.status) from exc
             raise
         self._sent.accept(key, {})
         progress()
@@ -315,7 +298,6 @@ class Dispatcher:
                 data = as_dict(self._fm.get_json(f"/api/v3/workspaces/{self._workspace_id}/items/{item_id}"))
                 tenant = _TENANT.search(str(data.get("urn", "")))
                 self._facts[item_id] = {"tenant": tenant.group(1) if tenant else "", "version": str(data.get("version") or "")}
-                log.info("Item %s: tenant %r, version %r", item_id, self._facts[item_id]["tenant"], self._facts[item_id]["version"])
             return self._facts[item_id]
 
     def _values(self, request: Dict[str, Any]) -> Dict[Key, str]:
@@ -343,6 +325,7 @@ class SendRun(JobState):
     kind = "send"
     sends = True
     stage = "sending"
+
     @property
     def unreached(self) -> str:
         return t("run.send_not_sent")
@@ -389,5 +372,6 @@ class SendRun(JobState):
             self.done += 1
 
     def _finish(self, phase: str, message: str) -> None:
+        """End the run and log how it ended."""
         self._end(phase, message)
         log.info("Send run %s %s: %s (%s)", self.id, phase, self.path, message or "ok")

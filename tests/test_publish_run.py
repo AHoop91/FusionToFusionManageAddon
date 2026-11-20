@@ -12,6 +12,7 @@ from unittest import mock
 
 from src.core.cancel import Cancelled
 from src.fm.client import FmApiError
+from src.fm.pivots import Derived
 from src.publish import runner
 from src.publish.runner import ITEMS, VALIDATING, PublishRun, SharedItemNumbers, _needs_matching
 from src.publish.sender import cut_off_text
@@ -204,32 +205,28 @@ class ComponentLinkTests(RunTestCase):
         run = self.run_of(config=cfg("COMPONENT"))
         self.assertIsNone(run._component("PN-1", {"state": "error"}, self.LINKED))
 
-    def test_the_link_the_data_model_gave_is_used_and_recorded(self):
+    def test_the_link_the_data_model_gave_is_used_with_the_derived_fields_of_the_linked_item_and_recorded(self):
         run = self.run_of(config=cfg("COMPONENT"))
-        with mock.patch.object(runner, "manage_link", return_value="/api/v3/workspaces/1/items/9"):
-            self.assertEqual(run._component("PN-1", {"state": NEW}, {"urn": "u", "url": "x"}), ("COMPONENT", "/api/v3/workspaces/1/items/9"))
+        derived = [Derived("COMPONENT_ASSET_URN", "A1", "/api/v3/workspaces/1/sections/551")]
+        with mock.patch.object(runner, "manage_link", return_value="/api/v3/workspaces/57/items/9"), mock.patch.object(runner, "PivotService") as pivots:
+            pivots.return_value.derived.return_value = derived
+            self.assertEqual(run._component("PN-1", {"state": NEW}, {"urn": "u", "url": "x"}), ("COMPONENT", "/api/v3/workspaces/57/items/9", derived))
+        pivots.return_value.derived.assert_called_once_with(run.cfg.workspace_id, "COMPONENT", "9")
         self.assertEqual(self.recorded("PN-1", "component link")[0]["status"], OK)
 
-    def test_an_unlinked_component_is_looked_for_in_the_picklist(self):
+    def test_a_pivot_that_could_not_be_read_fails_the_link_with_the_reason(self):
         run = self.run_of(config=cfg("COMPONENT"))
-        with mock.patch.object(runner, "ComponentService") as service:
-            service.return_value.find.return_value = ("/api/v3/workspaces/1/items/7", "")
-            self.assertEqual(run._component("PN-1", {"state": FOUND}, self.LINKED), ("COMPONENT", "/api/v3/workspaces/1/items/7"))
-
-    def test_no_link_found_is_recorded_with_the_reason_and_the_item_goes_on(self):
-        run = self.run_of(config=cfg("COMPONENT"))
-        with mock.patch.object(runner, "ComponentService") as service:
-            service.return_value.find.return_value = ("", "No such component.")
-            self.assertIsNone(run._component("PN-1", {"state": FOUND}, self.LINKED))
+        with mock.patch.object(runner, "manage_link", return_value="/api/v3/workspaces/57/items/9"), mock.patch.object(runner, "PivotService") as pivots:
+            pivots.return_value.derived.side_effect = FmApiError("503")
+            self.assertIsNone(run._component("PN-1", {"state": NEW}, {"urn": "u", "url": "x"}))
         entry = self.recorded("PN-1", "component link")[0]
-        self.assertEqual((entry["status"], entry["detail"]), (FAILED, "No such component."))
+        self.assertEqual((entry["status"], entry["detail"]), (FAILED, "503"))
 
-    def test_a_failed_search_for_the_component_is_the_reason(self):
+    def test_a_component_the_data_model_does_not_link_is_recorded_as_failed_and_not_looked_for(self):
         run = self.run_of(config=cfg("COMPONENT"))
-        with mock.patch.object(runner, "ComponentService") as service:
-            service.return_value.find.side_effect = FmApiError("503")
-            self.assertIsNone(run._component("PN-1", {"state": FOUND}, self.LINKED))
-        self.assertEqual(self.recorded("PN-1", "component link")[0]["detail"], "503")
+        self.assertIsNone(run._component("PN-1", {"state": FOUND}, self.LINKED))
+        entry = self.recorded("PN-1", "component link")[0]
+        self.assertEqual((entry["status"], entry["detail"]), (FAILED, "The Data Model has no Fusion Manage item linked to this component, so there is no Component link to send."))
 
 
 class BomTests(RunTestCase):

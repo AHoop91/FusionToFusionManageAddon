@@ -38,8 +38,6 @@ class WorkspaceKind:
     """A workspace the add-in works with."""
 
     kind_id: str
-    title: str
-    description: str
     # Short FM permission names the user needs on the workspace at all.
     required_permissions: tuple = ()
     # DefaultMapping rows the "Add default fields" button adds.
@@ -80,13 +78,9 @@ class SourceField:
 
 COMPONENT_LOOKUPS = "CUSTOM_LOOKUP_WS_COMPONENTS"   # starts the name of every picklist that lists the items of the Components workspace
 
-# The tabs and fields a Portfolio Management workspace must have. To be filled in from the layout the add-in logs for the workspace
-# ("Layout of workspace ..."): ``FieldNeed("FIELD_ID", "Single Selection", "Section title")``, and ``tabs`` by ``workspaceTabName``.
-PORTFOLIO_SCHEMA = WorkspaceSchema()
-
 WORKSPACE_KINDS = [
     # The item BOM is always published, so its permissions are required.
-    WorkspaceKind("items", "Items", "Manufacturing items created in Fusion Manage.",
+    WorkspaceKind("items",
                   ("view_items", "add_items", "edit_items", "view_bom", "add_to_bom", "edit_bom"),
                   (DefaultMapping("item_number", "NUMBER"), DefaultMapping("name", "TITLE"),
                    DefaultMapping("description", "DESCRIPTION"), DefaultMapping("thumbnail", "IMAGE"),
@@ -95,8 +89,8 @@ WORKSPACE_KINDS = [
                    DefaultMapping("physical:Length", "LENGTH"), DefaultMapping("physical:Mass", "ITEM_WEIGHT")),
                   "CUSTOM_LOOKUP_WS_COMPONENTS_ALL_INCLUDING_WORKING"),
     # Product Portfolio Management: the workspace, the field of the Primary Component and the Variants grid.
-    WorkspaceKind("portfolio", "Portfolio Management", "The Fusion Manage workspace that holds the product portfolio.",
-                  ("view_items",), mapped=False, revision_only=False, schema=PORTFOLIO_SCHEMA, assign=True,
+    WorkspaceKind("portfolio",
+                  ("view_items",), mapped=False, revision_only=False, assign=True,
                   component_lookup=COMPONENT_LOOKUPS),
 ]
 
@@ -137,24 +131,19 @@ def is_valid_source(source: str) -> bool:
 
 
 def _source_label(source: str) -> str:
-    """What the panel calls a source field: its label, or the property name for a named hub property."""
+    """What the panel calls a source field: its label, or the property name for a named hub property. Always English, whatever the language:
+    the names are the component's properties, which are mapped by name, and the lists of properties from the hub are in English too."""
     known = _SOURCES_BY_ID.get(source)
-    return source_label(known) if known else data_model_name(source) or source
-
-
-def source_label(source_field: SourceField) -> str:
-    """What the panel calls a source field. Always the English name, whatever the language: the names are the component's properties, which
-    are mapped by name, and the lists of properties from the hub are in English too."""
-    return source_field.label
+    return known.label if known else data_model_name(source) or source
 
 
 def kind_texts(kind: WorkspaceKind) -> tuple:
-    """The title and description of a workspace kind, in the language in use."""
+    """The title and description of a workspace kind, in the language in use. Raises ``ValueError`` for a kind with no texts."""
     if kind.kind_id == ITEMS_KIND:
         return t("data.ws_kind_items_title"), t("data.ws_kind_items_description")
     if kind.kind_id == PORTFOLIO_KIND:
         return t("data.ws_kind_portfolio_title"), t("data.ws_kind_portfolio_description")
-    return kind.title, kind.description
+    raise ValueError(f"No texts for the workspace kind {kind.kind_id!r}")
 
 
 def data_model_name(source: str) -> str:
@@ -234,6 +223,13 @@ class WorkspaceConfig:
         """Whether a mapped field takes a physical property (mass, volume ...): they are slow to read, so only a caller that maps them asks."""
         return any(m.source.startswith(PHYSICAL_PREFIX) and m.fm_field_id for m in self.mappings)
 
+    def item_number_field(self) -> str:
+        """The id of the Fusion Manage field the item number is mapped to. Raises ``ValueError`` when it is not mapped (``validate`` reports it too)."""
+        field = next((m.fm_field_id for m in self.mappings if m.source == ITEM_NUMBER_SOURCE), "")
+        if not field:
+            raise ValueError(t("data.ws_item_number_not_mapped", field=LEGACY_NUMBER_FIELD))
+        return field
+
     def setup_problem(self, title: str, mapped: bool = True) -> str:
         """Why this workspace cannot be used yet ("" when its settings are complete): it needs a workspace ID and, unless ``mapped`` is False
         (a workspace only chosen by its id), valid mappings. A workspace that is turned off cannot be used either."""
@@ -252,6 +248,18 @@ class WorkspaceConfig:
             problems.append(Problem(t("data.ws_id_not_number"), area="id"))
         if not mapped:
             return problems
+        problems += self._mapping_problems()
+        for index, row in enumerate(self.static_values):
+            if not row.fm_field_id:
+                problems.append(Problem(t("data.ws_choose_field", name=t("data.ws_default_value", n=index + 1)), area="static", row=index, part="field"))
+        problems += self._filled_twice()
+        if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE for row in self.mappings):
+            problems.append(Problem(t("data.ws_item_number_not_mapped", field=LEGACY_NUMBER_FIELD), area="mappings"))
+        return problems
+
+    def _mapping_problems(self) -> List[Problem]:
+        """The mapped rows whose source is not valid or is used by an earlier row, and those with no Fusion Manage field."""
+        problems: List[Problem] = []
         first_row_of_source: Dict[str, int] = {}
         for index, row in enumerate(self.mappings):
             name = t("data.ws_mapped_field", n=index + 1)
@@ -266,10 +274,11 @@ class WorkspaceConfig:
                 first_row_of_source[row.source] = index
             if not row.fm_field_id:
                 problems.append(Problem(t("data.ws_choose_field", name=name), area="mapping", row=index, part="field"))
-        for index, row in enumerate(self.static_values):
-            if not row.fm_field_id:
-                problems.append(Problem(t("data.ws_choose_field", name=t("data.ws_default_value", n=index + 1)), area="static", row=index, part="field"))
-        # A Fusion Manage field can be filled once: by a mapped field, the Component field or a default value.
+        return problems
+
+    def _filled_twice(self) -> List[Problem]:
+        """A Fusion Manage field can be filled once: by a mapped field, the Component field or a default value."""
+        problems: List[Problem] = []
         filled: Dict[str, str] = {}
         places = ([("mapping", i, t("data.ws_mapped_field", n=i + 1), t("data.ws_mapped_field_inline", n=i + 1), r.fm_field_id) for i, r in enumerate(self.mappings)]
                   + [("component", 0, t("data.ws_component_field"), t("data.ws_component_field_inline"), self.component_field)]
@@ -283,8 +292,6 @@ class WorkspaceConfig:
                     t("data.ws_field_filled_twice", name=name, field=fm_field_id, by=filled[fm_field_id]), area=area, row=index, part="field"))
             else:
                 filled[fm_field_id] = inline
-        if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE for row in self.mappings):
-            problems.append(Problem(t("data.ws_item_number_not_mapped", field=LEGACY_NUMBER_FIELD), area="mappings"))
         return problems
 
     def to_dict(self) -> Dict[str, Any]:
@@ -297,9 +304,7 @@ class WorkspaceConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WorkspaceConfig":
-        rows = data.get("mappings")
-        statics = data.get("static_values")
-        mappings = [FieldMapping.from_dict(r) for r in dict_rows(rows)]
+        mappings = [FieldMapping.from_dict(r) for r in dict_rows(data.get("mappings"))]
         # Earlier versions mapped the Part number to NUMBER; the Item Number is what that field holds now.
         if not any(m.source == ITEM_NUMBER_SOURCE for m in mappings):
             for m in mappings:
@@ -311,7 +316,7 @@ class WorkspaceConfig:
             variants=VariantsConfig.from_dict(data.get("variants")),
             enabled=data.get("enabled", True) is not False,
             mappings=mappings,
-            static_values=[StaticValue.from_dict(r) for r in dict_rows(statics)],
+            static_values=[StaticValue.from_dict(r) for r in dict_rows(data.get("static_values"))],
         )
 
 
@@ -323,7 +328,8 @@ class WorkspaceSettings:
         default_factory=lambda: {k.kind_id: WorkspaceConfig() for k in WORKSPACE_KINDS})
 
     def get(self, kind_id: str) -> WorkspaceConfig:
-        return self.workspaces.get(kind_id) or WorkspaceConfig()
+        """The settings of a workspace kind. Raises ``KeyError`` for a kind that is not one of ``WORKSPACE_KINDS``."""
+        return self.workspaces[kind_id]
 
     def validate(self) -> List[str]:
         problems: List[str] = []
@@ -348,14 +354,18 @@ class WorkspaceSettings:
         })
 
 
+def _kind_entry(kind: WorkspaceKind) -> Dict[str, Any]:
+    """One workspace kind as the panel renders its card."""
+    title, description = kind_texts(kind)
+    return {"id": kind.kind_id, "title": title, "description": description, "component_lookup": kind.component_lookup, "mapped": kind.mapped,
+            "revision_only": kind.revision_only, "assign": kind.assign, "default_mappings": [asdict(m) for m in kind.default_mappings]}
+
+
 def catalog() -> Dict[str, Any]:
     """Static lists the panel needs to render workspace cards and mapping rows."""
     return {
-        "kinds": [{"id": k.kind_id, "title": kind_texts(k)[0], "description": kind_texts(k)[1], "component_lookup": k.component_lookup,
-                   "mapped": k.mapped, "revision_only": k.revision_only, "assign": k.assign,
-                   "default_mappings": [asdict(m) for m in k.default_mappings]}
-                  for k in WORKSPACE_KINDS],
-        "source_fields": [{"id": f.field_id, "label": source_label(f), "kind": f.kind} for f in SOURCE_FIELDS],
+        "kinds": [_kind_entry(k) for k in WORKSPACE_KINDS],
+        "source_fields": [{"id": f.field_id, "label": f.label, "kind": f.kind} for f in SOURCE_FIELDS],
         "custom_prefix": CUSTOM_PREFIX,
         "base_prefix": BASE_PREFIX,
         "physical_prefix": PHYSICAL_PREFIX,

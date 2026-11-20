@@ -11,10 +11,11 @@ LINEAGE = "urn:adsk.wipprod:dm.lineage:4A7qrWmaTuG0eOal8ycK3w"
 LINK = "/api/v3/workspaces/57/items/15677"
 
 
-def item(lineage=LINEAGE):
+def item(lineage=LINEAGE, asset=None):
     data = {"sections": [{"fields": []}]}
-    if lineage is not None:
-        data["sections"][0]["fields"].append({"__self__": "/api/v3/workspaces/57/items/15677/views/1/fields/LINEAGE_URN", "value": lineage})
+    for field, value in (("LINEAGE_URN", lineage), ("ASSET_URN", asset)):
+        if value is not None:
+            data["sections"][0]["fields"].append({"__self__": f"/api/v3/workspaces/57/items/15677/views/1/fields/{field}", "value": value})
     return data
 
 
@@ -44,23 +45,35 @@ class DesignFileTests(unittest.TestCase):
         client.get_json.assert_not_called()
 
 
-class RevisionTests(unittest.TestCase):
-    def service(self, link, item):
+class AssetTests(unittest.TestCase):
+    def read(self, data, link=LINK):
         client = mock.Mock()
-        client.get_json.return_value = item
-        service = ComponentService(client)
-        service.find_working = mock.Mock(return_value=(link, ""))
-        return service, client
+        client.get_json.return_value = data
+        return ComponentService(client).asset(link), client
 
-    def test_the_revision_and_state_of_the_working_version(self):
-        service, client = self.service(LINK, {"version": "[REV:C]", "versionId": "C", "lifecycle": {"title": "Production"}})
-        self.assertEqual(service.revision_and_state("PN-1"), ("[REV:C]", "Production"))
+    def test_the_asset_urn_field_is_the_asset(self):
+        found, client = self.read(item(asset="gEDHlC30rZcLLOTVGJMj9m_aga"))
+        self.assertEqual(found, "gEDHlC30rZcLLOTVGJMj9m_aga")
         client.get_json.assert_called_once_with(LINK)
 
-    def test_a_component_with_no_working_version_has_neither_and_no_read_is_made(self):
-        service, client = self.service("", {})
-        self.assertEqual(service.revision_and_state("PN-1"), ("", ""))
+    def test_an_item_with_no_asset_urn_raises(self):
+        for data in (item(), item(asset="")):
+            with self.assertRaises(FmApiError):
+                self.read(data)
+
+    def test_a_link_that_is_not_an_item_is_refused_before_a_read(self):
+        client = mock.Mock()
+        with self.assertRaises(FmApiError):
+            ComponentService(client).asset("/api/v3/users/9")
         client.get_json.assert_not_called()
+
+
+class RevisionTests(unittest.TestCase):
+    def test_the_revision_and_state_of_the_record(self):
+        client = mock.Mock()
+        client.get_json.return_value = {"version": "[REV:C]", "versionId": "C", "lifecycle": {"title": "Production"}}
+        self.assertEqual(ComponentService(client).revision_and_state(LINK), ("[REV:C]", "Production"))
+        client.get_json.assert_called_once_with(LINK)
 
 
 class OpenTests(unittest.TestCase):

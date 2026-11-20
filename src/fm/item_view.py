@@ -13,7 +13,7 @@ import base64
 import html
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
@@ -32,6 +32,7 @@ HIDDEN = ("NEVER", "HIDDEN", "NONE")   # visibility values of a field that is no
 VISIBLE_ALWAYS = ("ALWAYS", "VISIBLE")
 HEADER_FIELDS = ("TYPE",)   # read for the line under the title, shown or not
 MAX_IMAGE_BYTES = 2_000_000
+MAX_PICTURES_AT_ONCE = 6   # pictures of an item downloaded together
 LOG_CHARS = 3000   # of an answer that could not be laid out, kept in the log
 IMAGE, CHECK_BOX = "Image", "Check Box"   # the types of field that are drawn or worded differently
 COLUMN_KEYS = ("columns", "columnNames", "columnTitles")   # where a matrix layout may name its columns and rows, in the order tried
@@ -73,6 +74,20 @@ def load_image(client: FmClient, link: str) -> str:
     return f"data:{kind.split(';')[0]};base64,{base64.b64encode(body).decode('ascii')}"
 
 
+def _image_links(node: Any) -> Iterator[str]:
+    """The link of the picture of every image field in ``node`` (an item's answer) that holds one."""
+    if isinstance(node, dict):
+        if dig(node, "type", "title") == IMAGE:
+            link = str(dig(node, "value", "link") or "")
+            if link:
+                yield link
+        for value in node.values():
+            yield from _image_links(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _image_links(value)
+
+
 def _text_of(node: Dict[str, Any], kind: str) -> str:
     """The text a plain field shows: a check box as Yes or No, a value with its unit of measure."""
     text = display_text(node.get("value"))
@@ -88,7 +103,7 @@ def cell_of(node: Dict[str, Any], images: ImageLoader, pages: PageLoader) -> Dic
     cell = {"id": field_id(node), "title": str(node.get("title") or node.get("name") or field_id(node)), "kind": "text", "value": ""}
     if kind == IMAGE:
         link = str(dig(node, "value", "link") or "")
-        return {**cell, "kind": "image", "value": images(link) if link else ""}
+        return {**cell, "kind": "image", "link": link, "value": images(link) if link else ""}   # a page that was given no picture asks for ``link`` itself
     links = _item_links(raw, pages)
     if links:
         return {**cell, "kind": "links", "value": links}
@@ -143,7 +158,7 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
         columns = [rows[0][i].get("title", "") for i in range(len(keep_cols))]
     all_labels = layout_names(layout, ROW_KEYS)
     labels = [all_labels[r] for r in keep_rows] if len(all_labels) == len(grid) else [""] * len(rows)
-    return {"columns": columns, "labels": labels, "rows": [[{"kind": c["kind"], "value": c["value"]} for c in r] for r in rows]}
+    return {"columns": columns, "labels": labels, "rows": [[{key: c[key] for key in ("kind", "value", "link") if key in c} for c in r] for r in rows]}   # a picture's link goes too
 
 
 def revision_and_state(item: Dict[str, Any]) -> Tuple[str, str]:
@@ -173,7 +188,7 @@ def _section(node: Dict[str, Any], cells: Dict[str, Dict[str, Any]], layout: Dic
     fields = [cell for fid, cell in cells.items() if fid not in in_matrix]
     if not fields and not matrices:
         return None
-    return {"title": str(node.get("title") or ""), "fields": fields, "matrices": matrices}
+    return {"title": str(node.get("title") or ""), "collapsed": layout.get("collapsed") is True, "fields": fields, "matrices": matrices}
 
 
 def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoader, base_url: str = "",
@@ -231,16 +246,20 @@ class ItemViewService:
                 except (FmApiError, AuthError) as exc:
                     log.debug("Preparing workspace %s: %s", workspace_id, exc)
 
-    def read(self, workspace_id: str, item_id: str, held: Set[str]) -> Dict[str, Any]:
-        """The item laid out for display; ``held`` is the user's permissions in the workspace (they decide which tabs can be opened)."""
-        with ThreadPoolExecutor(max_workers=2) as pool:
+    def read(self, workspace_id: str, item_id: str, held: Set[str], with_grid: bool = False, pictures: bool = True) -> Dict[str, Any]:
+        """The item laid out for display; ``held`` is the user's permissions in the workspace (they decide which tabs can be opened).
+        ``with_grid`` adds the Grid tab to ``tabs`` (see ``TabService.read``). ``pictures`` False leaves the image fields empty, each with its
+        ``link``, so the page can draw the item at once and ask for the pictures afterwards (they are the slowest part of a read)."""
+        with ThreadPoolExecutor(max_workers=3) as pool:
             # the other tabs are read when they are opened; only their names and counts come with the item
-            tabs = pool.submit(TabService(self._client).read, workspace_id, item_id, held)   # asked while the item is read
+            tabs = pool.submit(TabService(self._client).read, workspace_id, item_id, held, with_grid)   # asked while the item is read
             layouts = pool.submit(self._layouts, workspace_id)
+            hidden = pool.submit(self._hidden_fields, workspace_id)
             data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
             if not isinstance(data, dict):
                 raise FmApiError(t("data.fm_no_item", item=item_id, workspace=workspace_id))
-            view = build_view(data, layouts.result(), self._image, self._client.base_url, self._hidden_fields(workspace_id))
+            loader = self._pictures(data) if pictures else no_image
+            view = build_view(data, layouts.result(), loader, self._client.base_url, hidden.result())
             if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
                 log.error("No sections could be built for item %s: %s", item_id, str(data)[:LOG_CHARS])
             view["tabs"] = tabs.result()
@@ -253,9 +272,6 @@ class ItemViewService:
         except FmApiError as exc:   # the fields still show, without their matrices
             log.warning("Could not read the section layout of workspace %s: %s", workspace_id, exc)
             return {}
-        for layout in list(layouts.values())[:3]:
-            log.debug("Section %s layout keys: %s; matrices: %s", last_segment(str(layout.get("__self__") or layout.get("link") or "")),
-                     sorted(layout), [sorted(m) for m in dict_rows(layout.get("matrices"))[:1]])
         return layouts
 
     def _hidden_fields(self, workspace_id: str) -> Set[str]:
@@ -275,5 +291,12 @@ class ItemViewService:
                  sorted({str(r.get("visibility")) for r in rows}))
         return self._hidden_cache.put(key, hidden)
 
-    def _image(self, link: str) -> str:
-        return load_image(self._client, link)
+    def _pictures(self, item: Any) -> ImageLoader:
+        """The loader of the item's pictures, all downloaded at once: each is a read of its own, and an item can hold several."""
+        links = list(dict.fromkeys(_image_links(item)))
+        if not links:
+            return no_image
+        with ThreadPoolExecutor(max_workers=min(len(links), MAX_PICTURES_AT_ONCE)) as pool:
+            loaded = dict(zip(links, pool.map(lambda link: load_image(self._client, link), links)))
+        return lambda link: loaded.get(link, "")
+

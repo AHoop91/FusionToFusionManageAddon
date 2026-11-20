@@ -11,12 +11,12 @@ SORT = [Sort("TITLE")]
 
 
 class Client:
-    def __init__(self, *answers):
-        self.answers, self.sent = list(answers), []
+    def __init__(self, *answers, status=200):
+        self.answers, self.sent, self.status = list(answers), [], status
 
     def send_json(self, method, path, body=None, content_type="application/json"):
         self.sent.append((method, path, body))
-        return SimpleNamespace(status=200, headers={}, data=self.answers.pop(0))
+        return SimpleNamespace(status=self.status, headers={}, data=self.answers.pop(0))
 
 
 def answer(total, *ids):
@@ -45,6 +45,13 @@ class DefinitionTests(unittest.TestCase):
         for page, size in ((0, 10), (1, 0), (1, 1000)):
             with self.assertRaises(ValueError):
                 build_definition([Field("TITLE")], SORT, page=page, page_size=size)
+
+
+class NoMatchTests(unittest.TestCase):
+    def test_an_answer_with_no_body_is_a_search_that_matched_nothing(self):
+        client = Client(None, status=204)
+        page = V1SearchService(client).page("5", build_definition([Field("TITLE")], SORT))
+        self.assertEqual((page.total, page.rows), (0, []))
 
 
 class ParseTests(unittest.TestCase):
@@ -80,12 +87,6 @@ class ServiceTests(unittest.TestCase):
         rows = V1SearchService(client).rows("242", [Field("TITLE")], SORT, page_size=2)
         self.assertEqual([r.dms_id for r in rows], ["1", "2", "3"])
         self.assertEqual([body["pageNo"] for _, _, body in client.sent], [1, 2])
-
-    def test_a_limit_stops_the_reading(self):
-        client = Client(answer(9, 1, 2))
-        rows = V1SearchService(client).rows("242", [Field("TITLE")], SORT, page_size=2, limit=1)
-        self.assertEqual([r.dms_id for r in rows], ["1"])
-        self.assertEqual(len(client.sent), 1)
 
     def test_a_search_that_never_ends_raises_and_does_not_return_a_cut_off_list(self):
         client = Client(*[answer(10 ** 6, n) for n in range(1, MAX_PAGES + 1)])

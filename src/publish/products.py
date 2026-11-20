@@ -11,25 +11,26 @@ Editing reads the item, sends only the values that differ from what it holds (th
 when none do. A value left blank is never sent, so clearing a field is not something an edit can do.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.i18n import t
-from ..core.shapes import as_dict, as_list, dict_rows, rows_in
+from ..core.shapes import as_dict, dict_rows, rows_in
 from ..core.logging_setup import get_logger
-from ..fm.client import WORKSPACES, FmApiError, FmClient, last_segment
+from ..fm.client import WORKSPACES, FmApiError, FmClient, SendResult, last_segment
 from ..fm.bom import split_title
 from ..fm.components import Candidate, ComponentService, is_working, number_matches
 from ..fm.items import ItemService, display_text
 from ..fm.permissions import REFUSED
 from ..fm.pages import link_page, page_url
 from ..fm.tableaus import PICTURE_LINK
-from ..fm.v1_search import GRIDVIEW, Field, Sort, V1SearchService
+from ..fm.v1_search import GRIDVIEW, Field, Sort, V1Row, V1SearchService
 from ..fm.v3_search import number_key
 from ..fm.refusal import read_refusal
 from ..fm.sections import SectionService
 from ..fm.workspace import GRID_VIEW, WorkspaceService
 from ..sync.property_compare import FOUND, MISMATCH, NEW
-from .item_requests import _is_option, holds, item_request
+from .item_requests import field_value, holds, item_request
 from .sender import created_id
 
 
@@ -47,11 +48,15 @@ def _has_value(current: Any) -> bool:
     return bool(display_text(current).strip()) or (isinstance(current, dict) and bool(current.get("link")))
 
 
+def _links(items: List[Any]) -> List[str]:
+    """The links of a list of link values, in order."""
+    return sorted(str(item.get("link")) for item in items if isinstance(item, dict))
+
+
 def _same(current: Any, value: Any) -> bool:
     """Whether the item holds ``value`` already (a list of links, for a field of several items, in any order)."""
     if isinstance(value, list):
-        links = lambda items: sorted(str(i.get("link")) for i in items if isinstance(i, dict))   # noqa: E731
-        return isinstance(current, list) and links(current) == links(value)
+        return isinstance(current, list) and _links(current) == _links(value)
     return holds(current, value)
 
 
@@ -102,15 +107,7 @@ class ProductService:
         """Create a product with ``values`` (``{field id: value}``; a picklist's value is the link of its option); answers ``{"id", "link"}``.
         A value left blank is not sent. Raises ``FmApiError`` with Fusion Manage's reason when it is refused."""
         rows = [{"fm_field": field_id, "value": value, "status": NEW} for field_id, value in values.items()]
-        sections = SectionService(self._client).field_sections(workspace_id)
-        request, reason = item_request(workspace_id, {"state": NEW}, rows, [], sections)
-        if request is None:
-            raise FmApiError(reason or t("app.product_no_values"))
-        try:
-            result = self._client.send_json(request["method"], request["url"], request["body"])
-        except FmApiError as exc:   # what Fusion Manage refuses with is shown beside the fields it names
-            raise read_refusal(exc, set(sections), t("app.product_refused")) from exc
-        item_id = created_id(result)
+        item_id = created_id(self._write(workspace_id, {"state": NEW}, rows))
         return {"id": item_id, "link": f"{WORKSPACES}/{workspace_id}/items/{item_id}" if item_id else ""}
 
     def read(self, workspace_id: str, item_id: str) -> Dict[str, Any]:
@@ -126,15 +123,20 @@ class ProductService:
         link = f"{WORKSPACES}/{workspace_id}/items/{item_id}"
         if not rows:
             return {"id": item_id, "link": link, "unchanged": True}
+        self._write(workspace_id, {"state": FOUND, "item_id": item_id}, rows)
+        return {"id": item_id, "link": link, "unchanged": False}
+
+    def _write(self, workspace_id: str, fm: Dict[str, Any], rows: List[Dict[str, Any]]) -> SendResult:
+        """Send the item request for ``rows`` (a create when ``fm`` has the state NEW, an update for FOUND). Raises ``FmApiError``: with what
+        Fusion Manage refused, shown beside the fields it names, or with the reason there is nothing to send."""
         sections = SectionService(self._client).field_sections(workspace_id)
-        request, reason = item_request(workspace_id, {"state": FOUND, "item_id": item_id}, rows, [], sections)
+        request, reason = item_request(workspace_id, fm, rows, [], sections)
         if request is None:
             raise FmApiError(reason or t("app.product_no_values"))
         try:
-            self._client.send_json(request["method"], request["url"], request["body"])
+            return self._client.send_json(request["method"], request["url"], request["body"])
         except FmApiError as exc:
             raise read_refusal(exc, set(sections), t("app.product_refused")) from exc
-        return {"id": item_id, "link": link, "unchanged": False}
 
     def _options_of(self, workspace_id: str, field_id: str, number: str, grid: bool = False) -> Tuple[List[Candidate], Candidate]:
         """The options of the component with ``number`` in the picklist that the field ``field_id`` (of the workspace, or of its Grid tab when
@@ -148,9 +150,7 @@ class ProductService:
         lookup = next((f["link_lookup"] for f in fields if f["id"] == field_id), "")
         if not lookup:
             raise FmApiError(t("app.product_field_not_linked", field=field_id, workspace=workspace_id))
-        hits, none = ComponentService(self._client).matching(lookup, number)
-        if not hits:
-            raise FmApiError(none)
+        hits = ComponentService(self._client).matching(lookup, number)
         return hits, _latest_revision(hits)
 
     def assign(self, workspace_id: str, item_id: str, number: str, field_id: str, link_column: str, mode: str = "",
@@ -173,18 +173,19 @@ class ProductService:
         current = values.get(field_id)
         named = display_text(current).strip() if _has_value(current) else ""
         answer = {"number": number, "current": named, "component": chosen.link, "product": product}
-        if _has_value(current) and holds(current, {"link": chosen.link}):
+        held = _has_value(current)
+        if held and holds(current, {"link": chosen.link}):
             return {**answer, "status": SAME}
-        if _has_value(current) and mode not in (REPLACE, VARIANT, REPLACE_MOVE):
+        if held and mode not in (REPLACE, VARIANT, REPLACE_MOVE):
             return {**answer, "status": EXISTS}
         if mode == VARIANT:
             self._add_variant(workspace_id, item_id, number, link_column, chosen, row_values or {})
             return {**answer, "status": ADDED}
-        if mode == REPLACE_MOVE and _has_value(current):   # the one that is replaced is kept, as a variant (first: a refusal leaves the product as it was)
-            old = current.get("link") if isinstance(current, dict) else ""
+        if mode == REPLACE_MOVE and held:   # the one that is replaced is kept, as a variant (first: a refusal leaves the product as it was)
+            old = _link_of(current)
             if not old:
                 raise FmApiError(t("app.product_move_no_link", current=named))
-            self._post_variant(workspace_id, item_id, link_column, str(old), row_values or {})
+            self._post_variant(workspace_id, item_id, link_column, old, row_values or {})
         self.update(workspace_id, item_id, {field_id: {"link": chosen.link}})
         return {**answer, "status": ASSIGNED}
 
@@ -205,7 +206,7 @@ class ProductService:
 
         primary = None
         if _has_value(current):
-            primary = stand(str(current.get("link") or "") if isinstance(current, dict) else "", display_text(current).strip())
+            primary = stand(_link_of(current), display_text(current).strip())
         columns, rows = self._grid(workspace_id, item_id, link_column, stand)
         return {"product": product, "number": number, "component": chosen.link, "revision": chosen.version, "title": chosen.title,
                 "primary": primary, "primary_state": primary["state"] if primary else "", "link_column": link_column, "columns": columns, "rows": rows}
@@ -215,29 +216,34 @@ class ProductService:
         ``primary`` is ``{"link", "title"}`` or None when it has none; ``columns`` and each of the ``rows`` of the Variants grid are as in ``inspect``,
         a row's ``link``, ``title`` and ``url`` (its page in Fusion Manage) being the component it names ("" when it names none, or when
         ``link_column`` is "": the Variants column is not set up). Raises ``FmApiError`` with the reason."""
-        product, values = ItemService(self._client).read_named(workspace_id, item_id)
+        client = self._client
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            named = pool.submit(ItemService(client).read_named, workspace_id, item_id)   # while the grid is read
+            columns, rows = self._grid(workspace_id, item_id, link_column,
+                                       lambda link, title: {"link": link, "title": title, "url": link_page(client.base_url, client.tenant, link)})
+            product, values = named.result()
         current = values.get(field_id)
         primary = None
         if _has_value(current):
             primary = {"link": _link_of(current), "title": display_text(current).strip()}
-        client = self._client
-        columns, rows = self._grid(workspace_id, item_id, link_column,
-                                   lambda link, title: {"link": link, "title": title, "url": link_page(client.base_url, client.tenant, link)})
         return {"product": product, "primary": primary, "link_column": link_column, "columns": columns, "rows": rows}
 
-    def _grid(self, workspace_id: str, item_id: str, link_column: str, stand: Any) -> Any:
-        """The Grid tab of the product as ``(columns, rows)`` (see ``inspect``). How a grid is laid out is read loosely, and written to the log."""
+    def _grid(self, workspace_id: str, item_id: str, link_column: str,
+              stand: Callable[[str, str], Dict[str, Any]]) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
+        """The Grid tab of the product as ``(columns, rows)`` (see ``inspect``); ``stand(link, title)`` gives what each row says of the component
+        it names. How a grid is laid out is read loosely."""
         base = f"{WORKSPACES}/{workspace_id}"
-        data = self._client.get_json(f"{base}/items/{item_id}/views/{GRID_VIEW}/rows")
-        log.info("Grid of item %s: %.3000s", item_id, data)
-        laid_out = sorted(WorkspaceService(self._client).grid_fields(base)[0], key=lambda f: f["order"])   # as Fusion Manage lays the columns out
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fields = pool.submit(WorkspaceService(self._client).grid_fields, base)   # while the rows are read
+            data = self._client.get_json(f"{base}/items/{item_id}/views/{GRID_VIEW}/rows")
+            laid_out = sorted(fields.result()[0], key=lambda f: f["order"])   # as Fusion Manage lays the columns out
         titles = {f["id"]: f["title"] for f in laid_out}
         columns: List[Dict[str, str]] = [{"id": f["id"], "title": f["title"]} for f in laid_out if f["shown"]]
         rows: List[Dict[str, Any]] = []
         for row in rows_in(data, "rows"):
             cells: Dict[str, str] = {}
             link = title = ""
-            for cell in dict_rows(as_list(row.get("rowData"))):
+            for cell in dict_rows(row.get("rowData")):
                 if "/fields/" not in str(cell.get("__self__")):   # a cell that is not a column of the grid: the row's own id ("Row Id")
                     continue
                 column = last_segment(cell.get("__self__"))
@@ -283,12 +289,12 @@ class ProductService:
         return {"number": number, "variants_checked": bool(link_column), "primary": [cards[item] for item in primary],
                 "variants": [{**cards[item], "rows": rows} for item, rows in variants.items()]}
 
-    def _v1_rows(self, workspace_id: str, fields: List[Field], sort: List[Sort]) -> List[Any]:
+    def _v1_rows(self, workspace_id: str, fields: List[Field], sort: List[Sort]) -> List[V1Row]:
         """The rows of a v1 search. Raises ``NotAllowed`` when Fusion Manage does not accept the user's app, else ``FmApiError`` with the reason.
 
         Seen: a Client ID with no user mapped to it is answered 401 by the v3 API but 500 by the v1 search, so a 500 is asked of v3 again."""
         try:
-            return list(V1SearchService(self._client).rows(workspace_id, fields, sort))
+            return V1SearchService(self._client).rows(workspace_id, fields, sort)
         except FmApiError as exc:
             if exc.status in REFUSED or (exc.status >= 500 and self._app_not_accepted(workspace_id)):
                 raise NotAllowed() from exc
@@ -324,7 +330,7 @@ class ProductService:
         (a blank is left out; a picklist option is sent as a link to it)."""
         scope = f"{WORKSPACES}/{workspace_id}/views/{GRID_VIEW}/fields"
         cells = [{"__self__": f"{scope}/{link_column}", "value": {"link": link}}]
-        cells += [{"__self__": f"{scope}/{column}", "value": {"link": value} if _is_option(value) else value}
+        cells += [{"__self__": f"{scope}/{column}", "value": field_value(value)}
                   for column, value in row_values.items() if column != link_column and value not in (None, "", [], {})]
         self._send_row("POST", f"{WORKSPACES}/{workspace_id}/items/{item_id}/views/{GRID_VIEW}/rows", {"rowData": cells})
 

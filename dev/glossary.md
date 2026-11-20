@@ -27,7 +27,11 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | The open design's name, number and thumbnail from the Data Model, with the revision and state of its Fusion Manage item | `ItemNumbers.describe`, `item_view.revision_and_state` (the `products_design` action) | `ui/item_numbers.py`, `fm/item_view.py` | [finding-items.md](finding-items.md) |
 | Open the Fusion design a Components item was published from (its Lineage URN, then `findFileById`) | `ComponentService.design_file`, `open_design_file` (the `products_design_file` and `products_open_file` actions) | `fm/components.py`, `ui/actions/product_actions.py` | [finding-items.md](finding-items.md) |
 | Search the Items workspace with text and filters (Add Items picker) | `ItemSearchService.page`, `search_path`, `build_query` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
-| Find the Components record for a part | `ComponentService.find_working`, `find`, `matching` | `fm/components.py` | [finding-items.md](finding-items.md) |
+| Find the Components record of a part of the open design (its address, from the Data Model) | `ItemNumbers.record_link(ref, part_number)`, which uses `read_manage_item` and `manage_link` | `ui/item_numbers.py`, `fusion_mfg/model_service.py`, `fm/components.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
+| Read the Asset URN or the Lineage URN of a Components record | `ComponentService.asset`, `design_file` | `fm/components.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
+| Find the manufacturing bills of materials (MBOM) of a design, or check an item number is free | `MbomService.find` (lineage and asset), `number_taken` | `fm/mbom.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
+| List the options of the Component linking picklist for a number | `ComponentService.matching` | `fm/components.py` | [finding-items.md](finding-items.md) |
+| Read the derived fields a linking field takes from the item it links to (sent with the link on publish) | `PivotService.derived` | `fm/pivots.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Read an item's BOM, its BOM tab, or where it is used | `fm/bom.py`, `fm/bom_view.py`, `fm/where_used.py` | `fm/` | |
 | Show an item as the Item tab does (header, sections, matrices) | `fm/item_view.py` | `fm/` | [workspace-forms.md](workspace-forms.md) |
 | Read an item's tabs and counts, and which the user may open | `TabService` | `fm/tabs.py` | [permissions.md](permissions.md) |

@@ -112,6 +112,20 @@ class BuildViewTests(unittest.TestCase):
         self.assertEqual(matrix["columns"], ["Left", "Right"])
         self.assertEqual([[c["value"] for c in row] for row in matrix["rows"]], [["1", "2"]])
 
+    def test_a_picture_in_a_matrix_keeps_its_link_for_a_page_that_loads_it_later(self):
+        layout = {"10": {"matrices": [{"fields": [[ref("PIC"), ref("A")]], "columns": ["Picture", "Text"]}]}}
+        item = {"sections": [section("Details", field("PIC", {"link": "/img/1"}, "Image"), field("A", "1"))]}
+        (matrix,) = view(item, layout)["sections"][0]["matrices"]
+        picture, text = matrix["rows"][0]
+        self.assertEqual((picture["kind"], picture["link"], picture["value"]), ("image", "/img/1", ""))
+        self.assertNotIn("link", text)
+
+    def test_a_section_the_workspace_lays_out_folded_is_marked_collapsed(self):
+        layout = {"10": {"collapsed": True}, "11": {"collapsed": False}}
+        item = {"sections": [section("Folded", field("A", "1")), section("Open", field("B", "2"), link="/api/v3/workspaces/1/sections/11"),
+                             section("Unlisted", field("C", "3"), link="/api/v3/workspaces/1/sections/12")]}
+        self.assertEqual([s["collapsed"] for s in view(item, layout)["sections"]], [True, False, False])
+
     def test_a_matrix_column_that_is_all_hidden_is_left_out_with_its_name(self):
         layout = {"10": {"matrices": [{"fields": [[ref("A"), ref("B")], [ref("C"), ref("D")]], "columns": ["One", "Two"], "rows": ["x", "y"]}]}}
         item = {"sections": [section("Details", *(field(f, f) for f in "ABCD"))]}

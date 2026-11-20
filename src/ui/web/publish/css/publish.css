@@ -15,6 +15,37 @@
   flex: none; width: 88px; height: 88px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--bg, transparent) center / contain no-repeat;
 }
+/* The dropdown of the manufacturing bills of materials Fusion Manage holds for the design: in the bottom right corner of the summary, clear of
+   the line under it, with its name at its left. The dropdown is the one of Add Existing Items (add-items.css); the form of a new number
+   opens under it like its list. */
+.pub-mbom { position: absolute; right: 16px; bottom: 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.pub-mbom-label { color: var(--muted); white-space: nowrap; }
+.pub-mbom-pk { width: 280px; }
+.pub-mbom-pill, .pub-mbom-pk .pk-detail { flex: none; display: inline-block; padding: 1px 8px; border-radius: 999px; background: rgba(6, 150, 215, .12); color: var(--accent); font-size: 11px; font-weight: 600; line-height: 16px; }
+.pub-mbom-pill { margin-left: 8px; }
+.pub-mbom-pk .pk-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pub-mbom .pub-mbom-skel { display: block; width: 280px; height: 34px; border-radius: 6px; }
+.pub-mbom-add { flex: none; display: inline-flex; align-items: center; justify-content: center; align-self: stretch; width: 34px; box-sizing: border-box; margin-left: -4px; padding: 0; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+.pub-mbom-add svg { display: block; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pub-mbom-add:hover { filter: brightness(.92); }
+.pub-mbom-add:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+/* The last entry of the list is the way to make a new one: a plus before its name, in the accent colour, set apart by a fine line. */
+.pub-mbom-pk .pk-footer { position: relative; flex-direction: row-reverse; justify-content: flex-end; gap: 8px; margin-top: 6px; border-top: 0; padding: 8px 12px; color: var(--accent); font-weight: 500; }
+.pub-mbom-pk .pk-footer::before { content: ""; position: absolute; top: -4px; left: 0; right: 0; border-top: 1px solid #e6e9ec; }
+.pub-mbom-choices { display: flex; flex-direction: column; align-items: stretch; gap: 8px; max-width: 520px; margin: 24px auto; padding: 20px; }
+.pub-mbom-choose-title { margin: 0; font-size: 14px; }
+.pub-mbom-choices p { margin: 0 0 6px; }
+.pub-mbom-choice { text-align: left; padding: 9px 12px; border: 1px solid #cfd4d9; border-radius: 6px; background: #fff; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.pub-mbom-choice:hover { border-color: var(--accent); }
+.pub-mbom-choice:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.pub-mbom-form { position: absolute; top: 100%; right: 0; z-index: 60; box-sizing: border-box; width: 300px; margin-top: 6px; padding: 14px; background: var(--surface);
+  border: 1px solid #dfe3e7; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .16), 0 2px 6px rgba(0, 0, 0, .08); }
+.pub-mbom-form-title { margin: 0 0 10px; font-size: 13px; }
+.pub-mbom-input { display: block; width: 100%; box-sizing: border-box; height: 30px; padding: 0 8px; border: 1px solid #cfd4d9; border-radius: 6px; font: inherit; font-size: 13px; outline: none; }
+.pub-mbom-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.pub-mbom-hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+.pub-mbom-error { margin: 8px 0 0; font-size: 12px; text-align: left; }
+.pub-mbom-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 /* Skeleton of the table while the Bill of Materials loads: rows of bars with the same sweep as the thumbnail. */
 .pub-bom-status { margin: 0 0 10px; }
 .pub-skel-table { padding: 6px 14px; }

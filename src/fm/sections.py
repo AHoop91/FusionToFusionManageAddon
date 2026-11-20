@@ -1,31 +1,29 @@
 """The sections of a Fusion Manage workspace and which section holds each field.
 
 An item is created or edited by sending its field values grouped by section, so every field a
-publish sets has to be placed in its section. ``GET /api/v3/workspaces/{id}/sections`` only lists the
-sections (link and title); each section's own link gives its fields. Fields inside a matrix (a grid of
-fields) belong to the section too.
+publish sets has to be placed in its section. ``GET /api/v3/workspaces/{id}/sections`` lists the sections
+(link and title) only, but asked for ``BULK`` it answers one list of every section with its fields and its
+matrices (grids of fields), whose fields belong to the section too.
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Iterator, List
 
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
-from ..core.shapes import as_dict, as_list, dict_rows, rows_in
+from ..core.shapes import as_dict, as_list, dict_rows
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .pages import field_id
 from .ttl_cache import TtlCache
 
 log = get_logger("fm.sections")
 
-READERS = 4   # section details read at once
+BULK = "application/vnd.autodesk.plm.sections.bulk+json"   # asks for every section with its fields and matrices in one answer
 LOG_CHARS = 500   # of a sections answer that held no fields, kept in the log
 
 
 def _link(node: Any) -> str:
-    """The API link of a section ("" when it names none)."""
-    node = as_dict(node)
-    return str(node.get("__self__") or node.get("link") or "")
+    """The API link of a section: the ``__self__`` of its entry in the bulk list ("" when it names none)."""
+    return str(as_dict(node).get("__self__") or "")
 
 
 def _field_refs(section: Dict[str, Any]) -> Iterator[Any]:
@@ -81,17 +79,8 @@ class SectionService:
         cached = None if fresh else self._details_cache.get(key)
         if cached is not None:
             return cached
-        data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections")
-        entries = rows_in(data, "sections") or rows_in(data, "items")   # the list itself, or held under either name
-        with ThreadPoolExecutor(max_workers=READERS) as pool:
-            details = list(pool.map(self._detail, entries))
-        return self._details_cache.put(key, details)
-
-    def _detail(self, entry: Dict[str, Any]) -> Dict[str, Any]:
-        """The section ``entry`` stands for with its fields. The list holds links only; an entry that carries its fields needs no second read."""
-        if "fields" in entry or not _link(entry):
-            return entry
-        return as_dict(self._client.get_json(_link(entry)))
+        data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/sections", BULK)
+        return self._details_cache.put(key, dict_rows(data))
 
     def _read(self, workspace_id: str) -> Dict[str, str]:
         details = self._details(workspace_id)

@@ -9,7 +9,6 @@ been published, so it is refused with ``NoItemNumber``.
 import json
 import os
 import threading
-import time
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import adsk.core
@@ -20,10 +19,11 @@ from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.paths import DataDirError, data_dir, temp_dir
 from ..core.shapes import as_dict, dig
+from ..fm.components import manage_link
 from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient, MfgApiError
 from ..fusion_mfg.hub_lookup import read_hub_id
-from ..fusion_mfg.model_service import read_thumbnail_url
+from ..fusion_mfg.model_service import read_manage_item, read_thumbnail_url
 from .item_number_error import NoItemNumber
 
 log = get_logger("item_numbers")
@@ -90,6 +90,7 @@ def active_design_ref() -> DesignRef:
 
 
 def _same(a: str, b: str) -> bool:
+    """Whether two part numbers are the same, ignoring case and surrounding spaces."""
     return a.strip().lower() == b.strip().lower()
 
 
@@ -109,6 +110,7 @@ class _Remembered:
         return f"{ref.model_id}|{ref.time}|{part_number.strip().lower()}"
 
     def _load(self) -> Dict[str, List[str]]:
+        """The entries of the file; none when it is missing or not readable."""
         try:
             with open(self._path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -120,10 +122,12 @@ class _Remembered:
             return {}
 
     def get(self, ref: DesignRef, part_number: str) -> Optional[Subject]:
+        """What was found for the part number in this version of the design, or None."""
         found = self._entries.get(self._key(ref, part_number))
         return Subject(found[0], found[1]) if found else None
 
     def add(self, ref: DesignRef, part_number: str, subject: Subject) -> None:
+        """Keep what was found, as the newest entry, and write the file."""
         key = self._key(ref, part_number)
         self._entries.pop(key, None)   # re-added last, so it is the newest
         self._entries[key] = [subject.item_number, subject.part_number]
@@ -138,6 +142,7 @@ class _Remembered:
 
 
 def _remembered_path() -> str:
+    """Where the found item numbers are kept."""
     try:
         folder = data_dir()
     except DataDirError:   # what is remembered is only a shortcut: the add-in's folder in the temporary folder will do
@@ -175,8 +180,7 @@ class ItemNumbers:
         """``ref`` with its Data Model id (a design a drawing shows is found by its file). Raises ``NoItemNumber`` when the design is not saved. Worker thread."""
         if ref.model_id:
             return ref
-        if not ref.file_id:
-            raise NoItemNumber(t("app.number_design_not_saved"))
+        self._require_saved(ref)
         return self._model_of_file(FusionGraphQlClient(cancel), ref)
 
     def forget_files(self) -> None:
@@ -196,25 +200,36 @@ class ItemNumbers:
     def thumbnail_url(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> str:
         """A signed url of the thumbnail of the component with ``part_number`` in the design ``ref`` ("" is the design itself); "" when the Data
         Model has none yet. It expires soon, so use it at once. Raises ``NoItemNumber`` when the component is not in the design. Worker thread."""
+        ref, client, summary = self._summary_of(ref, cancel)
+        return read_thumbnail_url(client, summary, self._the_component(client, ref, summary, part_number), ref.time)
+
+    def _summary_of(self, ref: DesignRef, cancel: Optional[CancelToken]) -> Tuple[DesignRef, FusionGraphQlClient, Dict[str, Any]]:
+        """``(ref with its model, Data Model client, summary of the design)``."""
         ref = self.model_of(ref, cancel)
         client = FusionGraphQlClient(cancel)
-        summary = self.reads.summary(client, ref.model_id, ref.time)
+        return ref, client, self.reads.summary(client, ref.model_id, ref.time)
+
+    @staticmethod
+    def _require_saved(ref: DesignRef) -> None:
+        """Raises ``NoItemNumber`` when the design is not saved."""
+        if not ref.model_id and not ref.file_id:
+            raise NoItemNumber(t("app.number_design_not_saved"))
+
+    def _the_component(self, client: FusionGraphQlClient, ref: DesignRef, summary: Dict[str, Any], part_number: str) -> str:
+        """The Data Model id of the component with ``part_number`` in the design. Raises ``NoItemNumber`` when there is no such component, or
+        there are several."""
         _, matches = self._matching(client, ref, summary, part_number)
         ids = {str(m["id"] or "") for m in matches} - {""}
         if len(ids) != 1:
             label = part_number or t("app.number_the_design")
             raise NoItemNumber(t("app.number_not_in_bom", label=label) if not ids else t("app.number_several_components", label=label))
-        return read_thumbnail_url(client, summary, ids.pop(), ref.time)
+        return ids.pop()
 
     def describe(self, ref: DesignRef, cancel: Optional[CancelToken] = None) -> Dict[str, str]:
         """``{"number", "name", "thumbnail_url"}`` of the design itself, from the Data Model: its item number ("" when it has none), its name and
         a signed url of its thumbnail ("" when it has none yet or it could not be read; it expires soon). Raises ``NoItemNumber`` when the design
         is not saved. Worker thread."""
-        if not ref.model_id and not ref.file_id:
-            raise NoItemNumber(t("app.number_design_not_saved"))
-        ref = self.model_of(ref, cancel)
-        client = FusionGraphQlClient(cancel)
-        summary = self.reads.summary(client, ref.model_id, ref.time)
+        ref, client, summary = self._summary_of(ref, cancel)
         try:
             thumbnail = read_thumbnail_url(client, summary, str(summary.get("component_id") or ""), ref.time)
         except MfgApiError as exc:   # the picture only decorates the answer: the design is described without it
@@ -223,10 +238,17 @@ class ItemNumbers:
         return {"number": str(summary.get("item_number") or "").strip(), "name": str(summary.get("name") or summary.get("part_number") or ""),
                 "thumbnail_url": thumbnail if thumbnail.startswith("https://") else ""}
 
+    def record_link(self, ref: DesignRef, part_number: str = "", cancel: Optional[CancelToken] = None) -> str:
+        """The API link of the record in the Components workspace (``/api/v3/workspaces/<workspace>/items/<item>``) of the component with
+        ``part_number`` in the design ``ref`` ("" is the design itself), from the Data Model: "" when it is not linked to one yet. Raises
+        ``NoItemNumber`` when the design is not saved or has no such component. Worker thread."""
+        ref, client, summary = self._summary_of(ref, cancel)
+        linked = read_manage_item(client, summary, self._the_component(client, ref, summary, part_number), ref.time)
+        return manage_link(linked["urn"], linked["url"])
+
     def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""
-        if not ref.model_id and not ref.file_id:
-            raise NoItemNumber(t("app.number_design_not_saved"))
+        self._require_saved(ref)
         client = None   # made when the Data Model is first asked, so an item number kept from before needs no settings
 
         def data_model() -> FusionGraphQlClient:
@@ -240,7 +262,6 @@ class ItemNumbers:
         if known:
             log.info("Part number %s is item number %s (kept from an earlier read)", known.part_number or "(the design)", known.item_number)
             return known
-        began = time.monotonic()
         summary = self.reads.summary(data_model(), ref.model_id, ref.time)
         is_design, matches = self._matching(data_model(), ref, summary, part_number)
         found = {str(m["item_number"] or "") for m in matches}
@@ -254,8 +275,7 @@ class ItemNumbers:
         number = found.pop().strip()
         if not number:
             raise NoItemNumber(t("app.number_not_published", label=label))
-        log.info("Part number %s is item number %s (%.2fs; the Data Model is read once per version of the design, then kept)",
-                 part_number or "(the design)", number, time.monotonic() - began)
+        log.info("Part number %s is item number %s", part_number or "(the design)", number)
         subject = Subject(number, part_number)
         self._remembered.add(ref, requested, subject)
         return subject

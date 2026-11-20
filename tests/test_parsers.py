@@ -8,8 +8,8 @@ ODD = (None, "x", [], {"bulkModels": None}, {"bulkModels": "x"}, {"bulkModels": 
        {"bulkModels": [{"model": {"component": "x"}}]})
 
 
-def model(component):
-    return {"bulkModels": [{"model": {"component": component}}]}
+def model(component, design_item=None):
+    return {"bulkModels": [{"model": {"component": component, "designItem": design_item}}]}
 
 
 def relation(parent, child, sequence=1, **extra):
@@ -19,9 +19,9 @@ def relation(parent, child, sequence=1, **extra):
 class SummaryTests(unittest.TestCase):
     def test_the_fields_of_the_root_component(self):
         data = model({"id": "c1", "composition": "DESIGN", "itemNumber": {"id": "PN-1"}, "name": {"value": "Gear"},
-                      "description": {"value": "A gear"}, "partNumber": {"value": "G-1"}})
-        self.assertEqual(parse_summary(data), {"component_id": "c1", "composition": "DESIGN", "item_number": "PN-1",
-                                               "part_number": "G-1", "name": "Gear", "description": "A gear"})
+                      "description": {"value": "A gear"}, "partNumber": {"value": "G-1"}}, {"id": "urn:adsk.wipprod:dm.lineage:abc", "name": "Gear v3"})
+        self.assertEqual(parse_summary(data), {"lineage": "urn:adsk.wipprod:dm.lineage:abc", "file_name": "Gear v3", "component_id": "c1", "composition": "DESIGN",
+                                               "item_number": "PN-1", "part_number": "G-1", "name": "Gear", "description": "A gear"})
 
     def test_an_answer_of_an_unexpected_shape_is_empty(self):
         for data in ODD:

@@ -1,11 +1,12 @@
-"""Find the Components workspace item that stands for a part, to fill an item's component linking field.
+"""The Components workspace: its id, the fields of one of its records (the design's lineage and asset ids, the revision and state), and the
+options of the component linking picklist for an item number.
 
-The field is a picklist whose options are the items of the Components workspace (``CUSTOM_LOOKUP_WS_COMPONENTS_...``),
-so the lookup is asked for the options whose text matches the item number. The option's ``link`` is what the field takes.
+That field is a picklist whose options are the items of the Components workspace (``CUSTOM_LOOKUP_WS_COMPONENTS_...``), so the lookup is asked
+for the options whose text matches the item number. The option's ``link`` is what the field takes.
 """
 
 import re
-from typing import Any, Iterable, List, NamedTuple, Tuple
+from typing import Any, List, NamedTuple, Tuple
 from urllib.parse import quote
 
 from ..core.logging_setup import get_logger
@@ -15,7 +16,6 @@ from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
 from .item_view import revision_and_state
 from .items import collect_values
 from .pages import ITEM_LINK
-from .v3_search import WORKING, ItemFinder
 from .ttl_cache import TtlCache
 
 log = get_logger("fm.components")
@@ -23,9 +23,9 @@ log = get_logger("fm.components")
 COMPONENTS_WORKSPACE = "Components"   # what Fusion Manage calls the workspace of the components
 WORKSPACES_LIMIT = 200   # workspaces asked for when looking for it
 CANDIDATES = 25   # options asked for when searching by number
-SHOWN = 5   # matches named in the message when more than one fits
 LINEAGE = re.compile(r"urn:adsk\.wipprod:dm\.lineage:[A-Za-z0-9_-]+")   # the id Fusion finds a design's data file by
 LINEAGE_FIELD = "LINEAGE_URN"   # the Components workspace field that holds it
+ASSET_FIELD = "ASSET_URN"   # and the one that holds the design's asset id (it is not part of the Data Model's model id)
 _URN = re.compile(r"\.(\d+)\.(\d+)\s*$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
 _WORKING = re.compile(r"\[REV:\s*w(?:orking)?\s*\]", re.IGNORECASE)   # "[REV:w]": how Fusion Manage names the working version
 _WORKSPACES = TtlCache(600)   # the Components workspace's id by tenant: it does not change, and the Export window asks twice
@@ -65,11 +65,6 @@ def link_ids(link: str) -> Tuple[str, str]:
     return match.groups() if match else ("", "")
 
 
-def _named(candidates: Iterable[Candidate]) -> str:
-    """The first few of ``candidates``, each by title, version and id, for a message that says which ones fit."""
-    return ", ".join(f"{c.title} {c.version} ({last_segment(c.link)})".replace("  ", " ") for c in list(candidates)[:SHOWN])
-
-
 def parse_workspace_id(data: Any, title: str = COMPONENTS_WORKSPACE) -> str:
     """The id of the workspace called ``title`` (ignoring case and space) in the answer listing the workspaces ("" when there is none)."""
     for row in dict_rows(dig(data, "items")):
@@ -79,15 +74,8 @@ def parse_workspace_id(data: Any, title: str = COMPONENTS_WORKSPACE) -> str:
     return ""
 
 
-def _the_one(hits: List[Candidate], none: str, many: str) -> Tuple[str, str]:
-    """``(link, "")`` when ``hits`` is one record, else ``("", reason)``: ``none`` when there is no record, ``many`` when there are several."""
-    if len(hits) == 1:
-        return hits[0].link, ""
-    return "", many if hits else none
-
-
 class ComponentService:
-    """Finds components in the Components workspace and in the picklist of the component linking field."""
+    """Reads the Components workspace and the picklist of the component linking field through an ``FmClient``."""
 
     def __init__(self, client: FmClient) -> None:
         self._client = client
@@ -103,55 +91,43 @@ class ComponentService:
                 _WORKSPACES.put(key, found)
         return found
 
+    def _field(self, link: str, field_id: str) -> str:
+        """The text of a field of the item at ``link``: "" when the item holds no value for it, or ``link`` is not an item's (nothing is read)."""
+        workspace_id, item_id = link_ids(link)
+        if not item_id:
+            return ""
+        return str(collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")).get(field_id) or "")
+
     def design_file(self, link: str) -> str:
         """The lineage id (``urn:adsk.wipprod:dm.lineage:...``) of the Fusion design the component item at ``link`` was published from: what Fusion
         opens the design by. It is the item's Lineage URN field. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no design."""
-        workspace_id, item_id = link_ids(link)
-        if not item_id:
-            raise FmApiError(t("data.fm_no_design_file"))
-        found = str(collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")).get(LINEAGE_FIELD) or "")
+        found = self._field(link, LINEAGE_FIELD)
         if not LINEAGE.fullmatch(found):
             raise FmApiError(t("data.fm_no_design_file"))
         return found
 
-    def revision_and_state(self, number: str) -> Tuple[str, str]:
-        """``(revision, life cycle state)`` of the working version of the component with this item number; ``("", "")`` when it has none (an item
-        that has not been published is not an error: ``find_working`` says why)."""
-        link, _ = self.find_working(number)
-        return revision_and_state(self._client.get_json(link)) if link else ("", "")
+    def asset(self, link: str) -> str:
+        """The asset id of the Fusion design the component item at ``link`` was published from (its Asset URN field): what the Items workspace's
+        ``COMPONENT_ASSET_URN`` copies. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no asset id."""
+        found = self._field(link, ASSET_FIELD)
+        if not found:
+            raise FmApiError(t("data.fm_no_asset"))
+        return found
 
-    def find_working(self, number: str) -> Tuple[str, str]:
-        """``(link, "")`` of the working version of the record for this item number in the Components workspace, else ``("", reason)``.
+    def revision_and_state(self, link: str) -> Tuple[str, str]:
+        """``(revision, life cycle state)`` of the component record at ``link`` (the Data Model gives it, see ``read_manage_item``)."""
+        return revision_and_state(self._client.get_json(link))
 
-        It is the search by item number (``ItemFinder``) in the Components workspace, which lists a record's working version. Each hit has
-        its item id and its ``descriptor`` (``PN-1 - Axle``). The picklist of the component linking field is for publish only: it names no
-        workspace and has an option for every revision.
-        """
+    def matching(self, lookup: str, number: str) -> List[Candidate]:
+        """Every option of the picklist for this item number (one for each revision of the component). Raises ``FmApiError`` with the reason
+        when the item has no number or no option matches it."""
         if not number:
-            return "", t("data.fm_no_number")
-        workspace_id = self.workspace_id()
-        if not workspace_id:
-            return "", t("data.fm_no_components_workspace", workspace=COMPONENTS_WORKSPACE)
-        found = [Candidate(f"{WORKSPACES}/{workspace_id}/items/{hit['id']}", hit["descriptor"], "")
-                 for hit in ItemFinder(self._client, WORKING).search(workspace_id, number)]
-        log.info("Working versions for %s in workspace %s: %s", number, workspace_id, [f"{c.title} {c.link}" for c in found])
-        working = [c for c in found if number_matches(c.title, number)]
-        return _the_one(working, t("data.fm_no_working_version", number=number, count=len(found)),
-                        t("data.fm_many_working_versions", count=len(working), number=number, named=_named(working)))
-
-    def matching(self, lookup: str, number: str) -> Tuple[List[Candidate], str]:
-        """``(options, reason)``: every option of the picklist for this item number (one for each revision of the component), and why there
-        is none when there is none."""
-        if not number:
-            return [], t("data.fm_no_number")
+            raise FmApiError(t("data.fm_no_number"))
         data = self._client.get_json(f"{LOOKUPS}/{lookup}?offset=0&limit={CANDIDATES}&filter={quote(number)}&asc=&desc=")
         options: List[Candidate] = [Candidate(str(r["link"]), str(r.get("title") or ""), str(r.get("version") or ""))
                                     for r in dict_rows(dig(data, "items")) if r.get("link")]
         hits = [o for o in options if number_matches(o.title, number)]
         log.debug("Component options for %s: %s", number, [o.title for o in options])
-        return hits, t("data.fm_no_component", number=number, lookup=lookup, count=len(options))
-
-    def find(self, lookup: str, number: str) -> Tuple[str, str]:
-        """``(link, "")`` of the one option for this item number, else ``("", reason)``."""
-        hits, none = self.matching(lookup, number)
-        return _the_one(hits, none, t("data.fm_many_components", count=len(hits), number=number, named=_named(hits)))
+        if not hits:
+            raise FmApiError(t("data.fm_no_component", number=number, lookup=lookup, count=len(options)))
+        return hits

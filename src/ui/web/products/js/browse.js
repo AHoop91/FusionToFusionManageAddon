@@ -130,8 +130,7 @@
   /** A tab's button text: its name as the workspace gives it, and how many entries it holds. */
   function tabText(key) {
     const info = view.tabs[key];
-    const count = key === 'grid' && grid ? grid.rows.length : info.count;
-    return info.allowed && count ? info.label + ' (' + count + ')' : info.label;
+    return info.allowed && info.count ? info.label + ' (' + info.count + ')' : info.label;
   }
 
   /** The balls and a line in the middle of ``pane`` (across and down) while it is read. */
@@ -182,13 +181,21 @@
       panes[key] = pane;
     });
     if (panes.item) {
-      view.sections.forEach(function (section) { panes.item.appendChild(ns.itemSections.section(section, host.openLightbox)); });
+      view.sections.forEach(function (section) { panes.item.appendChild(ns.itemSections.section(section, host.openLightbox, loadPicture)); });
       if (!view.sections.length) panes.item.appendChild(el('p', 'pu-muted', t('item.no_fields')));
     }
     if (panes.grid) { if (grid) paintGrid(); else loading(panes.grid); }
     const wanted = panes[tab] && !buttons[tab].disabled ? tab : ORDER.find(function (key) { return panes[key] && !buttons[key].disabled; });
     tab = '';
     if (wanted) select(wanted);
+  }
+
+  /** A picture one of the product's image fields holds, asked for after the sections are drawn: ``done(src)`` is given the picture, or '' when it
+   *  could not be read (the field is then left empty). */
+  function loadPicture(link, done) {
+    host.ask('products_picture', { link: link }, function (answer) {
+      done(answer.ok && answer.result ? answer.result.image : '');
+    });
   }
 
   /** Read the product ``item`` and show it, on the tab the person was on when it is there. */
@@ -231,7 +238,6 @@
       if (!answer.ok) { if (panes.grid) failed(panes.grid, answer); return; }
       grid = answer.result;
       $('products-browse-design').hidden = !(grid.primary && grid.primary.link);   // opens the Primary Component's design
-      if (view && buttons.grid) buttons.grid.textContent = tabText('grid');
       paintGrid();
     });
   }

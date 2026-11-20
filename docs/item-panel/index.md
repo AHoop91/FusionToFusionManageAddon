@@ -54,6 +54,9 @@ If more than one item in the Items workspace has the component's item number, th
 
 The numbers in the screenshot match the table. Controls without a number appear only in some cases.
 
+!!! note "The Type needs a field with the ID TYPE"
+    The status line shows the item's Type, after its version and lifecycle state, only when the Items workspace has a field with the field ID `TYPE`. Without that field the line shows the version and lifecycle state alone, and nothing else is affected.
+
 | # | Control | What it does |
 |---|---|---|
 | 1 | Title and status line | The item's title, and a line with its version, lifecycle state and Type. |

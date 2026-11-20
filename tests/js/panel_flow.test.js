@@ -38,6 +38,11 @@ function openPanel() {
     reading: (step) => panel.reading.push(step.done ? 'done' : step.status), stopReading: () => panel.reading.push('stopped'),
   };
   ns.pubAddItems = { open() {} };
+  let found = [];
+  ns.pubMbom = {   // chooses the MBOM it is asked for, else the first; ``panel.mbomHost`` is what the panel gave it, to choose as the user would
+    init: (host) => { panel.mbomHost = host; }, show: (items, wanted) => { found = items; return items.some((i) => i.number === wanted) ? wanted : items.length > 1 ? null : (items[0] || {}).number || ''; },
+    idOf: (number) => (found.find((i) => i.number === number) || {}).id || '', answer() {}, offer() {}, loading() {}, reset() {}, forget() {},
+  };
   ns.diffReport = { open() {}, COLUMN_VALUE: 'v', COLUMN_FM: 'f' };
   ns.pubDetails = {
     init() {}, open() {}, setRoot() {}, setRootError() {}, handleComponent() {}, handleThumbnail() {},
@@ -66,6 +71,7 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   const reload = () => $('pub-refresh').click();   // the refresh button: reads everything again at once
   const openDesign = (rows) => {
     reply('summary', { data: SUMMARY });
+    reply('mbom', { data: [] });
     reply('structure', { data: { rows: rows, shared: false, fm_item_id: '9' } });
   };
   const firstLevel = () => [row('A', 'PN-A', { has_children: true }), row('P', 'PN-P', { status: 'new' })];
@@ -79,7 +85,10 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   panel.authChanged(true);
   assert.ok(lastSent('summary'), 'the summary is asked for');
   reply('summary', { data: SUMMARY });
-  assert.ok(lastSent('structure') && lastSent('thumbnail'), 'the structure and thumbnail follow the summary');
+  assert.ok(lastSent('mbom') && lastSent('thumbnail'), 'the MBOM lookup and the thumbnail follow the summary');
+  assert.ok(!lastSent('structure'), 'nothing is searched in Fusion Manage by item number before the MBOM lookup has answered');
+  reply('mbom', { data: [] });
+  assert.ok(lastSent('structure'), 'the Bill of Materials follows the lookup');
   assert.ok($('pub-publish').disabled, 'publish waits for the Bill of Materials');
   reply('structure', { data: { rows: [row('A', 'PN-A', { has_children: true }), row('B', 'PN-B', { status: 'new' }),
     row('S', '', { status: 'skipped', skip: 'no_number', has_children: true })], shared: false, fm_item_id: '9' } });
@@ -200,6 +209,28 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   assert.ok(!$('pub-bom').querySelector('.pub-cmp-tool-expand').disabled);
 });
 
+test('choosing another MBOM reads the Bill of Materials again, compared with that item', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  const panel = openPanel();
+  panel.w.document.getElementById('view-app').hidden = false;
+  panel.authChanged(true);
+  const reply = (slot, entry) => panel.handlers.load_publish_section({ ok: true, result: Object.assign({
+    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, stage: '' }, entry) });
+  const targets = (section) => panel.sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section).map(([, p]) => p.target);
+  reply('summary', { data: SUMMARY });
+  assert.deepStrictEqual(plain(targets('summary')), [''], 'the summary is the design\'s own');
+  reply('mbom', { data: [{ id: '1', number: 'M-1' }, { id: '2', number: 'M-2' }] });
+  assert.deepStrictEqual(plain(targets('structure')), [], 'several MBOMs: the Bill of Materials waits for the user to choose one');
+  panel.mbomHost.choose('M-1');
+  assert.deepStrictEqual(plain(targets('structure')), ['M-1'], 'the one chosen is what the Bill of Materials is read for');
+  reply('structure', { data: { rows: [row('P', 'PN-P', { status: 'new' })], shared: false, fm_item_id: '9' } });
+  panel.mbomHost.choose('M-2');
+  assert.deepStrictEqual(plain(targets('structure')), ['M-1', 'M-2'], 'another MBOM: the Bill of Materials is asked for again');
+  const ids = panel.sent.filter(([action, p]) => action === 'load_publish_section' && p.section === 'structure').map(([, p]) => p.target_id);
+  assert.deepStrictEqual(plain(ids), ['1', '2'], 'each is asked for by the id of its item, whatever its number becomes');
+  reply('structure', { data: { rows: [row('P', 'PN-P')], shared: false, fm_item_id: '9' } });
+  assert.deepStrictEqual(plain(targets('properties')), ['M-1', 'M-2'], 'and the design\'s own properties are compared with it');
+});
+
 test('the up-to-date check button says what the design and its lines come to', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
   /** The panel open on a design whose first level is ``rows``, with its own properties answered as ``compare`` and the details saying ``own``. */
   function checked(own, rows, compare) {
@@ -211,6 +242,7 @@ test('the up-to-date check button says what the design and its lines come to', {
     const reply = (slot, entry) => panel.handlers.load_publish_section({ ok: true, result: Object.assign({
       section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, stage: '' }, entry) });
     reply('summary', { data: SUMMARY });
+    reply('mbom', { data: [] });
     reply('structure', { data: { rows: rows, shared: false, fm_item_id: '9' } });
     reply('properties', { data: { compare: compare, count: 1 } });
     const button = doc.getElementById('pub-check');

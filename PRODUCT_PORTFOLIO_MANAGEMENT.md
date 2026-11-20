@@ -55,7 +55,7 @@ The Items workspace is not needed to use it.
 
 ### Workspace layout check
 
-`src/fm/workspace_schema.py` can check that a workspace has the tabs and fields a kind needs (`WorkspaceSchema` and `FieldNeed`). The Portfolio schema `PORTFOLIO_SCHEMA` is **empty right now**, so nothing is checked beyond the workspace id. When a workspace is validated, the add-in logs its layout ("Layout of workspace ...") so the real required fields can be taken from the log and added later.
+`src/fm/workspace_schema.py` can check that a workspace has the tabs and fields a kind needs (`WorkspaceSchema` and `FieldNeed`). The Portfolio kind has **no schema right now**, so nothing is checked beyond the workspace id. To add a check, give the kind a `WorkspaceSchema` in `WORKSPACE_KINDS`; the add-in then logs the layout of the workspace ("Layout of workspace ...") when it validates one, so the required fields can be taken from the log.
 
 ## 3. The Assign Product panel
 
@@ -206,7 +206,7 @@ Palette JS  ->  bridge message "products_*"  ->  Python action (registered in pr
 - The revision lookup for link chips in the form.
 
 **Not filled in**
-- `PORTFOLIO_SCHEMA` is empty, so there is no workspace layout check.
+- The Portfolio kind has no schema, so there is no workspace layout check.
 
 **Designed but not built: "Where used"**
 You asked for a check, on opening the panel, of whether the open design is already on a product, including in any Variants grid. The decisions so far:

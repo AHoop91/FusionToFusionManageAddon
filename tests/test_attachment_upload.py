@@ -33,6 +33,33 @@ class TabCountTests(unittest.TestCase):
         self.assertEqual((counts["files"], counts["bom"], counts["changelog"]), (6, 0, 0))
 
 
+class GridTabTests(unittest.TestCase):
+    class Client:
+        tenant = "acme"
+
+        def __init__(self, tab_names):
+            self.tab_names = tab_names
+
+        def get_json(self, path, accept="application/json"):
+            if path.endswith("/items/2/tabs"):
+                return {"tabs": [{"name": "PART_GRID", "totalCount": 3}, {"name": "PART_ATTACHMENTS", "totalCount": 1}]}
+            return [{"workspaceTabName": name, "name": name.title()} for name in self.tab_names]
+
+    def setUp(self):
+        TabService.forget()   # the names of a workspace's tabs are kept between reads
+
+    def tabs(self, names, **options):
+        return TabService(self.Client(names)).read("1", "2", set(), **options)
+
+    def test_the_grid_tab_is_added_with_its_count_only_when_asked_for(self):
+        names = ["ITEM_DETAILS", "PART_GRID"]
+        self.assertNotIn("grid", self.tabs(names))   # the Item panel does not show it
+        self.assertEqual(self.tabs(names, with_grid=True)["grid"], {"label": "Part_Grid", "count": 3, "allowed": True})
+
+    def test_a_workspace_without_a_grid_tab_has_none(self):
+        self.assertNotIn("grid", self.tabs(["ITEM_DETAILS"], with_grid=True))
+
+
 class ResolveHitsTests(unittest.TestCase):
     TWINS = [{"id": "1", "descriptor": "PN-001276 - End Cap Pulley Side"}, {"id": "2", "descriptor": "PN-001276 - End Cap Pulley Side"}]
 

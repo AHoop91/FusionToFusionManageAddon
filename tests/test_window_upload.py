@@ -13,6 +13,10 @@ from tests.hub_fixtures import auth_of, capture, config_of, items_workspace
 
 
 CONTEXT = capture(config_of())
+LINK = "/api/v3/workspaces/176/items/5"   # the Components record the Data Model says a part is linked to
+RECORDS = mock.Mock(return_value=LINK)
+REF = types.SimpleNamespace(model_id="m1")   # the design the part is in
+SUBJECT = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
 
 
 class _Stub(types.ModuleType):
@@ -78,7 +82,7 @@ class UploadEndTests(unittest.TestCase):
     def setUp(self):
         self.ui = _Ui()
         self.reloads = []
-        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Host(), config_of(), auth_of(), lambda: self.reloads.append(1))
+        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Host(), config_of(), auth_of(), lambda: self.reloads.append(1), records=RECORDS)
         self.job = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), lambda *a: None, lambda *a: True)
 
     def test_one_upload_at_a_time(self):
@@ -116,7 +120,7 @@ class UploadEndTests(unittest.TestCase):
 class UploadAnnounceTests(unittest.TestCase):
     def setUp(self):
         self.told = []
-        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Host(), config_of(), auth_of(), lambda: None, self.told.append)
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Host(), config_of(), auth_of(), lambda: None, self.told.append, records=RECORDS)
         self.job = UploadJob("Uploading STEP File", "STEP file", ".step", ("Find item", "Create STEP", "Upload"), lambda *a: None, lambda *a: True)
 
     def test_each_change_is_pushed_and_a_repeat_is_not(self):
@@ -169,7 +173,7 @@ class MakeTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.ui = _Ui()
-        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
+        self.upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
         self.subject = types.SimpleNamespace(item_number="PN/1")
 
     def test_the_file_is_read_then_its_folder_is_removed_and_the_upload_goes_on_at_the_send_stage(self):
@@ -221,7 +225,7 @@ class MakeTests(unittest.TestCase):
 
     def test_the_window_that_cannot_be_shown_does_not_leave_the_upload_under_way(self):
         window = _Window(RuntimeError("no window"))
-        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), window, config_of(), auth_of(), lambda: None)
+        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), window, config_of(), auth_of(), lambda: None, records=RECORDS)
         with mock.patch("threading.Thread") as thread:
             upload.from_number(_job(), self.subject)
         self.assertEqual(upload.status(), {"active": False})
@@ -239,7 +243,7 @@ class MakeTests(unittest.TestCase):
 
     def test_a_late_report_of_an_upload_that_ended_is_dropped(self):
         told = []
-        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, told.append)
+        upload = AttachmentUpload(self.ui, _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, told.append, records=RECORDS)
         upload._begin(_job(), 1)
         upload._end()
         upload._stage(_job(), 2, 80)
@@ -251,7 +255,7 @@ class FindItemTests(unittest.TestCase):
     def setUp(self):
         from src.ui import attachment_upload
         self.module = attachment_upload
-        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
         self.addCleanup(mock.patch.stopall)
 
     def _search(self, hits):
@@ -291,7 +295,7 @@ class PreviewTests(unittest.TestCase):
     def setUp(self):
         from src.ui import attachment_upload
         self.module = attachment_upload
-        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
         for name in ("FmClient", "AttachmentService"):
             mock.patch.object(attachment_upload, name).start()
         self.addCleanup(mock.patch.stopall)
@@ -301,7 +305,7 @@ class PreviewTests(unittest.TestCase):
         with mock.patch.object(self.upload, "_find_item", return_value=("242", "9")), \
                 mock.patch.object(self.upload, "_find_component", return_value=("176", "5")) as component:
             self.component = component
-            return self.upload.preview(destination, "PN-1", "PN-1.step", {"saved": 1}, CONTEXT)
+            return self.upload.preview(destination, SUBJECT, REF, "PN-1.step", {"saved": 1}, CONTEXT)
 
     def test_a_file_not_there_yet_would_be_attached_as_new(self):
         self.files.return_value = [{"name": "other.pdf", "version": 1, "updated": "u", "user": "x", "size": 3}]
@@ -350,8 +354,8 @@ class ContextTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks = _Ui(), _Queue()
         self.config = config_of()
-        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), self.config, auth_of(), lambda: None)
-        self.subject = types.SimpleNamespace(item_number="PN-1")
+        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), self.config, auth_of(), lambda: None, records=RECORDS)
+        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
 
     def _change_hub(self):
         self.config.hub_id = "hub2"
@@ -377,7 +381,7 @@ class ContextTests(unittest.TestCase):
         context = self.upload.begin_in_window(_job())
         self._change_hub()
         with mock.patch("threading.Thread") as thread:
-            self.upload.continue_in_window(_job(), context, self.subject, "item")
+            self.upload.continue_in_window(_job(), context, self.subject, "item", REF)
         self.assertEqual(thread.call_args.kwargs["args"][1].tenant, "acme")
 
     def test_settings_that_cannot_be_read_are_told_to_the_user_and_nothing_starts(self):
@@ -395,8 +399,8 @@ class ContextTests(unittest.TestCase):
 class WindowTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks, self.window = _Ui(), _Queue(), _Window()
-        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), self.window, config_of(), auth_of(), lambda: None)
-        self.subject = types.SimpleNamespace(item_number="PN-1")
+        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), self.window, config_of(), auth_of(), lambda: None, records=RECORDS)
+        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
 
     def _from_number(self):
         with mock.patch("threading.Thread"):
@@ -429,27 +433,27 @@ class WindowTests(unittest.TestCase):
 class FindThenMakeTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks = _Ui(), _Queue()
-        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), config_of(), auth_of(), lambda: None)
-        self.subject = types.SimpleNamespace(item_number="PN-1")
+        self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
+        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
         self.job = _job()
         self.upload._begin(self.job, 0)
 
     def test_the_item_found_is_made_into_a_file_on_the_ui_thread(self):
         with mock.patch.object(self.upload, "_find_item", return_value=("242", "9")), mock.patch.object(self.upload, "_make") as make:
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item")
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item", None)
             make.assert_not_called()   # posted, not run on the worker
             self.tasks.run()
         make.assert_called_once_with(self.job, CONTEXT, "242", "9", self.subject, "item")
 
-    def test_a_component_is_looked_for_in_the_components_workspace(self):
+    def test_a_component_is_looked_for_through_the_design_it_is_a_part_of(self):
         with mock.patch.object(self.upload, "_find_item") as item, mock.patch.object(self.upload, "_find_component", return_value=("176", "5")) as component:
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "component")
-        component.assert_called_once_with("PN-1", CONTEXT)
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, "component", REF)
+        component.assert_called_once_with(self.subject, REF, CONTEXT, None)
         item.assert_not_called()
 
     def test_an_item_that_is_not_found_ends_the_upload_with_the_reason(self):
         with mock.patch.object(self.upload, "_find_item", side_effect=LookupError("No item exists for PN-1.")):
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item")
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item", None)
         self.assertEqual(self.upload.status(), {"active": False})
         self.tasks.run()
         self.assertEqual(self.ui.messages, ["Could not attach a STEP file:\nNo item exists for PN-1."])
@@ -457,7 +461,7 @@ class FindThenMakeTests(unittest.TestCase):
     def test_the_add_in_stopping_ends_it_without_a_message(self):
         from src.core.cancel import Cancelled
         with mock.patch.object(self.upload, "_find_item", side_effect=Cancelled()):
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item")
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item", None)
         self.assertEqual(self.upload.status(), {"active": False})
         self.tasks.run()
         self.assertEqual(self.ui.messages, [])
@@ -471,7 +475,7 @@ class SendAndDoneTests(unittest.TestCase):
         self.sent, self.reloads = [], []
         self.host.send = lambda *args: self.sent.append(args)
         self.window = _Window()
-        self.upload = AttachmentUpload(self.ui, self.tasks, self.host, self.window, config_of(), auth_of(), lambda: self.reloads.append(1))
+        self.upload = AttachmentUpload(self.ui, self.tasks, self.host, self.window, config_of(), auth_of(), lambda: self.reloads.append(1), records=RECORDS)
         self.job = _job()
         self.upload._begin(self.job, 2)
         patcher = mock.patch.object(attachment_upload, "FmClient")
@@ -543,46 +547,46 @@ class SendAndDoneTests(unittest.TestCase):
 
 class WarmComponentTests(unittest.TestCase):
     def setUp(self):
-        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
+        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
 
     def test_a_failure_is_left_for_the_export_to_report(self):
         with mock.patch.object(self.upload, "_find_component", side_effect=LookupError("none")):
-            self.upload.warm_component("PN-1", CONTEXT)   # does not raise
+            self.upload.warm_component(SUBJECT, REF, CONTEXT)   # does not raise
 
     def test_the_add_in_stopping_is_not_an_error(self):
         from src.core.cancel import Cancelled
         with mock.patch.object(self.upload, "_find_component", side_effect=Cancelled()):
-            self.upload.warm_component("PN-1", CONTEXT)
+            self.upload.warm_component(SUBJECT, REF, CONTEXT)
 
 
 class FindComponentTests(unittest.TestCase):
     def setUp(self):
-        from src.ui import attachment_upload
-        self.module = attachment_upload
-        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), auth_of(), lambda: None)
-        mock.patch.object(attachment_upload, "FmClient").start()
-        self.service = mock.patch.object(attachment_upload, "ComponentService").start()
-        self.addCleanup(mock.patch.stopall)
+        self.records = mock.Mock(return_value=LINK)
+        self.upload = AttachmentUpload(_Ui(), _Queue(), _Host(), _Window(), config_of(), auth_of(), lambda: None, records=self.records)
 
-    def test_the_component_is_found_once_and_then_kept(self):
-        self.service.return_value.find_working.return_value = ("/api/v3/workspaces/176/items/5", "")
-        self.assertEqual(self.upload._find_component("PN-1", CONTEXT), ("176", "5"))
-        self.assertEqual(self.upload._find_component("PN-1", CONTEXT), ("176", "5"))
-        self.service.return_value.find_working.assert_called_once()
+    def test_the_record_is_found_once_and_then_kept(self):
+        self.assertEqual(self.upload._find_component(SUBJECT, REF, CONTEXT), ("176", "5"))
+        self.assertEqual(self.upload._find_component(SUBJECT, REF, CONTEXT), ("176", "5"))
+        self.records.assert_called_once_with(REF, "PN-1", None)
+
+    def test_the_part_is_asked_of_the_design_it_is_in(self):
+        other = types.SimpleNamespace(item_number="PN-2", part_number="Gear")
+        self.upload._find_component(other, REF, CONTEXT)
+        self.records.assert_called_once_with(REF, "Gear", None)
 
     def test_what_was_found_under_one_tenant_is_not_reused_under_another(self):
-        self.service.return_value.find_working.side_effect = [("/api/v3/workspaces/176/items/5", ""), ("/api/v3/workspaces/176/items/8", "")]
-        self.assertEqual(self.upload._find_component("PN-1", CONTEXT), ("176", "5"))
-        self.assertEqual(self.upload._find_component("PN-1", capture(config_of(tenant="other"))), ("176", "8"))
-        self.assertEqual(self.upload._find_component("PN-1", CONTEXT), ("176", "5"))   # each tenant keeps its own
+        self.records.side_effect = ["/api/v3/workspaces/176/items/5", "/api/v3/workspaces/176/items/8"]
+        self.assertEqual(self.upload._find_component(SUBJECT, REF, CONTEXT), ("176", "5"))
+        self.assertEqual(self.upload._find_component(SUBJECT, REF, capture(config_of(tenant="other"))), ("176", "8"))
+        self.assertEqual(self.upload._find_component(SUBJECT, REF, CONTEXT), ("176", "5"))   # each tenant keeps its own
 
-    def test_a_component_that_is_not_there_says_why_and_is_not_kept(self):
-        self.service.return_value.find_working.return_value = ("", "It is released.")
-        with self.assertRaisesRegex(LookupError, "It is released."):
-            self.upload._find_component("PN-1", CONTEXT)
+    def test_a_part_with_no_record_says_so_and_is_not_kept(self):
+        self.records.return_value = ""
+        with self.assertRaisesRegex(LookupError, "PN-1"):
+            self.upload._find_component(SUBJECT, REF, CONTEXT)
         with self.assertRaises(LookupError):
-            self.upload._find_component("PN-1", CONTEXT)
-        self.assertEqual(self.service.return_value.find_working.call_count, 2)
+            self.upload._find_component(SUBJECT, REF, CONTEXT)
+        self.assertEqual(self.records.call_count, 2)
 
 
 if __name__ == "__main__":

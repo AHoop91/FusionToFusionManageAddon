@@ -83,7 +83,7 @@
 
   /** The Items workspace is set on another tab, so draw the rows again when this one is opened. */
   function init() {
-    document.querySelector('.tab[data-tab="export"]').addEventListener('click', draw);
+    document.querySelector('.tab[data-tab="exports"]').addEventListener('click', draw);
   }
 
   /** The destinations in the shape Python saves. Without the Items workspace every one is the component. */

@@ -42,11 +42,11 @@ query ($componentId: ID!, $composition: BOMCompositionEnum!, $time: DateTime) {
 }
 """ % _PHYSICAL
 
-# The physical properties as the fields of a component, to add to a query (see ``model_service.publish_query``).
+# The physical properties as the fields of a component, to add to a query (see ``model_service._publish_query``).
 PHYSICAL_FIELDS = "primaryModel { %s }" % _PHYSICAL
 
 # Fusion Manage's weight field is in kilograms; the Data Model gives the mass in whatever unit it names (grams in a metric design). A unit is
-# looked up in the singular, so "grams" and "lbs" are found as "gram" and "lb".
+# looked up in the singular (see ``_singular``), so "grams" and "lbs" are found as "gram" and "lb".
 KILOGRAMS_PER = {"kilogram": 1.0, "kg": 1.0, "gram": 0.001, "g": 0.001, "milligram": 1e-6, "mg": 1e-6,
                  "pound": 0.45359237, "lb": 0.45359237, "ounce": 0.028349523125, "oz": 0.028349523125}
 
@@ -64,6 +64,11 @@ def _unit(node: Dict[str, Any]) -> str:
     return parts[-1].strip("[]()").lower() if len(parts) > 1 else ""
 
 
+def _singular(unit: str) -> str:
+    """A unit name without its plural ``s`` ("grams" is "gram", "lbs" is "lb")."""
+    return unit.rstrip("s")
+
+
 def _symbol(unit: str) -> str:
     """A unit's short form for display: "kilograms per cubic centimeter" is "kg/cm³" (a unit it does not know is shown as it is)."""
     text = unit.strip().lower().replace("^2", "²").replace("^3", "³")
@@ -74,7 +79,7 @@ def _symbol(unit: str) -> str:
     if word in _POWERS and rest:
         return _symbol(rest) + _POWERS[word]
     base = text.rstrip("²³")
-    return _SHORT.get(base.rstrip("s"), base) + text[len(base):]
+    return _SHORT.get(_singular(base), base) + text[len(base):]
 
 
 def _number(node: Any, kilograms: bool = False) -> Dict[str, str]:
@@ -91,7 +96,7 @@ def _number(node: Any, kilograms: bool = False) -> Dict[str, str]:
         unit = _symbol(unit_name)
         original = f"{value:.10g} {unit}".strip()
         if kilograms:
-            factor = KILOGRAMS_PER.get(unit_name.rstrip("s"))
+            factor = KILOGRAMS_PER.get(_singular(unit_name))
             if factor is None:
                 log.warning("Mass is in an unknown unit %r (value %s, shown as %r); sent as it is", unit_name, value, node.get("displayValue"))
             else:

@@ -113,7 +113,7 @@ class AssignTests(unittest.TestCase):
         self.workspace.return_value.fields.return_value = ([{"id": "PRIMARY", "link_lookup": "COMPONENTS"}], "")
         self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "link_lookup": "COMPONENTS"}], "")
         self.components = mock.Mock()
-        self.components.return_value.matching.return_value = ([Candidate(self.LINK, "PN-1 - Axle", "[REV:w]")], "")
+        self.components.return_value.matching.return_value = [Candidate(self.LINK, "PN-1 - Axle", "[REV:w]")]
         self.items = mock.Mock()
         self.sections = mock.Mock()
         self.sections.return_value.field_sections.return_value = {"PRIMARY": "/api/v3/workspaces/77/sections/5"}
@@ -267,7 +267,7 @@ class AssignTests(unittest.TestCase):
             Candidate("/o/15695", "PN-1 - Axle", "[REV:sB]"), Candidate("/o/15745", "PN-1 - Axle", "[REV:w]")]
 
     def assign_among(self, options):
-        self.components.return_value.matching.return_value = (options, "")
+        self.components.return_value.matching.return_value = options
         self.held(None)
         return self.assign()
 
@@ -289,14 +289,14 @@ class AssignTests(unittest.TestCase):
     def test_a_variant_takes_the_same_revision_from_the_columns_own_picklist(self):
         self.workspace.return_value.grid_fields.return_value = ([{"id": "VARIANT", "link_lookup": "OTHER"}], "")
         self.components.return_value.matching.side_effect = [
-            ([Candidate("/o/1", "PN-1 - Axle", "[REV:w]")], ""), ([Candidate("/g/9", "PN-1 - Axle", "[REV:w]"), Candidate("/g/8", "PN-1 - Axle", "[REV:A]")], "")]
+            [Candidate("/o/1", "PN-1 - Axle", "[REV:w]")], [Candidate("/g/9", "PN-1 - Axle", "[REV:w]"), Candidate("/g/8", "PN-1 - Axle", "[REV:A]")]]
         self.held({"link": "/api/v3/workspaces/9/items/1", "title": "PN-0"})
         self.assign("variant")
         body = self.client.send_json.call_args[0][2]
         self.assertEqual(body["rowData"][0]["value"], {"link": "/g/9"})
 
     def test_a_component_that_cannot_be_found_says_why(self):
-        self.components.return_value.matching.return_value = ([], "No component PN-1.")
+        self.components.return_value.matching.side_effect = FmApiError("No component PN-1.")
         with self.assertRaises(FmApiError) as caught:
             self.assign()
         self.assertEqual(str(caught.exception), "No component PN-1.")
@@ -481,23 +481,25 @@ class ActionTests(unittest.TestCase):
     def test_design_gives_the_data_model_details_and_the_revision_and_state_of_its_item(self):
         design = mock.Mock()
         design.describe.return_value = {"number": "PN-1", "name": "Axle", "thumbnail_url": "https://x/t.png"}
+        design.record_link.return_value = "/api/v3/workspaces/57/items/16997"
         self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         with mock.patch.object(product_actions, "ComponentService") as components:
             components.return_value.revision_and_state.return_value = ("B", "Released")
             self.reads.design({"token": "t1"})
             self.finish()
-        components.return_value.revision_and_state.assert_called_once_with("PN-1")
+        components.return_value.revision_and_state.assert_called_once_with("/api/v3/workspaces/57/items/16997")
         self.assertEqual(self.reads.status({"token": "t1"})["result"], {"number": "PN-1", "name": "Axle", "thumbnail_url": "https://x/t.png",
                                                                        "revision": "B", "state": "Released"})
 
     def test_design_with_no_item_in_fusion_manage_still_gives_its_details(self):
         design = mock.Mock()
         design.describe.return_value = {"number": "PN-1", "name": "Axle", "thumbnail_url": ""}
+        design.record_link.return_value = ""
         self.reads = ProductReads(self.config, lambda: object(), self.queued.append, design, contexts=CONTEXTS)
         with mock.patch.object(product_actions, "ComponentService") as components:
-            components.return_value.revision_and_state.return_value = ("", "")
             self.reads.design({"token": "t1"})
             self.finish()
+        components.return_value.revision_and_state.assert_not_called()
         result = self.reads.status({"token": "t1"})["result"]
         self.assertEqual((result["name"], result["revision"], result["state"]), ("Axle", "", ""))
 
@@ -560,24 +562,15 @@ class ActionTests(unittest.TestCase):
         self.assertEqual(answer["ok"], False)
 
     def test_a_product_is_read_for_browsing_as_the_item_panel_reads_an_item(self):
-        with mock.patch.object(product_actions, "ItemViewService") as service, mock.patch.object(product_actions, "granted", return_value={"view_items"}), \
-                mock.patch.object(product_actions, "TabService") as tabs:
-            service.return_value.read.return_value = {"title": "24-000002 - Universal Joint", "state": "Proposal", "tabs": {"item": {"label": "Product"}}}
-            tabs.return_value.labels.return_value = {"PART_GRID": "Product Variants"}
+        with mock.patch.object(product_actions, "ItemViewService") as service, mock.patch.object(product_actions, "granted", return_value={"view_items"}):
+            service.return_value.read.return_value = {"title": "24-000002 - Universal Joint", "state": "Proposal",
+                                                      "tabs": {"item": {"label": "Product"}, "grid": {"label": "Product Variants", "count": 1, "allowed": True}}}
             self.reads.view({"token": "t1", "item": "901"})
             self.finish()
-        service.return_value.read.assert_called_once_with("77", "901", {"view_items"})
+        service.return_value.read.assert_called_once_with("77", "901", {"view_items"}, with_grid=True, pictures=False)   # the Grid tab, and no pictures: the page asks for those itself
         service.forget.assert_called_once_with()   # the layout is read again, as the Item panel does on refresh
         result = self.reads.status({"token": "t1"})["result"]
         self.assertEqual((result["state"], result["stamp"], result["tabs"]["grid"]["label"]), ("Proposal", "stamp-1", "Product Variants"))
-
-    def test_a_product_has_no_grid_tab_when_the_workspace_lists_none(self):
-        with mock.patch.object(product_actions, "ItemViewService") as service, mock.patch.object(product_actions, "granted", return_value=set()),                 mock.patch.object(product_actions, "TabService") as tabs:
-            service.return_value.read.return_value = {"title": "x", "state": "", "tabs": {"item": {"label": "Product"}}}
-            tabs.return_value.labels.return_value = {"ITEM_DETAILS": "Product"}
-            self.reads.view({"token": "t1", "item": "901"})
-            self.finish()
-        self.assertEqual(list(self.reads.status({"token": "t1"})["result"]["tabs"]), ["item"])
 
     def test_the_window_is_told_which_way_it_was_opened(self):
         bridge = MessageBridge()

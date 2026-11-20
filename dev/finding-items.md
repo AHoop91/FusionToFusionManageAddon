@@ -20,8 +20,8 @@ All v3 search code is in one file, `src/fm/v3_search.py`: the query building, th
 | One number | `ItemFinder.search(ws, number)` in `src/fm/v3_search.py` | `itemDescriptor="<number>" AND (workspaceId=<ws>)`, 50 results | `WORKING` by default | `[{id, descriptor}]` | Item panel, `bom_levels` (`search_design`, `compare_level`), `attachment_upload`, `Dispatcher._created_before` |
 | Many numbers | `ItemFinder.find_many(ws, numbers)` | `(itemDescriptor="a" OR itemDescriptor="b") AND (workspaceId=<ws>)`, 50 a page, asks for the bulk media type so each hit carries its fields | `WORKING` | `{number key: [{id, descriptor, values}]}` | `ReadAhead` in publish, 10 numbers a search, 2 searches at once |
 | Add Items picker | `ItemSearchService.page` in `src/fm/v3_search.py`, query from `search_path` | Free text and filter groups, built by `build_query`; oldest first; 25 a page | `LATEST` by default | `{total, raw, items[]}` with a linkable row | `PickerReads.items` (`search_actions.py`), `add-items.js` |
-| A component's working record | `ComponentService.find_working(number)` in `src/fm/components.py`, which calls `ItemFinder.search` on the Components workspace | `itemDescriptor="<number>" AND (workspaceId=<Components workspace>)`, 50 results; keeps a title that is the number or starts with it and a separator | `WORKING` | `(link, "")` or `("", reason)` | `attachment_upload` |
-| A component in a picklist | `ComponentService.matching` and `find(lookup, number)` | `GET /api/v3/lookups/<lookup>?filter=<number>`, 25 options | all revisions | the options (one for each revision of a component) | Publish (`runner.py`) and the Assign Product wizard (`ProductService._options_of` in `products.py`) |
+| A component's record | Not a search: the Data Model says which record a part is linked to (`ItemNumbers.record_link`, see [manufacturing-data-model.md](manufacturing-data-model.md)) | n/a | n/a | the record's API link | `attachment_upload`, View product portfolio |
+| A component in a picklist | `ComponentService.matching(lookup, number)` | `GET /api/v3/lookups/<lookup>?filter=<number>`, 25 options | all revisions | the options (one for each revision of a component) | The Assign Product wizard (`ProductService._options_of` in `products.py`) |
 | Rows of a view | `TableauService.rows` | Not a search: a saved view of a workspace | n/a | rows | Products page, see [tableaus.md](tableaus.md) |
 
 ### Choosing among several matches
@@ -64,8 +64,7 @@ What the help pages document, and the code relies on:
 - The answer is not wrapped (`reportResult` is absent) and keeps the casing of the help page's example: `rowId` and `dmsId`, as below.
 - A picklist cell holds its text in both `value` and `label`; `formattedValue` was not seen on one.
 - A row has no entry for a field it leaves blank. The Variants Grid column was asked for and the row came back with no entry for it, so how v1 answers a Grid column that has rows is still **Assumed** (`V1Row.entries` keeps every entry, in case it comes once for each grid row).
-
-The first answer of each page is logged at info level (3000 characters, "v1 search of workspace ..."), so a new shape can be pasted here and marked Seen.
+- A search that matches nothing is answered `204` with no body (log of 2026-11-19, workspace 242, a filter on the derived fields `COMPONENT_LINEAGE_URN` and `COMPONENT_ASSET_URN`), not with a `totalResultCount` of 0. `V1SearchService.page` reads it as no rows. The same search on `COMPONENT_LINEAGE_URN` alone with the filter `IS` (15) answered 200 with the three items made from the design.
 
 ## What Fusion Manage answers
 
@@ -82,6 +81,6 @@ The v1 answer below is **Seen**. No v3 search answer is in the add-in log, so ev
 
 ## Known duplication
 
-Listed for a decision; nothing has been changed. The constants, the search path and the item link pattern that used to be written in several files are now in `v3_search.py` and `pages.py`, and `find_working` calls `ItemFinder`. Its query changed from free text to `itemDescriptor`; that has not been checked live.
+Listed for a decision; nothing has been changed. The constants, the search path and the item link pattern that used to be written in several files are now in `v3_search.py` and `pages.py`.
 
 - `find_many` leaves out a number with no hit and says the caller must ask again, and `read_ahead.found` returns `None` for the item to look for itself. That is a fallback to a second path.

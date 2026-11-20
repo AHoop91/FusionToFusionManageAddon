@@ -3,7 +3,8 @@
  * The Product Portfolio form and the Item panel both draw their sections with it (styled by ``shared/css/section.css``).
  *
  * ``make(title, content, options)`` returns the card (a <section>). ``content`` is the element of the section's rows (the card gives it
- * the class ``section-body``); ``options.folded`` starts it folded. A section with no ``title`` has no bar and cannot be folded.
+ * the class ``section-body``); ``options.folded`` starts it folded, and ``options.onOpen`` is called the first time it is open (a section that
+ * starts folded calls it when it is first unfolded). A section with no ``title`` has no bar and cannot be folded.
  */
 (function (ns) {
   'use strict';
@@ -18,16 +19,24 @@
       bar.type = 'button';
       bar.appendChild(el('span', '', title));
       bar.appendChild(ns.svg(['M6 9l6 6 6-6'], 20));
+      let opened = false;
       const fold = function (folded) {
         content.hidden = folded;
         card.classList.toggle('folded', folded);
         bar.setAttribute('aria-expanded', String(!folded));
+        if (!folded && !opened) {
+          opened = true;
+          if (options && options.onOpen) options.onOpen();
+        }
       };
+      card.appendChild(bar);
+      card.appendChild(content);
       fold(Boolean(options && options.folded));
       bar.addEventListener('click', function () { fold(!content.hidden); });
-      card.appendChild(bar);
+      return card;
     }
     card.appendChild(content);
+    if (options && options.onOpen) options.onOpen();   // no bar: always open
     return card;
   }
 

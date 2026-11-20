@@ -7,7 +7,7 @@ from src.config.workspace_models import WorkspaceKind
 from src.fm.client import FmApiError
 from src.fm.workspace import MAX_OPTIONS, OPTIONS_PAGE, WorkspaceService
 
-KIND = WorkspaceKind("items", "Items", "", required_permissions=("view_items", "add_items"))
+KIND = WorkspaceKind("items", required_permissions=("view_items", "add_items"))
 FIELD = "/api/v3/workspaces/242/views/1/fields/"
 
 

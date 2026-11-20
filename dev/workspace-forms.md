@@ -17,7 +17,7 @@ An edit of an existing product also calls `products_item` (`ProductService.read`
 
 | Piece | What it does |
 | --- | --- |
-| `SectionService.layouts(workspace_id, fresh=False)` | `{section id: section}` as the workspace lays it out: its `fields`, its `matrices`, its title and `collapsed`. Reads `/sections`, then each section's own link unless the list entry already holds `fields`. Kept for a few minutes (`TtlCache`) unless `fresh`. |
+| `SectionService.layouts(workspace_id, fresh=False)` | `{section id: section}` as the workspace lays it out: its `fields`, its `matrices`, its title and `collapsed`. Reads `/sections` once, asking for the bulk list (`BULK`), which holds every section with its fields and matrices. Kept for a few minutes (`TtlCache`) unless `fresh`. |
 | `SectionService.field_sections(workspace_id)` | `{field id: section link}`, for the write side (`item_request` groups values by section). Fields inside matrices count. The first section to name a field wins. Raises `FmApiError` when no section holds any field. |
 
 ## Field specs (`_spec`, `_kind`)
@@ -148,21 +148,22 @@ The validators link of a Grid column answers a **bare list** (seen, in an older 
 
 ### Sections of a workspace
 
-`GET /api/v3/workspaces/{id}/sections`, then each section's own link (`SectionService._details`). No real answer is in the log (they are not logged), so every key here is **Assumed** from `src/fm/sections.py` and `tests/test_sections.py`, `tests/test_workspace_form.py`, `tests/test_requests.py`. The form log does show real section titles (`Basic`, `Details`, `Milestones & Checklists`), so a title is present; which key held it was not recorded.
+`GET /api/v3/workspaces/{id}/sections` with `Accept: application/vnd.autodesk.plm.sections.bulk+json` (`SectionService._details`) answers every section with its fields and matrices in one list. Without that header the same path lists only each section's `link`, `urn` and `title`, so it is never asked without it. Seen in a real answer (workspace 242, Items): the keys below, marked **Seen**.
 
 | Key | Meaning |
 | --- | --- |
-| List: a bare list, or an object holding it under `sections` or `items` | Entries are links, or already hold `fields` |
-| `__self__` or `link` | The section's link; its last segment is the section id |
-| `title`, else `name` | The section's title. Tests use `title`. Both are read (`parse_form`). |
-| `fields[]` | References `{__self__ or link: ".../views/1/fields/TITLE"}`; the field id is the last segment |
-| `matrices[].fields` | Rows of references; a gap in a row is null |
-| `matrices[].columns`, `rows` | Names of the columns and rows: objects with `title` or `name`, or plain strings. Also tried: `columnNames`, `columnTitles`, `rowNames`, `rowTitles` (`COLUMN_KEYS`, `ROW_KEYS` in `item_view.py`). |
-| `collapsed` | A section starts folded only when it is `true` |
+| List | **Seen**: a bare list of sections, each with its fields and matrices |
+| `__self__` | **Seen**: the section's link; its last segment is the section id. (`urn` is there too.) |
+| `name` | **Seen**: the section's title. `description`, `type`, `sectionType`, `displayOrder` are there too. |
+| `fields[]` | **Seen**: references `{link, urn, title, type}`, `type` being `FIELD`; the field id is the last segment of `link`. A matrix is listed here too, as `{link, urn, type: "MATRIX"}` with no title. |
+| `matrices[]` | **Seen**: `{__self__, width, height, columnNames, rowNames, fields}` |
+| `matrices[].fields` | **Seen**: rows of field references, one list for each row |
+| `matrices[].columnNames`, `rowNames` | **Seen**: plain strings. `item_view.py` also tries other key names (`COLUMN_KEYS`, `ROW_KEYS`), which this answer does not need. |
+| `collapsed` | **Seen**: a section starts folded only when it is `true` |
 
 ### Rows of a Grid tab of an item
 
-`GET /api/v3/workspaces/{id}/items/{item}/views/13/rows` (`ProductService`, logged as "Grid of item"). Seen as an object.
+`GET /api/v3/workspaces/{id}/items/{item}/views/13/rows` (`ProductService`). Seen as an object.
 
 | Key | Meaning | Status |
 | --- | --- | --- |

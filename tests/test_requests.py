@@ -4,6 +4,7 @@ import unittest
 
 from src.config.workspace_models import StaticValue
 from src.fm.components import number_matches
+from src.fm.pivots import Derived
 from src.fm.sections import parse_sections
 from src.publish.bom_requests import bom_requests
 from src.publish.item_requests import field_entry, item_request
@@ -33,13 +34,24 @@ class ItemRequestTests(unittest.TestCase):
     def test_component_link_is_sent_on_create_and_added_to_an_item_that_lacks_it(self):
         link = "/api/v3/workspaces/57/items/15695"
         sections = {**SECTIONS, "COMPONENT": "/api/v3/workspaces/1/sections/10"}
-        created, _ = item_request("1", {"state": NEW}, [row("TITLE", "Axle", NEW)], [], sections, None, None, ("COMPONENT", link))
+        created, _ = item_request("1", {"state": NEW}, [row("TITLE", "Axle", NEW)], [], sections, None, None, ("COMPONENT", link, []))
         self.assertEqual(entries(created)["COMPONENT"], {"link": link})
-        lacking, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MATCH)], [], sections, None, {}, ("COMPONENT", link))
+        lacking, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MATCH)], [], sections, None, {}, ("COMPONENT", link, []))
         self.assertEqual(entries(lacking), {"COMPONENT": {"link": link}})
         holding, reason = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MATCH)], [], sections, None,
-                                       {"COMPONENT": {"link": link, "title": "PN-1"}}, ("COMPONENT", link))
+                                       {"COMPONENT": {"link": link, "title": "PN-1"}}, ("COMPONENT", link, []))
         self.assertIsNone(holding)
+
+    def test_the_derived_fields_of_the_linked_item_are_sent_in_the_section_the_pivot_names(self):
+        link = "/api/v3/workspaces/57/items/15695"
+        derived = [Derived("COMPONENT_ASSET_URN", "A1", "/api/v3/workspaces/1/sections/12"), Derived("COMPONENT_LINEAGE_URN", "L1", "/api/v3/workspaces/1/sections/12")]
+        sections = {**SECTIONS, "COMPONENT": "/api/v3/workspaces/1/sections/10"}
+        created, _ = item_request("1", {"state": NEW}, [row("TITLE", "Axle", NEW)], [], sections, None, None, ("COMPONENT", link, derived))
+        self.assertEqual(entries(created), {"TITLE": "Axle", "COMPONENT": {"link": link}, "COMPONENT_ASSET_URN": "A1", "COMPONENT_LINEAGE_URN": "L1"})
+        self.assertEqual([s["link"] for s in created["body"]["sections"]], ["/api/v3/workspaces/1/sections/10", "/api/v3/workspaces/1/sections/12"])
+        held = {"COMPONENT": {"link": link}, "COMPONENT_ASSET_URN": "A1", "COMPONENT_LINEAGE_URN": "L1"}
+        same, _ = item_request("1", {"state": FOUND, "item_id": "7"}, [row("TITLE", "Axle", MATCH)], [], sections, None, held, ("COMPONENT", link, derived))
+        self.assertIsNone(same)
 
     def test_component_option_matches_the_number_not_a_longer_one(self):
         self.assertTrue(number_matches("PN-000703", "pn-000703"))

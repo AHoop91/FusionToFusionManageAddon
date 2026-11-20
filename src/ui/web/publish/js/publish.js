@@ -13,13 +13,16 @@
   const jobs = ns.pubJobs;
   const bom = ns.pubBom;
   const check = ns.pubCheck;
+  const mbom = ns.pubMbom;
   function t(key, params) { return ns.i18n.t(key, params); }
 
   const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
-  const SECTIONS = ['structure', 'thumbnail'];    // loaded for the open design once its summary is in
-  const ALL_SECTIONS = ['properties', 'structure', 'thumbnail'];   // the design's own properties load last, once the Bill of Materials is in (for the up-to-date check), so they never slow it
+  const SECTIONS = ['thumbnail', 'mbom'];    // loaded for the open design once its summary is in
+  const AFTER_MBOM = ['structure'];          // what searches Fusion Manage by item number: not before the MBOM lookup (lineage and asset) has answered
+  const BOM_SECTIONS = ['properties', 'structure'];   // the design's own properties load last, once the Bill of Materials is in (for the up-to-date check), so they never slow it
 
   let currentSummary = null;   // summary of the open design
+  let target = '';             // the item number of the MBOM chosen in the dropdown: what the design is compared with and published to ("" is the design's own)
   let loadedKey = null;        // design the panel currently shows
   let loadedStamp = '';        // the hub and settings it was read under
   let lastLoad = 0;
@@ -58,7 +61,7 @@
     setThumbnail('', true);
     setSummary([
       line(t('publish.item_number'), s.item_number || '-'),
-      line(t('publish.part_number'), s.part_number || '-'),
+      line(t('publish.file_name'), s.file_name || '-'),
       line(t('publish.description'), s.description || '-'),
     ]);
   }
@@ -80,10 +83,15 @@
 
   // ---- Asking Python for sections --------------------------------------------------
 
+  /** The summary of the open design as the rest of the panel reads it: with the item number of the chosen MBOM when there is one. */
+  function summary() {
+    return target ? Object.assign({}, currentSummary, { item_number: target }) : currentSummary || {};
+  }
+
   /** Ask Python for a section (or a component); its answer comes back to ``handleSection``. */
   function request(slot, payload) {
     clearTimeout(timers[slot]);
-    bridge.send('load_publish_section', payload);
+    bridge.send('load_publish_section', Object.assign({ target: target, target_id: mbom.idOf(target) }, payload));   // the id: the item is read, not searched for by its number
   }
 
   /** Ask for a slot of the Bill of Materials (the lines under an assembly, the whole tree), remembering which reload it was asked in. */
@@ -101,9 +109,9 @@
     request(name, { section: name, force: force });
   }
 
-  /** Load each section the first time it is needed for the open design. */
-  function ensureSections() {
-    SECTIONS.forEach(function (name) {
+  /** Load each of ``names`` the first time it is needed for the open design. */
+  function ensureSections(names) {
+    names.forEach(function (name) {
       if (loaded.summary && !loaded[name] && !inflight[name]) loadSection(name);
     });
   }
@@ -121,12 +129,18 @@
     showLoading(false);
     if (entry.denied) { showDenied(entry.denied); return; }
     if (!entry.ok) { setThumbnail('', false); setSummary([ui.errorState(entry.message, function () { lastLoad = 0; refresh(true); })]); return; }
+    if (entry.key !== loadedKey) {   // another design: the MBOM chosen, and the numbers made, for the last are not its
+      target = '';
+      mbom.forget();
+    }
     loadedKey = entry.key;
     loadedStamp = entry.stamp || '';
     jobs.setStamp(loadedStamp);   // a publish names what the design was read under, and is refused if the hub or settings are no longer those
     loaded.summary = true;
     renderSummary(entry.data);
-    ensureSections();
+    ensureSections(SECTIONS);
+    mbom.loading();
+    bom.showLoading();   // the Bill of Materials area is not blank while the MBOM lookup is on its way
   }
 
   /** The design's own properties, compared with Fusion Manage. */
@@ -149,6 +163,33 @@
     if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
 
+  /** Another MBOM was chosen: its item number is what the Bill of Materials is read and compared for. */
+  function chooseTarget(number) {
+    target = number;
+    restartBom(false);
+    ensureSections(AFTER_MBOM);
+  }
+
+  /** The manufacturing bills of materials of the design. Fusion Manage is not searched for anything else until this has answered; when it
+   *  failed, the panel says why and waits for a retry. */
+  function answerMbom(entry) {
+    if (entry.ok) {
+      const chosen = mbom.show(entry.data, target);
+      if (chosen === null) {   // several, and none was chosen before: the Bill of Materials waits for the user to say which
+        target = '';
+        mbom.offer(bom.clear());
+        return;
+      }
+      target = chosen;
+      ensureSections(AFTER_MBOM);
+      return;
+    }
+    const failure = entry.message || t('publish.unknown_error');
+    mbom.reset();
+    check.fail(failure);
+    bom.showError(failure, function () { check.clearFailure(); loaded.mbom = false; loadSection('mbom'); check.update(); });
+  }
+
   function handleSection(r) {
     if (!r.ok) return;
     const entry = r.result;
@@ -163,6 +204,8 @@
     if (name === 'summary') { answerSummary(entry); return; }
     if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
     loaded[name] = true;
+    if (name === 'mbom') { answerMbom(entry); return; }
+    if (name === 'mbom_number') { mbom.answer(entry); return; }
     if (name === 'thumbnail') {   // no thumbnail (or none yet) just leaves the box empty
       const url = entry.ok ? entry.data.url : '';
       setThumbnail(url, false);
@@ -174,15 +217,12 @@
     }
   }
 
-  /** Read the open design again (all sections), skipping the cached copies when ``force``. ``now`` ignores the pause that merges triggers. */
-  function refresh(force, now) {
-    // Focus, sign-in and the button can all fire together; load once.
-    if (!now && Date.now() - lastLoad < 2000) return;
-    lastLoad = Date.now();
-    generation++;   // answers still on their way for the old contents are ignored
+  /** Read the Bill of Materials and its check again; answers still on their way for the old contents are ignored. The thumbnail and the MBOM lookup are left as they are. */
+  function restartBom(force) {
+    generation++;
     bom.reset();
-    Object.keys(timers).forEach(function (slot) { clearTimeout(timers[slot]); });
-    ALL_SECTIONS.forEach(function (name) {
+    Object.keys(timers).forEach(function (slot) { if (SECTIONS.indexOf(slot) < 0) clearTimeout(timers[slot]); });
+    BOM_SECTIONS.forEach(function (name) {
       loaded[name] = false;
       inflight[name] = false;
       forceNext[name] = !!force;
@@ -190,6 +230,21 @@
     bom.clear();
     check.reset();
     details.reset(force);
+  }
+
+  /** Read the open design again (all sections), skipping the cached copies when ``force``. ``now`` ignores the pause that merges triggers. */
+  function refresh(force, now) {
+    // Focus, sign-in and the button can all fire together; load once.
+    if (!now && Date.now() - lastLoad < 2000) return;
+    lastLoad = Date.now();
+    SECTIONS.forEach(function (name) {
+      clearTimeout(timers[name]);
+      loaded[name] = false;
+      inflight[name] = false;
+      forceNext[name] = !!force;
+    });
+    restartBom(force);
+    mbom.reset();
     loaded.summary = false;
     forceNext.summary = !!force;
     showLoading(true);
@@ -199,9 +254,15 @@
   // ---- Start ---------------------------------------------------------------------
 
   function init() {
-    bom.init({ summary: function () { return currentSummary || {}; }, ask: ask, changed: check.update });
+    mbom.init({
+      itemNumber: function () { return (currentSummary || {}).item_number || ''; },   // the design's own, whatever MBOM is chosen
+      // A new number: no item holds it yet, so there is no id.
+      check: function (number) { request('mbom_number', { section: 'mbom_number', target: number, target_id: '' }); },
+      choose: chooseTarget,
+    });
+    bom.init({ summary: summary, ask: ask, changed: check.update });
     check.init({
-      summary: function () { return currentSummary || {}; },
+      summary: summary,
       rows: bom.rows,
       structureLoaded: function () { return !!loaded.structure; },
       partial: bom.partial,
@@ -210,7 +271,7 @@
       request: request,
       // The design's row was opened: read its own properties the first time.
       onRootLoad: function () {
-        if (loaded.summary && !loaded.properties && !inflight.properties) loadSection('properties');
+        if (loaded.structure && !loaded.properties && !inflight.properties) loadSection('properties');   // the Bill of Materials is in, so the lookup has answered
       },
       onRootRetry: function () {
         loaded.properties = false;

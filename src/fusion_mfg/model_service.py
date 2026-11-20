@@ -1,4 +1,5 @@
-"""Read one section of a model from the Manufacturing Data Model.
+"""Read a model from the Manufacturing Data Model: its sections (summary, properties, Bill of Materials, thumbnail), and for a component the
+Fusion Manage item it is linked to and what a publish needs of several components at once.
 
 Sections are read separately and on demand, so the panel can show the summary first and fetch the rest only when it is needed.
 """
@@ -22,6 +23,7 @@ query ($input: [BulkModelsQueryInput!]!) {
   bulkModels(input: $input) {
     model {
       id
+      designItem { id name }
       component {
         id
         composition
@@ -88,7 +90,7 @@ PUBLISH_FIELDS = """
     lifecycle { itemUrn itemUrl }"""
 
 
-def publish_query(count: int, extra_fields: str = "") -> str:
+def _publish_query(count: int, extra_fields: str = "") -> str:
     """The query for ``count`` components (variables ``id0`` ... , ``composition`` and ``time``); ``extra_fields`` are added to each."""
     declared = "".join(f", $id{n}: ID!" for n in range(count))
     components = "\n".join(f"  c{n}: component(componentId: $id{n}, composition: $composition, time: $time) {{{PUBLISH_FIELDS}\n    {extra_fields}\n  }}"
@@ -172,13 +174,16 @@ def read_section(client: FusionGraphQlClient, section: str, model_id: str, saved
     if physical and section == PROPERTIES and summary.get("component_id"):   # the design's own component, with its physical properties
         return _read_component(client, summary, summary["component_id"], saved_at, physical)["properties"]
     query, parse = SECTIONS[section]
-    entry = {"modelId": model_id}
-    if saved_at:
-        entry["time"] = saved_at
-    return parse(client.query(query, {"input": [entry]}, label=section))
+    return parse(client.query(query, {"input": [{"modelId": model_id, **_at(saved_at)}]}, label=section))
+
+
+def _at(saved_at: str) -> Dict[str, str]:
+    """The ``time`` variable that pins a query to the version ``saved_at`` (none when it is empty: the latest is read)."""
+    return {"time": saved_at} if saved_at else {}
 
 
 def _by_name(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """The property rows ordered by name, ignoring case."""
     return sorted(rows, key=lambda row: row["name"].lower())
 
 
@@ -187,10 +192,7 @@ def _component_variables(summary: Dict[str, Any], component_id: str, saved_at: s
     composition = summary.get("composition", "")
     if not component_id or not composition:
         raise ValueError(t("data.mfg_no_component_id"))
-    variables: Dict[str, Any] = {"componentId": component_id, "composition": composition}
-    if saved_at:
-        variables["time"] = saved_at
-    return variables
+    return {"componentId": component_id, "composition": composition, **_at(saved_at)}
 
 
 def _component_in(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -237,11 +239,9 @@ def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any]
     composition = summary.get("composition", "")
     if not composition or not component_ids or not all(component_ids):
         raise ValueError(t("data.mfg_no_component_id"))
-    variables: Dict[str, Any] = {"composition": composition, **{f"id{n}": cid for n, cid in enumerate(component_ids)}}
-    if saved_at:
-        variables["time"] = saved_at
+    variables: Dict[str, Any] = {"composition": composition, **{f"id{n}": cid for n, cid in enumerate(component_ids)}, **_at(saved_at)}
     try:
-        data = client.query(publish_query(len(component_ids), PHYSICAL_FIELDS if physical else ""), variables,
+        data = client.query(_publish_query(len(component_ids), PHYSICAL_FIELDS if physical else ""), variables,
                             label=f"publish x{len(component_ids)}" + (" + physical" if physical else ""))
     except MfgApiError as exc:
         if exc.transient:

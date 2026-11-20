@@ -3,20 +3,17 @@
 ``POST /api/rest/v1/workspaces/{id}/items/search`` takes a search definition: the fields to return, a sort and filters, each naming the tab
 a field lives on (``fieldTypeID``). Reading a Grid tab's rows is the reason this exists (``GRIDVIEW`` fields).
 
-Every key of the request and answer is **Assumed** from the v1 help page; none has been seen in the add-in log. The page contradicts itself on
-casing (``rowID``/``rowId``) and on a ``reportResult`` wrapper, so this reads the casing of its example and raises when the answer has no
-``totalResultCount``, so the first live answer settles it.
+What a live call showed is in ``dev/finding-items.md``: the answer is not wrapped and uses the casing ``rowId``/``dmsId``, a search needs a
+sort, and a search that matches nothing is answered 204 with no body. How a Grid column that has rows is answered, and which key a text field
+keeps its text under (``formattedValue`` is not seen), are still **Assumed**. An answer without ``totalResultCount`` raises.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 from ..core.i18n import t
-from ..core.logging_setup import get_logger
 from ..core.shapes import as_dict, dict_rows, dig, whole
-from .client import FmApiError, FmClient
-
-log = get_logger("fm.v1_search")
+from .client import NO_CONTENT, FmApiError, FmClient
 
 SEARCH_PATH = "/api/rest/v1/workspaces/{workspace}/items/search"
 DEFAULT_PAGE_SIZE = 100
@@ -26,18 +23,14 @@ MAX_PAGES = 100        # most pages ``rows`` reads, so a search that never ends 
 # ``fieldTypeID``: the tab a field lives on.
 ITEM_DETAILS = 0
 GRIDVIEW = 2
-LOG_INFO = 3
 LIFECYCLE = 10
-ALL_FIELDS = 99        # search across tabs
+DESCRIPTOR_TAB = 15   # the tab of the item's descriptor (its field id is ``DESCRIPTOR``, as in the v1 help's example)
 
-# ``filterType.filterID`` for fields whose data type is Alpha Numeric (4): text, email, URL, a picklist that keeps its label.
+# ``filterType.filterID``. For fields whose data type is Alpha Numeric (4): text, email, URL, a picklist that keeps its label.
 CONTAINS = 2
-STARTS_WITH = 3
-ENDS_WITH = 4
-DOES_NOT_CONTAIN = 5
 IS = 15
-IS_BLANK = 20
-NOT_BLANK = 21
+# For a true/false field: it matches when the field is true, and takes no value (the help's own example of LATEST_RELEASE).
+IS_TRUE = 13
 
 AND = "AND"
 OR = "OR"
@@ -61,6 +54,7 @@ class Filter:
 
 @dataclass(frozen=True)
 class Sort:
+    """How the rows are ordered: by one field, ascending unless ``descending``."""
     field_id: str
     type_id: int = ITEM_DETAILS
     descending: bool = False
@@ -78,13 +72,14 @@ class V1Row:
 
 @dataclass(frozen=True)
 class V1Page:
+    """One page of an answer: how many items match in all, and the rows of this page."""
     total: int
     rows: List[V1Row]
 
 
-def build_definition(fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (), logic: str = AND,
-                     page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> Dict[str, Any]:
-    """The search definition to send. A single filter is sent with ``OR``, as the service requires. A ``sort`` is required: the service refuses a
+def build_definition(fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (), page: int = 1,
+                     page_size: int = DEFAULT_PAGE_SIZE) -> Dict[str, Any]:
+    """The search definition to send: every filter must match (``AND``), but a single filter is sent with ``OR``, as the service requires. A ``sort`` is required: the service refuses a
     search with none ("sortFieldsList is not specified", seen live)."""
     if page < 1 or not 0 < page_size <= MAX_PAGE_SIZE:
         raise ValueError(f"page {page} and page size {page_size} are not allowed")
@@ -93,7 +88,7 @@ def build_definition(fields: Sequence[Field], sort: Sequence[Sort], filters: Seq
     return {
         "pageNo": page,
         "pageSize": page_size,
-        "logicClause": OR if len(filters) == 1 else logic,
+        "logicClause": OR if len(filters) == 1 else AND,
         "fields": [{"fieldID": f.id, "fieldTypeID": f.type_id} for f in fields],
         "sort": [{"fieldID": s.field_id, "fieldTypeID": s.type_id, "sortDescending": s.descending} for s in sort],
         "filter": [{"fieldID": f.field_id, "fieldTypeID": f.type_id, "filterType": {"filterID": f.filter_id}, "filterValue": f.value}
@@ -126,27 +121,27 @@ class V1SearchService:
     """Searches one workspace through the v1 API. Call from a worker thread."""
 
     def __init__(self, client: FmClient) -> None:
-        self.client = client
+        self._client = client
 
     def page(self, workspace_id: str, definition: Dict[str, Any]) -> V1Page:
         """One page of the items that match ``definition`` (see ``build_definition``)."""
         workspace = str(workspace_id).strip()
         if not workspace.isdigit():
             raise FmApiError(t("data.fm_bad_address"))
-        result = self.client.send_json("POST", SEARCH_PATH.format(workspace=workspace), definition)
-        if definition.get("pageNo") == 1:   # the first answer of a search is the one worth reading; the rest repeat its shape
-            log.info("v1 search of workspace %s: %.3000s", workspace, result.data)
+        result = self._client.send_json("POST", SEARCH_PATH.format(workspace=workspace), definition)
+        if result.status == NO_CONTENT:   # seen live: a search that matches nothing is answered with no body at all
+            return V1Page(0, [])
         return parse_page(result.data)
 
     def rows(self, workspace_id: str, fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (),
-             logic: str = AND, page_size: int = DEFAULT_PAGE_SIZE, limit: Optional[int] = None) -> List[V1Row]:
-        """Every matching row (at most ``limit``), reading page after page until the total is reached.
+             page_size: int = DEFAULT_PAGE_SIZE) -> List[V1Row]:
+        """Every matching row, reading page after page until the total is reached.
 
         Raises when the search would need more than ``MAX_PAGES`` pages, and does not return a cut-off list."""
         found: List[V1Row] = []
         for number in range(1, MAX_PAGES + 1):
-            page = self.page(workspace_id, build_definition(fields, sort, filters, logic, number, page_size))
+            page = self.page(workspace_id, build_definition(fields, sort, filters, number, page_size))
             found.extend(page.rows)
-            if not page.rows or len(found) >= page.total or (limit is not None and len(found) >= limit):
-                return found if limit is None else found[:limit]
+            if not page.rows or len(found) >= page.total:
+                return found
         raise FmApiError(t("data.fm_v1_search_too_long", pages=MAX_PAGES))

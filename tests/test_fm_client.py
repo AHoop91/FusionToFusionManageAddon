@@ -114,10 +114,11 @@ class SendJsonTests(unittest.TestCase):
         self.assertIsNone(opened.call_args.args[0].get_header("Content-type"))
         self.assertIsNone(result.data)
 
-    def test_an_answer_that_is_not_json_reads_as_no_answer(self):
+    def test_an_answer_that_is_not_json_is_an_error(self):
         client, _auth = make_client()
         with mock.patch.object(client_module, "open_url", return_value=Answer(b"<html>", status=201)):
-            self.assertIsNone(client.send_json("POST", "/api/v3/x", {}).data)
+            with self.assertRaises(FmApiError):
+                client.send_json("POST", "/api/v3/x", {})
 
     def test_a_refusal_carries_what_fusion_manage_said_but_not_all_of_it(self):
         client, _auth = make_client()
@@ -135,6 +136,18 @@ class SendJsonTests(unittest.TestCase):
             with self.assertRaises(FmApiError):
                 client.send_json("POST", "/api/v3/x", {})
         self.assertEqual(opened.call_count, 1)
+
+
+class ReadableTests(unittest.TestCase):
+    def test_an_embedded_file_is_cut_short_and_the_fields_around_it_are_kept(self):
+        body = b'{"TITLE": "Axle", "IMAGE": "data:image/png;base64,' + b"A" * 5000 + b'", "NUMBER": "PN-1"}'
+        shown = client_module._readable(body)
+        self.assertIn('"TITLE": "Axle"', shown)
+        self.assertIn('"NUMBER": "PN-1"', shown)
+        self.assertLess(len(shown), 200)
+
+    def test_no_body_is_empty(self):
+        self.assertEqual(client_module._readable(None), "")
 
 
 class PutBytesTests(unittest.TestCase):

@@ -13,7 +13,6 @@ they run on a worker thread; the page polls ``get_item_view`` for the answer.
 import json
 import re
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -130,6 +129,7 @@ def _selected_component_number(entities: Any) -> str:
 
 
 def _active_selection() -> List[Any]:
+    """The entities selected now. UI thread."""
     selections = adsk.core.Application.get().userInterface.activeSelections
     return [selections.item(index).entity for index in range(selections.count)]
 
@@ -143,7 +143,7 @@ def _selected_part_number(from_menu: bool = False) -> str:
         return number
     if drawing_source.active_drawing() is not None:
         return drawing_source.top_level_number()[0]
-    design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+    design = _open_design()
     return str(design.rootComponent.partNumber or "").strip() if design is not None else ""
 
 
@@ -152,12 +152,17 @@ def _own_ref(part_number: str) -> Optional[DesignRef]:
     the selection holds no such component or it has none. UI thread."""
     if drawing_source.active_drawing() is not None:
         return None
-    design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+    design = _open_design()
     for entity in _active_selection():
         component = _component_of(entity)
         if component is not None and str(component.partNumber or "").strip() == part_number:
             return component_ref(component, design)
     return None
+
+
+def _open_design() -> Optional[adsk.fusion.Design]:
+    """The design open in Fusion, or None when the open document is not a design (a drawing, or none). UI thread."""
+    return adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
 
 
 def _active_ref() -> DesignRef:
@@ -195,15 +200,16 @@ class ItemPanel:
         self._ui = ui
         self._show_publish = show_publish
         self._choices = ItemChoices()   # the item picked where several share a number; the uploads use it too, so they agree with the panel
+        self._numbers = ItemNumbers()
         self._uploads = AttachmentUpload(ui, tasks, host, progress, config, auth, self._reload,
-                                         lambda status: bridge.push("upload_status", status), self._choices)   # the pages are told how far it has got
+                                         lambda status: bridge.push("upload_status", status), self._choices,   # the pages are told how far it has got
+                                         records=self._numbers.record_link)
         self._tasks = tasks
         self._host = host
         self._contexts = HubContexts(config, auth.session)
         self._auth = auth
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = _answer(seq=0)
-        self._numbers = ItemNumbers()
         self._saved = TtlCache(SAVED_STATE_SECONDS)   # when the document was last saved, by (document, modified, part number)
         self._export_refs: Dict[str, DesignRef] = {}   # part number -> where the Data Model finds it, as the window opened
         self._export_read = TtlCache()   # what Fusion says of what the Export window exports (when it was saved), read once per window
@@ -272,10 +278,6 @@ class ItemPanel:
         if stamp != shown:
             self._reload()
 
-    def _new_session(self) -> None:
-        """Another item is shown: end what was being read for the last one."""
-        self._session.replace()
-
     def _cancel_lookups(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """End the look-ups the page names (``requests``: the ids it gave): the tab they were for was left."""
         with self._lock:
@@ -286,34 +288,34 @@ class ItemPanel:
 
     def _where_used_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the parents of an item (or of one of those parents, given its ``up`` link); the answer is pushed to the page."""
-        workspace_id, item_id, up = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("up") or "")
+        workspace_id, item_id, up = self._workspace_id(payload), self._item_id(payload), str(payload.get("up") or "")
         return self._lookup(payload, lambda client: WhereUsedService(client).read(workspace_id, item_id, up), "where_used_result")
 
     def _files_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the item's files; the answer is pushed to the page."""
-        workspace_id, item_id, item_urn = self._workspace_id(payload), str(payload.get("item_id") or ""), str(payload.get("item_urn") or "")
+        workspace_id, item_id, item_urn = self._workspace_id(payload), self._item_id(payload), str(payload.get("item_urn") or "")
         return self._lookup(payload, lambda client: AttachmentService(client).files(workspace_id, item_id, item_urn), "files_result")
 
     def _workflows_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the associated workflows that reference the item; the answer is pushed to the page."""
-        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        workspace_id, item_id = self._workspace_id(payload), self._item_id(payload)
         return self._lookup(payload, lambda client: AssociatedWorkflowService(client).read(workspace_id, item_id), "workflows_result")
 
     def _bom_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the item's bill of materials; the answer is pushed to the page."""
-        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        workspace_id, item_id = self._workspace_id(payload), self._item_id(payload)
         view_id, flat = str(payload.get("view_id") or ""), bool(payload.get("flat"))
         return self._lookup(payload, lambda client: BomViewService(client).read(workspace_id, item_id, view_id, flat), "bom_result")
 
     def _changelog_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading one page of the item's change log (from ``offset``); the answer is pushed to the page."""
-        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        workspace_id, item_id = self._workspace_id(payload), self._item_id(payload)
         offset = int(payload.get("offset") or 0)
         return self._lookup(payload, lambda client: ChangeLogService(client).read(workspace_id, item_id, offset), "changelog_result")
 
     def _tab_counts_load(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading how many entries each tab of the item holds now (a tab's Refresh button); the answer is pushed to the page."""
-        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        workspace_id, item_id = self._workspace_id(payload), self._item_id(payload)
         return self._lookup(payload, lambda client: TabService(client).counts(workspace_id, item_id), "tab_counts_result")
 
     def _design_check(self, payload: Dict[str, Any], check: Callable[[ShownItem], Dict[str, Any]], result_action: str) -> Dict[str, Any]:
@@ -322,7 +324,7 @@ class ItemPanel:
         context = self._lookup_context(payload, result_action)
         if context is None:
             return {"started": True}
-        item_id = str(payload.get("item_id") or "")
+        item_id = self._item_id(payload)
         ref, number = _active_ref(), self._number
 
         def work(fm: FmClient) -> Dict[str, Any]:
@@ -335,9 +337,14 @@ class ItemPanel:
         return self._lookup(payload, work, result_action, context)
 
     @staticmethod
-    def _workspace_id(payload: Dict[str, Any]) -> str:
+    def _item_id(payload: Dict[str, Any]) -> str:
+        """The id of the item a request of the page is about."""
+        return str(payload.get("item_id") or "")
+
+    @classmethod
+    def _workspace_id(cls, payload: Dict[str, Any]) -> str:
         """The workspace id of a look-up (the item id is checked with it)."""
-        workspace_id, item_id = str(payload.get("workspace_id") or ""), str(payload.get("item_id") or "")
+        workspace_id, item_id = str(payload.get("workspace_id") or ""), cls._item_id(payload)
         if not (str(payload.get("request") or "") and workspace_id and item_id):
             raise ValueError(t("app.lookup_no_item"))
         return workspace_id
@@ -374,12 +381,14 @@ class ItemPanel:
         return {"started": True}
 
     def _lookup_result(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """The answer of the look-up the page names (``request``), as ``_lookup`` keeps it; the page asks while it has heard nothing."""
         request = str(payload.get("request") or "")
         with self._lock:
             state = self._lookups.get(request) or {"pending": False, "ok": False, "message": t("app.lookup_unknown"), "result": None}
             return {**state, "request": request}
 
     def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken, result_action: str, context: HubContext) -> None:
+        """A look-up, on its own thread: run ``work``, keep the outcome under ``request`` and push it to the page."""
         try:
             client = FmClient(context.settings, self._auth, token)
             state = {"pending": False, "ok": True, "message": "", "result": work(client)}
@@ -408,7 +417,7 @@ class ItemPanel:
 
     def open_selected(self) -> None:
         """Show the item of the selected component, or of the open design when nothing is selected. UI thread."""
-        self._find(_selected_part_number(), lambda subject: self._open(subject), fresh=True)
+        self._find(_selected_part_number(), self._open, fresh=True)
 
     def _follow_selection(self) -> None:
         """While the panel is open, show the item of a component just selected. A selection with no component leaves the panel as it is."""
@@ -459,6 +468,7 @@ class ItemPanel:
         threading.Thread(target=work, daemon=True).start()
 
     def dispose(self) -> None:
+        """End everything still being read, and stop following the selection. UI thread."""
         self._session.cancel()
         self._export.cancel()
         try:
@@ -468,12 +478,13 @@ class ItemPanel:
 
     def open_from_menu(self) -> None:
         """Show the item of the component the right-click menu was opened on. UI thread."""
-        self._find(_selected_part_number(from_menu=True), lambda subject: self._open(subject), fresh=True)
+        self._find(_selected_part_number(from_menu=True), self._open, fresh=True)
 
     def _open(self, subject: Subject, show: bool = True) -> None:
+        """Show the item of ``subject``; ``show`` opens the palette too (not when it follows a selection while open already). UI thread."""
         self._number = subject.item_number
         self._part = subject.part_number
-        self._new_session()   # what was being read for the item shown before is not wanted
+        self._session.replace()   # what was being read for the item shown before is not wanted
         self._start()
         if show:
             self._host.show()
@@ -499,7 +510,7 @@ class ItemPanel:
         cfg = self._context_of(payload).cfg
         if not (self._number and cfg and cfg.workspace_id):
             raise ValueError(t("app.no_item_shown"))
-        self._choices.set(cfg.workspace_id, self._number, str(payload.get("item_id") or ""))
+        self._choices.set(cfg.workspace_id, self._number, self._item_id(payload))
         self._start()
         self._host.send("item_changed")
         return {"chosen": True}
@@ -550,7 +561,7 @@ class ItemPanel:
         ``updated``) it answers ``stale``: name -> why. The same comparison as the Export window's (``export_freshness.compare``). UI thread."""
         if drawing_source.active_drawing() is not None:
             extensions = (".pdf", ".dwg", ".dxf")
-        elif adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
+        elif _open_design() is not None:
             extensions = (".step",)
         else:
             return {"stale": {}}
@@ -568,7 +579,8 @@ class ItemPanel:
         return {"stale": stale}
 
     def _upload_for_item(self, job: UploadJob, payload: Dict[str, Any]) -> Dict[str, Any]:
-        workspace_id, item_id = self._workspace_id(payload), str(payload.get("item_id") or "")
+        """Start ``job`` for the item the page shows. Raises ``ValueError`` when no item is shown or the context has changed. UI thread."""
+        workspace_id, item_id = self._workspace_id(payload), self._item_id(payload)
         if not self._number:
             raise ValueError(t("app.no_item_shown"))
         context = self._context_of(payload)   # the item shown was read under the settings that are active still
@@ -583,7 +595,7 @@ class ItemPanel:
             return {"publish": False, "actions": [{"action": "upload_drawing", "label": t("app.export_pdf_label"), "ext": ".pdf", "ready": ready},
                                 {"action": "upload_dwg", "label": t("app.export_dwg_label"), "ext": ".dwg", "ready": ready},
                                 {"action": "upload_dxf", "label": t("app.export_dxf_label"), "ext": ".dxf", "ready": ready}]}
-        if adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct) is not None:
+        if _open_design() is not None:
             return {"publish": True, "actions": [{"action": "add_step_file", "label": t("app.export_step_name"), "ext": ".step", "ready": True}]}
         return {"publish": False, "actions": []}   # neither a design nor a drawing is open: nothing to offer
 
@@ -620,7 +632,7 @@ class ItemPanel:
                 component = design.rootComponent if design is not None else None
             else:
                 component = next((c for c in map(_component_of, _active_selection()) if c is not None), None)
-                design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+                design = _open_design()
                 component = component or (design.rootComponent if design is not None else None)
             if component is None:
                 return "", ""
@@ -633,16 +645,13 @@ class ItemPanel:
 
     def _export_state(self, number: str) -> Dict[str, Any]:
         """The last save (``design_history.saved_state``) of what Export exports, numbered ``number``. Reading it holds Fusion's thread, so it is
-        done once per window, and timed in the log. UI thread."""
+        done once per window. UI thread."""
         document = adsk.core.Application.get().activeDocument
         key = (number, document.name if document is not None else "")
         kept = self._export_read.get(key)
         if kept:
             return kept
-        began = time.monotonic()
-        source = saved_state(number, _active_selection())
-        log.info("Export state of %s read on Fusion's thread in %.2fs", number, time.monotonic() - began)
-        return self._export_read.put(key, source)
+        return self._export_read.put(key, saved_state(number, _active_selection()))
 
     def warm_export_target(self, found: Callable[[str, str], None], thumbnail: Callable[[str, str], None]) -> None:
         """Read the item number of what Export will export ahead of the click, on a worker thread, so that the Data Model (about two seconds
@@ -676,7 +685,7 @@ class ItemPanel:
             except Exception as exc:  # noqa: BLE001 - the title does without a picture
                 log.info("Thumbnail of %s not read: %s", number, exc)
                 thumbnail(number, "")
-            self._uploads.warm_component(subject.item_number, context, cancel)
+            self._uploads.warm_component(subject, ref, context, cancel)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -713,8 +722,8 @@ class ItemPanel:
 
         def work() -> None:
             try:
-                item_number = self._numbers.resolve(ref, number, cancel).item_number
-                done(self._uploads.preview(destination, item_number, f"{safe_name(item_number)}{extension}", source, context, cancel))
+                subject = self._numbers.resolve(ref, number, cancel)
+                done(self._uploads.preview(destination, subject, ref, f"{safe_name(subject.item_number)}{extension}", source, context, cancel))
             except Cancelled:   # the window was closed: nobody waits for the answer
                 log.info("The look at the files for the export of %s was cancelled", number)
             except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches
@@ -736,11 +745,10 @@ class ItemPanel:
         context = self._uploads.begin_in_window(job)
         if context is None:
             raise ValueError(t("app.upload_busy"))
-        began = time.monotonic()
         pick(_active_selection())
-        self._find(number, lambda subject: self._uploads.continue_in_window(job, context, subject, destination), fail=self._uploads.fail_in_window,
-                   ref=self._export_ref(number))
-        log.info("Export began its search after %.2fs on Fusion's thread", time.monotonic() - began)
+        ref = self._export_ref(number)
+        self._find(number, lambda subject: self._uploads.continue_in_window(job, context, subject, destination, ref), fail=self._uploads.fail_in_window,
+                   ref=ref)
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""
@@ -761,6 +769,7 @@ class ItemPanel:
         threading.Thread(target=self._load, args=(seq, self._number, token, context), daemon=True).start()
 
     def _load(self, seq: int, number: str, token: CancelToken, context: HubContext) -> None:
+        """Read the item for read number ``seq``, on a worker thread, and settle the answer: the item, or why there is none."""
         try:
             view = self._read(number, token, context)
             view["stamp"] = context.stamp   # the page sends it with each look-up and upload for this item
@@ -793,6 +802,8 @@ class ItemPanel:
         self._tell_page("get_item_view", answer)
 
     def _read(self, number: str, cancel: CancelToken, context: HubContext) -> Dict[str, Any]:
+        """The view of the item numbered ``number``. Raises ``NoAccess``, ``ItemNotFound`` or ``SeveralItems`` for what the panel shows in
+        place of an item, and ``ValueError`` for what stops the read."""
         problem = context.items_problem   # the ribbon greys the command out too; this covers the other ways in
         if problem:
             raise ValueError(t("app.complete_in_preferences", problem=problem))
@@ -826,7 +837,7 @@ class ItemPanel:
 
 def _selects_root(entities: Any) -> bool:
     """Whether the root component of the open design is among the selected entities."""
-    design = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct)
+    design = _open_design()
     if design is None:
         return False
     root = design.rootComponent.entityToken

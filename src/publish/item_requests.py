@@ -4,21 +4,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..config.workspace_models import StaticValue
 from ..core.i18n import t
-from ..fm.client import LOOKUPS, WORKSPACES, last_segment
+from ..fm.client import LOOKUPS, VIEW, WORKSPACES, last_segment
+from ..fm.pivots import Derived
 from ..fm.items import display_text
 from ..sync.property_compare import FOUND, MISMATCH, NEW
-
-VIEW = "views/1"   # the view whose fields and sections an item is written through
 
 Row = Dict[str, Any]   # a compared property row: ``fm_field``, ``value``, ``status``
 Fields = List[Tuple[str, Any]]   # (field id, value) pairs, in the order they are sent
 Outcome = Tuple[Optional[Dict[str, Any]], str]   # (request, reason): a request, or None and why there is none
-
-
-
-def same_values() -> str:
-    """Why there is no request for an item whose values Fusion Manage holds already."""
-    return t("run.request_same_values")
 
 
 def _is_option(value: Any) -> bool:
@@ -31,9 +24,14 @@ def _given(value: Any) -> bool:
     return value is not None and str(value).strip() != ""
 
 
+def field_value(value: Any) -> Any:
+    """``value`` as a field takes it in a request: a picklist option is sent as a link to it."""
+    return {"link": value} if _is_option(value) else value
+
+
 def field_entry(scope: str, field_id: str, value: Any) -> Dict[str, Any]:
-    """One field of an item body. A picklist option is sent as a link to it. ``scope`` is the workspace's or the item's link."""
-    return {"__self__": f"{scope}/{VIEW}/fields/{field_id}", "value": {"link": value} if _is_option(value) else value}
+    """One field of an item body. ``scope`` is the workspace's or the item's link."""
+    return {"__self__": f"{scope}/{VIEW}/fields/{field_id}", "value": field_value(value)}
 
 
 def _by_section(workspace_id: str, fields: Fields, field_sections: Dict[str, str], item_id: str = "") -> Outcome:
@@ -57,10 +55,12 @@ def _by_section(workspace_id: str, fields: Fields, field_sections: Dict[str, str
 def holds(current: Any, value: Any) -> bool:
     """Whether the item's current value of a field is ``value`` (a picklist option is held as ``{"link": ...}``)."""
     if isinstance(value, dict):   # a link to an item, e.g. the component
-        return isinstance(current, dict) and current.get("link") == value.get("link")
-    if _is_option(value):
-        return isinstance(current, dict) and current.get("link") == value
-    return display_text(current).strip() == str(value).strip()
+        wanted = value.get("link")
+    elif _is_option(value):
+        wanted = value
+    else:
+        return display_text(current).strip() == str(value).strip()
+    return isinstance(current, dict) and current.get("link") == wanted
 
 
 def _of_status(rows: List[Row], status: str) -> Fields:
@@ -70,7 +70,7 @@ def _of_status(rows: List[Row], status: str) -> Fields:
 
 def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_values: List[StaticValue],
                  field_sections: Dict[str, str], files: Optional[Fields] = None,
-                 current: Optional[Dict[str, Any]] = None, component: Optional[Tuple[str, str]] = None) -> Outcome:
+                 current: Optional[Dict[str, Any]] = None, component: Optional[Tuple[str, str, List[Derived]]] = None) -> Outcome:
     """``(request, reason)`` for one item: create it (POST), update what differs (PATCH), or nothing (request None).
 
     ``fm`` is the comparison's Fusion Manage info (``state``, ``item_id``) and ``rows`` the compared property rows. ``field_sections`` maps
@@ -81,14 +81,18 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_
       ``current`` is its values as Fusion Manage holds them; without it every static value is sent.
     * ``files`` are (field id, value) pairs for image fields. They cannot be compared, so they are always sent: with a create, and with an
       update, which they make on their own when nothing else differs.
-    * ``component`` is the (field id, link) of the component linking field. It is sent like a static value, so an item that lacks the
-      link gets it.
+    * ``component`` is the (field id, link, derived fields) of the component linking field. The link and the derived fields Fusion Manage
+      takes from the linked item are sent like static values, so an item that lacks them gets them. Fusion Manage refuses an item that does not
+      hold the derived values, and names the section each is written in.
     """
     state = fm.get("state")
     files = list(files or [])
     fixed: Fields = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id]
     if component:
-        fixed.append((component[0], {"link": component[1]}))
+        component_field, link, derived = component
+        fixed.append((component_field, {"link": link}))
+        fixed += [(d.field_id, d.value) for d in derived]
+        field_sections = {**field_sections, **{d.field_id: d.section for d in derived}}
     if state == NEW:
         fields = _of_status(rows, NEW) + fixed + files
         method, url, item_id = "POST", f"{WORKSPACES}/{workspace_id}/items", ""
@@ -99,7 +103,7 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_
         fields = _of_status(rows, MISMATCH) + [(field_id, value) for field_id, value in fixed
                                                if current is None or not holds(current.get(field_id), value)]
         if not fields and not files:
-            return None, same_values()
+            return None, t("run.request_same_values")
         fields += files
         method, url = "PATCH", f"{WORKSPACES}/{workspace_id}/items/{item_id}"
     else:

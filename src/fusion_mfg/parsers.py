@@ -1,6 +1,7 @@
 """Turn Manufacturing Data Model answers into plain dicts and lists.
 
-Parsing is defensive: a missing, ``null`` or wrongly shaped branch yields an empty value rather than an error.
+The Data Model's GraphQL fields can be ``null`` (a component with no part number, a design with no thumbnail yet), so a missing or ``null``
+branch reads as an empty value. A branch of the wrong type reads as empty too (see ``core.shapes``), rather than as an error.
 """
 
 from typing import Any, Dict, List
@@ -9,10 +10,15 @@ from ..core.shapes import as_dict, as_list, dig
 from ..core.i18n import t
 
 
+def _model(data: Dict[str, Any]) -> Dict[str, Any]:
+    """The first model in a ``bulkModels`` result."""
+    models = dig(data, "bulkModels")
+    return as_dict(dig(models[0], "model")) if isinstance(models, list) and models else {}
+
+
 def _component(data: Dict[str, Any]) -> Dict[str, Any]:
     """The ``component`` of the first model in a ``bulkModels`` result."""
-    models = dig(data, "bulkModels")
-    return as_dict(dig(models[0], "model", "component")) if isinstance(models, list) and models else {}
+    return as_dict(_model(data).get("component"))
 
 
 def _text(node: Any) -> str:
@@ -33,9 +39,13 @@ def _item_number(component: Dict[str, Any]) -> str:
 
 
 def parse_summary(data: Dict[str, Any]) -> Dict[str, str]:
-    """The design's root component: its id and composition, item and part number, name and description."""
+    """The design's root component: its id and composition, item and part number, name and description, and the design's data file: its lineage
+    id (``urn:adsk.wipprod:dm.lineage:...``) and its file name."""
     component = _component(data)
+    design_item = as_dict(_model(data).get("designItem"))
     return {
+        "lineage": _id(design_item),
+        "file_name": str(design_item.get("name") or ""),
         "component_id": _id(component),
         "composition": str(component.get("composition") or ""),
         "item_number": _item_number(component),
@@ -66,6 +76,11 @@ def parse_component(data: Dict[str, Any]) -> Dict[str, Any]:
     return {"properties": _properties(dig(data, "component", "allProperties"))}
 
 
+def _sequence(relation: Dict[str, Any]) -> int:
+    """The position of a relation among its siblings (0 when the Data Model gives none)."""
+    return relation.get("sequenceNumber") or 0
+
+
 def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[str, Any]]:
     """Rebuild the BOM tree from flat relations, as rows in tree order with their ``level`` (0 = direct child).
 
@@ -78,7 +93,7 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
     result: List[Dict[str, Any]] = []
 
     def walk(parent: str, level: int, ancestors: frozenset) -> None:
-        for relation in sorted(children.get(parent, []), key=lambda r: r.get("sequenceNumber") or 0):
+        for relation in sorted(children.get(parent, []), key=_sequence):
             child = relation["toComponent"]
             child_id = _id(child)
             if child_id in ancestors:
@@ -88,7 +103,7 @@ def parse_structure(relations: List[Dict[str, Any]], root_id: str) -> List[Dict[
                            "id": child_id,
                            "has_children": bool(child.get("hasChildren")),   # so an assembly shows its chevron before its lines are read
                            "item_number": item_number,
-                           "sequence": relation.get("sequenceNumber") or 0,
+                           "sequence": _sequence(relation),
                            "name": _text(child.get("name")),
                            "part_number": _text(child.get("partNumber")) or item_number,
                            "description": _text(child.get("description")),

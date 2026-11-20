@@ -6,13 +6,14 @@ import unittest
 from unittest import mock
 
 from src.config.models import ConnectionSettings
-from src.config.workspace_models import WorkspaceConfig
+from src.config.workspace_models import ITEM_NUMBER_SOURCE, FieldMapping, WorkspaceConfig
 from src.core.cancel import Cancelled
 from src.publish import panel_sections
 from src.publish.panel_sections import PublishSections
 from tests.hub_fixtures import auth_of, capture
 
-SUMMARY = {"component_id": "R", "composition": "RELEASED", "item_number": "TOP", "part_number": "TOP", "name": "Top", "description": ""}
+SUMMARY = {"component_id": "R", "composition": "RELEASED", "item_number": "TOP", "part_number": "TOP", "name": "Top", "description": "",
+           "lineage": "urn:adsk.wipprod:dm.lineage:abc"}
 
 
 class Fixture:
@@ -25,10 +26,13 @@ class Fixture:
         self.gate = None   # a threading.Event a read waits for, so a test can look at a load that is still going
         self.config = config = mock.Mock(hub_id="hub1")
         config.effective_settings.return_value = ConnectionSettings(client_id="c", tenant="acme")
-        config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="242")
+        config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="242", mappings=[FieldMapping(ITEM_NUMBER_SOURCE, "NUMBER")])
         self.patches = [
             mock.patch.object(panel_sections, "FusionGraphQlClient"), mock.patch.object(panel_sections, "FmClient"),
             mock.patch.object(panel_sections, "ADDIN"),
+            mock.patch.object(panel_sections, "MbomService"),
+            mock.patch.object(panel_sections, "read_manage_item",
+                              return_value={"urn": "urn:adsk.plm:tenant.workspace.item:ACME.57.16997", "url": ""}),
             mock.patch.object(panel_sections, "publish_denial", return_value=denied),
             mock.patch.object(panel_sections, "read_section", side_effect=self.read),
             mock.patch.object(panel_sections, "search_design", return_value=[]),
@@ -67,6 +71,13 @@ class Fixture:
 
     def ask(self, section, **payload):
         return self.sections.request({"section": section, **payload})
+
+    def ask_loaded(self, section):
+        """Ask for a section after the summary, as the panel does, and wait for its answer."""
+        self.ask("summary")
+        self.wait("summary")
+        self.ask(section)
+        return self.wait(section)
 
 
 class SectionTests(unittest.TestCase):
@@ -206,6 +217,105 @@ class SectionTests(unittest.TestCase):
         done = self.fx.wait("summary")
         self.assertFalse(done["ok"])
         self.assertEqual(done["message"], "down")
+
+    def test_the_mbom_section_finds_the_items_made_from_the_open_design(self):
+        found = [{"id": "11", "number": "PN-1-A"}]
+        panel_sections.MbomService.return_value.find.return_value = found
+        done = self.fx.ask_loaded("mbom")
+        self.assertEqual((done["ok"], done["data"]), (True, found))
+        panel_sections.MbomService.return_value.find.assert_called_once_with("242", "urn:adsk.wipprod:dm.lineage:abc",
+                                                                             "/api/v3/workspaces/57/items/16997", "NUMBER")
+
+    def test_a_failed_mbom_search_is_reported_not_an_empty_list(self):
+        panel_sections.MbomService.return_value.find.side_effect = RuntimeError("no such field")
+        done = self.fx.ask_loaded("mbom")
+        self.assertEqual((done["ok"], done["message"]), (False, "no such field"))
+
+    def test_an_unmapped_item_number_is_reported_not_searched(self):
+        self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="242")
+        done = self.fx.ask_loaded("mbom")
+        self.assertFalse(done["ok"])
+        panel_sections.MbomService.return_value.find.assert_not_called()
+
+    def test_a_design_with_no_record_in_the_components_workspace_is_reported_not_searched(self):
+        panel_sections.read_manage_item.return_value = {"urn": "", "url": ""}
+        done = self.fx.ask_loaded("mbom")
+        self.assertFalse(done["ok"])
+        self.assertTrue(done["message"])
+        panel_sections.MbomService.return_value.find.assert_not_called()
+
+    def test_a_section_that_compares_the_design_uses_the_item_number_of_the_target(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure", target="MBOM-2")
+        self.fx.wait("structure")
+        self.assertEqual(panel_sections.search_design.call_args.args[2]["item_number"], "MBOM-2")
+        self.fx.ask("structure")
+        self.fx.wait("structure")
+        self.assertEqual(panel_sections.search_design.call_args.args[2]["item_number"], "TOP")
+
+    def test_a_target_with_an_item_id_is_read_by_the_id_not_searched_for_by_its_number(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure", target="MBOM-2", target_id="55")
+        done = self.fx.wait("structure")
+        self.assertEqual(done["target_id"], "55")
+        panel_sections.search_design.assert_not_called()
+        self.assertEqual(panel_sections.compare_design_bom.call_args.args[4], [{"id": "55"}])
+
+    def test_a_target_without_an_item_id_is_searched_for_by_its_number(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure", target="NEW-1")
+        self.fx.wait("structure")
+        panel_sections.search_design.assert_called_once()
+
+    def test_the_same_number_with_another_item_id_is_read_afresh(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        for item_id in ("55", "55", "56"):
+            self.fx.ask("structure", target="MBOM-2", target_id=item_id)
+            self.fx.wait("structure")
+        self.assertEqual([r for r in self.fx.reads if r[0] == "level"].__len__(), 2)
+
+    def test_another_target_is_read_afresh_and_the_same_one_is_kept(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        for target in ("A", "A", "B"):
+            self.fx.ask("structure", target=target)
+            self.fx.wait("structure")
+        self.assertEqual([r for r in self.fx.reads if r[0] == "level"].__len__(), 2)
+
+    def test_the_other_slots_of_the_design_are_left_alone_by_another_target(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("children", id="c1", item_number="PN-1")
+        self.fx.wait("children:c1")
+        self.fx.ask("structure", target="A")
+        self.fx.wait("structure")
+        self.assertTrue(self.fx.sections.status({"section": "children:c1"})["ok"])
+
+    def test_the_number_check_asks_whether_the_item_number_it_is_given_is_taken(self):
+        panel_sections.MbomService.return_value.number_taken.return_value = True
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("mbom_number", target="101-00001-B")
+        done = self.fx.wait("mbom_number")
+        self.assertEqual((done["ok"], done["data"], done["target"]), (True, {"taken": True}, "101-00001-B"))
+        panel_sections.MbomService.return_value.number_taken.assert_called_once_with("242", "101-00001-B")
+
+    def test_each_number_is_checked_afresh(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        for number in ("101-00001-B", "101-00001-C"):
+            self.fx.ask("mbom_number", target=number)
+            self.fx.wait("mbom_number")
+        self.assertEqual(panel_sections.MbomService.return_value.number_taken.call_count, 2)
+
+    def test_a_section_that_does_not_compare_the_design_ignores_the_target(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.assertEqual(self.fx.ask("thumbnail", target="A")["target"], "")
 
     def test_a_load_replaced_by_a_newer_one_leaves_the_slot_to_it(self):
         panel_sections.read_section.side_effect = [Cancelled(), dict(SUMMARY)]

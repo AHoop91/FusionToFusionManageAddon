@@ -55,7 +55,8 @@ A component item of the Components workspace carries the ids of the design it wa
 | Key | What it holds |
 | --- | --- |
 | `modelId`, `componentId` | The Data Model's ids, base64url encoded. `modelId` decodes to `model~<space>~<asset>` and `componentId` to `product~<space>~<product>`. The `modelId` of a design that is open in Fusion is the same string as `rootDataComponent.mfgdmModelId`. |
-| field `SPACE_COLLECTION_ID`, `PRODUCT_URN`, `ASSET_URN` | The `<space>` part, the `<product>` part of `componentId` and the `<asset>` part of `modelId`. |
+| field `SPACE_COLLECTION_ID`, `PRODUCT_URN` | The `<space>` part and the `<product>` part of `componentId` (**Seen**: the decoded ids match the two fields). |
+| field `ASSET_URN` | An id of the same kind (`gEDHlC30rZcLLOTVGJMj9m_aga`, ends in `_aga`) that is **not** the `<asset>` part of `modelId` (`TaN5RSVKKe7SGGd7KyKBt9_aga` for the same design). It is not in the Data Model (see below), so read it from this record: the Items workspace's derived field `COMPONENT_ASSET_URN` copies it. `ComponentService.asset`. |
 | field `LINEAGE_URN` | `urn:adsk.wipprod:dm.lineage:<id>`: the design's data file. It is the same string as `DesignRef.file_id` (the file's `dataFile.id`). |
 | `fusionTeamLink` | A web address ending `/g/data/<base64url of the lineage urn>?version=<n>`. |
 | field `DESIGN_THUMBNAIL` | `value.link` is a signed S3 address that expires after 300 s. |
@@ -64,6 +65,14 @@ A component item of the Components workspace carries the ids of the design it wa
 The model id does **not** contain the file's lineage id: the two are unrelated strings (the add-in logged both for one design), so a lineage id cannot be worked out from a model id. Go through the item's `LINEAGE_URN` instead.
 
 Fusion opens a design by its lineage id: `Application.data.findFileById(urn)` and `documents.open(file)`, on Fusion's own thread, and only for a file in the active hub. `ComponentService.design_file(link)` reads the lineage from a component item's link (the Lineage URN field; it raises when the field is missing, and does not decode `fusionTeamLink`) and `product_actions.open_design_file` opens it (the `products_design_file` and `products_open_file` actions). View product portfolio does not offer it, since the design is open there; a screen that needs it adds a menu entry that calls `openInFusion(product.component)` in `products-page.js` and the text "Open in Fusion". No query that goes from a model id to its file has been found.
+
+## Where the lineage id and the asset id are
+
+Checked in Data Explorer on 2026-11-19 against the live schema, for one saved design (**Seen**):
+
+- **Lineage id**: `model { designItem { id } }` is `urn:adsk.wipprod:dm.lineage:<id>`, the same string as the Components record's `LINEAGE_URN` and `DataFile.id`. The summary reads it (`parse_summary` gives it as `lineage`).
+- **Asset id** (`ASSET_URN` of the Components record): not in the Data Model. Looked at, with no match: every field of `Model`, `Component`, `DesignItem`, `Version` and `ModelAlternativeIdentifiers` (its only field, `f3dComponentId`, is Fusion's own component GUID), `Model.id`, `Component.id`, `allProperties` (only Type, description, tipPartNumber, partNumber, name, materialName), `Component.models` (one model, the same) and `version`/`latestVersion` (null). Fusion's API does not give it either: `DataComponent.id` and `DataComponent.versionId` answer "not supported for this hub version".
+- `Component.lifecycle { itemUrn }` is the address of the design's Components record (`urn:adsk.plm:tenant.workspace.item:<tenant>.<workspace>.<item>`), which is where the asset id is read (`manage_link`, then `ComponentService.asset`).
 
 ## Not the Data Model
 

@@ -189,6 +189,7 @@
       head.appendChild(th);
     });
     table.appendChild(head);
+    const texts = statusTexts();
     rows.forEach(function (r) {
       const tr = el('tr');
       const hasFm = r.fm_field && r.fm_value;
@@ -198,7 +199,6 @@
         c[1].setAttribute('data-label', c[0]);
         tr.appendChild(c[1]);
       });
-      const texts = statusTexts();
       const text = texts[r.status] || texts.unknown;
       const cell = el('td', 'pub-status pub-status-' + r.status);
       const mark = el('span', 'pub-mark');
@@ -274,16 +274,16 @@
       head.appendChild(thumb);
     }
     // The number is the title; the name (the design's description) is a sub heading under it.
-    const number = selected.part_number || selected.item_number || '';
+    const number = selected.item_number || selected.part_number || '';   // the item number is the master; the part number only stands in when there is none
     const name = selected.root ? selected.description : selected.name || selected.description;
     const text = el('div', 'pub-props-text');
     text.appendChild(el('h3', 'pub-props-title', number || selected.title));
     if (number && name) text.appendChild(el('p', 'pub-props-subtitle', name));
     head.appendChild(text);
-    const side = el('div', 'pub-props-side');   // the state pill, in the top right corner
     const state = changeState(compare);
     const pillOf = pills()[state];
     if (compare && pillOf) {
+      const side = el('div', 'pub-props-side');   // the state pill, in the top right corner
       const pill = el('span', 'pub-state pub-state-' + state);
       pill.appendChild(el('span', 'pub-state-dot'));
       pill.appendChild(el('span', 'pub-state-label', pillOf.text));
@@ -292,8 +292,8 @@
       pill.appendChild(info);
       pill.title = pillOf.title;
       side.appendChild(pill);
+      head.appendChild(side);
     }
-    if (side.childNodes.length) head.appendChild(side);
     return head;
   }
 
