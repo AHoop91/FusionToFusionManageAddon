@@ -398,12 +398,26 @@
       /** Does the MBOM have any line under it? */
       hasLines: function () { return mbom.children.length > 0; },
 
-      /** Quick add: make the MBOM a copy of the EBOM, every line with what is under it and the item numbers it has. The lines it had are replaced (one step of
-       *  the history, so undo gives them back). A line that was there and has the same number under the same assembly, with nothing under it, stays the line it was. */
+      /** Quick add: make the MBOM a copy of the EBOM, every line with what is under it, in the EBOM's order, with its quantity. A line Fusion Manage has with the same
+       *  item number under the same assembly stays that line (its line id, number and what is under it are kept, so nothing is removed and added again, and an
+       *  assembly keeps its own bill of materials); the lines it has that the EBOM does not are dropped, and the rest are new. One step of the history. */
       matchEbom: function () {
         return edit(function () {
           if (!ebom.children.length) throw fail('no_such_ebom');
-          mbom.children = ebom.children.map(function (c) { return fromEbom(c, true); });
+          function merge(mine, theirs) {
+            const pool = mine.filter(function (m) { return m.kind === KINDS.component || m.kind === KINDS.added; });
+            return theirs.map(function (e) {
+              const key = numberKey(e.number);
+              const at = key ? pool.findIndex(function (m) { return numberKey(m.number) === key; }) : -1;
+              if (at < 0) return fromEbom(e, true);
+              const node = pool.splice(at, 1)[0];
+              node.quantity = e.quantity || '1';
+              node.source = e.key;
+              if (!node.cut) node.children = merge(node.children, e.children);   // a line cut at the deepest level has lines that were not read: they stay unread
+              return node;
+            });
+          }
+          mbom.children = merge(mbom.children, ebom.children);
         });
       },
 
@@ -569,7 +583,7 @@
 
       /** What changed since the MBOM was read. ``changes`` maps a line's uid to its flags: ``{new}`` for a line with no BOM line yet, else any of
        *  ``moved`` (with ``oldParent``, a uid), ``quantity`` (with ``oldQuantity``) and ``reordered`` (its place among the siblings it kept
-       *  changed), each independent, and ``edgeId``, the line it has in Fusion Manage. ``removed`` lists the lines of the read MBOM that are gone
+       *  changed), each independent, and ``edgeId``, the line it has in Fusion Manage. ``held`` is the bill of materials Fusion Manage has for each item as read (an item's own lines are the same wherever it is used). ``identity`` gives a line removed and added again in one edit the number and line id of the line it stands for. ``removed`` lists the lines of the read MBOM that are gone
        *  and whose assembly is not (``{uid, number, parent, edgeId, itemId, quantity, sequence, cascade}``): ``cascade`` counts the lines under it that went
        *  with it. With no MBOM read, every line is new. */
       changes: function () {
@@ -583,6 +597,12 @@
         }
         const present = new Set();   // the uids in the tree now, from one walk
         (function walk(node) { node.children.forEach(function (c) { present.add(c.uid); walk(c); }); })(mbom);
+        const held = {};   // an item's number -> {child number -> {sequence, edgeId, quantity}}: the bill of materials Fusion Manage has for it, as read
+        (function lines(node) {
+          const mine = held[numberKey(node.number)] = held[numberKey(node.number)] || {};
+          node.children.forEach(function (c) { if (!mine[numberKey(c.number)]) mine[numberKey(c.number)] = { sequence: String(c.sequence || ''), edgeId: c.edgeId || '', quantity: c.quantity }; lines(c); });
+        })(baseline || { number: '', children: [] });
+        const identity = {};   // uid of a line added again -> the number and the line id the one it replaces has in Fusion Manage
         const claimed = {};   // old uid -> true: a line that was removed and added again in the same edit stays the line it was
         /** The line of the read MBOM that ``c`` (a line with no place in it) replaces: the same item removed from this assembly, with nothing under it. */
         function readded(c, parent) {
@@ -597,6 +617,7 @@
           const kept = [];   // the old places of the lines that were under this assembly before too, in the order they are now
           node.children.forEach(function (c) {
             const was = old[c.uid] || readded(c, node);
+            if (was && !old[c.uid]) identity[c.uid] = { sequence: String(was.node.sequence || ''), edgeId: was.node.edgeId || '' };
             if (!was) changes[c.uid] = { new: true };
             else {
               const flags = {};
@@ -635,7 +656,7 @@
           const n = old[id].node;
           removed.push({ uid: id, number: n.number, parent: old[id].parent, edgeId: n.edgeId || '', itemId: n.itemId || '', quantity: n.quantity, sequence: n.sequence || '', cascade: count(n) });
         });
-        return { changes: changes, removed: removed };
+        return { changes: changes, removed: removed, identity: identity, held: held };
       },
     };
     return api;

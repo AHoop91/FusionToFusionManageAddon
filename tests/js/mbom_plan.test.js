@@ -232,3 +232,39 @@ test('a number given to a line is the number it is sent with, and the others kee
   added.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, '');
   assert.strictEqual(plan(added).operations.find((o) => o.op === 'add').sequence, '101', 'a line added after it is numbered above it');
 });
+
+// TOP-M as Fusion Manage has it: A (line 1, with A1 and A2 under it, quantity 2), B (line 2, with B1), C (line 8)
+const withSubAssemblies = () => S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP-M', itemId: 'i0', children: [
+  { number: 'A', quantity: '2', itemId: 'iA', edgeId: 'eA', sequence: '1', children: [
+    { number: 'A1', quantity: '1', itemId: 'iA1', edgeId: 'eA1', sequence: '1', children: [] }, { number: 'A2', quantity: '1', itemId: 'iA2', edgeId: 'eA2', sequence: '2', children: [] }] },
+  { number: 'B', quantity: '1', itemId: 'iB', edgeId: 'eB', sequence: '2', children: [{ number: 'B1', quantity: '1', itemId: 'iB1', edgeId: 'eB1', sequence: '1', children: [] }] },
+  { number: 'C', quantity: '1', itemId: 'iC', edgeId: 'eC', sequence: '8', children: [] }] }, EBOM) });
+
+test('quick add over an MBOM that has sub-assemblies keeps their lines, so nothing is removed or added again; only a number that is not its place is sent', () => {
+  const s = withSubAssemblies();
+  s.matchEbom();
+  assert.strictEqual(s.root().children.map((c) => c.number).join(), 'A,B,C');
+  assert.strictEqual(s.root().children[0].edgeId, 'eA', 'a line that is there stays that line');
+  assert.strictEqual(s.root().children[0].children[0].edgeId, 'eA1', 'and so do the lines under it');
+  const p = plan(s);
+  assert.deepStrictEqual(p.problems, []);
+  assert.ok(!p.operations.some((o) => o.op === 'add' || o.op === 'remove'), 'no line is added or removed: ' + JSON.stringify(p.operations));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(p.operations)), []);
+});
+
+test('a line removed and added again keeps the number and the line id it had, so its request can name the line', () => {
+  const s = withSubAssemblies();
+  const c = s.root().children.find((n) => n.number === 'C');
+  s.remove([c.uid]);
+  s.addFromEbom(['0.2'], S.ROOT, '', true);   // C of the EBOM
+  s.setQuantity(s.root().children.find((n) => n.number === 'C').uid, '3');
+  const ops = plan(s).operations;
+  assert.deepStrictEqual(ops.map((o) => [o.op, o.number, o.sequence, o.edge].join(':')), ['update:C:8:eC']);
+  const t = withSubAssemblies();
+  const b = t.root().children.find((n) => n.number === 'B');
+  t.remove([b.uid]);
+  t.addFromEbom(['0.1'], S.ROOT, t.root().children[0].uid, true);   // B again, now before A
+  const moved = plan(t).operations;
+  assert.ok(!moved.some((o) => o.op === 'add' && o.parent === 'B'), 'B keeps its own lines: B1 is not added to it again: ' + JSON.stringify(moved));
+  assert.ok(moved.filter((o) => o.op === 'renumber').every((o) => o.edge && o.from_sequence !== ''), 'every renumber names the line it changes');
+});

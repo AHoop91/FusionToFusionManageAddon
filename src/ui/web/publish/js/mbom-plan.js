@@ -33,7 +33,8 @@
 
   /** The numbers the lines of the assembly tree under ``root`` are given (``changes`` is the structure's ``changes().changes``): ``sequences`` (uid -> number, for each
    *  line that has none yet or takes another), ``staged`` (the passage numbers) and ``rank`` (the order the lines that go at once are sent in). */
-  function numbering(root, changes) {
+  function numbering(root, changes, identity) {
+  const seqOf = function (c) { return identity[c.uid] ? identity[c.uid].sequence : c.sequence; };   // a line added again has the number of the line it replaces
   // The BOM line numbers. An assembly with any line that is new, moved in or out of order is numbered 1, 2, 3 in the tree's order, so the numbers
   // are the places of the lines and Fusion Manage lists them as the tree does. A line that has its place's number already is left alone. An assembly
   // with a line the user gave a number to (``pin``) keeps the numbers it has instead, each above the one before it: a line takes its own number, else the one it
@@ -56,18 +57,18 @@
         let number = at + 1;
         if (keeps) {
           if (pinned(c)) number = Math.max(Number(c.pin), previous + 1);
-          else if (!entering(c) && String(c.sequence).trim() && numeric(c.sequence) > previous) number = numeric(c.sequence);
+          else if (!entering(c) && String(seqOf(c)).trim() && numeric(seqOf(c)) > previous) number = numeric(seqOf(c));
           else number = previous + 1;
         }
         previous = number;
         given[c.uid] = number;
         if (entering(c)) sequences[c.uid] = String(number);
-        else if (!String(c.sequence).trim() || numeric(c.sequence) !== number) { sequences[c.uid] = String(number); moving.push(c); }
+        else if (!String(seqOf(c)).trim() || numeric(seqOf(c)) !== number) { sequences[c.uid] = String(number); moving.push(c); }
       });
       // A line goes once the number it takes is free, so one that takes the number of another goes after it (lines shifted down by an insert go from
       // the last one up). What is left is lines that take each other's numbers: they go through a number above all the others.
       const heldBy = {};   // number -> the uid of the line that holds it now
-      node.children.forEach(function (c) { if (!entering(c) && String(c.sequence).trim()) heldBy[numeric(c.sequence)] = c.uid; });
+      node.children.forEach(function (c) { if (!entering(c) && String(seqOf(c)).trim()) heldBy[numeric(seqOf(c))] = c.uid; });
       const left = moving.slice();
       let turn = 0;
       while (left.length) {
@@ -75,9 +76,9 @@
         if (at < 0) break;
         const c = left.splice(at, 1)[0];
         rank[c.uid] = turn++;
-        if (String(c.sequence).trim()) delete heldBy[numeric(c.sequence)];
+        if (String(seqOf(c)).trim()) delete heldBy[numeric(seqOf(c))];
       }
-      let above = node.children.reduce(function (high, c) { return Math.max(high, numeric(c.sequence), given[c.uid]); }, node.children.length) + 1;
+      let above = node.children.reduce(function (high, c) { return Math.max(high, numeric(seqOf(c)), given[c.uid]); }, node.children.length) + 1;
       left.forEach(function (c) { staged[c.uid] = String(above++); });
     }
     node.children.forEach(assign);
@@ -89,9 +90,10 @@
    *  has the number it has now (the one Fusion Manage gave it); a new line has the one it will be added with. */
   function lineNumbers(structure, changes) {
     const root = structure.root();
-    const given = numbering(root, changes.changes).sequences;
+    const identity = changes.identity || {};
+    const given = numbering(root, changes.changes, identity).sequences;
     const out = {};
-    (function walk(node) { node.children.forEach(function (c) { out[c.uid] = given[c.uid] !== undefined ? given[c.uid] : String(c.sequence === undefined || c.sequence === null ? '' : c.sequence); walk(c); }); })(root);
+    (function walk(node) { node.children.forEach(function (c) { out[c.uid] = given[c.uid] !== undefined ? given[c.uid] : String(identity[c.uid] ? identity[c.uid].sequence : c.sequence === undefined || c.sequence === null ? '' : c.sequence); walk(c); }); })(root);
     return out;
   }
 
@@ -122,7 +124,11 @@
     (function index(node) { node.children.forEach(function (c) { nodeAt[c.uid] = { node: c, parent: node }; index(c); }); })(root);
     function numberOf(parent) { return parent.uid === root.uid ? rootNumber : String(parent.number); }
 
-    const numbers = numbering(root, changes);
+    const identity = found.identity || {};
+    const held = found.held || {};
+    const seqOf = function (c) { return identity[c.uid] ? identity[c.uid].sequence : c.sequence; };
+    const edgeOf = function (c) { return identity[c.uid] ? identity[c.uid].edgeId : c.edgeId; };
+    const numbers = numbering(root, changes, identity);
     const sequences = numbers.sequences;
     const staged = numbers.staged;
     const rank = numbers.rank;
@@ -148,25 +154,30 @@
           const parent = numberOf(node);
           if (flags && flags.moved) {
             const was = nodeAt[flags.oldParent];
-            if (was) push({ op: 'remove', parent: numberOf(was.node), number: c.number, sequence: c.sequence || '', edge: flags.edgeId || '' });   // from the assembly it left
+            if (was) push({ op: 'remove', parent: numberOf(was.node), number: c.number, sequence: seqOf(c) || '', edge: flags.edgeId || '' });   // from the assembly it left
           }
           if (flags && (flags.new || flags.moved)) {
-            const line = { op: 'add', parent: parent, number: c.number, quantity: c.quantity, sequence: given };
-            if (c.kind === 'added') { line.link = c.link || ''; line.linkable = c.linkable || null; }   // it has its item already: only the line is added
-            push(line);
+            const there = (held[key(parent)] || {})[key(c.number)];   // the item has this line in its own bill of materials in Fusion Manage already
+            if (there) {   // (a copy of an assembly that was removed and added again): it is not added a second time, only its quantity brought in step
+              if (Number(there.quantity) !== Number(c.quantity)) push({ op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: there.quantity, sequence: there.sequence, edge: there.edgeId });
+            } else {
+              const line = { op: 'add', parent: parent, number: c.number, quantity: c.quantity, sequence: given };
+              if (c.kind === 'added') { line.link = c.link || ''; line.linkable = c.linkable || null; }   // it has its item already: only the line is added
+              push(line);
+            }
           } else if (given) {   // a line of Fusion Manage's that takes another number; its new quantity goes with it, in the one request that gives its number
-            const edge = (flags && flags.edgeId) || c.edgeId || '';
-            const line = { op: 'renumber', parent: parent, number: c.number, from_sequence: c.sequence || '', sequence: given, edge: edge };
+            const edge = (flags && flags.edgeId) || edgeOf(c) || '';
+            const line = { op: 'renumber', parent: parent, number: c.number, from_sequence: seqOf(c) || '', sequence: given, edge: edge };
             if (flags && flags.quantity) line.quantity = c.quantity;
             if (staged[c.uid]) {   // by a number nobody holds first; every line has been moved aside before the first one is given its own
-              passage.push({ op: 'renumber', parent: parent, number: c.number, from_sequence: c.sequence || '', sequence: staged[c.uid], edge: edge });
+              passage.push({ op: 'renumber', parent: parent, number: c.number, from_sequence: seqOf(c) || '', sequence: staged[c.uid], edge: edge });
               line.from_sequence = staged[c.uid];
               later.push(line);
             } else {
               direct.push({ rank: rank[c.uid], line: line });
             }
           } else if (flags && flags.quantity) {
-            push({ op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: flags.oldQuantity, sequence: c.sequence || '', edge: flags.edgeId || '' });
+            push({ op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: flags.oldQuantity, sequence: seqOf(c) || '', edge: flags.edgeId || edgeOf(c) || '' });
           }
         }
         walk(c);

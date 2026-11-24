@@ -122,6 +122,9 @@ def created_id(result: SendResult) -> str:
     return ""
 
 
+FACT_READERS = 5   # items read at once for the versions a request names
+
+
 class Dispatcher:
     """Sends item and Bill of Materials requests, remembering the ids of the items and what was accepted.
 
@@ -292,18 +295,30 @@ class Dispatcher:
             return self._ids[number]
 
     def _item_facts(self, item_id: str) -> Dict[str, str]:
-        """Tenant code and revision of an item, read from the item itself."""
+        """Tenant code and revision of an item, read from the item itself. The read is made outside the lock: held across a request (about a second), it made
+        every thread wait for each other's reads, so the items of a Bill of Materials were read one after another."""
         with self._lock:
-            if item_id not in self._facts:
-                data = as_dict(self._fm.get_json(f"/api/v3/workspaces/{self._workspace_id}/items/{item_id}"))
-                tenant = _TENANT.search(str(data.get("urn", "")))
-                self._facts[item_id] = {"tenant": tenant.group(1) if tenant else "", "version": str(data.get("version") or "")}
-            return self._facts[item_id]
+            known = self._facts.get(item_id)
+        if known is not None:
+            return known
+        data = as_dict(self._fm.get_json(f"/api/v3/workspaces/{self._workspace_id}/items/{item_id}"))
+        tenant = _TENANT.search(str(data.get("urn", "")))
+        facts = {"tenant": tenant.group(1) if tenant else "", "version": str(data.get("version") or "")}
+        with self._lock:
+            return self._facts.setdefault(item_id, facts)
+
+    def _read_facts(self, item_ids: List[str]) -> None:
+        """Read the items not read yet together (a request names the version of each item it holds), not one after another."""
+        missing = [i for i in dict.fromkeys(item_ids) if i not in self._facts]
+        if len(missing) > 1:
+            with ThreadPoolExecutor(max_workers=min(len(missing), FACT_READERS)) as pool:
+                list(pool.map(self._item_facts, missing))
 
     def _values(self, request: Dict[str, Any]) -> Dict[Key, str]:
         """The value of every marker in ``request`` (those left out make ``resolve`` say which are missing)."""
         values: Dict[Key, str] = {}
         found = markers(request)
+        self._read_facts([self._item_id(argument) for kind, argument in found if kind == VERSION])
         for kind, argument in found:
             if kind == ITEM:
                 values[(kind, argument)] = self._item_id(argument)
