@@ -7,7 +7,8 @@ again unless it is forced.
 The panel's "structure" is the first level of the Bill of Materials only. "children" is the level under one assembly (a slot of its own
 for each), and "tree" is the whole tree (Expand all, and publishing, which needs every line). "mbom" is the manufacturing bills of
 materials of the design that Fusion Manage already holds, found by the design's lineage id and the asset id of its Components record,
-and "mbom_number" whether an item number is taken by an item already (for a new one).
+and "mbom_number" whether an item number is taken by an item already (for a new one). "mbom_tree" is the whole Bill of Materials of the target
+item as one tree (down to ``MBOM_DEPTH`` levels, each line with its item id and line id), for the structure viewer; it needs the target's id.
 
 The panel may name one of those items as the ``target`` of the sections that compare the design with Fusion Manage (its own properties and
 its Bill of Materials): they then use the item number of the target, not the design's own. ``mbom_number`` is asked about the item number
@@ -28,6 +29,8 @@ from ..core.cancel import ADDIN, Cancelled, CancelToken
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..core.timing import Stopwatch
+from ..fm.bom import BomService
+from ..fm.bom_view import BOM_DEPTH
 from ..fm.client import FmClient
 from ..fm.components import manage_link
 from ..fm.mbom import MbomService
@@ -42,9 +45,10 @@ from ..config.hub_context import HubContext, HubContexts
 log = get_logger("panel_sections")
 
 SUMMARY, PROPERTIES, COMPONENT, STRUCTURE_VIEW, TREE, CHILDREN, MBOM = "summary", "properties", "component", "structure", "tree", "children", "mbom"
-MBOM_NUMBER = "mbom_number"
-PANEL_SECTIONS = (*SECTION_NAMES, TREE, CHILDREN, MBOM, MBOM_NUMBER)
-TARGETED = (PROPERTIES, STRUCTURE_VIEW, TREE, MBOM_NUMBER)   # sections about one item of Fusion Manage: they read the target's
+MBOM_NUMBER, MBOM_TREE = "mbom_number", "mbom_tree"
+MBOM_DEPTH = BOM_DEPTH   # levels of the target's Bill of Materials read for the structure viewer, as the Item panel reads its tree: a line at the last level shows no lines under it
+PANEL_SECTIONS = (*SECTION_NAMES, TREE, CHILDREN, MBOM, MBOM_NUMBER, MBOM_TREE)
+TARGETED = (PROPERTIES, STRUCTURE_VIEW, TREE, MBOM_NUMBER, MBOM_TREE)   # sections about one item of Fusion Manage: they read the target's
 PER_COMPONENT = (COMPONENT, "thumbnail", CHILDREN)   # sections with a slot for each component
 READS = {STRUCTURE_VIEW: LEVEL, TREE: STRUCTURE, CHILDREN: LEVEL}   # what the Data Model is asked for, where it is not the section's own name
 COMPONENT_KEYS = ("id", "item_number", "part_number", "description",
@@ -252,6 +256,12 @@ class PublishSections:
             return {"compare": compared, **({"count": len(properties)} if load.name == PROPERTIES else {})}
         if load.name in (MBOM, MBOM_NUMBER):
             return self._mbom(load, summary)
+        if load.name == MBOM_TREE:   # the item is read by its id: a design with no MBOM item has no tree, and the viewer starts from the EBOM
+            if not load.cfg.workspace_id:
+                raise ValueError(t("run.compare_no_workspace"))
+            if not load.target_id:
+                raise ValueError(t("run.section_no_mbom_item"))
+            return BomService(load.fm).tree(load.cfg.workspace_id, load.target_id, MBOM_DEPTH)
         if load.name == CHILDREN:
             c = load.component
             return compare_level(read(), c["item_number"], bool(c["skip"]), bool(c["compared"]), load.cfg, load.fm)

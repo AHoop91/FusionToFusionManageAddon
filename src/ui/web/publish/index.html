@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="css/bom.css">
   <link rel="stylesheet" href="css/details.css">
   <link rel="stylesheet" href="css/add-items.css">
+  <link rel="stylesheet" href="css/mbom-viewer.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
   <link rel="stylesheet" href="../shared/css/tooltip.css">
   <link rel="stylesheet" href="../shared/css/diff-report.css">
@@ -84,9 +85,15 @@
         <div class="pub-bom-pane">
           <div class="pub-pane-header">
             <span class="pub-pane-title" data-i18n="publish.bom_title">Bill of Materials</span>
+            <!-- The table (what Publish sends) or the structure viewer (EBOM beside MBOM, edits not sent yet); filled in by mbom-viewer.js. -->
+            <div class="pub-view-switch" role="group" aria-label="Bill of Materials view" data-i18n-attr="aria-label:publish.view_label">
+              <button id="pub-view-table" class="pub-view-button" type="button" aria-pressed="true" data-i18n="publish.view_table">Table</button>
+              <button id="pub-view-structure" class="pub-view-button" type="button" aria-pressed="false" data-i18n="publish.view_structure">Structure</button>
+            </div>
             <button id="pub-add-items" class="btn pub-pane-action" type="button" data-i18n="publish.add_items">Add Existing Items</button>
           </div>
           <section id="pub-bom" class="pub-bom"></section>
+          <section id="pub-structure" class="pub-structure" hidden></section>
         </div>
         <div id="pub-backdrop" class="pub-backdrop" hidden></div>
         <aside id="pub-detail" class="pub-detail" hidden>
@@ -175,12 +182,14 @@
   <script src="js/bom-tree.js"></script>
   <script src="js/bom-model.js"></script>
   <script src="js/bom-plan.js"></script>
+  <script src="js/mbom-structure.js"></script>
   <script src="js/bom-cells.js"></script>
   <script src="js/bom-filters.js"></script>
   <script src="js/bom-columns.js"></script>
   <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>
   <script src="js/add-items.js"></script>
+  <script src="js/mbom-viewer.js"></script>
   <script src="js/publish-jobs.js"></script>
   <script src="js/publish-check.js"></script>
   <script src="js/publish-bom.js"></script>

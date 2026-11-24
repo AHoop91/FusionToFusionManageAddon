@@ -33,6 +33,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | List the options of the Component linking picklist for a number | `ComponentService.matching` | `fm/components.py` | [finding-items.md](finding-items.md) |
 | Read the derived fields a linking field takes from the item it links to (sent with the link on publish) | `PivotService.derived` | `fm/pivots.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Read an item's BOM, its BOM tab, or where it is used | `fm/bom.py`, `fm/bom_view.py`, `fm/where_used.py` | `fm/` | |
+| Read an item's whole BOM as one tree, each line with its item id and line id (the `mbom_tree` section) | `BomService.tree`, `build_tree` | `fm/bom.py`, `publish/panel_sections.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Show an item as the Item tab does (header, sections, matrices) | `fm/item_view.py` | `fm/` | [workspace-forms.md](workspace-forms.md) |
 | Read an item's tabs and counts, and which the user may open | `TabService` | `fm/tabs.py` | [permissions.md](permissions.md) |
 | Read an item's files, change log or associated workflows | `fm/attachments.py`, `fm/change_log.py`, `fm/associated_workflows.py` | `fm/` | |
@@ -163,7 +164,9 @@ These are built but are not yet shared, so a second page cannot call them. Move 
 | Drag to reorder a list | `products/js/sortable.js` | [tableaus.md](tableaus.md) |
 | Show Fusion Manage's own markup safely | `item/js/safe-html.js` (`ns.safeHtml.render`, also used by the Products page) | |
 | The BOM table, tree, columns, filters and cells | `publish/js/bom-*.js`, `item/js/bom.js`, `item/js/tree.js` | |
+| The structure of an MBOM: the tree, its edits (move, copy, reorder, phantom and other assemblies, split into a new or an existing assembly, add, remove, quantity), undo and redo, and the EBOM and change comparisons | `publish/js/mbom-structure.js` (`ns.mbomStructure`) | |
 | The Add Items picker | `publish/js/add-items.js` | [finding-items.md](finding-items.md) |
+| Show the EBOM beside the editable MBOM (two panes, drag and drop, search, undo), or map an MBOM read from Fusion Manage to the EBOM by item number | `publish/js/mbom-viewer.js` (`ns.mbomViewer`), `ns.mbomStructure.mapByNumber`, `zoneOf` | [publish-item-flow.md](publish-item-flow.md) |
 | Files, change log, where used, workflows | `item/js/files.js`, `change-log.js`, `where-used.js`, `associated-workflows.js` | |
 | Settings: workspaces, mappings, exports, language, hub picker | `settings/js/` | |
 

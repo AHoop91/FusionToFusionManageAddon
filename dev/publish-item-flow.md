@@ -2,7 +2,7 @@
 
 This note follows one design through the Publish Item panel, from opening it to the last request sent to Fusion Manage. It says what the code does now, in the order it does it. The last section lists where the order is uneven, as a starting point for clean-up.
 
-Files: the panel is `src/ui/web/publish/js/publish.js` (loading), `publish-mbom.js` (the MBOM dropdown), `publish-bom.js` (the Bill of Materials and the Publish button) and `publish-jobs.js` (the progress dialog and the Jobs window). Python is `src/publish/panel_sections.py` (the sections), `src/ui/actions/publish_run_actions.py` (starting a run), `src/publish/runner.py` (a run) and `src/publish/sender.py` (the sending).
+Files: the panel is `src/ui/web/publish/js/publish.js` (loading), `publish-mbom.js` (the MBOM dropdown), `publish-bom.js` (the Bill of Materials and the Publish button), `mbom-viewer.js` and `mbom-structure.js` (the structure viewer, section 5) and `publish-jobs.js` (the progress dialog and the Jobs window). Python is `src/publish/panel_sections.py` (the sections), `src/ui/actions/publish_run_actions.py` (starting a run), `src/publish/runner.py` (a run) and `src/publish/sender.py` (the sending).
 
 ## 1. Opening the panel: the sections, in order
 
@@ -23,7 +23,8 @@ Other things the panel asks for later:
 - Choosing another MBOM: the Bill of Materials and the properties are cleared and read again for the new target (steps 4 and 5). The thumbnail and the MBOM lookup are kept.
 - Opening an assembly in the table: `children:<id>` reads and compares that level, matching by item number (there is no id for a child).
 - Details Panel: `component:<id>` and `thumbnail:<id>` for one row.
-- `tree`: the whole tree, read the same way as step 4. It runs when Publish is clicked and levels are still unread, or on Expand all.
+- `tree`: the whole tree, read the same way as step 4. It runs when Publish is clicked and levels are still unread, on Expand all, or when the structure viewer needs the EBOM (section 5).
+- `mbom_tree`: the target item's whole Bill of Materials as one tree (`BomService.tree`, `MBOM_DEPTH` = 10 levels as the Item panel reads its tree), read by the target's id with the working bias; each line has its item id and its line (edge) id. It needs a target id, so a design with no MBOM item is never asked. It raises (rather than leaving a hole) for a line whose parent or child has no item number, a line with no item id, an item inside itself, and a tree of more than 20000 lines; a line at the last level whose own lines the answer shows elsewhere is marked `cut`. It runs only for the structure viewer.
 
 ## 2. Clicking Publish (panel)
 
@@ -73,7 +74,15 @@ A failure in one item never stops the others.
 
 The manifest is saved (`root`, workspace, tenant, model, cancelled) and the phase becomes `done`, `error` or `cancelled`. A run with failed rows is announced with a message box unless a progress dialog is following it. A failed run is retried from its folder (`SendRun`): it sends the written requests again, skips what the send log holds, and refuses when the tenant is not the one it was made for.
 
-## 5. Where the order is uneven
+## 5. The structure viewer (not part of Publish yet)
+
+The Bill of Materials pane has a switch, Table | Structure (`pub-view-table`, `pub-view-structure`). The table is still what Publish uses and is the default; the Structure view is a second section beside it (`#pub-structure`) that only shows when chosen, so nothing in Publish changes. Edits in the viewer are kept while the table is shown, dropped when the Bill of Materials is read again (another MBOM, Refresh, a finished publish), and **not sent**: the viewer says so. Publish still sends what the table shows.
+
+What it does when opened (`ns.mbomViewer.refresh`): waits for the first level (step 4); reads the whole tree through `tree` (the rows of the table's tree, without the lines only Fusion Manage has) to make the EBOM; then, if the MBOM item has an id, asks `mbom_tree` and maps each line to an EBOM line by item number (`mapByNumber`: for a number that is in the EBOM more than once, the line under the same EBOM assembly first); a design with no MBOM item starts as a copy of the EBOM. Then `ns.mbomStructure.create` holds the MBOM and every edit goes through it (move, copy with Ctrl, add from the EBOM by drag, new assembly, merge, split, add existing items with the Add Items picker, quantity, remove, undo and redo). A refused edit shows its reason in the message line. Phantoms are off (`phantom: false`) until Settings name the Type field and its Phantom value. Drag and drop is made from mouse events (`pointerDown`, `pointerMove`, `pointerUp`), not the browser's own drag and drop, which Fusion's embedded browser does not carry through (`products/js/sortable.js` is pointer-based for the same reason; it only reorders one flat list, so the tree drag, with its into/before/after zones and the drop across panes, is its own).
+
+Not done: the publish plan from the structure (the old plan still drives Publish), Settings for the phantom fields, and properties or where-used for a line.
+
+## 6. Where the order is uneven
 
 These are facts from reading the code, not decisions.
 

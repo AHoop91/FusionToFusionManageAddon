@@ -376,7 +376,7 @@
   columns.onLayoutChange(function () { if (current && current.redraw) current.redraw(); });
 
   ns.bomTable = {
-    render: render, select: select,
+    render: render, select: select, foldTools: foldTools,   // foldTools: the Collapse all and Expand all pair, which the structure viewer shows too
     /** Show on each row what the check against Fusion Manage found (``states``: item number, lower case -> checking, ok or review); the ones with several items are the Duplicates filter. */
     markChecks: function (states) {
       marks = states || {};

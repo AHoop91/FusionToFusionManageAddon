@@ -220,12 +220,14 @@
       if (publishing) jobs.stopReading();
       ns.toast.show((publishing ? t('publish.tree_failed_publish', { message: entry.message || t('publish.unknown_error') }) : t('publish.tree_failed', { message: entry.message || t('publish.unknown_error') })), { tone: 'error' });
       draw(true);
+      host.treeDone(entry);
       return;
     }
     tree.setAll(entry.data.rows);
     ns.bomTable.openAllOnNextDraw();   // Expand all: everything opens
     draw(true);
     host.changed();
+    host.treeDone(entry);
     if (publishing) goOn();
   }
 
@@ -337,7 +339,7 @@
 
   /**
    * ``hostApi`` is the panel: ``summary()`` of the open design, ``ask(slot, payload)`` to request a section (its answer comes back
-   * to ``finishKids`` / ``finishTree``), and ``changed()`` to say what was read has changed.
+   * to ``finishKids`` / ``finishTree``), ``changed()`` to say what was read has changed and ``treeDone(entry)`` to say the whole tree was read (or failed).
    */
   function init(hostApi) {
     host = hostApi;
@@ -347,7 +349,7 @@
 
   ns.pubBom = {
     init: init, clear: clear, showLoading: showLoading, showError: showError, showFirstLevel: showFirstLevel, status: status,
-    finishKids: finishKids, finishTree: finishTree, treeStatus: treeStatus, reset: reset,
+    finishKids: finishKids, finishTree: finishTree, treeStatus: treeStatus, reset: reset, loadTree: loadTree,
     rows: function () { return rows; }, partial: function () { return tree.unloaded().length > 0; },
   };
 })(window.MfgUi);

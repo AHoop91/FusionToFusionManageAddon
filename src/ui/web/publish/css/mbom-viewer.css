@@ -1,0 +1,120 @@
+/* ==========================================================================
+   Publish Item panel: the structure viewer (mbom-viewer.js). EBOM and MBOM side by side; they stack when the panel is narrow.
+   Sections: the switch, the area, toolbar and form, panes, lines, badges and marks.
+   ========================================================================== */
+
+/* ---- The switch between the table and the structure (in the pane header) ---- */
+.pub-view-switch { display: inline-flex; margin-right: auto; margin-left: 12px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.pub-view-button { padding: 3px 12px; border: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.pub-view-button + .pub-view-button { border-left: 1px solid var(--border); }
+.pub-view-button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.pub-bom[hidden], .pub-structure[hidden] { display: none; }
+
+/* ---- The area ---- */
+.pub-structure { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; overflow: hidden; }
+.pub-structure [hidden] { display: none !important; }
+.sv-message { margin: 0; text-align: left; }
+.sv-wait { margin: 24px 0; text-align: center; }
+.sv-state { flex: 1; min-height: 0; overflow: auto; }
+
+/* ---- Toolbar and form ---- */
+.sv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sv-btn { padding: 3px 10px; font-size: 12px; }
+.sv-btn:disabled { cursor: not-allowed; }
+.sv-icon, .sv-act { flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; transition: color .15s, background-color .15s; }
+/* The toolbar buttons look like the table's own (.pub-cmp-tool): a white square with a thin border. */
+.sv-icon { box-sizing: border-box; width: 28px; height: 28px; border: 1px solid rgba(0, 0, 0, .23); background: #fff; color: rgba(0, 0, 0, .87); transition: background-color .15s, border-color .15s; }
+.sv-icon:hover:not(:disabled) { background: #eceef0; border-color: rgba(0, 0, 0, .6); color: rgba(0, 0, 0, .87); }
+.sv-icon:disabled { opacity: .45; }
+.sv-pair { display: inline-flex; }
+.sv-pair .sv-icon:first-child { border-radius: 4px 0 0 4px; }
+.sv-pair .sv-icon:last-child { border-radius: 0 4px 4px 0; border-left: 0; }
+.sv-act:hover:not(:disabled) { background: rgba(0, 0, 0, .07); color: var(--accent); }
+.sv-icon:disabled, .sv-act:disabled { opacity: .4; cursor: not-allowed; }
+.sv-icon:focus-visible, .sv-act:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sv-icon svg, .sv-act svg, .sv-grip svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sv-input { box-sizing: border-box; height: 28px; padding: 0 8px; border: 1px solid #cfd4d9; border-radius: 4px; font: inherit; font-size: 12px; outline: none; }
+.sv-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.sv-search-box { position: relative; display: inline-flex; align-items: center; }
+.sv-search-box > svg { position: absolute; left: 9px; pointer-events: none; fill: none; stroke: rgba(0, 0, 0, .5); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sv-search { width: 240px; height: 30px; padding: 0 10px 0 32px; border-color: rgba(0, 0, 0, .23); background: #fff; }
+.sv-search:hover { border-color: rgba(0, 0, 0, .6); }
+.sv-found { font-size: 12px; min-width: 56px; }
+.sv-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
+.sv-form-title { flex: 1 0 100%; margin: 0; font-size: 13px; }
+.sv-form-actions { display: flex; gap: 6px; }
+
+/* ---- Panes ---- */
+.sv-panes { flex: 1; min-height: 0; display: flex; gap: 12px; }
+.sv-pane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px; background: #fff; }
+.sv-pane-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #e9eaec; border-bottom: 2px solid rgba(0, 0, 0, .14); }
+.sv-pane-title { font-size: 13px; font-weight: 500; line-height: 1; letter-spacing: .02em; color: #3c4249; white-space: nowrap; }
+.sv-tree { flex: 1; min-height: 0; overflow: auto; outline: none; }
+.sv-footer { flex: none; }
+.sv-removed { margin: 0; font-size: 12px; }
+@container bompane (max-width: 640px) {
+  .sv-panes { flex-direction: column; }
+  .sv-pane { flex: 1 1 50%; }
+}
+
+/* ---- Lines ---- */
+.sv-row { --row-bg: #fff; position: relative; display: flex; align-items: center; gap: 0; min-height: 32px; padding: 0 8px 0 var(--indent, 0); border-bottom: 1px solid var(--border); font-size: 12px; cursor: default; user-select: none; }
+.sv-row:hover { --row-bg: #f5f5f5; background: var(--row-bg); }
+.sv-row.selected { --row-bg: #eaf2fb; background: var(--row-bg); }
+.sv-row.sv-hit .sv-pn { background: #fff3a3; }
+/* Not in the MBOM (red) or added (green): the bar and the icon change colour, the row stays as it is. */
+.sv-row-missing .pub-tree-icon { border-right-color: var(--danger); }
+.sv-row-missing .pub-tree-icon svg { stroke: var(--danger); }
+.sv-toggle { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.sv-toggle:disabled { cursor: default; visibility: hidden; }
+.sv-toggle svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sv-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-pn { font-weight: 600; }
+.sv-name::before { content: " - "; }
+.sv-qty { flex: none; box-sizing: border-box; width: 64px; padding: 1px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; font: inherit; text-align: right; }   /* the quantity is the last thing in every row, in a column of its own */
+/* The MBOM quantity looks like the input it is; the EBOM one is plain text. */
+button.sv-qty { border-color: #cfd4d9; background: #fff; cursor: text; }
+button.sv-qty:hover { border-color: var(--accent); }
+button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.sv-row > .sv-badge, .sv-row > .sv-matched, .sv-row > .sv-qty { margin-left: 6px; }   /* the row has no gap: the toggle and the icon sit edge to edge, as in the table */
+.sv-seq { flex: none; min-width: 14px; margin: 0 8px 0 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* An EBOM line that is all in the MBOM is quiet (it can still be dragged or added again). */
+.sv-row-matched .sv-label, .sv-row-matched .sv-qty, .sv-row-matched .sv-seq { color: var(--muted); }
+.sv-row-matched .sv-pn { font-weight: 500; }
+.sv-matched { flex: none; display: inline-flex; color: var(--ok); }
+.sv-matched svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.sv-qty-input { flex: none; box-sizing: border-box; width: 64px; height: 22px; padding: 0 6px; border: 1px solid var(--accent); border-radius: 4px; font: inherit; font-size: 12px; text-align: right; }
+/* The actions of a line: out of the way until the line is pointed at or has the keyboard (they stay focusable, so the keyboard reaches them). */
+/* They lie over the end of the label, just left of the quantity, with a fade so the text under them does not clash; nothing moves when they show. */
+.sv-actions { position: absolute; top: 0; bottom: 0; right: 72px; display: inline-flex; align-items: center; gap: 2px; padding: 0 2px 0 28px; background: linear-gradient(to right, transparent, var(--row-bg) 24px); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.sv-row:hover .sv-actions, .sv-row:focus-within .sv-actions { opacity: 1; pointer-events: auto; }
+.sv-act { width: 24px; height: 24px; }
+.sv-grip { display: inline-flex; align-items: center; width: 16px; color: var(--muted); cursor: grab; }
+.sv-more { display: block; width: 100%; padding: 6px 0; border: 0; border-top: 1px solid rgba(0, 0, 0, .06); background: transparent; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+
+/* ---- Badges and marks ---- */
+.sv-badge { flex: none; padding: 0 6px; border-radius: 8px; background: #eceff1; color: #455a64; font-size: 11px; line-height: 16px; white-space: nowrap; }
+.sv-badge-missing { background: #fde7e9; color: var(--danger); }
+.sv-badge-quantity, .sv-badge-chg-quantity { background: #fff0cc; color: #8a5a00; }
+.sv-badge-moved, .sv-badge-chg-moved, .sv-badge-chg-reordered { background: #e3f0fb; color: #0b5a8a; }
+.sv-badge-chg-new { background: #e3f6e8; color: #1c6b34; }
+.sv-badge-exceeded { background: #fde7e9; color: var(--danger); }
+.sv-badge-cut { background: #fde7e9; color: var(--danger); }
+.sv-badge-mfg { background: #ede7f6; color: #4527a0; }
+.sv-chg-new .pub-tree-icon { border-right-color: var(--ok); }
+.sv-chg-new .pub-tree-icon svg { stroke: var(--ok); }
+.sv-chg-moved, .sv-chg-reordered { box-shadow: inset 3px 0 0 var(--accent); }
+.sv-chg-quantity { box-shadow: inset 3px 0 0 #e0a100; }
+.sv-ghost { position: fixed; z-index: 1000; max-width: 280px; padding: 4px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; border: 1px solid var(--accent); border-radius: 4px; background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, .2); font-size: 12px; opacity: .92; }
+.sv-ghost[data-mode="copy"]::before { content: "+ "; color: var(--accent); font-weight: 600; }
+.sv-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.sv-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.sv-drop-into { background: #dcecf9; outline: 1px dashed var(--accent); outline-offset: -2px; }
+
+.sv-icon .sv-plus { stroke: var(--accent); stroke-width: 2.4; }   /* the plus on the box icon's corner */
+
+/* The info icon at the right of a pane header, with its tip (the same look as the Settings tabs' info icons). */
+.sv-info { position: relative; margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: #8a9099; color: #fff; font-size: 10px; font-weight: 700; font-style: normal; cursor: help; }
+.sv-info:hover, .sv-info:focus-visible { background: var(--accent); outline: 0; }
+.sv-tip { display: none; position: absolute; top: 20px; right: -8px; z-index: 30; width: 260px; padding: 8px 10px; border-radius: 6px; background: #2b3340; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.4; text-align: left; text-transform: none; letter-spacing: 0; white-space: normal; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
+.sv-info:hover .sv-tip, .sv-info:focus .sv-tip { display: block; }

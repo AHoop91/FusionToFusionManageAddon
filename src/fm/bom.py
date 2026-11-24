@@ -13,6 +13,7 @@ from ..core.logging_setup import get_logger
 from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig
 from .client import WORKSPACES, FmApiError, FmClient
+from .components import link_ids, manage_link
 from .items import display_text
 from .pages import field_id
 
@@ -73,9 +74,10 @@ def _edge_id(edge: Dict[str, Any]) -> str:
 
 
 def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
-    """``{parent item number: [{"number", "name", "quantity", "sequence", "edge_id"}]}`` from a bulk BOM answer.
+    """``{parent item number: [{"number", "name", "quantity", "sequence", "edge_id", "item_id"}]}`` from a bulk BOM answer.
 
-    ``sequence`` is the line's BOM item number, ``edge_id`` the id Fusion Manage gives the line (to change or delete it). The quantity is the
+    ``sequence`` is the line's BOM item number, ``edge_id`` the id Fusion Manage gives the line (to change or delete it) and ``item_id`` the id
+    of the item the line holds (the last part of the node's urn; empty when the urn is not an item's). The quantity is the
     edge field with one of ``QUANTITY_FIELDS`` as its id, else the first numeric edge field. A line whose parent or child is not a node with
     an item number is left out.
     """
@@ -90,8 +92,47 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
         if not parent or not child:
             continue
         children[parent].append({"number": child, "name": name_of(titles[child_urn]), "quantity": _quantity(edge.get("fields")),
-                                 "sequence": "" if sequence is None else str(sequence), "edge_id": _edge_id(edge)})
+                                 "sequence": "" if sequence is None else str(sequence), "edge_id": _edge_id(edge), "item_id": link_ids(manage_link(child_urn, ""))[1]})
     return children
+
+
+TREE_NODE_CAP = 20000   # lines of one tree: an item used in many places has its lines in each, so a tree can be far larger than the answer
+
+
+def build_tree(lines: Dict[str, List[Dict[str, str]]], data: Any, root_id: str, depth: int, cap: int = TREE_NODE_CAP) -> Dict[str, Any]:
+    """The tree of the item ``root_id`` from ``parse_bom``'s lines and the answer they came from. The lines of an item are those of its number, so an
+    item in several places has them in each (a tree of more than ``cap`` lines raises). Only ``depth`` levels are made; a line at the last one whose
+    own lines the answer shows elsewhere is marked ``cut`` (its lines were not read), not left to look empty. Raises ``FmApiError`` for an answer with
+    no node for the item, a line (edge) whose parent or child has no item number, a line with no item id, or an item inside itself."""
+    nodes = dict_rows(as_dict(data).get("nodes"))
+    root = next((n for n in nodes if link_ids(manage_link(str(dig(n, "item", "urn") or ""), ""))[1] == root_id), None)
+    if root is None:
+        raise FmApiError(t("data.fm_bom_no_root"))
+    numbers = {str(dig(n, "item", "urn") or ""): number_of(str(dig(n, "item", "title") or "")) for n in nodes}
+    for edge in dict_rows(as_dict(data).get("edges")):   # parse_bom leaves such a line out: here that would be a tree with a hole in it
+        if not numbers.get(str(edge.get("parent") or "")) or not numbers.get(str(edge.get("child") or "")):
+            raise FmApiError(t("data.fm_bom_edge_no_number"))
+    title = str(dig(root, "item", "title") or "")
+    count = [0]
+
+    def under(number: str, level: int, path: frozenset) -> List[Dict[str, Any]]:
+        out = []
+        for line in lines.get(number, []):
+            if not line["item_id"]:
+                raise FmApiError(t("data.fm_bom_line_no_item", number=line["number"]))
+            if line["item_id"] in path:
+                raise FmApiError(t("data.fm_bom_loop", number=line["number"]))
+            count[0] += 1
+            if count[0] > cap:
+                raise FmApiError(t("data.fm_bom_too_big", count=cap))
+            last = level + 1 >= depth
+            node: Dict[str, Any] = {**line, "children": [] if last else under(line["number"], level + 1, path | {line["item_id"]})}
+            if last and lines.get(line["number"]):
+                node["cut"] = True
+            out.append(node)
+        return out
+
+    return {"number": number_of(title), "name": name_of(title), "item_id": root_id, "children": under(number_of(title), 0, frozenset([root_id]))}
 
 
 class BomService:
@@ -108,6 +149,16 @@ class BomService:
 
         ``effectiveDate`` is always sent: without it Fusion Manage sometimes answers 400 (``null wrong date format``).
         """
+        return parse_bom(self._answer(workspace_id, item_id, depth))
+
+    def tree(self, workspace_id: str, item_id: str, depth: int) -> Dict[str, Any]:
+        """The item's BOM down to ``depth`` levels as one tree: ``{"number", "name", "item_id", "children": [line]}``, each line with its
+        ``number``, ``name``, ``quantity``, ``sequence``, ``edge_id``, ``item_id`` and ``children`` (the lines under it, in BOM order). Raises ``FmApiError`` when the
+        answer has no node for the item, or a line has no item id."""
+        data = self._answer(workspace_id, item_id, depth)
+        return build_tree(parse_bom(data), data, item_id, depth)
+
+    def _answer(self, workspace_id: str, item_id: str, depth: int) -> Any:
         path = (f"{WORKSPACES}/{workspace_id}/items/{item_id}/bom"
                 f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias={self._bias}&rootId={item_id}")
         data = self._client.get_json(path, accept=ACCEPT)
@@ -115,4 +166,4 @@ class BomService:
         log.info("BOM answer for %s: %d node(s)", path, nodes)
         if not nodes:   # an item is always a node of its own BOM, so an answer with none is not a BOM
             raise FmApiError(t("data.fm_no_bom_nodes"))
-        return parse_bom(data)
+        return data

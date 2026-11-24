@@ -52,7 +52,7 @@ function openPanel() {
   scripts.filter((src) => /(^|\/)dom\.js$/.test(src)).forEach((src) => run(w, src));
   Object.assign(ns, { bridge: ns.bridge, i18n: ns.i18n, shell: ns.shell, account: ns.account, auth: ns.auth, diffReport: ns.diffReport });   // dom.js made a fresh namespace's helpers; keep the stand-ins
   scripts.filter((src) => /\/ui\.js$|toast\.js$/.test(src)).forEach((src) => run(w, src));
-  scripts.filter((src) => /\/bom-[a-z-]+\.js$|publish-check|publish-bom/.test(src)).forEach((src) => run(w, src));
+  scripts.filter((src) => /\/m?bom-[a-z-]+\.js$|publish-check|publish-bom/.test(src)).forEach((src) => run(w, src));
   run(w, 'js/publish.js');
   return panel;
 }

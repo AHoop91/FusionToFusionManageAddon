@@ -14,6 +14,7 @@
   const bom = ns.pubBom;
   const check = ns.pubCheck;
   const mbom = ns.pubMbom;
+  const viewer = ns.mbomViewer;
   function t(key, params) { return ns.i18n.t(key, params); }
 
   const POLL_INTERVAL_MS = 100;   // a status check is a lookup in Python, so asking often is cheap and shortens the wait for an answer
@@ -159,6 +160,7 @@
       return;
     }
     bom.showFirstLevel(entry.data);
+    viewer.structureRead();   // the structure viewer can ask for the rest of the tree now
     check.setNew(entry.data.design_new);
     if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
@@ -178,6 +180,7 @@
       if (chosen === null) {   // several, and none was chosen before: the Bill of Materials waits for the user to say which
         target = '';
         mbom.offer(bom.clear());
+        viewer.showTable();   // the choice is drawn where the table is: the structure view would wait for it for ever
         return;
       }
       target = chosen;
@@ -203,6 +206,7 @@
     if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
     if (name === 'summary') { answerSummary(entry); return; }
     if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
+    if (name === 'mbom_tree') { viewer.answer(entry); return; }   // the MBOM of the target, for the structure viewer
     loaded[name] = true;
     if (name === 'mbom') { answerMbom(entry); return; }
     if (name === 'mbom_number') { mbom.answer(entry); return; }
@@ -228,6 +232,7 @@
       forceNext[name] = !!force;
     });
     bom.clear();
+    viewer.reset();
     check.reset();
     details.reset(force);
   }
@@ -260,7 +265,17 @@
       check: function (number) { request('mbom_number', { section: 'mbom_number', target: number, target_id: '' }); },
       choose: chooseTarget,
     });
-    bom.init({ summary: summary, ask: ask, changed: check.update });
+    bom.init({ summary: summary, ask: ask, changed: check.update, treeDone: viewer.treeDone });
+    viewer.init({
+      design: function () { return currentSummary || {}; },   // the design's own item number, not the target's
+      rows: bom.rows,
+      partial: bom.partial,
+      loadTree: bom.loadTree,
+      askMbom: function () { ask('mbom_tree', { section: 'mbom_tree' }); },
+      targetId: function () { return mbom.idOf(target); },   // empty for a design with no MBOM item: the viewer starts from the EBOM
+      target: function () { return target; },
+      phantom: function () { return false; },   // Settings do not name the Type field and its Phantom value yet
+    });
     check.init({
       summary: summary,
       rows: bom.rows,
