@@ -204,3 +204,31 @@ test('a bought version read from Fusion Manage does not make its EBOM component 
   assert.deepStrictEqual(p.components.map((c) => c.id), ['root', 'b']);
   assert.deepStrictEqual(p.operations, []);
 });
+
+test('a renumber asked for gives the lines of the assembly their places, one request for each line that has another number', () => {
+  const s = S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP-M', itemId: 'i0', children: [['P', '1'], ['Q', '2'], ['R', '3'], ['S', '8']].map((n) => (
+    { number: n[0], quantity: '1', itemId: 'i' + n[0], edgeId: 'e' + n[0], sequence: n[1], children: [] })) }, EBOM) });
+  assert.deepStrictEqual(plan(s).operations, [], 'nothing changed, nothing to send');
+  s.renumber();
+  assert.deepStrictEqual(plan(s).operations.map((o) => [o.op, o.number, o.from_sequence, o.sequence].join(':')), ['renumber:S:8:4']);
+});
+
+test('a number given to a line is the number it is sent with, and the others keep theirs', () => {
+  const s = four();   // P 10, Q 20, R 30, S 40 as Fusion Manage has them
+  const shown = {};
+  s.root().children.forEach((c) => { shown[c.uid] = c.sequence; });
+  s.setNumber(uidOf(s, 'S'), '55', shown);
+  assert.deepStrictEqual(plan(s).operations.map((o) => [o.op, o.number, o.from_sequence, o.sequence].join(':')), ['renumber:S:40:55']);
+  const t = four();
+  const shownT = {};
+  t.root().children.forEach((c) => { shownT[c.uid] = c.sequence; });
+  t.setNumber(uidOf(t, 'P'), '25', shownT);   // P goes between Q (20) and R (30)
+  assert.strictEqual(t.root().children.map((c) => c.number).join(''), 'QPRS');
+  assert.deepStrictEqual(plan(t).operations.map((o) => [o.op, o.number, o.from_sequence, o.sequence].join(':')), ['renumber:P:10:25']);
+  const added = four();
+  const shownA = {};
+  added.root().children.forEach((c) => { shownA[c.uid] = c.sequence; });
+  added.setNumber(uidOf(added, 'S'), '100', shownA);
+  added.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, '');
+  assert.strictEqual(plan(added).operations.find((o) => o.op === 'add').sequence, '101', 'a line added after it is numbered above it');
+});

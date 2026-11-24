@@ -69,7 +69,7 @@ Properties with no mapping are listed as not published. Mapped properties are li
 
 1. Review the BOM and details. **Refresh** reads the design and Fusion Manage again.
 2. Optionally use **Add Existing Items** to include existing Fusion Manage items in the BOM (see [Bill of Materials](#add-existing-items)).
-3. Click **Publish**. The button is enabled once the BOM has loaded. It stays disabled while a line still needs a choice (**Review**), while **Expand all** is reading the tree, and when the design's own item number is shared.
+3. Click **Publish**. The button is enabled once the BOM has loaded. It stays disabled while a line still needs a choice (**Review**), while **Expand All** is reading the tree, and when the design's own item number is shared.
 
 A progress dialog appears with up to three bars, one after the other, each with a percentage. **Reading** shows only when the Bill of Materials has levels that are not read yet: **Publish** reads and compares them first, counting the lines so far, and the bar turns green with the number of items found when it is done. **Validating** looks up every item number in Fusion Manage. If a number belongs to several items, or Fusion Manage cannot be searched, the run stops there and nothing is written (see [Item numbers that several items carry](#item-numbers-that-several-items-carry)). Once validation is complete and green, **Publishing** fills as the items are created or updated and then as the requests of the Bill of Materials are sent (each add, update, removal or renumber counts as one). You can close it; the run continues in the background and you can keep working in Fusion, even in another design. Closing it while **Reading** is still going drops the publish. Use **Cancel publish** to stop: items already processed are kept in the run's folder, the rest are not published.
 
@@ -214,9 +214,9 @@ The Publish panel compares the design's BOM with the BOM already in Fusion Manag
 
 The panel reads the BOM one level at a time, so a large assembly opens quickly. At first it shows the design and the lines directly under it. Click an assembly's chevron to read the lines under it: a spinner replaces the chevron and grey rows hold the place until they arrive. If one assembly cannot be read, its rows show **Could not read this level** with a **Retry** button, and the rest of the table stays.
 
-**Expand all** reads every level that is not read yet and opens everything; **Collapse all** closes every assembly except the design itself.
+**Expand All** reads every level that is not read yet and opens everything; **Collapse All** closes every assembly except the design itself.
 
-**Publish covers the whole design.** If some levels are not read yet, **Publish** first reads and compares every one of them (as **Expand all** does), then goes on to validate the item numbers and publish. If that read shows lines that need a choice (**Review**), they are opened for you and the publish waits; choose, then click **Publish** again. If the read fails, nothing is published. The pills at the bottom left count what is covered:
+**Publish covers the whole design.** If some levels are not read yet, **Publish** first reads and compares every one of them (as **Expand All** does), then goes on to validate the item numbers and publish. If that read shows lines that need a choice (**Review**), they are opened for you and the publish waits; choose, then click **Publish** again. If the read fails, nothing is published. The pills at the bottom left count what is covered:
 
 | Pill | Counts |
 |---|---|
@@ -226,9 +226,9 @@ The panel reads the BOM one level at a time, so a large assembly opens quickly. 
 
 A line that needs a choice (**Review**) holds **Publish** back, whether its assembly is open or closed.
 
-Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a read is bigger than the add-in can handle, the panel says so instead of showing a table when the first level fails, and shows a message and keeps the table when **Expand all** fails:
+Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a read is bigger than the add-in can handle, the panel says so instead of showing a table when the first level fails, and shows a message and keeps the table when **Expand All** fails:
 
-- More than **25,000 lines** in one read (a level, or the whole tree for **Expand all**).
+- More than **25,000 lines** in one read (a level, or the whole tree for **Expand All**).
 - Nested **50 levels deep or more** (checked on the whole-tree read).
 - A component that contains itself.
 
@@ -260,7 +260,7 @@ The numbers in the screenshot match the table.
 | # | Part | What it shows |
 |---|---|---|
 | 1 | **Filters** drop-down | Narrows the table to rows of one status ([Filters](#filters)) |
-| 2 | **Collapse all** and **Expand all** | Fold or unfold the whole tree ([Filters](#filters)) |
+| 2 | **Collapse All** and **Expand All** | Fold or unfold the whole tree ([Filters](#filters)) |
 | 3 | **New** chip | The design has the line and Fusion Manage does not; publishing adds it |
 | 4 | **Review** chip | A **New** line and a **Fusion Manage Only** line at the same position wait for your choice ([Paired rows](#paired-rows-a-replaced-item)) |
 | 5 | **Skipped** chip | The component has no item number, shares one, or sits below such a line; nothing is published for it. Hover the **i** for the reason |
@@ -274,7 +274,7 @@ The **Filters** drop-down above the table (top left) narrows it to rows of one s
 - **Counts and tooltips.** Each filter shows how many lines it holds, and its tooltip explains what it shows.
 - **Show Hidden Components** is separate. It adds the components that are hidden in the Fusion component tree, marked with a crossed eye.
 - **Clear filters** unticks them all.
-- **Collapse all** and **Expand all**, next to it at the right, fold the whole tree.
+- **Collapse All** and **Expand All**, next to it at the right, fold the whole tree.
 
 #### Duplicates
 

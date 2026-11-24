@@ -37,6 +37,8 @@
     bought: ['M3 4h2.5l2 11h10l2-8H7', 'M10 19.5h.01', 'M17 19.5h.01'],   // a trolley
     cart: ['M8 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M19 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M2 3h2l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L22 7H5.1'],   // a shopping cart: a purchased part
     info: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5'],   // a circle with an i: the note of a line
+    position: ['M8 4v16', 'M5 7l3-3 3 3', 'M16 20V4', 'M13 17l3 3 3-3'],   // an arrow up beside an arrow down: the line goes up or down the assembly
+    renumber: ['M4 5h2v6', 'M4 14h4v2.5l-4 2.5h4', 'M11 8h9', 'M11 17h9'],   // 1 and 2 beside two lines: the lines numbered again
     match: ['M3 12h12', 'M11 7l5 5-5 5', 'M20 5v14'],   // an arrow into a bar: the EBOM carried over to the MBOM
     addItems: ['M4 6h11', 'M4 12h7', 'M4 18h7', 'M17 14v6', 'M14 17h6'],   // a list with a plus
     grip: ['M9 6h.01', 'M15 6h.01', 'M9 12h.01', 'M15 12h.01', 'M9 18h.01', 'M15 18h.01'],
@@ -63,6 +65,8 @@
     would_exceed: function (p) { return t('publish.sv_err_would_exceed', p); },
     under_purchased: function (p) { return t('publish.sv_err_under_purchased', p); },
     root_no_quantity: function () { return t('publish.sv_err_root_no_quantity'); },
+    bad_number: function () { return t('publish.sv_pos_invalid'); },
+    number_taken: function (p) { return t('publish.sv_pos_taken', p); },
   };
 
   /** An error of an edit in words; one that is not the structure's refusal is shown as it is, never hidden. */
@@ -507,6 +511,75 @@
     if (first) first.focus();
   }
 
+  /** "Set Position", at the left of ``button``: a small box with one number, the BOM line number the line is to have (any whole number from 1; the line goes to
+   *  the place its number gives it among the lines of its assembly, the others keep their numbers). A value that is not a number, or one another line has, is
+   *  said in the box, which stays open. */
+  function openPositionBox(button, id) {
+    closeDestMenu();
+    const entry = index.get(id);
+    const shown = ns.mbomPlan.lineNumbers(structure, compare().chg);   // the numbers the lines of the assembly show now
+    const current = {};
+    entry.parent.children.forEach(function (c) { current[c.uid] = shown[c.uid]; });
+    const box = el('div', 'sv-dest sv-pos');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', t('publish.sv_pos_title'));
+    const head = el('div', 'sv-dest-head');
+    const cross = el('button', 'sv-dest-btn sv-dest-close');
+    cross.type = 'button';
+    cross.setAttribute('aria-label', t('publish.sv_dest_close'));
+    cross.title = t('publish.sv_dest_close');
+    cross.appendChild(ns.svg(['M6 6l12 12', 'M18 6L6 18'], 14));
+    cross.addEventListener('click', function () { closeDestMenu(); button.focus(); });
+    head.append(el('span', 'sv-dest-title', t('publish.sv_pos_title') + ' ' + entry.node.number), cross);
+    const body = el('div', 'sv-pos-body');
+    const input = el('input', 'sv-input sv-pos-input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.autocomplete = 'off';
+    input.value = current[id] || '';
+    input.setAttribute('aria-label', t('publish.sv_pos_label'));
+    const set = el('button', 'btn sv-pos-set', t('publish.sv_pos_set'));
+    set.type = 'button';
+    const row = el('div', 'sv-pos-row');
+    row.append(input, set);
+    const message = el('p', 'error sv-pos-message');
+    message.setAttribute('role', 'alert');
+    message.hidden = true;
+    body.append(el('label', 'sv-pos-label', t('publish.sv_pos_label')), row, message);
+    box.append(head, body);
+    function refuse(text) {
+      message.textContent = text;
+      message.hidden = false;
+      input.focus();
+    }
+    function submit() {
+      const text = input.value.trim();
+      if (!/^\d{1,9}$/.test(text) || Number(text) < 1) { refuse(t('publish.sv_pos_invalid')); return; }
+      if (Number(text) === Number(current[id])) { closeDestMenu(); return; }
+      const clash = entry.parent.children.some(function (c) { return c.uid !== id && Number(current[c.uid]) === Number(text); });
+      if (clash) { refuse(t('publish.sv_pos_taken', { number: String(Number(text)) })); return; }
+      closeDestMenu();
+      run(function () { structure.setNumber(id, text, current); });
+    }
+    set.addEventListener('click', submit);
+    input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { event.preventDefault(); submit(); } });
+    document.body.appendChild(box);
+    const spot = button.getBoundingClientRect();
+    box.style.right = Math.max(8, Math.min(window.innerWidth - spot.left + 4, window.innerWidth - box.offsetWidth - 8)) + 'px';
+    box.style.top = Math.max(8, Math.min(spot.top, window.innerHeight - box.offsetHeight - 8)) + 'px';
+    function outside(event) { if (!box.contains(event.target) && !button.contains(event.target)) closeDestMenu(); }
+    function key(event) { if (event.key === 'Escape') { event.stopPropagation(); closeDestMenu(); button.focus(); } }
+    document.addEventListener('mousedown', outside, true);
+    document.addEventListener('keydown', key, true);
+    destMenu = { button: button, close: function () {
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', key, true);
+      box.remove();
+    } };
+    input.focus();
+    input.select();
+  }
+
   /** Quick add: the MBOM becomes a copy of the EBOM, item numbers and all. When Fusion Manage has lines already, the user is asked first, as this replaces them
    *  (they are only replaced in the viewer: nothing is written until Publish, and undo gives them back). */
   function matchEbom() {
@@ -520,6 +593,20 @@
     if (!mine.hasLines()) { go(); return; }
     ns.pubItemPanel.confirm({ title: t('publish.sv_match_title'), lead: t('publish.sv_match_lead'), ask: t('publish.sv_match_ask'), confirm: t('publish.sv_match_confirm'),
                               icon: ICONS.match, onConfirm: go });
+  }
+
+  /** Automatic renumber of every assembly (the toolbar), after a question, as it changes the numbers Fusion Manage has (only when the publish sends them:
+   *  nothing is sent now, and Undo takes it back). Nothing to renumber is said, with no question. */
+  function renumber() {
+    const mine = structure;
+    if (!mine.renumbering().length) { ns.toast.show(t('publish.sv_renumber_none'), { tone: 'info' }); return; }
+    ns.pubItemPanel.confirm({
+      title: t('publish.sv_renumber'), lead: t('publish.sv_renumber_lead_all'), ask: t('publish.sv_renumber_ask'), confirm: t('publish.sv_renumber_confirm'), icon: ICONS.renumber,
+      onConfirm: function () {
+        if (structure !== mine) return;   // the Bill of Materials was read again while the question was open
+        run(function () { return structure.renumber(); });
+      },
+    });
   }
 
   function addItems() {
@@ -574,6 +661,8 @@
       const place = placeForNew();
       openPlace(place);
       run(function () { structure.addFromEbom(targets, place.parentId, place.before, true); });   // an assembly comes with the lines under it, as a drag does
+    } else if (act === 'position') {
+      openPositionBox(button, id);
     } else if (act === 'remove') {
       run(function () { structure.remove(targets); });
     } else if (act === 'addTo') {
@@ -811,8 +900,9 @@
       if (depth) list.push(node.uid);
       const count = selected.has(node.uid) ? selected.size : 1;
       const actions = [];
-      if (depth) {   // always in this order: add to an assembly, and the bin last
-        actions.push({ act: 'addTo', icon: 'assembly', label: actionLabel(t('publish.sv_act_add_to'), count) },
+      if (depth) {   // the position, add to an assembly, and the bin last
+        actions.push({ act: 'position', icon: 'position', label: t('publish.sv_act_position') },
+                     { act: 'addTo', icon: 'assembly', label: actionLabel(t('publish.sv_act_add_to'), count) },
                      { act: 'remove', icon: 'remove', label: actionLabel(t('publish.sv_act_remove'), count) });
       }
       const notes = depth ? mbomNotes(node, cmp, flags) : [];
@@ -1152,7 +1242,8 @@
     const searchBox = el('div', 'sv-search-box');   // the field with a magnifier inside it
     searchBox.append(ns.svg(ICONS.search, 16), search);
     tools.match = iconButton('match', t('publish.sv_match'), matchEbom);
-    tools.bar.append(searchBox, found, tools.fold, history, tools.add, tools.newItem, tools.match);
+    tools.renumber = iconButton('renumber', t('publish.sv_renumber'), renumber);
+    tools.bar.append(searchBox, found, tools.fold, history, tools.add, tools.newItem, tools.match, tools.renumber);
     const state = el('div', 'sv-state');
     const left = pane(t('publish.sv_ebom_title'), t('publish.sv_ebom_tip'));
     left.tree.classList.add('sv-tree-ebom');   // its hover icons sit nearer the quantity: no quantity box to clear

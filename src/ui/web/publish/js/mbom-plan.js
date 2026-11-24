@@ -11,8 +11,8 @@
  * * the components are the design (the root) and every line made from an EBOM component (``source``), once each: all go through the comparison
  *   with Fusion Manage, so an item whose properties differ is updated. An added item (a bought version, or one picked in Fusion Manage) is never one
  *   of them: it exists already;
- * * a BOM line number (``sequence``) is unique under its assembly and follows the tree: an assembly with a line that is new, moved in or out of order
- *   has its lines numbered 1, 2, 3 in the tree's order (a line that has its number already is left alone; a kept line is ``renumber``ed, a new one is
+ * * a BOM line number (``sequence``) is unique under its assembly and follows the tree: an assembly with a line that is new, moved in or out of order (or one the user asked to renumber)
+ *   has its lines numbered 1, 2, 3 in the tree's order (one that has a line given a number by the user keeps the numbers it has, and that line its own); (a line that has its number already is left alone; a kept line is ``renumber``ed, a new one is
  *   added with its number). Where a line would take a number another still holds, the lines that change go by a number above the others first (a second
  *   ``renumber``), so no two requests ever want the same number;
  *
@@ -35,21 +35,34 @@
    *  line that has none yet or takes another), ``staged`` (the passage numbers) and ``rank`` (the order the lines that go at once are sent in). */
   function numbering(root, changes) {
   // The BOM line numbers. An assembly with any line that is new, moved in or out of order is numbered 1, 2, 3 in the tree's order, so the numbers
-  // are the places of the lines and Fusion Manage lists them as the tree does. A line that has its place's number already is left alone. A number is
-  // unique under its assembly, so when a line is to take a number a line that stays still holds, every line that has to change goes by a number
-  // above all the others first (``staged``) and then to its own: no two lines ever hold the same number in a request.
+  // are the places of the lines and Fusion Manage lists them as the tree does. A line that has its place's number already is left alone. An assembly
+  // with a line the user gave a number to (``pin``) keeps the numbers it has instead, each above the one before it: a line takes its own number, else the one it
+  // has when that is above the one before, else the one above the one before. A number is unique under its assembly, so when a line is to take a number a line
+  // that stays still holds, every line that has to change goes by a number above all the others first (``staged``) and then to its own: no two lines ever
+  // hold the same number in a request.
   const sequences = {};   // uid -> the number the line is given (a line that keeps its own has none here)
   const rank = {};        // uid -> when a line that goes by its own number is sent, among its assembly's
   const staged = {};      // uid -> the number it passes through on the way (only where a line would take a number another holds)
   (function assign(node) {
     const flagged = function (c) { const f = changes[c.uid]; return !!(f && (f.new || f.moved || f.reordered)); };
-    if (node.children.some(flagged)) {
+    const pinned = function (c) { return c.pin !== undefined && c.pin !== ''; };
+    const keeps = !node.renumber && node.children.some(pinned);
+    if (node.renumber || keeps || node.children.some(flagged)) {   // ``renumber``: the user asked for the lines of this assembly to be numbered again
       const entering = function (c) { return !!(changes[c.uid] && (changes[c.uid].new || changes[c.uid].moved)); };   // no line of this assembly in Fusion Manage yet
+      const given = {};   // uid -> the number it ends with
       const moving = [];   // the lines Fusion Manage has under this assembly that take another number
+      let previous = 0;
       node.children.forEach(function (c, at) {
-        const place = at + 1;
-        if (entering(c)) sequences[c.uid] = String(place);
-        else if (!String(c.sequence).trim() || numeric(c.sequence) !== place) { sequences[c.uid] = String(place); moving.push(c); }
+        let number = at + 1;
+        if (keeps) {
+          if (pinned(c)) number = Math.max(Number(c.pin), previous + 1);
+          else if (!entering(c) && String(c.sequence).trim() && numeric(c.sequence) > previous) number = numeric(c.sequence);
+          else number = previous + 1;
+        }
+        previous = number;
+        given[c.uid] = number;
+        if (entering(c)) sequences[c.uid] = String(number);
+        else if (!String(c.sequence).trim() || numeric(c.sequence) !== number) { sequences[c.uid] = String(number); moving.push(c); }
       });
       // A line goes once the number it takes is free, so one that takes the number of another goes after it (lines shifted down by an insert go from
       // the last one up). What is left is lines that take each other's numbers: they go through a number above all the others.
@@ -64,7 +77,7 @@
         rank[c.uid] = turn++;
         if (String(c.sequence).trim()) delete heldBy[numeric(c.sequence)];
       }
-      let above = node.children.reduce(function (high, c) { return Math.max(high, numeric(c.sequence)); }, node.children.length) + 1;
+      let above = node.children.reduce(function (high, c) { return Math.max(high, numeric(c.sequence), given[c.uid]); }, node.children.length) + 1;
       left.forEach(function (c) { staged[c.uid] = String(above++); });
     }
     node.children.forEach(assign);

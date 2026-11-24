@@ -45,7 +45,7 @@ function open(options) {
     click: (el, init) => el.dispatchEvent(new w.MouseEvent('click', Object.assign({ bubbles: true }, init || {}))),
     button: (label) => [...$('pub-structure').querySelectorAll('.sv-bar button')].find((b) => b.getAttribute('aria-label') === label),
     act: (pane, number, name) => [...api.rowOf(pane, number).querySelectorAll('.sv-act')].find((b) => b.dataset.act === name),
-    openAll: () => api.button('Expand all').click(),
+    openAll: () => api.button('Expand All').click(),
     drag: (fromEl, toEl, init) => {   // the pointer goes down on a line, moves over another and is released
       const doc = w.document;
       const mouse = (type, el, x, y) => {
@@ -109,7 +109,7 @@ test('lines open and close one at a time and all at once, and only open lines ar
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C'], 'the other pane is its own');
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'B1', 'C']);
-  v.button('Collapse all').click();
+  v.button('Collapse All').click();
   assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'B', 'C']);
 });
 
@@ -183,7 +183,7 @@ test('dragging in the MBOM moves a line, and a refused drop is said', skip, () =
 test('dragging an EBOM line into the MBOM adds it with what is under it, and Alt without', skip, () => {
   const v = built();
   v.openAll();
-  v.button('Collapse all').click();
+  v.button('Collapse All').click();
   v.act(v.mbom(), 'B', 'remove').click();
   const added = v.drag(v.rowOf(v.ebom(), 'B'), v.rowOf(v.mbom(), 'TOP'));
   assert.strictEqual(added.mode, 'add');
@@ -231,7 +231,7 @@ test('a failed read of the MBOM is shown, and the search finds lines and opens w
 
 test('add items opens the picker with the target item and puts what it returns into the MBOM', skip, () => {
   const v = built({ targetId: '' });
-  v.button('Add existing part').click();
+  v.button('Add Existing Part').click();
   assert.strictEqual(v.added.length, 1);
   v.added[0].onAdd([{ id: '9', number: 'X9', name: 'Extra', link: '/api/v3/workspaces/57/items/9', linkable: null }]);
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C', 'X9']);
@@ -287,7 +287,7 @@ test('reading the Bill of Materials again drops the structure, the selection and
 
 test('the Add Items picker, answering after the Bill of Materials was read again, adds nothing', skip, () => {
   const v = built();
-  v.button('Add existing part').click();
+  v.button('Add Existing Part').click();
   v.ns.mbomViewer.reset();
   v.ns.mbomViewer.structureRead();
   v.added[0].onAdd([{ id: '9', number: 'X9', name: 'Extra' }]);
@@ -307,7 +307,7 @@ test('lines a fold hides leave the selection, so an action on a line does not ta
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'C']);
   v.click(v.rowOf(v.mbom(), 'A1'));
-  v.button('Collapse all').click();
+  v.button('Collapse All').click();
   assert.strictEqual(v.mbom().querySelectorAll('.sv-row.selected').length, 0);
   v.openAll();
   assert.strictEqual(v.mbom().querySelectorAll('.sv-row.selected').length, 0);
@@ -346,8 +346,8 @@ test('the icons on a line: add to assembly, the bin last, and a handle to drag i
   v.openAll();
   assert.ok(v.rowOf(v.mbom(), 'B').querySelector('.sv-grip'));
   const order = (id) => [...v.rowOf(v.mbom(), id).querySelectorAll('.sv-act')].map((b) => b.dataset.act);
-  assert.deepStrictEqual(order('A'), ['addTo', 'remove'], 'the bin is always last');
-  assert.deepStrictEqual(order('C'), ['addTo', 'remove']);
+  assert.deepStrictEqual(order('A'), ['position', 'addTo', 'remove'], 'the position first, the bin always last');
+  assert.deepStrictEqual(order('C'), ['position', 'addTo', 'remove']);
   assert.strictEqual(v.rowOf(v.mbom(), 'TOP').querySelector('.sv-act'), null, 'the MBOM itself has none');
   v.click(v.rowOf(v.mbom(), 'B'));
   v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
@@ -479,9 +479,9 @@ test('the New item button and the Create bought version action open the side pan
   v.show();
   v.ns.mbomViewer.structureRead();
   v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1'), treeLine('OIL', '1', { item_id: '' })]) });
-  const tool = v.button('Create New Manufacturing Item');
-  assert.ok(tool, 'the toolbar has an icon button named Create New Manufacturing Item');
-  assert.strictEqual(tool.title, 'Create New Manufacturing Item');
+  const tool = v.button('New Manufacturing Item');
+  assert.ok(tool, 'the toolbar has an icon button named New Manufacturing Item');
+  assert.strictEqual(tool.title, 'New Manufacturing Item');
   v.click(tool);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(opened)), [{ mode: 'assembly' }]);
   assert.strictEqual(v.act(v.mbom(), 'C', 'bought'), undefined, 'the MBOM lines have no such action');
@@ -673,7 +673,7 @@ test('quick add asks before it overrides the lines Fusion Manage has, and matche
   v.show();
   v.ns.mbomViewer.structureRead();
   v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('OIL', '1'), treeLine('C', '1')]) });
-  const tool = v.button('Quick add: match Fusion Manage to Fusion Component');
+  const tool = v.button('Quick Add');
   assert.ok(tool, 'the toolbar has the quick add button');
   v.click(tool);
   assert.strictEqual(asked.length, 1);
@@ -696,7 +696,7 @@ test('quick add with no lines in Fusion Manage matches at once, with no question
   v.show();
   v.ns.mbomViewer.structureRead();
   v.ns.mbomViewer.answer({ ok: true, data: mbomTree([]) });
-  v.click(v.button('Quick add: match Fusion Manage to Fusion Component'));
+  v.click(v.button('Quick Add'));
   assert.strictEqual(asked.length, 0);
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'A1', 'A2', 'B', 'B1', 'C']);
@@ -716,4 +716,67 @@ test('the MBOM shows the line numbers Fusion Manage has, in their order, until a
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()).slice(1), ['A', 'C', 'B']);
   assert.deepStrictEqual(numbers(), ['1', '1', '2'], 'A and B keep their numbers; C is line 1 of A, as it will be sent');
+});
+
+test('Automatic renumber asks first, then numbers the lines 1, 2, 3 in the order shown, says so when they are already, and undo gives the numbers back', skip, () => {
+  const v = open({ targetId: '77' });
+  const asked = [];
+  v.ns.pubItemPanel = { open: () => {}, close: () => {}, confirm: (o) => asked.push(o) };
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '2', { sequence: '1' }), treeLine('B', '1', { sequence: '2' }), treeLine('C', '1', { sequence: '8' })]) });
+  const numbers = () => [...v.mbom().querySelectorAll('.sv-row')].slice(1).map((r) => r.querySelector('.sv-seq').textContent);
+  const tool = v.button('Automatic Renumber');
+  assert.ok(tool, 'the toolbar has the Automatic renumber button');
+  v.click(tool);
+  assert.strictEqual(asked.length, 1);
+  assert.strictEqual(asked[0].title, 'Automatic Renumber');
+  assert.match(asked[0].ask, /Are you sure/);
+  assert.deepStrictEqual(numbers(), ['1', '2', '8'], 'nothing changes until it is confirmed');
+  asked[0].onConfirm();
+  assert.deepStrictEqual(numbers(), ['1', '2', '3']);
+  v.click(tool);
+  assert.strictEqual(asked.length, 1, 'nothing to renumber: no question');
+  assert.match(v.toasts[v.toasts.length - 1], /numbered 1, 2, 3 already/);
+  v.click(v.button('Undo'));
+  assert.deepStrictEqual(numbers(), ['1', '2', '8']);
+});
+
+test('the Set Position hover action opens a small box with the number the line shows, and gives the line any whole number', skip, () => {
+  const v = open({ targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '1', { sequence: '1' }), treeLine('B', '1', { sequence: '2' }), treeLine('C', '1', { sequence: '8' })]) });
+  const doc = v.w.document;
+  const numbers = () => [...v.mbom().querySelectorAll('.sv-row')].slice(1).map((r) => r.querySelector('.sv-seq').textContent);
+  const set = (value) => { const box = doc.querySelector('.sv-pos'); box.querySelector('.sv-pos-input').value = value; box.querySelector('.sv-pos-set').click(); };
+  const action = v.act(v.mbom(), 'C', 'position');
+  assert.strictEqual(action.getAttribute('aria-label'), 'Set Position');
+  v.click(action);
+  const box = doc.querySelector('.sv-pos');
+  assert.ok(box, 'the box is open');
+  assert.strictEqual(box.querySelector('.sv-pos-input').value, '8', 'it starts at the number the line shows');
+  assert.match(box.textContent, /New position number/);
+  ['', 'x', '0', '-2', '1.5'].forEach((bad) => {
+    set(bad);
+    assert.ok(doc.querySelector('.sv-pos'), 'a value that is not a whole number keeps the box open: ' + bad);
+    assert.match(box.querySelector('.sv-pos-message').textContent, /whole number, 1 or more/);
+  });
+  set('2');
+  assert.match(box.querySelector('.sv-pos-message').textContent, /already has the number 2/, 'a number another line has is said');
+  set('10');
+  assert.strictEqual(doc.querySelector('.sv-pos'), null, 'any number is taken, 10 with only three lines: the box closes');
+  assert.deepStrictEqual(numbers(), ['1', '2', '10']);
+  v.click(v.act(v.mbom(), 'C', 'position'));
+  set('1500');
+  assert.deepStrictEqual(numbers(), ['1', '2', '1500']);
+  v.click(v.act(v.mbom(), 'A', 'position'));
+  set('5');
+  assert.deepStrictEqual(v.lines(v.mbom()).slice(1), ['B', 'A', 'C'], 'the line goes to the place its number gives it');
+  assert.deepStrictEqual(numbers(), ['2', '5', '1500'], 'the other lines keep their numbers');
+  v.click(v.act(v.mbom(), 'B', 'position'));
+  doc.querySelector('.sv-pos-input').dispatchEvent(new v.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.strictEqual(doc.querySelector('.sv-pos'), null, 'Escape closes it');
+  v.click(v.button('Undo'));
+  assert.deepStrictEqual(numbers(), ['1', '2', '1500'], 'each is one step');
 });

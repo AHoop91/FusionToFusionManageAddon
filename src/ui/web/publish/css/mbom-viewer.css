@@ -152,3 +152,10 @@ button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-sh
 .sv-dest-number { flex: none; font-weight: 600; white-space: nowrap; }
 .sv-dest-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .sv-dest-more { padding: 6px 12px; font-size: 11px; color: var(--muted); }
+.sv-pos { width: 250px; max-height: none; }
+.sv-pos-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.sv-pos-label { font-size: 12px; color: var(--muted); }
+.sv-pos-row { display: flex; gap: 8px; }
+.sv-pos-input { flex: 1; min-width: 0; text-align: right; }
+.sv-pos-message { margin: 0; font-size: 12px; }
+.sv-pos-message[hidden] { display: none; }

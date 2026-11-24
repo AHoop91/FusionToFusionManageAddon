@@ -13,6 +13,8 @@
  *   ``assembly`` (a new manufacturing assembly) or ``phantom`` (a new phantom assembly);
  * * ``itemId`` is the id of the item Fusion Manage holds for it ("" for one that does not exist yet) and ``edgeId`` the id of its BOM line
  *   there ("" for a line that is not in Fusion Manage yet);
+ * * ``renumber`` is true on an assembly whose lines the publish numbers 1, 2, 3 in the tree's order whatever else changed (see ``renumber``); ``pin`` is the
+ *   BOM line number the user gave a line (see ``setNumber``), which the publish keeps;
  * * ``cut`` is true for a line read at the deepest level whose own lines were not read (the answer shows it has some);
  * * ``isNew`` is true for a node the user made or added, which has no BOM line in Fusion Manage yet.
  *
@@ -348,7 +350,9 @@
       move: function (ids, parentId, before) {
         edit(function () {
           const guard = guardPlacement(ids, parentId, before);
-          insert(need(parentId), detach(guard.moving), guard.anchor);
+          const moving = detach(guard.moving);
+          moving.forEach(function (n) { delete n.pin; });   // a line put elsewhere has no number of its own any more
+          insert(need(parentId), moving, guard.anchor);
         });
       },
 
@@ -403,6 +407,55 @@
         });
       },
 
+      /** The assemblies ``renumber`` would mark: those that have a line of Fusion Manage's whose BOM line number is not its place (1, 2, 3 in the tree's order),
+       *  or a line given a number of its own (``setNumber``), and are not marked yet. */
+      renumbering: function () {
+        const found = [];
+        (function walk(node) {
+          const lacks = !node.renumber && node.children.some(function (c, at) {
+            return c.pin !== undefined || (!c.isNew && String(c.sequence === undefined || c.sequence === null ? '' : c.sequence).trim() !== String(at + 1));
+          });
+          if (lacks) found.push(node);
+          node.children.forEach(walk);
+        })(mbom);
+        return found;
+      },
+
+      /** Renumber: the assemblies of ``renumbering()`` are marked (``renumber``) and the numbers their lines were given are let go, so the publish numbers their lines
+       *  1, 2, 3 in the tree's order. Returns how many were marked; none is no step of the history. */
+      renumber: function () {
+        return edit(function () {
+          const marking = api.renumbering();
+          marking.forEach(function (node) {
+            node.renumber = true;
+            node.children.forEach(function (c) { delete c.pin; });
+          });
+          return marking.length;
+        });
+      },
+
+      /** Give a line the BOM line number ``value`` (a whole number, 1 or more, with no other limit). ``current`` is the number each line of the assembly shows now
+       *  (``{uid: number}``): they are kept as they are, so only this line changes, and the lines are put in the order of their numbers. Another line with that number
+       *  is refused (``number_taken``), a value that is not a whole number too (``bad_number``). */
+      setNumber: function (id, value, current) {
+        edit(function () {
+          if (id === ROOT) throw fail('root_immutable');
+          const node = need(id);
+          const parent = parentOf(id);
+          const text = String(value).trim();
+          if (!/^\d{1,9}$/.test(text) || Number(text) < 1) throw fail('bad_number');
+          const wanted = Number(text);
+          parent.children.forEach(function (c) {
+            if (c !== node && Number(current[c.uid]) === wanted) throw fail('number_taken', { number: String(wanted) });
+          });
+          parent.children.forEach(function (c) { if (c !== node && current[c.uid] !== undefined) c.pin = String(Number(current[c.uid])); });
+          node.pin = String(wanted);
+          delete parent.renumber;
+          parent.children = parent.children.map(function (c, at) { return { c: c, at: at }; })
+            .sort(function (x, y) { return Number(x.c.pin) - Number(y.c.pin) || x.at - y.at; }).map(function (e) { return e.c; });
+        });
+      },
+
       /** Add existing Fusion Manage items (``{id, number, name, link, linkable, quantity, source}``) as lines. ``source`` (an EBOM key) is for the bought
        *  version of a component: the line stands for that EBOM line in the comparison. */
       addItems: function (items, parentId, before) {
@@ -413,6 +466,22 @@
           });
           placeNew(nodes, parentId, before);
           return nodes.map(function (n) { return n.uid; });
+        });
+      },
+
+      /** Put a line at ``position`` (1 is the first) among the lines of its assembly. A position that is not a whole number from 1 to how many lines the assembly
+       *  has is refused (``bad_position``, with ``max``). The publish then numbers the assembly 1, 2, 3 in this order. */
+      setPosition: function (id, position) {
+        edit(function () {
+          if (id === ROOT) throw fail('root_immutable');
+          const node = need(id);
+          const parent = parentOf(id);
+          const max = parent.children.length;
+          const text = String(position).trim();
+          const wanted = /^\d{1,6}$/.test(text) ? Number(text) : 0;
+          if (wanted < 1 || wanted > max) throw fail('bad_position', { max: max });
+          parent.children.splice(parent.children.indexOf(node), 1);
+          parent.children.splice(wanted - 1, 0, node);
         });
       },
 

@@ -523,3 +523,36 @@ function fromReadFresh() {
   const outline = (node) => (node || s.root()).children.map((c) => c.children.length ? c.number + '[' + outline(c) + ']' : c.number).join(',');
   return { s: s, outline: outline };
 }
+
+test('renumber marks the assemblies whose lines are not numbered by their places, and is one step', () => {
+  const s = S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP', itemId: 'i0', children: [
+    { number: 'A', quantity: '2', itemId: 'iA', edgeId: 'eA', sequence: '1', children: [] },
+    { number: 'B', quantity: '1', itemId: 'iB', edgeId: 'eB', sequence: '2', children: [] },
+    { number: 'C', quantity: '1', itemId: 'iC', edgeId: 'eC', sequence: '8', children: [] }] }, EBOM) });
+  assert.strictEqual(s.renumber(), 1);
+  assert.strictEqual(s.root().renumber, true);
+  assert.strictEqual(s.renumber(), 0, 'nothing is left to mark, so it is no second step');
+  s.undo();
+  assert.strictEqual(s.root().renumber, undefined, 'one undo takes it back');
+  assert.strictEqual(s.canUndo(), false);
+});
+
+test('a line is given a number of its own: any whole number, the lines in the order of their numbers, and a taken or non-numeric one is refused', () => {
+  const { s, at, outline } = fresh();
+  const shown = () => { const out = {}; s.root().children.forEach((c, i) => { out[c.uid] = String(i + 1); }); return out; };   // A B C show 1 2 3
+  s.setNumber(at('C'), '10', shown());
+  assert.strictEqual(outline(), 'A[A1,A2],B[B1],C');
+  assert.strictEqual(s.root().children[2].pin, '10');
+  assert.strictEqual(s.root().children[0].pin, '1', 'the lines beside it keep the numbers they show');
+  const now = { [at('A')]: '1', [at('B')]: '2', [at('C')]: '10' };
+  assert.throws(() => s.setNumber(at('C'), '2', now), failsWith('number_taken'));
+  ['0', '-1', '1.5', '', 'x', '1234567890'].forEach((bad) => assert.throws(() => s.setNumber(at('C'), bad, now), failsWith('bad_number'), bad));
+  assert.throws(() => s.setNumber(S.ROOT, '1', now), failsWith('root_immutable'));
+  s.setNumber(at('A'), '5', now);   // 5 goes between B (2) and C (10)
+  assert.strictEqual(outline(), 'B[B1],A[A1,A2],C');
+  assert.strictEqual(s.canUndo(), true);
+  s.undo();
+  assert.strictEqual(outline(), 'A[A1,A2],B[B1],C', 'each is one step');
+  s.renumber();
+  assert.strictEqual(s.root().children[2].pin, undefined, 'Automatic Renumber lets go of the numbers given');
+});
