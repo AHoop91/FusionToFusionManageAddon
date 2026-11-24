@@ -59,7 +59,7 @@ The Items workspace is not needed to use it.
 
 ## 3. The Assign Product panel
 
-The panel is a palette (`src/ui/web/products/index.html`) driven by `products-page.js`, `filters.js`, `validators.js` and `sortable.js`. It signs in first, and shows the sign-in screen if needed.
+The panel is a palette (`src/ui/web/products/index.html`) driven by `products-page.js`, `filters.js` and `sortable.js` (with the shared `validators.js` and `form-controls.js`). It signs in first, and shows the sign-in screen if needed.
 
 ### The list
 
@@ -185,7 +185,7 @@ Palette JS  ->  bridge message "products_*"  ->  Python action (registered in pr
 | Form model | `src/fm/workspace_form.py`, `sections.py`, `refusal.py`, `workspace_schema.py` |
 | Views, rows and pictures | `src/fm/tableaus.py` |
 | Permissions | `src/fm/permissions.py` |
-| Panel UI | `src/ui/web/products/index.html`, `css/products-page.css`, `js/products-page.js`, `filters.js`, `validators.js`, `sortable.js` |
+| Panel UI | `src/ui/web/products/index.html`, `css/products-page.css`, `js/products-page.js`, `filters.js`, `sortable.js` (and shared `validators.js`, `form-controls.js`) |
 | Strings | `resources/languages/en.json` (`products.*`, `app.product_*`, `data.portfolio_*`) |
 | Tests | `tests/test_products.py`, `test_workspace_form.py`, `test_tableaus.py`, `test_refusal.py`, `test_workspace_schema.py`, `test_portfolio_workspace.py`, `test_tableau_picture.py` |
 

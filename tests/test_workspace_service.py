@@ -5,6 +5,7 @@ import unittest
 from src.auth.errors import AuthError
 from src.config.workspace_models import WorkspaceKind
 from src.fm.client import FmApiError
+from src.fm.sections import SectionService
 from src.fm.workspace import MAX_OPTIONS, OPTIONS_PAGE, WorkspaceService
 
 KIND = WorkspaceKind("items", required_permissions=("view_items", "add_items"))
@@ -22,8 +23,11 @@ def field(fid, **extra):
 class Client:
     """Answers each path (its query left off) with what ``answers`` holds for it; an exception held is raised."""
 
+    tenant = "acme"
+
     def __init__(self, answers):
         self.answers, self.paths = answers, []
+        SectionService.forget()   # what an earlier test read of the sections is not this test's
 
     def get_json(self, path, accept="application/json"):
         self.paths.append(path)
@@ -43,12 +47,42 @@ class ValidateTests(unittest.TestCase):
     def answers(self, workspace=None, granted=None, fields=None):
         return {self.BASE: {"name": "Items"} if workspace is None else workspace,
                 self.BASE + "/users/@me/permissions": permissions("view_items", "add_items") if granted is None else granted,
-                self.BASE + "/fields": {"fields": []} if fields is None else fields}
+                self.BASE + "/fields": {"fields": []} if fields is None else fields,
+                self.BASE + "/sections": []}
 
     def test_a_workspace_the_user_may_use_is_valid_and_carries_its_fields(self):
         result = validate(self.answers(fields={"fields": [field("TITLE")]}))
         self.assertEqual((result["valid"], result["message"]), (True, "Workspace 'Items' is valid."))
         self.assertEqual([f["id"] for f in result["fields"]], ["TITLE"])
+
+    def test_each_field_says_which_section_of_the_form_holds_it(self):
+        answers = self.answers(fields={"fields": [field("TITLE"), field("WEIGHT"), field("LOOSE")]})
+        answers[self.BASE + "/sections"] = [
+            {"__self__": self.BASE + "/sections/2", "title": "Physical", "fields": [{"link": self.BASE + "/fields/WEIGHT"}]},
+            {"__self__": self.BASE + "/sections/1", "title": "General", "fields": [{"link": self.BASE + "/fields/TITLE"}]}]
+        placed = {f["id"]: (f["section"], f["section_order"]) for f in validate(answers)["fields"]}
+        self.assertEqual(placed, {"TITLE": ("General", 1), "WEIGHT": ("Physical", 0), "LOOSE": ("", 2)})
+
+    def test_a_classification_section_is_not_offered_and_sections_go_by_their_display_order(self):
+        answers = self.answers(fields={"fields": [field("A"), field("B"), field("PREFIX")]})
+        answers[self.BASE + "/sections"] = [
+            {"__self__": self.BASE + "/sections/1", "title": "Later", "displayOrder": 5, "sectionType": "FIELDCONTAINER", "fields": [{"link": self.BASE + "/fields/A"}]},
+            {"__self__": self.BASE + "/sections/2", "title": "Classification", "displayOrder": 4, "sectionType": "CLASSIFICATION", "fields": [{"link": self.BASE + "/fields/PREFIX"}]},
+            {"__self__": self.BASE + "/sections/3", "title": "First", "displayOrder": 1, "sectionType": "FIELDCONTAINER", "fields": [{"link": self.BASE + "/fields/B"}]}]
+        placed = {f["id"]: (f["section"], f["section_order"]) for f in validate(answers)["fields"]}
+        self.assertEqual(placed, {"A": ("Later", 1), "B": ("First", 0), "PREFIX": ("", 2)})
+
+    def test_a_field_says_where_its_section_puts_it(self):
+        answers = self.answers(fields={"fields": [field("A"), field("B")]})
+        answers[self.BASE + "/sections"] = [{"__self__": self.BASE + "/sections/1", "title": "General",
+                                             "fields": [{"link": self.BASE + "/fields/B"}, {"link": self.BASE + "/fields/A"}]}]
+        self.assertEqual({f["id"]: f["field_order"] for f in validate(answers)["fields"]}, {"A": 1, "B": 0})
+
+    def test_sections_that_cannot_be_read_leave_the_workspace_valid_with_no_section_named(self):
+        answers = self.answers(fields={"fields": [field("TITLE")]})
+        answers[self.BASE + "/sections"] = FmApiError("down", 503)
+        result = validate(answers)
+        self.assertEqual((result["valid"], result["fields"][0]["section"]), (True, ""))
 
     def test_an_id_that_is_not_a_number_is_refused_before_anything_is_asked(self):
         client = Client({})
@@ -122,7 +156,7 @@ class FieldsTests(unittest.TestCase):
 class OptionsTests(unittest.TestCase):
     def test_a_picklist_whose_options_cannot_be_loaded_leaves_its_field_as_text(self):
         base = "/api/v3/workspaces/242"
-        answers = {base: {"name": "Items"}, base + "/users/@me/permissions": permissions("view_items", "add_items"),
+        answers = {base: {"name": "Items"}, base + "/users/@me/permissions": permissions("view_items", "add_items"), base + "/sections": [],
                    base + "/fields": {"fields": [field("OK", picklist="/api/v3/lookups/GOOD"), field("BAD", picklist="/api/v3/lookups/BAD")]},
                    "/api/v3/lookups/GOOD": {"totalCount": 1, "items": [{"link": "/api/v3/lookups/GOOD/options/1", "title": "One"}]},
                    "/api/v3/lookups/BAD": FmApiError("down", 503)}

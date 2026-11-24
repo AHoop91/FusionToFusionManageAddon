@@ -1,6 +1,6 @@
 # Validation: validators and refusals
 
-Two ways a wrong value is caught. The browser checks the validators Fusion Manage puts on a field before anything is sent (`validators.js`). Fusion Manage refuses what is still wrong, and the add-in reads the refusal and shows it beside the field it names (`refusal.py`). Both end in the same place on the form: a message under a field, and a message for the whole form.
+Two ways a wrong value is caught. The browser checks the validators Fusion Manage puts on a field before anything is sent (`shared/js/validators.js`). Fusion Manage refuses what is still wrong, and the add-in reads the refusal and shows it beside the field it names (`refusal.py`). Both end in the same place on the form: a message under a field, and a message for the whole form.
 
 Each shape named here is marked as seen in a real answer or assumed in "The refusal Fusion Manage sends" below.
 
@@ -36,7 +36,7 @@ The only refusal in the add-in log is of a Grid row, not of an item. It is not a
 
 So for that answer the person reads `HTTP 400 Bad Request {0} is required.` with nothing marked on a field. The tests (`tests/test_refusal.py`) use refusals shaped `{"message", "errors": [{"field": "TITLE", "message"}]}`, which are assumed. Do not build on the field tie-in for a real refusal until an item refusal has been seen; if you do see one, add its shape to "The refusal Fusion Manage sends" and extend `_walk` (for example to use `arguments`) with a test.
 
-## What the browser checks: `src/ui/web/products/js/validators.js`
+## What the browser checks: `src/ui/web/shared/js/validators.js`
 
 `ns.validators.check(field, value, lookup)` answers the first problem with a value as words, or `''`. `field` is `{title, required, validators}`, `value` is what the form would send, and `lookup(id)` gives `{title, value}` of another field on the form, or null. A check that names a field that is not on the form is skipped, and a validator the browser does not know is left to Fusion Manage.
 

@@ -13,6 +13,10 @@ const row = (level, number, quantity, name) => ({ level: level, item_number: num
 const ROWS = [row(0, 'A', '2'), row(1, 'A1'), row(1, 'A2'), row(0, 'B'), row(1, 'B1'), row(0, 'C')];
 const EBOM = S.ebomFromRows(ROWS, { item_number: 'TOP', name: 'Top' });
 
+// A structure whose MBOM was read with the given lines (``{number, quantity, children}``), mapped to the EBOM by item number.
+const line = (number, quantity, children) => ({ number: number, quantity: quantity, source: '', itemId: 'i' + number, edgeId: 'e', children: children || [] });
+const fromRead = (ebom, children) => S.create({ ebom: ebom, mbom: S.mapByNumber({ number: 'TOP', children: children }, ebom) });
+
 function fresh(options) {
   const s = S.create(Object.assign({ ebom: EBOM, phantom: true }, options || {}));
   const at = (...numbers) => {   // the uid of the line reached by item numbers from the top
@@ -48,14 +52,19 @@ test('moving a line to another assembly, and reordering under one', () => {
   assert.strictEqual(outline(), 'C,A[A2],B[A1,B1]');
 });
 
-test('a line cannot go inside itself, before itself, or under a part', () => {
+test('any line, even a part with no lines of its own, takes lines dropped on it, so a BOM can be built under it', () => {
+  const { s, at, outline } = fresh();
+  s.move([at('B')], at('C'), '');
+  assert.strictEqual(outline(), 'A[A1,A2],C[B[B1]]');
+  s.addItems([{ id: '9', number: 'X1' }], at('C', 'B', 'B1'), '');
+  assert.strictEqual(outline(), 'A[A1,A2],C[B[B1[X1]]]');
+});
+
+test('a line cannot go inside itself or before a line that is not beside it', () => {
   const { s, at, outline } = fresh();
   assert.throws(() => s.move([at('A')], at('A', 'A1'), ''), failsWith('inside_itself'));
   assert.throws(() => s.move([at('A')], at('A'), ''), failsWith('inside_itself'));
-  assert.throws(() => s.move([at('B')], at('C'), ''), failsWith('not_assembly'));
   assert.throws(() => s.move([at('C')], at('B'), at('A')), failsWith('before_not_under'));
-  assert.throws(() => s.copy([at('A')], at('A'), ''), failsWith('inside_itself'));
-  assert.throws(() => s.copy([at('A')], at('A', 'A1'), ''), failsWith('inside_itself'));
   assert.strictEqual(outline(), 'A[A1,A2],B[B1],C', 'a refused edit changes nothing');
   assert.strictEqual(s.canUndo(), false);
 });
@@ -64,15 +73,6 @@ test('moving a line and the assembly it is in moves them together', () => {
   const { s, at, outline } = fresh();
   s.move([at('A'), at('A', 'A1')], at('B'), '');
   assert.strictEqual(outline(), 'B[B1,A[A1,A2]],C');
-});
-
-test('copying reuses a component in another place, as a new line', () => {
-  const { s, at, outline } = fresh();
-  const [copy] = s.copy([at('C')], at('B'), '');
-  assert.strictEqual(outline(), 'A[A1,A2],B[B1,C],C');
-  assert.notStrictEqual(copy, at('C'));
-  s.copy([at('A')], at('B'), '');
-  assert.strictEqual(outline(), 'A[A1,A2],B[B1,C,A[A1,A2]],C');
 });
 
 test('a phantom assembly can take lines in as it is made, and needs a free item number and the setting', () => {
@@ -91,33 +91,6 @@ test('adopting the line the new assembly goes before puts it where that line was
   const { s, at, outline } = fresh();
   s.createAssembly('assembly', S.ROOT, at('B'), { number: 'X' }, [at('B')]);
   assert.strictEqual(outline(), 'A[A1,A2],X[B[B1]],C');
-});
-
-test('splitting into an assembly that is there already joins the same item into one line and keeps the totals', () => {
-  const { s, at, outline } = fresh();
-  s.copy([at('A', 'A1')], at('B'), '');
-  s.splitInto(at('A'), [at('A', 'A1')], at('B'));
-  assert.strictEqual(outline(), 'A[A2],B[B1,A1],C');
-  assert.strictEqual(s.find(at('B', 'A1')).quantity, '3', 'one A1 already under B, and two more: A is made twice and holds one each');
-  assert.throws(() => s.splitInto(at('A'), [at('A', 'A2')], at('B')), failsWith('split_some'));
-  assert.throws(() => s.splitInto(at('B'), [at('B', 'B1')], at('B')), failsWith('split_same'));
-  assert.throws(() => s.splitInto(S.ROOT, [at('A')], at('B')), failsWith('split_root'));
-  s.undo();
-  assert.strictEqual(outline(), 'A[A1,A2],B[B1,A1],C');
-  const nested = fresh();
-  nested.s.copy([nested.at('B')], nested.at('A'), '');
-  assert.throws(() => nested.s.splitInto(nested.at('A'), [nested.at('A', 'B')], nested.at('A', 'B')), failsWith('split_inside'));
-});
-
-test('splitting an assembly puts some of its lines in a new assembly next to it, with its quantity', () => {
-  const { s, at, outline } = fresh();
-  const id = s.split(at('A'), [at('A', 'A2')], 'phantom', { number: 'A-2' });
-  assert.strictEqual(outline(), 'A[A1],A-2[A2],B[B1],C');
-  assert.strictEqual(s.find(id).quantity, '2');
-  const whole = fresh();
-  assert.throws(() => whole.s.split(whole.at('A'), [], 'assembly', { number: 'Z' }), failsWith('split_some'));
-  assert.throws(() => whole.s.split(whole.at('A'), [whole.at('A', 'A1'), whole.at('A', 'A2')], 'assembly', { number: 'Z' }), failsWith('split_some'));
-  assert.throws(() => whole.s.split(whole.at('A'), [whole.at('B')], 'assembly', { number: 'Z' }), failsWith('split_direct'));
 });
 
 test('adding items from Fusion Manage and from the EBOM, and removing lines', () => {
@@ -167,9 +140,9 @@ test('compare says what the MBOM lacks, what has another quantity, and what sits
   s.move([at('B', 'B1')], at('A'), '');
   let c = s.compare();
   assert.strictEqual(c.ebom['0.2'].missing, true);
-  assert.deepStrictEqual(plain(c.ebom['0.0']), { missing: false, quantity: true, exceeded: true, moved: false, matched: false });
-  assert.deepStrictEqual(plain(c.ebom['0.1.0']), { missing: false, quantity: false, exceeded: false, moved: true, matched: true });
-  assert.deepStrictEqual(plain(c.ebom['0.0.0']), { missing: false, quantity: false, exceeded: false, moved: false, matched: true });
+  assert.deepStrictEqual(plain(c.ebom['0.0']), { missing: false, quantity: true, exceeded: true, moved: false, matched: false, bought: false, blocked: false });
+  assert.deepStrictEqual(plain(c.ebom['0.1.0']), { missing: false, quantity: false, exceeded: false, moved: true, matched: true, bought: false, blocked: false });
+  assert.deepStrictEqual(plain(c.ebom['0.0.0']), { missing: false, quantity: false, exceeded: false, moved: false, matched: true, bought: false, blocked: false });
   assert.strictEqual(c.mbom[at('A')], 'mapped');
   s.createAssembly('phantom', S.ROOT, '', { number: 'PH' }, [at('A', 'A1')]);
   c = s.compare();
@@ -234,24 +207,17 @@ test('a blank EBOM quantity is 1, and the lines of a component add up against th
   assert.strictEqual(ebom.children[0].quantity, '1');
   const s = S.create({ ebom: ebom });
   assert.strictEqual(s.compare().ebom['0.0'].quantity, false);
-  const b = s.root().children[1].uid;
-  s.copy([b], S.ROOT, '');
-  assert.strictEqual(s.compare().ebom['0.1'].quantity, true, 'two lines of 2 are 4, not 2');
-  s.setQuantity(s.root().children[2].uid, '1');
-  s.setQuantity(b, '1');
-  assert.strictEqual(s.compare().ebom['0.1'].quantity, false, '1 and 1 are 2');
+  const two = fromRead(ebom, [line('A', '1'), line('B', '2'), line('B', '2')]);
+  assert.strictEqual(two.compare().ebom['0.1'].quantity, true, 'two lines of 2 are 4, not 2');
+  two.setQuantity(two.root().children[2].uid, '1');
+  two.setQuantity(two.root().children[1].uid, '1');
+  assert.strictEqual(two.compare().ebom['0.1'].quantity, false, '1 and 1 are 2');
 });
 
 test('the EBOM carries the component id', () => {
   const ebom = S.ebomFromRows([Object.assign(row(0, 'A'), { id: 'cA' })], { item_number: 'TOP' });
   assert.strictEqual(ebom.children[0].componentId, 'cA');
   assert.strictEqual(S.create({ ebom: ebom }).root().children[0].componentId, 'cA');
-});
-
-test('copying a new assembly is refused, since the copy would carry the same item number', () => {
-  const { s, at } = fresh();
-  s.createAssembly('assembly', S.ROOT, '', { number: 'X' });
-  assert.throws(() => s.copy([at('X')], S.ROOT, ''), failsWith('copy_new_assembly'));
 });
 
 test('a line that is moving may name itself as the one to go before; a move that changes nothing is no step; ids count once, in tree order', () => {
@@ -264,30 +230,6 @@ test('a line that is moving may name itself as the one to go before; a move that
   s.undo();
   s.move([at('B'), at('A')], S.ROOT, at('A'));
   assert.strictEqual(outline(), 'A[A1,A2],B[B1],C', 'before the next line that stays: A and B are already there');
-});
-
-test('splitting into an assembly made more than once keeps the totals, or is refused', () => {
-  const { s, at, outline } = fresh();
-  s.setQuantity(at('B'), '4');
-  s.splitInto(at('A'), [at('A', 'A1')], at('B'));   // A is made 2 times, B 4: each A1 under A is half an A1 under B
-  assert.strictEqual(outline(), 'A[A2],B[B1,A1],C');
-  assert.strictEqual(s.find(at('B', 'A1')).quantity, '0.5');
-  const odd = fresh();
-  odd.s.setQuantity(odd.at('B'), '3');
-  assert.throws(() => odd.s.splitInto(odd.at('A'), [odd.at('A', 'A1')], odd.at('B')), failsWith('quantity_inexact'));
-  assert.strictEqual(odd.outline(), 'A[A1,A2],B[B1],C');
-});
-
-test('splitting joins the same item whatever its case, and only the same kind of line', () => {
-  const { s, at } = fresh();
-  s.addItems([{ id: '9', number: 'a1', name: 'x' }], at('B'), '');
-  s.splitInto(at('A'), [at('A', 'A1')], at('B'));
-  assert.strictEqual(s.find(at('B')).children.filter((c) => c.number.toLowerCase() === 'a1').length, 2, 'an added item and a component are not the same line');
-  const other = fresh();
-  other.s.copy([other.at('A', 'A1')], other.at('B'), '');
-  other.s.setQuantity(other.at('B', 'A1'), '1');
-  other.s.splitInto(other.at('A'), [other.at('A', 'A1')], other.at('B'));
-  assert.strictEqual(other.s.find(other.at('B', 'A1')).quantity, '3');
 });
 
 test('removing the first of three lines does not make the other two reordered', () => {
@@ -334,7 +276,7 @@ test('the MBOM read is mapped to the EBOM by item number, so one that mirrors it
   assert.deepStrictEqual(plain(mapped.children.slice(1).map((c) => c.children[0].source)), ['0.1.0', '0.0.0']);
   assert.strictEqual(read.children[0].source, undefined, 'the tree given is left as it is');
   const s = S.create({ ebom: ebom, mbom: mapped });
-  Object.values(s.compare().ebom).forEach((state) => assert.deepStrictEqual(plain(state), { missing: false, quantity: false, exceeded: false, moved: false, matched: true }));
+  Object.values(s.compare().ebom).forEach((state) => assert.deepStrictEqual(plain(state), { missing: false, quantity: false, exceeded: false, moved: false, matched: true, bought: false, blocked: false }));
   const none = S.mapByNumber(node('TOP', '', [node(''), node('nope')]), ebom);
   assert.deepStrictEqual(plain(none.children.map((c) => c.source)), ['', '']);
 });
@@ -380,11 +322,7 @@ test('a quantity is plain decimal digits: no hex, exponent or sign, and it is ke
 
 test('quantities that add up to the EBOM quantity within rounding are not flagged', () => {
   const rows = [row(0, 'A', '0.3')];
-  const s = S.create({ ebom: S.ebomFromRows(rows, { item_number: 'TOP' }) });
-  const a = s.root().children[0].uid;
-  s.setQuantity(a, '0.1');
-  s.copy([a], S.ROOT, '');
-  s.copy([a], S.ROOT, '');
+  const s = fromRead(S.ebomFromRows(rows, { item_number: 'TOP' }), [line('A', '0.1'), line('A', '0.1'), line('A', '0.1')]);
   assert.strictEqual(s.compare().ebom['0.0'].quantity, false, '0.1 + 0.1 + 0.1 is 0.30000000000000004');
 });
 
@@ -407,15 +345,16 @@ test('an EBOM line is matched when the lines made from it, in every assembly, ad
   // TOP: P1 [S (x2)], P2 [S (x2)], Q (x4): S is in two places, Q is one line of 4
   const rows = [row(0, 'P1'), row(1, 'S', '2'), row(0, 'P2'), row(1, 'S', '2'), row(0, 'Q', '4')];
   const ebom = S.ebomFromRows(rows, { item_number: 'TOP' });
-  const s = S.create({ ebom: ebom });
+  const first = S.create({ ebom: ebom });
+  assert.strictEqual(first.compare().ebom['0.0'].matched, true);
+  assert.strictEqual(first.compare().ebom['0.2'].matched, true);
+  first.setQuantity(first.root().children[2].uid, '3');
+  assert.strictEqual(first.compare().ebom['0.2'].matched, false, 'part covered: stays normal, with the quantity flag');
+  assert.strictEqual(first.compare().ebom['0.2'].quantity, true);
+  // as read, with a second line of Q under P1: 3 + 3 = 6 is over 4
+  const s = fromRead(ebom, [line('P1', '1', [line('S', '2'), line('Q', '3')]), line('P2', '1', [line('S', '2')]), line('Q', '3')]);
   const at = (...n) => { let node = s.root(); n.forEach((x) => { node = node.children.find((c) => c.number === x); }); return node.uid; };
   const state = (key) => s.compare().ebom[key];
-  assert.strictEqual(state('0.0').matched, true);
-  assert.strictEqual(state('0.2').matched, true);
-  s.setQuantity(at('Q'), '3');
-  assert.strictEqual(state('0.2').matched, false, 'part covered: stays normal, with the quantity flag');
-  assert.strictEqual(state('0.2').quantity, true);
-  s.copy([at('Q')], at('P1'), '');   // 3 + 3 = 6 is over 4
   assert.strictEqual(state('0.2').matched, false);
   assert.strictEqual(state('0.2').quantity, true, 'over covered');
   s.setQuantity(at('P1', 'Q'), '1');   // 3 + 1 = 4: split over two assemblies
@@ -442,9 +381,9 @@ test('the same component in two EBOM places is matched place by place, and summe
   assert.strictEqual(c['0.0.0'].matched, true);
   assert.strictEqual(c['0.1.0'].matched, true);
   assert.strictEqual(c['0.1.0'].moved, true);
-  s.copy([s.find(p1).children[0].uid], p1, '');   // a second line made from 0.0.0: 2 + 2 against 2
-  assert.strictEqual(s.compare().ebom['0.0.0'].matched, false);
-  assert.strictEqual(s.compare().ebom['0.0.0'].quantity, true);
+  const twice = fromRead(ebom, [line('P1', '1', [line('S', '2'), line('S', '2'), line('S', '2')]), line('P2', '1')]);   // a second line made from 0.0.0: 2 + 2 against 2
+  assert.strictEqual(twice.compare().ebom['0.0.0'].matched, false);
+  assert.strictEqual(twice.compare().ebom['0.0.0'].quantity, true);
 });
 
 test('the EBOM carries the sequence of each line', () => {
@@ -461,4 +400,89 @@ test('adding an EBOM line that is all in the MBOM already is refused, and the tr
   s.remove([at('B')]);
   s.addFromEbom(['0.1'], S.ROOT, '', true);
   assert.strictEqual(outline(), before.replace('B[B1],C', 'C,B[B1]'));
+});
+
+test('an assembly a purchased item stands for is matched, with bought set, though nothing under it is in the MBOM', () => {
+  const ebom = S.ebomFromRows([row(0, 'P1'), row(1, 'S')], { item_number: 'TOP' });
+  const s = S.create({ ebom: ebom });
+  s.remove([s.root().children[0].uid]);
+  assert.strictEqual(s.compare().ebom['0.0'].matched, false, 'gone from the MBOM');
+  s.addItems([{ id: '9', number: 'P1-B', quantity: '1', source: '0.0' }], S.ROOT, '');
+  const c = s.compare().ebom;
+  assert.strictEqual(c['0.0'].matched, true);
+  assert.strictEqual(c['0.0'].bought, true);
+  assert.strictEqual(c['0.0.0'].missing, true, 'what is under it is not in the MBOM');
+  assert.strictEqual(c['0.0.0'].bought, false);
+  s.setQuantity(s.root().children[0].uid, '2');
+  assert.strictEqual(s.compare().ebom['0.0'].matched, false, 'only when all its quantity is covered');
+});
+
+test('a line read from Fusion Manage that is an EBOM line\'s number and the bought suffix is that line\'s bought version: mapped to it, bought, matched', () => {
+  const ebom = S.ebomFromRows([row(0, 'P1', '4'), row(1, 'S'), row(0, 'Q')], { item_number: 'TOP' });
+  const read = (suffix) => S.mapByNumber({ number: 'TOP', children: [line('P1-B', '4'), line('Q', '1')] }, ebom, suffix);
+  assert.strictEqual(read('').children[0].source, '', 'with no suffix it is a line with no EBOM line');
+  const mapped = read('-B');
+  assert.strictEqual(mapped.children[0].source, '0.0');
+  assert.strictEqual(mapped.children[0].bought, true);
+  assert.strictEqual(mapped.children[1].bought, false, 'a line with an EBOM line\'s own number is not');
+  const s = S.create({ ebom: ebom, mbom: mapped });
+  const c = s.compare();
+  assert.strictEqual(c.ebom['0.0'].matched, true, 'it covers its EBOM line, which has lines of its own under it');
+  assert.strictEqual(c.ebom['0.0'].bought, true);
+  assert.strictEqual(c.mbom[s.root().children[0].uid], 'mapped');
+  assert.deepStrictEqual(plain(s.changes().changes), {}, 'nothing changed since it was read');
+});
+
+test('a line with the EBOM line\'s own number wins over its bought version, and the bought version of a line is taken once', () => {
+  const ebom = S.ebomFromRows([row(0, 'P1')], { item_number: 'TOP' });
+  const both = S.mapByNumber({ number: 'TOP', children: [line('P1-B', '1'), line('P1', '1')] }, ebom, '-B');
+  assert.deepStrictEqual(plain(both.children.map((c) => [c.source, c.bought])), [['', false], ['0.0', false]]);
+  const twice = S.mapByNumber({ number: 'TOP', children: [line('P1-B', '1'), line('P1-B', '1')] }, ebom, '-B');
+  assert.deepStrictEqual(plain(twice.children.map((c) => c.source)), ['0.0', '']);
+});
+
+test('adding an EBOM line the MBOM holds some of adds the rest to its line under the same assembly, else as a line of its own; with none left it is refused', () => {
+  const ebom = S.ebomFromRows([row(0, 'P', '4'), row(0, 'Q', '2'), row(0, 'R', '4'), row(1, 'S', '1')], { item_number: 'TOP' });
+  const s = S.create({ ebom: ebom, mbom: S.mapByNumber({ number: 'TOP', children: [line('P', '1'), line('Q', '2'), line('R', '1', [line('S', '1')])] }, ebom) });
+  const before = s.root().children.length;
+  const [uid] = s.addFromEbom(['0.0'], S.ROOT, '', false);
+  assert.strictEqual(s.root().children.length, before, 'no second line: it went to the one under the same assembly');
+  assert.strictEqual(s.find(uid).quantity, '4');
+  assert.strictEqual(s.compare().ebom['0.0'].matched, true);
+  const [other] = s.addFromEbom(['0.2'], s.find(s.root().children[0].uid).uid, '', false);   // R into P: not its assembly
+  assert.strictEqual(s.find(other).quantity, '3', 'under another assembly it is a line of its own, with the rest');
+  assert.strictEqual(s.root().children.length, before);
+  assert.throws(() => s.addFromEbom(['0.0'], S.ROOT, '', false), failsWith('would_exceed'));
+  assert.throws(() => s.addFromEbom(['0.1'], S.ROOT, '', false), failsWith('would_exceed'));
+});
+
+test('a line removed and added again in the same edit stays the line it was, not new and not removed', () => {
+  const { s, at } = fresh({ mbom: READ() });
+  s.remove([at('C')]);
+  s.addItems([{ id: '6', number: 'C' }], S.ROOT, at('D'));
+  const c = s.changes();
+  assert.deepStrictEqual(plain(c.removed), [], 'the line is still there');
+  assert.deepStrictEqual(plain(Object.values(c.changes).filter((f) => f.new)), [], 'and it is not new');
+  assert.deepStrictEqual(plain(Object.values(c.changes)), [], 'the same place and quantity: nothing to publish');
+  s.remove([s.root().children.find((n) => n.number === 'C').uid]);
+  s.addItems([{ id: '6', number: 'C', quantity: '3' }], S.ROOT, at('D'));
+  const q = Object.values(s.changes().changes);
+  assert.strictEqual(q.length, 1);
+  assert.strictEqual(q[0].quantity, true, 'a different quantity is an update of the line it was');
+  assert.strictEqual(q[0].edgeId, 'e6');
+});
+
+test('what is under a purchased part is blocked: not addable, and the structure refuses it', () => {
+  const ebom = S.ebomFromRows([row(0, 'P1'), row(1, 'S'), row(2, 'S1'), row(0, 'Q')], { item_number: 'TOP' });
+  const s = S.create({ ebom: ebom });
+  s.remove([s.root().children[0].uid]);
+  assert.strictEqual(s.compare().ebom['0.0.0'].blocked, false, 'not until a purchased part stands for P1');
+  s.addItems([{ id: '9', number: 'P1-B', quantity: '1', source: '0.0' }], S.ROOT, '');
+  const c = s.compare().ebom;
+  assert.strictEqual(c['0.0'].blocked, false, 'the purchased line itself is matched, not blocked');
+  assert.strictEqual(c['0.0.0'].blocked, true);
+  assert.strictEqual(c['0.0.0.0'].blocked, true, 'every level under it');
+  assert.strictEqual(c['0.1'].blocked, false);
+  assert.throws(() => s.addFromEbom(['0.0.0'], S.ROOT, '', true), failsWith('under_purchased'));
+  assert.throws(() => s.addFromEbom(['0.0.0.0'], S.ROOT, '', false), failsWith('under_purchased'));
 });

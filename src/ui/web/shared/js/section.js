@@ -15,8 +15,9 @@
     const card = el('section', 'section');
     content.classList.add('section-body');
     if (title) {
-      const bar = el('button', 'section-title');
-      bar.type = 'button';
+      const bar = el('div', 'section-title');   // not a <button>: one inside a disabled fieldset (a locked card of Settings) could not be opened
+      bar.setAttribute('role', 'button');
+      bar.tabIndex = 0;
       bar.appendChild(el('span', '', title));
       bar.appendChild(ns.svg(['M6 9l6 6 6-6'], 20));
       let opened = false;
@@ -33,6 +34,9 @@
       card.appendChild(content);
       fold(Boolean(options && options.folded));
       bar.addEventListener('click', function () { fold(!content.hidden); });
+      bar.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fold(!content.hidden); }
+      });
       return card;
     }
     card.appendChild(content);

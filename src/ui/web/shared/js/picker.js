@@ -18,7 +18,8 @@
  *   many items on; takenValues(wrap) -> values used elsewhere, greyed out; alignRight -> the list opens leftwards; onOpen(wrap) -> called as it opens;
  *   footer(wrap) -> {label, icon: svg paths, run} or null: an entry after the items that is not a choice but an action (it closes the list);
  *   valueClass -> a hidden input of that class carries the (first) value.
- * How it looks: className on the wrapper, buttonClass on the button.
+ * How it looks: className on the wrapper, buttonClass on the button; inlineSearch -> the search box is typed into the button's own field
+ * (it covers the button's text while the list is open) instead of sitting at the top of the list.
  *
  * ``make(cfg, selected)`` builds one (``selected``: the value a page's single picker holds) and fires a `pick` event on its wrapper when the choice
  * changes. The wrapper has ``refresh()`` (the button's text, after the lists change), ``rebuildOpen()`` (the list, if open, after the items
@@ -74,8 +75,10 @@
     if (cfg.multi) list.setAttribute('aria-multiselectable', 'true');
     button.setAttribute('aria-controls', id);
     button.appendChild(text);
-    [search, clear, count, list, status].forEach(function (part) { menu.appendChild(part); });
-    [input, chips, button, menu].forEach(function (part) { if (part) wrap.appendChild(part); });
+    const inline = !!cfg.inlineSearch;
+    if (inline) wrap.classList.add('pk-inline');
+    (inline ? [clear, count, list, status] : [search, clear, count, list, status]).forEach(function (part) { menu.appendChild(part); });
+    [input, chips, button, inline ? search : null, menu].forEach(function (part) { if (part) wrap.appendChild(part); });
 
     function current() { return chosen.length ? chosen[0].value : ''; }
     function labelOf(entry) { return cfg.label ? cfg.label(entry.value) : entry.label; }
@@ -263,6 +266,13 @@
       list.style.maxHeight = '';
       const cap = parseFloat(getComputedStyle(list).maxHeight);
       menu.style.width = box.width + 'px';   // a stylesheet may make it wider
+      wrap.classList.toggle('searching', inline && !search.hidden);
+      if (inline) {   // the search box over the button's text, leaving room for its arrow
+        search.style.left = button.offsetLeft + 1 + 'px';
+        search.style.top = button.offsetTop + 1 + 'px';
+        search.style.width = button.offsetWidth - 34 + 'px';
+        search.style.height = button.offsetHeight - 2 + 'px';
+      }
       const width = menu.offsetWidth;
       menu.style.left = Math.max(8, Math.min(cfg.alignRight ? box.right - width : box.left, view - 8 - width)) + 'px';
       const chrome = menu.offsetHeight - list.offsetHeight;   // search box and padding
@@ -270,6 +280,7 @@
       const above = box.top - 8;
       const up = menu.offsetHeight > below && above > below;
       menu.classList.toggle('up', up);
+      wrap.classList.toggle('opens-up', up);   // a stylesheet joins the list to the button on the side it opens
       menu.style.top = up ? 'auto' : box.bottom + 'px';
       menu.style.bottom = up ? window.innerHeight - box.top + 'px' : 'auto';
       list.style.maxHeight = Math.max(80, Math.min(cap, Math.max(up ? above : below, 120) - chrome)) + 'px';
@@ -286,6 +297,7 @@
 
     function close() {
       menu.hidden = true;
+      wrap.classList.remove('searching');
       button.setAttribute('aria-expanded', 'false');
       token++;   // a batch still on its way is let go
       clearTimeout(timer);
@@ -306,6 +318,7 @@
       document.addEventListener('scroll', scrolled, true);
       window.addEventListener('resize', close);
       search.value = '';
+      if (inline) search.placeholder = !cfg.multi && chosen.length ? labelOf(chosen[0]) : cfg.search;   // what is chosen stays readable until typing
       if (cfg.onOpen) cfg.onOpen(wrap);
       if (cfg.source) load(false); else render();   // built on open, so it reflects the other rows and the latest lists
       mark(menu.querySelector('.pk-item.selected'));

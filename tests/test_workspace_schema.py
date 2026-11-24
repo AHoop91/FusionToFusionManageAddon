@@ -78,6 +78,7 @@ class ValidateTests(unittest.TestCase):
     def _service(self, layout):
         service = WorkspaceService(mock.Mock())
         service.fields = mock.Mock(return_value=([], ""))
+        service._place = mock.Mock()
         patcher = mock.patch("src.fm.workspace.read_layout", return_value=layout)
         patcher.start()
         self.addCleanup(patcher.stop)

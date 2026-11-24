@@ -14,14 +14,15 @@ const row = (level, number, quantity, extra) => Object.assign({ level: level, id
 const ROWS = [row(0, 'A', '2'), row(1, 'A1'), row(1, 'A2'), row(0, 'B'), row(1, 'B1'), row(0, 'C')];
 
 function open(options) {
-  const opts = Object.assign({ rows: ROWS, targetId: '', phantom: false, partial: false }, options || {});
-  const dom = new JSDOM('<button id="pub-add-items"></button><button id="pub-view-table"></button><button id="pub-view-structure"></button>'
-    + '<section id="pub-bom"></section><section id="pub-structure" hidden></section>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const opts = Object.assign({ rows: ROWS, targetId: '', phantom: false, partial: false, bought: true }, options || {});
+  const dom = new JSDOM('<section id="pub-bom"></section><section id="pub-structure" hidden></section>', { runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   w.MfgUi = {};
   const ns = w.MfgUi;
   ['../shared/js/dom.js'].forEach((src) => run(w, src));
   ns.i18n = englishI18n();
+  const toasts = [];   // what a refused edit says: a toast, never a line above the panes
+  ns.toast = { show: (text) => toasts.push(text) };
   const added = [];
   ns.pubAddItems = { open: (o) => added.push(o) };
   ns.bomTable = { foldTools: (collapse, expand) => {   // the table's pair of buttons (tested with the table)
@@ -34,7 +35,6 @@ function open(options) {
     });
     return pair;
   } };
-  ns.picker = { make: () => Object.assign(w.document.createElement('div'), { getPicked: () => [] }) };   // the real picker is tested with its own page
   ['js/ui.js', 'js/mbom-structure.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
   const calls = { loadTree: 0, askMbom: 0 };
   const state = { partial: opts.partial };
@@ -42,11 +42,12 @@ function open(options) {
     design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R' }), rows: () => opts.rows, partial: () => state.partial,
     loadTree: () => { calls.loadTree++; }, askMbom: () => { calls.askMbom++; }, targetId: () => opts.targetId, target: () => (opts.targetId ? 'TOP-M' : ''),
     phantom: () => opts.phantom,
+    boughtReady: () => opts.bought,
   });
   const $ = (id) => w.document.getElementById(id);
   const api = {
-    w: w, ns: ns, calls: calls, state: state, added: added,
-    show: () => $('pub-view-structure').click(),
+    w: w, ns: ns, calls: calls, state: state, added: added, toasts: toasts,
+    show: () => ns.mbomViewer.show(true),
     ebom: () => $('pub-structure').querySelectorAll('.sv-pane')[0],
     mbom: () => $('pub-structure').querySelectorAll('.sv-pane')[1],
     lines: (pane) => [...pane.querySelectorAll('.sv-row')].map((r) => r.querySelector('.sv-pn').textContent),
@@ -54,7 +55,6 @@ function open(options) {
     click: (el, init) => el.dispatchEvent(new w.MouseEvent('click', Object.assign({ bubbles: true }, init || {}))),
     button: (label) => [...$('pub-structure').querySelectorAll('.sv-bar button')].find((b) => b.getAttribute('aria-label') === label),
     act: (pane, number, name) => [...api.rowOf(pane, number).querySelectorAll('.sv-act')].find((b) => b.dataset.act === name),
-    message: () => $('pub-structure').querySelector('.sv-message'),
     openAll: () => api.button('Expand all').click(),
     drag: (fromEl, toEl, init) => {   // the pointer goes down on a line, moves over another and is released
       const doc = w.document;
@@ -149,21 +149,22 @@ test('a quantity is changed in the line, and a refused one is said in the messag
   };
   edit('4');
   assert.strictEqual(quantity(), '4.0');
-  assert.strictEqual(v.message().hidden, true);
-  assert.ok(v.rowOf(v.mbom(), 'C').querySelector('.sv-badge-chg-quantity') === null, 'a copy of the EBOM has nothing read to change from: it is new');
+  assert.deepStrictEqual(v.toasts, []);
+  assert.ok(v.rowOf(v.mbom(), 'C').querySelector('.sv-note-btn').title.indexOf('Quantity changed') < 0, 'a copy of the EBOM has nothing read to change from: it is new');
   edit('0');
   assert.strictEqual(quantity(), '4.0');
-  assert.strictEqual(v.message().hidden, false);
-  assert.match(v.message().textContent, /above 0/);
+  assert.strictEqual(v.toasts.length, 1);
+  assert.match(v.toasts[0], /above 0/);
+  assert.strictEqual(v.w.document.querySelector('.sv-message'), null, 'there is no line for it above the panes');
   edit('5');
-  assert.strictEqual(v.message().hidden, true, 'the next edit that works clears the message');
+  assert.strictEqual(v.toasts.length, 1, 'an edit that works says nothing');
 });
 
 test('remove, undo and redo, and the buttons say why they cannot be used', skip, () => {
   const v = built();
   assert.strictEqual(v.button('Undo').disabled, true);
   assert.match(v.button('Undo').title, /nothing to undo/);
-  assert.match(v.act(v.mbom(), 'C', 'remove').title, /Remove from the MBOM/);
+  assert.match(v.act(v.mbom(), 'C', 'remove').title, /Remove from the bill of materials/);
   v.act(v.mbom(), 'C', 'remove').click();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B']);
   assert.ok(v.ebom().querySelector('.sv-row-missing'), 'the EBOM line that has no MBOM line is marked');
@@ -171,43 +172,22 @@ test('remove, undo and redo, and the buttons say why they cannot be used', skip,
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C']);
   v.button('Redo').click();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B']);
-  assert.strictEqual(v.button('Create phantom assembly'), undefined, 'no phantom button for now');
+  assert.strictEqual(v.button('Create assembly'), undefined, 'the toolbar has no Create assembly: Create item makes the new item');
 });
 
-test('create assembly needs a typed number that is free, takes the selected lines in, and says why when it cannot', skip, () => {
-  const v = built();
-  v.click(v.rowOf(v.mbom(), 'B'));
-  v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
-  v.button('Create assembly').click();
-  const form = v.w.document.querySelector('.sv-form');
-  assert.strictEqual(form.hidden, false);
-  const [number] = form.querySelectorAll('input');
-  const submit = () => [...form.querySelectorAll('button')].find((b) => b.textContent === 'OK').click();
-  number.value = 'A';
-  number.dispatchEvent(new v.w.Event('input'));
-  submit();
-  assert.match(v.message().textContent, /already used/);
-  assert.strictEqual(form.hidden, false, 'the form stays open for another number');
-  number.value = 'X-1';
-  number.dispatchEvent(new v.w.Event('input'));
-  submit();
-  assert.strictEqual(form.hidden, true);
-  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'X-1', 'B', 'C'], 'X-1 took B and C in, and is open');
-  assert.ok(v.rowOf(v.mbom(), 'X-1').querySelector('.sv-badge-kind'));
-});
-
-test('dragging in the MBOM moves a line, with ctrl copies it, and a refused drop is said', skip, () => {
+test('dragging in the MBOM moves a line, and a refused drop is said', skip, () => {
   const v = built();
   v.openAll();
-  v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'B'));   // no layout in jsdom: the middle of a line that holds lines is "into"
+  const moved = v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'B'));   // no layout in jsdom: the middle of a line that holds lines is "into"
+  assert.strictEqual(moved.mode, 'move');
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'B1', 'C'], 'C went into B, which is open, after B1');
   assert.strictEqual(v.rowOf(v.mbom(), 'C').style.getPropertyValue('--indent'), '64px');
   v.drag(v.rowOf(v.mbom(), 'A'), v.rowOf(v.mbom(), 'A1'));
-  assert.match(v.message().textContent, /inside itself|not an assembly/);
-  const copied = v.drag(v.rowOf(v.mbom(), 'B1'), v.rowOf(v.mbom(), 'A'), { ctrlKey: true });
-  assert.strictEqual(copied.mode, 'copy');
+  assert.match(v.toasts[v.toasts.length - 1], /inside itself|not an assembly/);
+  const again = v.drag(v.rowOf(v.mbom(), 'B1'), v.rowOf(v.mbom(), 'A'), { ctrlKey: true });
+  assert.strictEqual(again.mode, 'move', 'ctrl does not copy: the line moves');
   v.openAll();
-  assert.strictEqual(v.lines(v.mbom()).filter((n) => n === 'B1').length, 2);
+  assert.strictEqual(v.lines(v.mbom()).filter((n) => n === 'B1').length, 1);
 });
 
 test('dragging an EBOM line into the MBOM adds it with what is under it, and Alt without', skip, () => {
@@ -215,7 +195,8 @@ test('dragging an EBOM line into the MBOM adds it with what is under it, and Alt
   v.openAll();
   v.button('Collapse all').click();
   v.act(v.mbom(), 'B', 'remove').click();
-  v.drag(v.rowOf(v.ebom(), 'B'), v.rowOf(v.mbom(), 'TOP'));
+  const added = v.drag(v.rowOf(v.ebom(), 'B'), v.rowOf(v.mbom(), 'TOP'));
+  assert.strictEqual(added.mode, 'add');
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'C', 'B', 'B1']);
   v.act(v.mbom(), 'C', 'remove').click();
@@ -234,13 +215,13 @@ test('the MBOM read from Fusion Manage is mapped by item number, marks what has 
   v.ns.mbomViewer.answer({ ok: true, data: { number: 'TOP-M', name: 'Top M', item_id: '77', children: [line('A', '2', [line('A1', '1'), line('A2', '1')]), line('OIL', '1'), line('C', '1')] } });
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'A1', 'A2', 'OIL', 'C']);
-  assert.ok(v.rowOf(v.mbom(), 'OIL').querySelector('.sv-badge-mfg'), 'a line with no EBOM line is marked');
-  assert.strictEqual(v.rowOf(v.mbom(), 'A').querySelector('.sv-badge-mfg'), null);
+  assert.match(v.rowOf(v.mbom(), 'OIL').querySelector('.sv-note-btn').title, /Not in the EBOM/, 'a line with no EBOM line says so');
+  assert.ok(!v.rowOf(v.mbom(), 'A').querySelector('.sv-note-btn') || !/Not in the EBOM/.test(v.rowOf(v.mbom(), 'A').querySelector('.sv-note-btn').title));
   assert.ok(v.rowOf(v.ebom(), 'B').classList.contains('sv-row-missing'), 'B is not in the MBOM');
   assert.strictEqual(v.mbom().closest('.sv-pane').querySelector('.sv-pane-title').textContent, 'Fusion Manage');
   v.act(v.mbom(), 'C', 'remove').click();
   assert.match(v.w.document.querySelector('.sv-removed').textContent, /Removed since it was read: C/);
-  assert.strictEqual(v.rowOf(v.mbom(), 'A').classList.contains('sv-chg-new'), false);
+  assert.strictEqual(v.rowOf(v.mbom(), 'A').classList.contains('sv-tone-new'), false);
 });
 
 test('a failed read of the MBOM is shown, and the search finds lines and opens what is above them', skip, () => {
@@ -264,7 +245,7 @@ test('add items opens the picker with the target item and puts what it returns i
   assert.strictEqual(v.added.length, 1);
   v.added[0].onAdd([{ id: '9', number: 'X9', name: 'Extra', link: '/api/v3/workspaces/57/items/9', linkable: null }]);
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C', 'X9']);
-  assert.ok(v.rowOf(v.mbom(), 'X9').querySelector('.sv-badge-kind'));
+  assert.match(v.rowOf(v.mbom(), 'X9').querySelector('.sv-note-btn').title, /Added item/);
 });
 
 const mbomTree = (children) => ({ number: 'TOP-M', name: 'Top M', item_id: '77', children: children });
@@ -301,14 +282,11 @@ test('a second answer, or one after the Bill of Materials was read again, never 
   assert.strictEqual(v.rowOf(v.mbom(), 'C').querySelector('.sv-qty').textContent, '6.0', 'neither does a tree read for the table');
 });
 
-test('reading the Bill of Materials again drops the structure, the form, the selection and the search', skip, () => {
+test('reading the Bill of Materials again drops the structure, the selection and the search', skip, () => {
   const v = built();
   v.click(v.rowOf(v.mbom(), 'C'));
-  v.button('Create assembly').click();
   const box = search(v, 'c');
-  assert.strictEqual(v.w.document.querySelector('.sv-form').hidden, false);
   v.ns.mbomViewer.reset();
-  assert.strictEqual(v.w.document.querySelector('.sv-form').hidden, true, 'a form left open would act on the lines of the new structure');
   assert.strictEqual(box.value, '');
   assert.match(v.w.document.getElementById('pub-structure').textContent, /Reading the Bill of Materials/);
   v.ns.mbomViewer.structureRead();
@@ -358,51 +336,55 @@ test('the search is run again after an edit and an undo', skip, () => {
 
 test('EBOM lines are added with the icons on them, no drag needed, the selection together', skip, () => {
   const v = built();
-  assert.strictEqual(v.act(v.ebom(), 'A', 'add_deep'), undefined, 'all of it is in the MBOM: nothing to add');
+  assert.strictEqual(v.act(v.ebom(), 'A', 'add'), undefined, 'all of it is in the MBOM: nothing to add');
   assert.strictEqual(v.rowOf(v.ebom(), 'A').dataset.drag, undefined);
   ['A', 'B', 'C'].forEach((n) => v.act(v.mbom(), n, 'remove').click());
-  assert.ok(v.act(v.ebom(), 'A', 'add_deep'), 'an assembly has both');
-  assert.strictEqual(v.act(v.ebom(), 'C', 'add_deep'), undefined, 'a part has the one');
+  assert.ok(v.act(v.ebom(), 'A', 'add'), 'an assembly has the one Add');
+  assert.strictEqual(v.act(v.ebom(), 'C', 'add_deep'), undefined, 'there is no separate add with the lines under it');
   v.click(v.rowOf(v.ebom(), 'B'));
   v.click(v.rowOf(v.ebom(), 'C'), { ctrlKey: true });
-  assert.match(v.act(v.ebom(), 'C', 'add_one').title, /2 selected lines/);
-  v.act(v.ebom(), 'C', 'add_one').click();
+  assert.match(v.act(v.ebom(), 'C', 'add').title, /2 selected lines/);
+  v.act(v.ebom(), 'C', 'add').click();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'B', 'C']);
-  v.act(v.ebom(), 'A', 'add_deep').click();
+  v.act(v.ebom(), 'A', 'add').click();
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()).slice(-3), ['A', 'A1', 'A2']);
 });
 
-test('the icons on a line: split, copy, new assembly, the bin last, and a handle to drag it by', skip, () => {
+test('the icons on a line: add to assembly, the bin last, and a handle to drag it by', skip, () => {
   const v = built();
   v.openAll();
   assert.ok(v.rowOf(v.mbom(), 'B').querySelector('.sv-grip'));
-  assert.strictEqual(v.act(v.mbom(), 'C', 'split'), undefined, 'only an assembly is split');
   const order = (id) => [...v.rowOf(v.mbom(), id).querySelectorAll('.sv-act')].map((b) => b.dataset.act);
-  assert.deepStrictEqual(order('A'), ['split', 'copy', 'assembly', 'remove'], 'the bin is always last');
-  assert.deepStrictEqual(order('C'), ['copy', 'assembly', 'remove']);
-  assert.strictEqual(v.act(v.mbom(), 'A', 'split').disabled, true);
-  assert.match(v.act(v.mbom(), 'A', 'split').title, /Select some of the lines/);
+  assert.deepStrictEqual(order('A'), ['addTo', 'remove'], 'the bin is always last');
+  assert.deepStrictEqual(order('C'), ['addTo', 'remove']);
   assert.strictEqual(v.rowOf(v.mbom(), 'TOP').querySelector('.sv-act'), null, 'the MBOM itself has none');
-  v.act(v.mbom(), 'C', 'copy').click();
-  assert.deepStrictEqual(v.lines(v.mbom()).filter((n) => n === 'C').length, 2);
-  v.click(v.rowOf(v.mbom(), 'A2'));
-  assert.strictEqual(v.act(v.mbom(), 'A', 'split').disabled, false);
-  v.act(v.mbom(), 'A', 'split').click();
-  const form = v.w.document.querySelector('.sv-form');
-  const [number] = form.querySelectorAll('input');
-  number.value = 'A-S';
-  number.dispatchEvent(new v.w.Event('input'));
-  [...form.querySelectorAll('button')].find((b) => b.textContent === 'OK').click();
-  assert.deepStrictEqual(v.lines(v.mbom()).slice(0, 6), ['TOP', 'A', 'A1', 'A-S', 'A2', 'B']);
-  v.button('Undo').click();   // A has both its lines again
-  v.click(v.rowOf(v.mbom(), 'A1'));
-  v.act(v.mbom(), 'A', 'split').click();
-  assert.ok(v.w.document.querySelector('.sv-form > div:not(.sv-form-actions)'), 'the lines can go into an assembly that is there already (a picker; the test page has a stand-in for it)');
   v.click(v.rowOf(v.mbom(), 'B'));
   v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
-  v.act(v.mbom(), 'C', 'assembly').click();
-  assert.match(v.w.document.querySelector('.sv-form-title').textContent, /New assembly/);
+});
+
+test('Add to assembly opens a tree with a search and moves the selected lines to the one chosen', skip, () => {
+  const v = built();
+  v.openAll();
+  v.click(v.rowOf(v.mbom(), 'B'));
+  v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
+  v.act(v.mbom(), 'C', 'addTo').click();
+  const doc = v.w.document;
+  const names = () => [...doc.querySelectorAll('.sv-dest-number')].map((n) => n.textContent);
+  assert.ok(doc.querySelector('.sv-dest-search'), 'a search is on top');
+  assert.strictEqual(doc.querySelector('.sv-dest svg.sv-tree-icon, .sv-dest .tree-icon'), null, 'no icons on the lines');
+  assert.ok(!names().includes('B') && !names().includes('C'), 'the lines being moved are not places');
+  assert.ok(names().includes('A'));
+  assert.strictEqual(doc.querySelector('.sv-dest-bar').hidden, true, 'the search is closed until the magnifier is used');
+  doc.querySelector('.sv-dest-find').click();
+  assert.strictEqual(doc.querySelector('.sv-dest-bar').hidden, false);
+  const search = doc.querySelector('.sv-dest-search');
+  search.value = 'a';
+  search.dispatchEvent(new v.w.Event('input'));
+  assert.ok(names().includes('A'), 'a search keeps the lines that match');
+  [...doc.querySelectorAll('.sv-dest-pick')].find((p) => p.querySelector('.sv-dest-number').textContent === 'A').click();
+  assert.strictEqual(doc.querySelector('.sv-dest'), null, 'the menu closes');
+  assert.strictEqual(v.rowOf(v.mbom(), 'B').parentNode, v.rowOf(v.mbom(), 'C').parentNode);
 });
 
 test('lines are tree items, and the line selected says so', skip, () => {
@@ -420,7 +402,7 @@ test('a line cut at the deepest level says its lines were not read', skip, () =>
   v.show();
   v.ns.mbomViewer.structureRead();
   v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1', { cut: true })]) });
-  assert.ok(v.rowOf(v.mbom(), 'C').querySelector('.sv-badge-cut'));
+  assert.match(v.rowOf(v.mbom(), 'C').querySelector('.sv-note-btn').title, /not read/);
 });
 
 test('a few thousand lines build and draw quickly, only the open ones drawn', skip, () => {
@@ -477,8 +459,9 @@ test('each line has its number: the design sequence in the EBOM, the place under
   assert.deepStrictEqual(seqs(v.ebom()), ['', '10', '20', '30', '40', '50', '60']);
   assert.deepStrictEqual(seqs(v.mbom()), ['', '1', '1', '2', '2', '1', '3']);
   v.act(v.mbom(), 'C', 'remove').click();
-  v.act(v.mbom(), 'B', 'copy').click();
-  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'B1', 'B']);
+  assert.deepStrictEqual(seqs(v.mbom()), ['', '1', '1', '2', '2', '1']);
+  v.act(v.ebom(), 'C', 'add').click();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'B1', 'C']);
   assert.deepStrictEqual(seqs(v.mbom()), ['', '1', '1', '2', '2', '1', '3']);
 });
 
@@ -487,13 +470,194 @@ test('an EBOM line all in the MBOM is greyed with a check mark, an assembly only
   v.openAll();
   const matched = () => [...v.ebom().querySelectorAll('.sv-row-matched .sv-pn')].map((n) => n.textContent);
   assert.deepStrictEqual(matched(), ['A', 'A1', 'A2', 'B', 'B1', 'C']);
-  assert.match(v.rowOf(v.ebom(), 'C').querySelector('.sv-matched').title, /All of it is in the MBOM/);
+  assert.match(v.rowOf(v.ebom(), 'C').querySelector('.sv-matched').title, /All of it is in the bill of materials/);
   v.act(v.mbom(), 'B1', 'remove').click();
   assert.deepStrictEqual(matched(), ['A', 'A1', 'A2', 'C'], 'B is not matched while B1 is gone');
   assert.ok(v.rowOf(v.ebom(), 'B1').classList.contains('sv-row-missing'));
   assert.strictEqual(v.rowOf(v.ebom(), 'B1').querySelector('.sv-matched'), null);
   assert.strictEqual(v.rowOf(v.ebom(), 'B1').dataset.drag, '1', 'it can still be added');
-  v.act(v.mbom(), 'C', 'copy').click();
-  assert.ok(v.rowOf(v.ebom(), 'C').querySelector('.sv-badge-exceeded'), 'over covered: exceeded, not matched');
+  v.click(v.rowOf(v.mbom(), 'C').querySelector('button.sv-qty'));
+  enter(v, '2');
+  assert.match(v.rowOf(v.ebom(), 'C').querySelector('.sv-note-btn').title, /exceeds/, 'over covered: exceeded, not matched');
   assert.ok(!matched().includes('C'));
+});
+
+test('the New item button and the Create bought version action open the side panel', skip, () => {
+  const v = open({ targetId: '77' });
+  const opened = [];
+  v.ns.pubItemPanel = { open: (o) => opened.push(o), close: () => {} };
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1'), treeLine('OIL', '1', { item_id: '' })]) });
+  const tool = v.button('Create New Manufacturing Item');
+  assert.ok(tool, 'the toolbar has an icon button named Create New Manufacturing Item');
+  assert.strictEqual(tool.title, 'Create New Manufacturing Item');
+  v.click(tool);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(opened)), [{ mode: 'assembly' }]);
+  assert.strictEqual(v.act(v.mbom(), 'C', 'bought'), undefined, 'the MBOM lines have no such action');
+  assert.strictEqual(v.act(v.ebom(), 'TOP', 'bought'), undefined, 'the root has none');
+  assert.strictEqual(v.act(v.ebom(), 'C', 'bought'), undefined, 'a component already in the MBOM has none');
+  assert.strictEqual(v.act(v.ebom(), 'B', 'bought').getAttribute('aria-label'), 'Create Purchased Version of B');
+  v.act(v.ebom(), 'B', 'bought').click();
+  assert.strictEqual(opened[1].mode, 'bought');
+  assert.strictEqual(opened[1].sourceNumber, 'B');
+  assert.strictEqual(opened[1].number, 'B');
+  assert.strictEqual(typeof opened[1].onFound, 'function');
+  assert.strictEqual(typeof opened[1].onCreated, 'function');
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'C', 'OIL'], 'it does not add the component to the MBOM');
+});
+
+test('Create bought version is off, with the reason, until Make or buy is set up in Settings', skip, () => {
+  const v = open({ targetId: '77', bought: false });
+  const opened = [];
+  v.ns.pubItemPanel = { open: (o) => opened.push(o), close: () => {} };
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
+  const action = v.act(v.ebom(), 'B', 'bought');
+  assert.strictEqual(action.disabled, true);
+  assert.match(action.title, /Set up Make or buy in Settings/);
+  action.click();
+  assert.deepStrictEqual(opened, []);
+});
+
+function panelWith(v, opened) {
+  const panel = { open: (o) => opened.push(o), close: () => {} };
+  v.ns.pubItemPanel = panel;
+  return panel;
+}
+
+function withPanel() {
+  const v = open({ targetId: '77' });
+  const opened = [];
+  const panel = panelWith(v, opened);
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
+  return { v, opened, panel };
+}
+
+test('nothing is asked of Fusion Manage when the structure opens: no pill, and the action reads the same for every component', skip, () => {
+  const { v } = withPanel();
+  assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn'), null);
+  assert.strictEqual(v.act(v.ebom(), 'B', 'bought').getAttribute('aria-label'), 'Create Purchased Version of B');
+  assert.strictEqual(v.act(v.ebom(), 'B', 'bought').disabled, false);
+});
+
+test('the dialog opens at once; a bought version it found and the user chose is added to the MBOM with no message line', skip, () => {
+  const { v, opened } = withPanel();
+  v.act(v.ebom(), 'B', 'bought').click();
+  assert.strictEqual(opened.length, 1, 'opened without waiting for a search');
+  opened[0].onFound({ id: '9', link: '/api/v3/workspaces/1/items/9', number: 'B-B', name: 'Bee' });
+  assert.ok(v.lines(v.mbom()).includes('B-B'), 'it is added to the MBOM on the right');
+  assert.deepStrictEqual(v.toasts, [], 'nothing is said');
+  assert.strictEqual(v.act(v.ebom(), 'B', 'bought'), undefined, 'the EBOM line stands in the MBOM now');
+});
+
+test('a bought version created in the dialog is added to the MBOM in the quantity of the EBOM line', skip, () => {
+  const { v, opened } = withPanel();
+  v.act(v.ebom(), 'B', 'bought').click();
+  opened[0].onCreated({ id: '9', number: 'B-B', link: '/api/v3/workspaces/1/items/9' });
+  assert.ok(v.lines(v.mbom()).includes('B-B'), 'the bought item is added to the MBOM on the right');
+  assert.strictEqual(v.act(v.ebom(), 'B', 'bought'), undefined, 'the EBOM line is in the MBOM now: it stands for B, so it has no such action');
+  assert.strictEqual(v.rowOf(v.mbom(), 'B-B').querySelector('.sv-qty').textContent, '1.0', 'in the quantity of the EBOM line');
+});
+
+test('an EBOM line a purchased part stands for gets a blue check mark, not the green one', skip, () => {
+  const { v, opened } = withPanel();
+  assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-matched'), null);
+  v.act(v.ebom(), 'B', 'bought').click();
+  opened[0].onCreated({ id: '9', number: 'B-B', link: '/api/v3/workspaces/1/items/9' });
+  const mark = v.rowOf(v.ebom(), 'B').querySelector('.sv-matched-bought');
+  assert.ok(mark, 'the line shows it was matched by a purchased part');
+  assert.strictEqual(mark.title, 'Matched by a purchased part');
+  assert.strictEqual(v.rowOf(v.ebom(), 'C').querySelector('.sv-matched-bought'), null, 'a line made as it is has the green one');
+});
+
+test('an EBOM line a purchased part stands for says which one, and a quantity that does not agree says by how much', skip, () => {
+  const { v, opened } = withPanel();
+  assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn'), null, 'a line with nothing to say has no button');
+  v.act(v.ebom(), 'B', 'bought').click();
+  opened[0].onCreated({ id: '9', number: 'B-B', link: '/api/v3/workspaces/1/items/9' });
+  const button = v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn');
+  assert.ok(button, 'the icon button is there');
+  assert.ok(button.previousElementSibling.classList.contains('sv-qty'), 'right of the quantity');
+  assert.ok(v.rowOf(v.ebom(), 'C').querySelector('.sv-qty').nextElementSibling.classList.contains('sv-note-slot'), 'a line with none keeps its room, so the quantities line up');
+  assert.ok(v.rowOf(v.ebom(), 'B').querySelector('.sv-qty').previousElementSibling.classList.contains('sv-matched'), 'the tick is just left of the quantity');
+  assert.strictEqual(button.title, 'Linked to purchased part B-B');
+  assert.strictEqual(v.rowOf(v.ebom(), 'B').nextElementSibling.classList.contains('sv-note-row'), false, 'closed until it is clicked');
+  v.click(button);
+  const note = v.rowOf(v.ebom(), 'B').nextElementSibling;
+  assert.ok(note.classList.contains('sv-note-row'));
+  assert.match(note.textContent, /Linked to purchased part B-B/);
+  v.click(v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn'));
+  assert.ok(!v.rowOf(v.ebom(), 'B').nextElementSibling || !v.rowOf(v.ebom(), 'B').nextElementSibling.classList.contains('sv-note-row'), 'a second click closes it');
+  const mbomLine = v.rowOf(v.mbom(), 'B-B').querySelector('.sv-note-btn');
+  assert.ok(mbomLine, 'and the MBOM line says what it is');
+  assert.match(mbomLine.title, /Purchased part for B/);
+  assert.match(mbomLine.title, /New line/);
+  v.click(v.rowOf(v.mbom(), 'B-B').querySelector('button.sv-qty'));
+  const input = v.mbom().querySelector('input');
+  input.value = '3';
+  input.dispatchEvent(new v.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const warn = v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn');
+  assert.ok(warn.classList.contains('sv-note-warn'), 'more than the EBOM has is a warning');
+  assert.match(warn.title, /Qty 3\.0 exceeds 1\.0 in the EBOM/);
+});
+
+test('there are no pills on a line: what they said is in its note', skip, () => {
+  const v = built();
+  v.show();
+  assert.strictEqual(v.w.document.querySelectorAll('.sv-badge').length, 0);
+});
+
+test('an EBOM line that is under another assembly in the MBOM says which one', skip, () => {
+  const v = built();
+  v.openAll();
+  v.drag(v.rowOf(v.mbom(), 'B1'), v.rowOf(v.mbom(), 'A'));   // B1 into A (the middle of a line is into it)
+  const note = v.rowOf(v.ebom(), 'B1').querySelector('.sv-note-btn');
+  assert.ok(note, 'B1 is no longer under B');
+  assert.match(note.title, /Under A in the MBOM/);
+});
+
+test('adding an EBOM line the MBOM holds some of adds what is left to its line under the same assembly', skip, () => {
+  const v = open({ rows: [row(0, 'A', '4')], targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '1')]) });
+  assert.strictEqual(v.rowOf(v.mbom(), 'A').querySelector('.sv-qty').textContent, '1.0');
+  v.act(v.ebom(), 'A', 'add').click();
+  assert.deepStrictEqual(v.toasts, [], 'not refused');
+  const quantities = [...v.mbom().querySelectorAll('.sv-row')].filter((r) => r.querySelector('.sv-pn').textContent === 'A').map((r) => r.querySelector('.sv-qty').textContent);
+  assert.deepStrictEqual(quantities, ['4.0'], 'the 3 that were missing went to the line that is under the same assembly');
+  assert.ok(v.rowOf(v.ebom(), 'A').classList.contains('sv-row-matched'), 'and now all of it is in');
+});
+
+test('the info button and the bar beside the line icon share a colour: amber for a warning or an update, green for a new line', skip, () => {
+  const v = built();
+  v.openAll();
+  v.click(v.rowOf(v.mbom(), 'C').querySelector('button.sv-qty'));
+  const input = v.mbom().querySelector('input');
+  input.value = '3';
+  input.dispatchEvent(new v.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const c = v.rowOf(v.mbom(), 'C');
+  assert.ok(c.querySelector('.sv-note-btn').classList.contains('sv-note-warn'), 'more than the EBOM has: amber');
+  assert.ok(c.classList.contains('sv-tone-warn'), 'and the bar is amber too');
+  const ebom = v.rowOf(v.ebom(), 'C');
+  assert.ok(ebom.querySelector('.sv-note-btn').classList.contains('sv-note-warn') && ebom.classList.contains('sv-tone-warn'), 'the same on the EBOM line');
+});
+
+test('a line read from Fusion Manage whose quantity was edited is amber (an update), with no bar at the left of the line', skip, () => {
+  const v = open({ rows: [row(0, 'A', '4')], targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '4')]) });
+  v.click(v.rowOf(v.mbom(), 'A').querySelector('button.sv-qty'));
+  const input = v.mbom().querySelector('input');
+  input.value = '3';
+  input.dispatchEvent(new v.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const line = v.rowOf(v.mbom(), 'A');
+  assert.ok(line.classList.contains('sv-tone-warn'), 'an update is amber');
+  assert.ok(line.querySelector('.sv-note-btn').classList.contains('sv-note-warn'));
+  assert.ok(![...line.classList].some((k) => k.startsWith('sv-chg-')), 'no bar at the left');
 });

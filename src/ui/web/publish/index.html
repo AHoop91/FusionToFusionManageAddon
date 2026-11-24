@@ -9,12 +9,15 @@
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/picker.css">
+  <link rel="stylesheet" href="../shared/css/form-controls.css">
+  <link rel="stylesheet" href="../shared/css/section.css">
   <!-- Publish panel styles -->
   <link rel="stylesheet" href="css/publish.css">
   <link rel="stylesheet" href="css/bom.css">
   <link rel="stylesheet" href="css/details.css">
   <link rel="stylesheet" href="css/add-items.css">
   <link rel="stylesheet" href="css/mbom-viewer.css">
+  <link rel="stylesheet" href="css/item-panel.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
   <link rel="stylesheet" href="../shared/css/tooltip.css">
   <link rel="stylesheet" href="../shared/css/diff-report.css">
@@ -85,12 +88,6 @@
         <div class="pub-bom-pane">
           <div class="pub-pane-header">
             <span class="pub-pane-title" data-i18n="publish.bom_title">Bill of Materials</span>
-            <!-- The table (what Publish sends) or the structure viewer (EBOM beside MBOM, edits not sent yet); filled in by mbom-viewer.js. -->
-            <div class="pub-view-switch" role="group" aria-label="Bill of Materials view" data-i18n-attr="aria-label:publish.view_label">
-              <button id="pub-view-table" class="pub-view-button" type="button" aria-pressed="true" data-i18n="publish.view_table">Table</button>
-              <button id="pub-view-structure" class="pub-view-button" type="button" aria-pressed="false" data-i18n="publish.view_structure">Structure</button>
-            </div>
-            <button id="pub-add-items" class="btn pub-pane-action" type="button" data-i18n="publish.add_items">Add Existing Items</button>
           </div>
           <section id="pub-bom" class="pub-bom"></section>
           <section id="pub-structure" class="pub-structure" hidden></section>
@@ -108,8 +105,6 @@
 
       <!-- Actions for the open item. -->
       <footer class="pub-footer">
-        <!-- What publishing covers (what is in view), filled in by publish-bom.js. -->
-        <div id="pub-pills" class="pub-pills" role="status" aria-label="What publishing covers" data-i18n-attr="aria-label:publish.pills_label"></div>
         <button id="pub-publish" class="btn" disabled title="Waiting for the Bill of Materials." data-i18n="publish.publish" data-i18n-attr="title:publish.waiting_bom">Publish</button>
       </footer>
     </div>
@@ -174,6 +169,9 @@
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/picker.js"></script>
+  <script src="../shared/js/validators.js"></script>
+  <script src="../shared/js/form-controls.js"></script>
+  <script src="../shared/js/section.js"></script>
   <!-- Publish panel -->
   <script src="js/ui.js"></script>
   <script src="../shared/js/toast.js"></script>
@@ -183,12 +181,14 @@
   <script src="js/bom-model.js"></script>
   <script src="js/bom-plan.js"></script>
   <script src="js/mbom-structure.js"></script>
+  <script src="js/mbom-plan.js"></script>
   <script src="js/bom-cells.js"></script>
   <script src="js/bom-filters.js"></script>
   <script src="js/bom-columns.js"></script>
   <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>
   <script src="js/add-items.js"></script>
+  <script src="js/item-panel.js"></script>
   <script src="js/mbom-viewer.js"></script>
   <script src="js/publish-jobs.js"></script>
   <script src="js/publish-check.js"></script>

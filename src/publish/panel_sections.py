@@ -139,7 +139,8 @@ class PublishSections:
         with self._lock:
             self._forget_other_designs(key)
             current = self._slots.get(slot) or entry(slot)
-            if not payload.get("force") and self._holds(current, key, context.stamp, target, target_id) and (current["pending"] or current["ok"]):
+            # The MBOM tree is never served from a copy kept here: its line ids are what a publish changes, and Fusion Manage changes under the panel.
+            if not (payload.get("force") or name == MBOM_TREE) and self._holds(current, key, context.stamp, target, target_id) and (current["pending"] or current["ok"]):
                 log.debug("%s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
                 return dict(current)
             log.debug("%s requested: starting", slot)
@@ -276,4 +277,7 @@ class PublishSections:
         data = read()
         if load.name == SUMMARY and not item_number_of(data):   # no item number: never published, so nothing here applies
             raise PublishDenied(t("run.section_no_number"))
+        if load.name == SUMMARY:   # what the viewer needs to know of the settings: whether a bought version can be made
+            make_buy = load.cfg.make_buy
+            return {**data, "make_buy": make_buy.is_set(), "bought_suffix": make_buy.suffix if make_buy.is_set() else ""}
         return data

@@ -11,6 +11,7 @@ Each module registers one feature area on the ``MessageBridge``:
 * ``publish_actions``: the open model for the Publish Item panel.
 * ``search_actions``: the Add Items picker: search matches, filterable fields and picklist options.
 * ``product_actions``: the Assign Product panel: the products of the Portfolio Management workspace, and creating one.
+* ``item_create_actions``: the Publish panel's side panel: a new manufacturing item, and a bought version of an item.
 * ``hub_actions``, ``hub_file_actions``, ``hub_save_actions``: the user's role in the hub, and finding or saving its Configuration File.
 
 ``register_actions`` is the only function the add-in entry point needs.
@@ -26,10 +27,11 @@ from ..message_bridge import MessageBridge
 from ..job_alerts import JobAlerts
 from ..jobs_badge import JobsBadge
 from .auth_actions import register_auth_actions
-from .hub_actions import HubRoles, register_hub_actions
+from .hub_actions import MEMBER, HubRoles, register_hub_actions
 from .help_actions import register_help_actions
 from .hub_file_actions import register_hub_file_actions
 from .hub_save_actions import register_hub_save_actions
+from .item_create_actions import register_item_create_actions
 from .product_actions import register_product_actions
 from .search_actions import register_search_actions
 from .property_actions import register_property_actions
@@ -45,12 +47,12 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
                      languages: Optional[HubLanguages] = None) -> HubRoles:
     """Register every palette action on ``bridge``; ``post`` queues work on Fusion's main thread; ``languages`` is what keeps the languages
     a hub shares. Answers the hub roles."""
-    register_settings_actions(bridge, config)
+    roles = register_hub_actions(bridge, config)
+    register_settings_actions(bridge, config, lambda: roles.get()["state"] == MEMBER)   # a member may not change Make or buy
     register_help_actions(bridge)
     register_auth_actions(bridge, config, auth)
     register_workspace_actions(bridge, config, auth)
     register_tenant_actions(bridge)
-    roles = register_hub_actions(bridge, config)
     register_hub_file_actions(bridge, config, post, languages)
     register_hub_save_actions(bridge, config, languages)
     register_property_actions(bridge)
@@ -58,4 +60,5 @@ def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthSer
     register_publish_run_actions(bridge, config, auth, dialogs, badge, alerts)
     register_search_actions(bridge, config, auth)
     register_product_actions(bridge, config, auth)
+    register_item_create_actions(bridge, config, auth)
     return roles

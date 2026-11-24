@@ -289,7 +289,7 @@
 
   ns.bomModel = {
     decisions: decisions, clearDecisions: clearDecisions, canEditQuantity: canEditQuantity, baseQuantity: baseQuantity, quantityOf: quantityOf, setQuantity: setQuantity,
-    quantityDiffers: quantityDiffers, quantityEdited: quantityEdited, revertQuantity: revertQuantity, statusOf: statusOf, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent,
+    quantityDiffers: quantityDiffers, quantityEdited: quantityEdited, revertQuantity: revertQuantity, statusOf: statusOf, stage: stage, unstage: unstage, setStagedQuantity: setStagedQuantity, stagedIds: stagedIds, rootComponent: rootComponent, lineComponent: lineComponent,
     buildItems: buildItems, arrange: arrange, groupsOf: groupsOf, pendingReviews: pendingReviews,
   };
 })(window.MfgUi);

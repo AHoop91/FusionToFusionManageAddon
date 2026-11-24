@@ -38,6 +38,8 @@ Choose between `may` and `denial` like this: `may` for a yes or no that shapes t
 | `src/ui/export_dialog.py` | Turns off a file destination the user may not attach to, with the reason beside it | `denial(..., ATTACH_PERMISSIONS, ..., "attach files to")` |
 | `src/ui/item_panel.py` | Reads all permissions once; without `view_items` nothing else is read and the panel says no access (`NoAccess`) | `granted` |
 | `src/fm/tabs.py` | `TabService.read` marks each item tab `allowed` by `TAB_PERMISSIONS`; the page disables a tab that is not allowed (`item.js`) | The set `held` that `item_panel.py` read |
+| `src/ui/actions/item_create_actions.py` | `can_create` in the answers of `items_form` and `bought_form` (the dialog of the structure viewer disables Create without it). The create itself is not blocked: Fusion Manage's refusal is what the person sees. | `may(client, workspace, ADD_ITEMS)` |
+| `src/ui/actions/settings_actions.py` | `save_settings` refuses a hub member who changes the Make or buy settings (they decide the item numbers of bought items). A role that is not known yet (`pending`, `unknown`) is not a refusal: then only the page's own lock stands. A request that does not name `make_buy` keeps what is stored, so a member saving other settings cannot clear it. | `HubRoles.get()["state"]` is `member` |
 | `src/fm/workspace.py` | Setup check of a workspace kind: `required_permissions` of the kind (`WorkspaceKind` in `src/config/workspace_models.py`) | `parse_granted` and `missing` on its own request |
 
 The Items kind needs `view_items`, `add_items`, `edit_items`, `view_bom`, `add_to_bom` and `edit_bom`.

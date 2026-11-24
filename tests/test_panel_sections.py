@@ -159,6 +159,16 @@ class SectionTests(unittest.TestCase):
         self.fx.wait("summary")
         self.assertEqual(len(self.fx.reads), 2)
 
+    def test_the_mbom_tree_is_read_afresh_every_time_even_when_not_forced(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        with mock.patch.object(panel_sections, "BomService") as bom:
+            bom.return_value.tree.return_value = {"number": "M-1", "children": []}
+            for _ in range(2):
+                self.fx.ask("mbom_tree", target="M-1", target_id="9")
+                self.fx.wait("mbom_tree")
+            self.assertEqual(bom.return_value.tree.call_count, 2)
+
     def test_another_design_is_read_afresh(self):
         self.fx.ask("summary")
         self.fx.wait("summary")

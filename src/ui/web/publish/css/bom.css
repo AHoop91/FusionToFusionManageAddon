@@ -20,8 +20,6 @@
   background: #fff; border-left: 1px solid var(--border); border-right: 3px solid #111;
 }
 .pub-tree-icon svg { fill: none; stroke: #111; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
-.pub-tree-icon-assembly, .pub-tree-icon-root { border-right-color: var(--accent); }
-.pub-tree-icon-assembly svg, .pub-tree-icon-root svg { stroke: var(--accent); }
 .pub-tree-seq { flex: none; min-width: 14px; margin: 0 8px 0 10px; font-weight: 600; }
 .pub-tree-icon + span:not(.pub-tree-seq) { margin-left: 10px; }
 

@@ -8,7 +8,7 @@ A native `<select>` is not used because its popup was slow to open in Fusion's e
 
 - A button that opens a list laid out in the window, so a scrolling card does not cut it off. The list opens up or down, whichever has room.
 - Arrow keys, Enter, Space and Escape, with ARIA listbox roles.
-- One open at a time. It closes on a click elsewhere, on Escape, on a scroll of the page and on a resize.
+- A search box (at the top of the list, or typed into the field itself with `inlineSearch`, as the form controls do), a clear entry, greyed-out taken items, and groups with headings.
 - A search box, a clear entry, greyed-out taken items, and groups with headings.
 - A single value, or several values shown as chips (`multi`).
 - Items the page holds, or items read from somewhere else in batches.

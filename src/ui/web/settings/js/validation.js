@@ -26,12 +26,32 @@
     if (where.area === 'id') part = card.querySelector('.ws-id');
     else if (where.area === 'component') part = card.querySelector('.ws-component-field');
     else if (where.area === 'mappings') return card.querySelector('.ws-add-btn');
+    else if (where.area === 'make_buy') return findMakeBuy(card, where.part);
     else {
       const rows = card.querySelectorAll(where.area === 'static' ? '.ws-static-row' : '.ws-row:not(.ws-static-row)');
       const row = rows[where.row];
       if (row) part = row.querySelector(where.part === 'source' ? '.ws-source' : '.ws-fm-field');
     }
     return part ? part.parentNode : null;   // a picker's wrapper holds its value input and its button
+  }
+
+  /** The control of a Make or buy problem. A field used twice is named by ``part`` "field" whichever of the two it is, so it is the one whose
+   *  value another field of the card also holds. */
+  function findMakeBuy(card, part) {
+    const input = function (selector) { return card.querySelector(selector); };
+    const picker = function (selector) { const i = input(selector); return i ? i.parentNode : null; };
+    if (part === 'suffix') return input('.ws-mb-suffix');
+    if (part === 'make_value') return picker('.ws-mb-make');
+    if (part === 'buy_value') return picker('.ws-mb-buy');
+    if (part === 'source_field') return picker('.ws-mb-source');
+    const field = input('.ws-mb-field');
+    const source = input('.ws-mb-source');
+    if (part === 'field' && field && source) {
+      const others = Array.prototype.map.call(card.querySelectorAll('.ws-fm-field, .ws-component-field'), function (i) { return i.value; });
+      const twice = function (own, other) { return !!own.value && (own.value === other.value || others.indexOf(own.value) >= 0); };
+      if (!twice(field, source) && twice(source, field)) return source.parentNode;
+    }
+    return picker('.ws-mb-field');
   }
 
   /** What the message says about its own field: the part before the colon names the row, which the note stands under. */
@@ -98,6 +118,7 @@
   function mark(problem, target, message) {
     target.classList.add('invalid');
     problem.target = target;
+    unfold(target);
     problem.note = el('p', 'field-error', message);
     problem.note.setAttribute('role', 'alert');
     place(problem.note, target);
@@ -109,8 +130,15 @@
     problem.stop = function () { target.removeEventListener(event, done); };
   }
 
+  /** Open the folded section that holds ``target``, so a problem in it is seen. */
+  function unfold(target) {
+    const card = target.closest('.section.folded');
+    if (card) card.querySelector('.section-title').click();
+  }
+
   /** Bring the field of a problem into view, on the tab that holds it. */
   function reveal(target) {
+    unfold(target);
     const panel = target.closest('[id^="sub-"]');
     const tab = panel && document.querySelector('.tab[data-tab="' + panel.id.slice(4) + '"]');
     if (tab && !tab.classList.contains('active')) tab.click();

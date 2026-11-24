@@ -111,7 +111,6 @@
 /* Title bar of a pane (the bill of materials, the details): a lighter grey than the top bar, so the panes stand out from it. */
 .pub-pane-header { flex: none; box-sizing: border-box; height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 8px 16px; background: #e9eaec; border-bottom: 1px solid var(--header-border); }
 .pub-pane-title { font-size: 13px; font-weight: 600; }
-.pub-pane-action { padding: 3px 12px; }
 .pub-bom.pub-loading { display: flex; }
 
 /* ---- Footer with the actions ---------------------------------------------- */
@@ -120,25 +119,6 @@
   background: var(--surface); border-top: 1px solid var(--border);
 }
 
-/* What publishing covers: a pill for each count at the left of the footer. A pill is a status dot, the count and what it counts, tinted
-   with the colour of its kind (--pill-ink text, --pill-bg fill, --pill-line outline, --pill-dot dot). */
-.pub-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-right: auto; min-width: 0; }
-.pub-pill {
-  --pill-ink: #4f5d73; --pill-bg: #f3f5f8; --pill-line: #dde2ea; --pill-dot: #8794a8;
-  display: inline-flex; align-items: center; gap: 7px; height: 26px; box-sizing: border-box; padding: 0 12px 0 10px;
-  border: 1px solid var(--pill-line); border-radius: 6px; background: var(--pill-bg); color: var(--pill-ink);
-  font: inherit; font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: .01em; white-space: nowrap; cursor: default;
-  animation: pub-fade-in .2s ease both;
-}
-.pub-pill-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pill-dot); }
-.pub-pill b { font-weight: 700; font-variant-numeric: tabular-nums; }
-.pub-pill-label { font-weight: 500; }
-.pub-pill-info { flex: none; display: inline-flex; margin-left: 1px; opacity: .65; cursor: help; transition: opacity .15s; }
-.pub-pill:hover .pub-pill-info { opacity: 1; }
-.pub-pill-info svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.pub-pill-items { --pill-ink: #0b5a96; --pill-bg: #eef6fd; --pill-line: #cfe3f6; --pill-dot: #1f8ceb; }
-.pub-pill-skipped { --pill-ink: #5d6672; --pill-bg: #f3f4f6; --pill-line: #dcdfe4; --pill-dot: #98a1ad; }
-@media (prefers-reduced-motion: reduce) { .pub-pill { animation: none; } }
 
 /* ---- States ---------------------------------------------------------------- */
 .pub-error { color: var(--danger); }

@@ -57,7 +57,34 @@ def open_design_file(payload: Dict[str, Any], app: Callable[[], Any] = _fusion_a
 NO_DESIGN = {"number": "", "name": "", "thumbnail_url": "", "revision": "", "state": ""}   # what ``design`` answers for a design that is not saved
 
 
-class ProductReads(PickerReads):
+class WorkspaceReads(PickerReads):
+    """The reads of the panels that work with one workspace of the settings (``kind``): it finds the workspace and starts a read on it, or
+    answers at once why it cannot be used."""
+
+    kind = PORTFOLIO_KIND
+
+    def _cfg(self) -> Optional[WorkspaceConfig]:
+        """The settings of the workspace of this ``kind``, or None when none are set."""
+        return self._config.config.workspaces.get(self.kind)
+
+    def _problem(self, cfg: Optional[WorkspaceConfig]) -> str:
+        """Why the workspace cannot be used ("" when it can): turned off, or not set."""
+        if cfg and not cfg.enabled:
+            return t("data.portfolio_off")
+        return "" if cfg and cfg.workspace_id else t("app.products_not_set_up")
+
+    def _in_workspace(self, payload: Dict[str, Any], work: Callable[[FmClient, str], Any], alongside: bool = False) -> Dict[str, Any]:
+        """Start ``work(client, workspace)`` for the request, or answer at once that the workspace cannot be used."""
+        token = token_of(payload)
+        cfg = self._cfg()
+        problem = self._problem(cfg)
+        if problem:
+            return answer_for(token, message=problem)
+        workspace = str(cfg.workspace_id)
+        return self._start(token, lambda client: work(client, workspace), alongside)
+
+
+class ProductReads(WorkspaceReads):
     """The reads and the create of the Assign Product panel, one answer for each request token."""
 
     def __init__(self, config: ConfigService, make_client: Callable[[], FmClient], run: Runner = in_thread, design: Optional[OpenDesign] = None, *,
@@ -65,21 +92,6 @@ class ProductReads(PickerReads):
         super().__init__(config, make_client, run)
         self._contexts = contexts   # gives the ``stamp`` the Item panel's tabs ask for
         self._design = design or OpenDesign()   # which design is open, and its item number
-
-    def _cfg(self) -> Optional[WorkspaceConfig]:
-        """The settings of the Portfolio Management workspace, or None when none are set."""
-        return self._config.config.workspaces.get(PORTFOLIO_KIND)
-
-    def _in_workspace(self, payload: Dict[str, Any], work: Callable[[FmClient, str], Any], alongside: bool = False) -> Dict[str, Any]:
-        """Start ``work(client, workspace)`` for the request, or answer at once that no Portfolio Management workspace is set up."""
-        token = token_of(payload)
-        cfg = self._cfg()
-        if cfg and not cfg.enabled:
-            return answer_for(token, message=t("data.portfolio_off"))
-        workspace = str(cfg.workspace_id) if cfg and cfg.workspace_id else ""
-        if not workspace:
-            return answer_for(token, message=t("app.products_not_set_up"))
-        return self._start(token, lambda client: work(client, workspace), alongside)
 
     def _automatic(self) -> Set[str]:
         """The ids of the fields the add-in fills in when a product is assigned: the Primary Component field."""

@@ -1,7 +1,7 @@
 """Palette actions for reading and saving settings."""
 
 from dataclasses import asdict
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from ...config.config_service import ConfigService
 from ...config.export_models import ExportSettings
@@ -45,8 +45,23 @@ def _section(payload: Dict[str, Any], key: str) -> Optional[Dict[str, Any]]:
     return payload[key]
 
 
-def save_settings(config: ConfigService, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Save the settings in ``payload`` as the active hub's. A part the request leaves out stays as it is.
+def _keep_make_buy(workspaces: Dict[str, Any], current: WorkspaceSettings, is_member: Callable[[], bool]) -> WorkspaceSettings:
+    """The workspace settings in ``workspaces`` with Make or buy as it was wherever the request does not name it (an older page does not send
+    it), and a refusal (``ValueError``) when a hub member changes it: it decides the item numbers of bought items, so it is an admin's to set.
+    A role that is not known is not a refusal: then only the page's own lock stands (it shows Make or buy to a member as view only)."""
+    settings = WorkspaceSettings.from_dict(workspaces)
+    for kind_id, cfg in settings.workspaces.items():
+        sent = workspaces.get(kind_id)
+        if not isinstance(sent, dict) or "make_buy" not in sent:
+            cfg.make_buy = current.get(kind_id).make_buy
+        elif cfg.make_buy != current.get(kind_id).make_buy and is_member():
+            raise ValueError(t("app.settings_make_buy_admin_only"))
+    return settings
+
+
+def save_settings(config: ConfigService, payload: Dict[str, Any], is_member: Callable[[], bool] = lambda: False) -> Dict[str, Any]:
+    """Save the settings in ``payload`` as the active hub's. A part the request leaves out stays as it is. ``is_member`` says whether the user
+    is known to be a plain member of the hub, who may not change Make or buy.
 
     Answers the settings as saved, or ``{"problems": ...}`` for the panel to mark in its fields (nothing is saved then). Raises ``ValueError``
     for a request that is not about the active hub, or is not well formed.
@@ -62,7 +77,7 @@ def save_settings(config: ConfigService, payload: Dict[str, Any]) -> Dict[str, A
     problems = config.update(
         mode,
         ConnectionSettings.from_dict(local) if local is not None else current.local,
-        WorkspaceSettings.from_dict(workspaces) if workspaces is not None else current.workspaces,
+        _keep_make_buy(workspaces, current.workspaces, is_member) if workspaces is not None else current.workspaces,
         str(payload.get("company_source", current.company_source)).strip(),
         ExportSettings.from_dict(exports) if exports is not None else None)   # None keeps the export settings as they are
     if problems:
@@ -70,7 +85,7 @@ def save_settings(config: ConfigService, payload: Dict[str, Any]) -> Dict[str, A
     return settings_payload(config)
 
 
-def register_settings_actions(bridge: MessageBridge, config: ConfigService) -> None:
-    """Register ``get_settings`` and ``save_settings``."""
+def register_settings_actions(bridge: MessageBridge, config: ConfigService, is_member: Callable[[], bool] = lambda: False) -> None:
+    """Register ``get_settings`` and ``save_settings``. ``is_member``: see ``save_settings``."""
     bridge.register("get_settings", lambda _payload: settings_payload(config))
-    bridge.register("save_settings", lambda payload: save_settings(config, payload))
+    bridge.register("save_settings", lambda payload: save_settings(config, payload, is_member))

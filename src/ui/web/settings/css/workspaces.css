@@ -82,6 +82,7 @@
 .ws-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
 .ws-section-head .ws-heading { margin: 0; }
 .ws-section-head .ws-defaults { margin: 0; }
+.ws-section-head > .ws-defaults:only-child { margin-left: auto; }   /* a card whose bar took the heading */
 .ws-info { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; padding: 8px 10px;
   border: 1px solid #b9dcf3; border-radius: 4px; background: #eef7fd; }
 .ws-info-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--accent); }
@@ -169,3 +170,60 @@ button.val-item:focus-visible { outline: 2px solid var(--danger); outline-offset
 /* Messages of a failed save under a row: one line, each in the column of its field. */
 .ws-row-notes { display: grid; column-gap: 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 24px; margin: -4px 0 8px; }
 .ws-row-notes .field-error { margin: 0; }
+
+/* The settings of a workspace are cards that fold (shared/css/section.css). */
+.ws-fold { margin-top: 14px; }
+.ws-fold > .section-body { padding: 16px 18px 18px; }   /* room between the bar and what is under it */
+.ws-fold .ws-section { margin-bottom: 0; }
+.ws-fold .ws-section + .ws-section { margin-top: 20px; padding-top: 16px; }   /* one divider, one gap, between the sections of a card */
+.ws-fold .ws-section > .ws-heading, .ws-fold .ws-section > .ws-section-head { margin-top: 0; }
+
+/* Two blocks side by side: the Make and Buy values. */
+.ws-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.ws-pair > .ws-block { margin: 0; padding: 0; border: 0; }
+
+/* The fields a bought version copies: a checklist, all ticked to begin with. */
+.ws-copy { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.ws-copy-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #f6f7f9; }
+.ws-copy-search { flex: 1; min-width: 0; height: 32px; }
+.ws-copy-actions { display: inline-flex; flex: none; }
+.ws-copy-btn { height: 32px; padding: 0 14px; border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; }
+.ws-copy-btn:first-child { border-radius: 6px 0 0 6px; }
+.ws-copy-btn:last-child { margin-left: -1px; border-radius: 0 6px 6px 0; }
+.ws-copy-btn:hover:not(:disabled) { position: relative; background: #eef1f4; border-color: #b9bfc7; }
+.ws-copy-btn:disabled { opacity: .5; cursor: default; }
+.ws-copy-btn:focus-visible { position: relative; outline: 2px solid var(--accent); outline-offset: -2px; }
+.ws-card .ws-copy-search { margin: 0; padding: 0 10px; font-size: 13px; border-radius: 6px; box-sizing: border-box; }   /* more specific than `.card input[type=text]` */
+.ws-card .ws-copy-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); outline: none; }
+.ws-copy-list { max-height: 380px; overflow-x: hidden; overflow-y: auto; }
+.ws-copy-group + .ws-copy-group { border-top: 1px solid var(--border); }
+.ws-copy-head { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 0 16px; background: #fafbfc; cursor: pointer; user-select: none; }
+.ws-copy-head:hover { background: #f1f3f5; }
+.ws-copy.searching .ws-copy-head { cursor: default; background: #fafbfc; }   /* a search shows every match: nothing to fold */
+.ws-copy.searching .ws-copy-chevron { visibility: hidden; }
+.ws-copy-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ws-copy-chevron { flex: none; width: 7px; height: 7px; margin: 0 4px 0 3px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .12s; }
+.ws-copy-group.open > .ws-copy-head > .ws-copy-chevron { transform: rotate(45deg); }
+.ws-copy-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.ws-copy-of { flex: none; font-size: 12px; color: var(--muted); }
+.ws-body .ws-copy-row { display: flex; align-items: center; gap: 14px; min-height: 40px; margin: 0; padding: 0 20px 0 48px; font-size: 13px; font-weight: 400; cursor: pointer; }   /* more specific than `.ws-body label` */
+.ws-copy-row:hover { background: #f6f8fa; }
+fieldset:disabled .ws-copy-row { cursor: default; }
+fieldset:disabled .ws-copy-row:hover { background: none; }
+.ws-copy-row.locked { cursor: default; }
+.ws-copy-row.locked:hover { background: none; }
+.ws-copy-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-copy-id { flex: 0 1 auto; max-width: 42%; margin-left: 24px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: Consolas, monospace; font-size: 11px; color: var(--muted); text-align: right; }
+.ws-copy-foot { display: flex; align-items: center; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--border); background: #f6f7f9; }
+.ws-copy-count { font-size: 12px; font-weight: 600; color: var(--muted); }
+.ws-copy-empty { margin: 0; padding: 16px; font-size: 12px; color: var(--muted); }
+
+/* The ticks of the list: a square with rounded corners, filled when ticked, a dash when only some of a section is. */
+.ws-copy input[type=checkbox] { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; width: 18px; height: 18px; margin: 0; border: 1.5px solid #9aa3ad; border-radius: 5px; background: #fff; cursor: pointer; transition: background .1s, border-color .1s; }
+.ws-copy input[type=checkbox]:hover:not(:disabled) { border-color: var(--accent); }
+.ws-copy input[type=checkbox]:checked, .ws-copy input[type=checkbox]:indeterminate { border-color: var(--accent); background: var(--accent); }
+.ws-copy input[type=checkbox]:checked::after { content: ''; width: 4px; height: 8px; margin-bottom: 2px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.ws-copy input[type=checkbox]:indeterminate::after { content: ''; width: 8px; height: 2px; border-radius: 1px; background: #fff; }
+.ws-copy input[type=checkbox]:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+.ws-copy input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-copy input[type=checkbox]:disabled { opacity: .5; cursor: default; }

@@ -1,6 +1,6 @@
 # Workspace forms
 
-How a Fusion Manage workspace becomes a form in a panel, from the API read to the control on screen. The Python side works for any workspace id. The JavaScript side today lives inside `src/ui/web/products/js/products-page.js` (see [Reusing it](#reusing-it)).
+How a Fusion Manage workspace becomes a form in a panel, from the API read to the control on screen. The Python side works for any workspace id. The JavaScript side is the controls in `src/ui/web/shared/js/form-controls.js` (`ns.formControls`, shared) and the layout in `src/ui/web/products/js/products-page.js` (see [Reusing it](#reusing-it)).
 
 The exact keys of every answer mentioned here are in "What Fusion Manage answers" below.
 
@@ -72,7 +72,22 @@ A section is `{title, fields: [spec], matrices: [matrix], collapsed}`; `title` i
 | `WorkspaceService.fields(base, path)` and `_field` | The field list shaped for the Settings mapping picker (`link_lookup` is the lookup of a link field). The form does not use it; it reads the raw rows. |
 | `is_computed(row)`, `GRID_VIEW` | Used by `workspace_form.py`. |
 
-## The controls (`control(field)` in `products-page.js`)
+## The controls (`control(field)` in `shared/js/form-controls.js`)
+
+`ns.formControls.make({ask, failure, openLightbox, actions})` answers one form's worth of controls (a page makes one: `products-page.js` calls it `fc`). `ask(action, payload, done)` sends a request to Python, `failure(answer)` words a refusal, `openLightbox(src)` shows a picture large, and `actions` (optional) renames the two requests the controls make (`options`, default `products_options`; `picture`, default `products_picture`). What it gives back:
+
+| Name | Use |
+| --- | --- |
+| `control(spec)` | The input for one spec (see the table). |
+| `fieldLine(spec)` | `{row, label, value}`: the line, its label (starred when `required`) and the box for the control. A tall control (`textarea`, `radio`, `image`, `links`) aligns to the top. |
+| `makeRecord(spec, wrap, lookup)`, `addField(spec, wrap)` | A record `{id, title, kind, required, validators, input, wrap, error, lookup}`; `addField` also keeps it in `fields`, checks it on focus out and again as it is edited. |
+| `fillLine(line, record)` | Puts the control and its error line in the line and points the label at the control. |
+| `valueOf(record)`, `setFieldValue(record, raw, wanted)` | Read the value out (below) and put a held value in. `wanted()` says whether a picture answer is still wanted. |
+| `showState(record)`, `collect()`, `showRefusals(messages)`, `readiness()` | Check one field and show the message under it; check all and answer `{values, first}` (blanks left out); show a refusal `{field id: text}` under each field and answer the first; count what is required, empty or wrong without marking. |
+| `lookupField(id)`, `fields`, `reset()` | The other field a check looks at; the records; forget them. |
+| `autoBox`, `infoIcon`, `aimable`, `watchFocus` | The disabled box of an `auto` field; the round "i"; whether a label can point at the control; the check on focus out. |
+
+The texts come from the existing `products.*` keys.
 
 | `kind` | Control | Value the form reads (`valueOf`) |
 | --- | --- | --- |
@@ -91,7 +106,7 @@ A section is `{title, fields: [spec], matrices: [matrix], collapsed}`; `title` i
 
 A control with `max_length` is wrapped by `counted`, which sets `maxLength` and shows a count of characters used against the limit. Every picker is `ns.picker.make` (see [pickers.md](pickers.md)); do not write another.
 
-`paintForm` marks required fields with a star in the label (`fieldLine`), and in a matrix cell with a tooltip. Textarea, radio, image and links lines align to the top. A `description` shows as an info icon beside the field. A section whose `collapsed` is true starts folded. The search box and "required only" tick above the form hide fields through `applyFormFilters`.
+`paintForm` (still in `products-page.js`) marks required fields with a star in the label (`fieldLine`), and in a matrix cell with a tooltip. Textarea, radio, image and links lines align to the top. A `description` shows as an info icon beside the field. A section whose `collapsed` is true starts folded. The search box and "required only" tick above the form hide fields through `applyFormFilters`.
 
 Each field becomes a record (`makeRecord`): `{id, title, kind, required, validators, input, wrap, error, lookup}`. `formFields` holds them all, and `lookupField(id)` lets one validator see the value of another.
 
@@ -185,13 +200,17 @@ A new feature that needs a form for another workspace:
 
 1. In Python, subclass `PickerReads` as `ProductReads` does. Add a method that calls `self._start(token, lambda client: WorkspaceFormService(client).form(workspace_id, automatic))`, and register it with `bridge.register("<name>_form", reads.form)` in a `register_*_actions` function that `src/ui/actions/__init__.py` calls. Register `<name>_options` (inherited `PickerReads.options`) and `<name>_status` too, or the pickers and polling have nothing to ask. `automatic` is a set of field ids, empty if none.
 2. Write with `ProductService.create(workspace_id, values)` and `update(workspace_id, item_id, values)` in `src/publish/products.py`. They take the workspace id and `{field id: value}`, group values by section and turn a refusal into an `FmRefused`.
-3. In JavaScript, do not copy `control`, `selectPicker`, `linkPicker`, `imagePicker`, `makeRecord`, `showState`, `readiness` or `paintForm`. They are private to the `products-page.js` closure, so move them into a shared module under `src/ui/web/shared/js/` (as `picker.js` is) and have `products-page.js` call it. Load it after `picker.js` and `validators.js`.
+3. In JavaScript, load `shared/js/picker.js`, `validators.js` and `form-controls.js` (in that order, after `dom.js` and `i18n.js`) and call `ns.formControls.make(...)`; do not copy `control`, `makeRecord`, `showState`, `readiness` or `valueOf`. `paintForm`, the matrix tables, the filters above the form and the checklist are still private to `products-page.js`; share them the same way when a second page needs them.
+
+The Items workspace's form is read the same way for the dialog of the structure viewer (`publish/js/item-panel.js`, the second user of `ns.formControls`; see [publish-item-flow.md](publish-item-flow.md)). The Publish page loads `picker.js`, `validators.js` and `form-controls.js` and the sheet `shared/css/form-controls.css` (the control styles moved there from `products-page.css`, which still lays the controls out for its own form; the dialog stacks every line, label over control). It makes `ns.formControls.make({ask, failure, openLightbox: no-op, actions: {options: 'search_options'}})`: the panel's `ask` polls `items_status` for `items_*` and `bought_*` requests and `search_status` for `search_options`. `search_options` is `PickerReads.options` (`search_actions.py`): it reads a picklist by its name (`/api/v3/lookups/{name}`), not by workspace, so it is not tied to the Portfolio or the Items workspace and serves the Items form's pickers as it does the Add Items picker's. The bridge keeps one listener for an action, and `add-items.js` already owns the `search_*` ones, so it asks `ns.pubItemPanel.claims` first and the panel takes the answers whose token it made. The panel needs no `picture` action: a picture field is taken out of the Items form by `without`. A matrix of the form is laid out row by row as stacked fields. A copied value is put in with `setFieldValue`; an option comes from Python as its link text, so the panel gives the control `{link}` as Fusion Manage holds it; a linked item has no title in `values`, so a picker shows its link until the answer carries one.
+
+On the Python side: `ItemCreateReads` (`src/ui/actions/item_create_actions.py`) is a `WorkspaceReads` of the Items kind, and `BoughtItems` (`src/publish/bought_items.py`) reads the form with `WorkspaceFormService.form` and writes with `ProductService.create`. It changes the form in two ways: the item number field, which Fusion Manage describes as given when the item is saved (`info`), is made a required `text` field (the add-in writes the number itself when it publishes; **not seen live**), and the fields the add-in sets (Make or buy, the source link, the number, the component link, pictures) are taken out with `without`. A value copied from an item is turned into what the form sends by `form_value`: text and date as text (a date must be `YYYY-MM-DD`), a number as text, a tick as `true`, an option as its link, a linked item as `{link}`, several as `[{link}]`, a blank as nothing; any other shape raises, it is not guessed.
 
 Extend rather than copy:
 
 | To add | Extend |
 | --- | --- |
-| A kind of field | `_KINDS` or `_kind` in `workspace_form.py`, `control` and `valueOf` in the page, and a row in the tables above |
-| A check Fusion Manage makes | `checks` in `validators.js` |
+| A kind of field | `_KINDS` or `_kind` in `workspace_form.py`, `control` and `valueOf` in `form-controls.js`, and a row in the tables above |
+| A check Fusion Manage makes | `checks` in `shared/js/validators.js` |
 | A field filled in by the add-in | The `automatic` set |
 | Another grid | A `grid_form`-style method; `GRID_VIEW` is the Grid tab's view id |

@@ -25,6 +25,8 @@ from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in, whole
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
 from .item_view import not_shown
 from .permissions import REFUSED, missing, parse_granted, title
+from .pages import field_id
+from .sections import SectionService, _field_refs, parse_sections
 from .workspace_schema import problems as schema_problems, read_layout
 
 log = get_logger("fm.workspace")
@@ -36,6 +38,7 @@ READERS = 4          # picklists read at once
 WORKSPACES_PAGE = 100   # workspaces requested per call
 MAX_WORKSPACES = 2000   # stop reading the list of workspaces after this many
 WORKSPACES_BULK = "application/vnd.autodesk.plm.workspaces.bulk+json"
+CLASSIFICATION_SECTION = "CLASSIFICATION"   # the ``sectionType`` of the section that holds a workspace's classification fields (the others are ``FIELDCONTAINER``)
 GRID_VIEW = "13"   # /api/v3/workspaces/{id}/views/13: the Grid tab of an item (its columns are that view's fields)
 REVISION_CONTROLLED_TYPE = "6"   # /api/v3/workspace-types/6: "Revision Controlled Workspace"
 
@@ -163,6 +166,8 @@ class WorkspaceService:
         if lacking:
             return _verdict(kind, False, t("data.fm_workspace_lacking", name=name, missing=", ".join(title(p) for p in lacking)))
         fields, fields_error = self.fields(base)   # read once: the schema check and the mapping picker both use it
+        if not fields_error:
+            self._place(fields, workspace_id)
         if kind.schema is not None:
             wrong = fields_error or self._schema_problem(kind, name, workspace_id, fields)
             if wrong:
@@ -171,6 +176,29 @@ class WorkspaceService:
         grid, grid_error = self.grid_fields(base) if kind.assign else ([], "")   # only a workspace that has a Variants grid is asked for its columns
         return {**_verdict(kind, True, t("data.fm_workspace_valid", name=name)), "fields": fields, "picklists": picklists, "fields_error": fields_error,
                 "grid_fields": grid, "grid_error": grid_error}
+
+    def _place(self, fields: List[Field], workspace_id: str) -> None:
+        """Say which section of the form holds each field: its ``section`` (title), ``section_order`` (where the form puts that section, by its ``displayOrder``) and
+        ``field_order`` (where the section puts the field). Fields of a classification section are left in none. A field no section holds, or any field when the sections cannot be read, has an empty
+        ``section``; the workspace is usable without them."""
+        try:
+            layouts = SectionService(self._client).layouts(workspace_id)
+        except (FmApiError, AuthError) as exc:
+            log.warning("Could not read the sections of workspace %s: %s", workspace_id, exc)
+            layouts = {}
+        layouts = {i: s for i, s in layouts.items() if s.get("sectionType") != CLASSIFICATION_SECTION}   # classification data is not copied: its fields are in no section offered
+        order = {section_id: place for place, section_id in enumerate(sorted(layouts, key=lambda i: whole(layouts[i].get("displayOrder"))))}   # as the form lays them out
+        titles = {section_id: str(section.get("title") or section.get("name") or "") for section_id, section in layouts.items()}
+        held = {field_id: last_segment(link) for field_id, link in parse_sections(list(layouts.values())).items()}
+        at = {}
+        for section in layouts.values():
+            for place, ref in enumerate(_field_refs(section)):
+                at.setdefault(field_id(ref), place)
+        for field in fields:
+            section_id = held.get(field["id"], "")
+            field["section"] = titles.get(section_id, "")
+            field["section_order"] = order.get(section_id, len(order))
+            field["field_order"] = at.get(field["id"], 0)
 
     def _schema_problem(self, kind: WorkspaceKind, name: str, workspace_id: str, fields: List[Field]) -> str:
         """Why the workspace is not one the kind can work with ("" when it has everything its schema needs)."""

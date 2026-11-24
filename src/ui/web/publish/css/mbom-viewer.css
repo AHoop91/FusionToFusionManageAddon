@@ -1,26 +1,18 @@
 /* ==========================================================================
    Publish Item panel: the structure viewer (mbom-viewer.js). EBOM and MBOM side by side; they stack when the panel is narrow.
-   Sections: the switch, the area, toolbar and form, panes, lines, badges and marks.
+   Sections: the area, toolbar and form, panes, lines, badges and marks.
    ========================================================================== */
 
-/* ---- The switch between the table and the structure (in the pane header) ---- */
-.pub-view-switch { display: inline-flex; margin-right: auto; margin-left: 12px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-.pub-view-button { padding: 3px 12px; border: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
-.pub-view-button + .pub-view-button { border-left: 1px solid var(--border); }
-.pub-view-button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .pub-bom[hidden], .pub-structure[hidden] { display: none; }
 
 /* ---- The area ---- */
 .pub-structure { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; overflow: hidden; }
 .pub-structure [hidden] { display: none !important; }
-.sv-message { margin: 0; text-align: left; }
 .sv-wait { margin: 24px 0; text-align: center; }
 .sv-state { flex: 1; min-height: 0; overflow: auto; }
 
 /* ---- Toolbar and form ---- */
 .sv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.sv-btn { padding: 3px 10px; font-size: 12px; }
-.sv-btn:disabled { cursor: not-allowed; }
 .sv-icon, .sv-act { flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; transition: color .15s, background-color .15s; }
 /* The toolbar buttons look like the table's own (.pub-cmp-tool): a white square with a thin border. */
 .sv-icon { box-sizing: border-box; width: 28px; height: 28px; border: 1px solid rgba(0, 0, 0, .23); background: #fff; color: rgba(0, 0, 0, .87); transition: background-color .15s, border-color .15s; }
@@ -40,9 +32,6 @@
 .sv-search { width: 240px; height: 30px; padding: 0 10px 0 32px; border-color: rgba(0, 0, 0, .23); background: #fff; }
 .sv-search:hover { border-color: rgba(0, 0, 0, .6); }
 .sv-found { font-size: 12px; min-width: 56px; }
-.sv-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
-.sv-form-title { flex: 1 0 100%; margin: 0; font-size: 13px; }
-.sv-form-actions { display: flex; gap: 6px; }
 
 /* ---- Panes ---- */
 .sv-panes { flex: 1; min-height: 0; display: flex; gap: 12px; }
@@ -76,37 +65,52 @@
 button.sv-qty { border-color: #cfd4d9; background: #fff; cursor: text; }
 button.sv-qty:hover { border-color: var(--accent); }
 button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
-.sv-row > .sv-badge, .sv-row > .sv-matched, .sv-row > .sv-qty { margin-left: 6px; }   /* the row has no gap: the toggle and the icon sit edge to edge, as in the table */
-.sv-seq { flex: none; min-width: 14px; margin: 0 8px 0 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sv-row > .sv-seq { flex: none; min-width: 14px; margin: 0 8px 0 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* An EBOM line that is all in the MBOM is quiet (it can still be dragged or added again). */
 .sv-row-matched .sv-label, .sv-row-matched .sv-qty, .sv-row-matched .sv-seq { color: var(--muted); }
 .sv-row-matched .sv-pn { font-weight: 500; }
-.sv-matched { flex: none; display: inline-flex; color: var(--ok); }
+.sv-matched { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 24px; margin-right: 4px; color: var(--ok); }   /* touches the quantity: 24px with its gap */
+.sv-matched-bought { color: var(--accent); }
+
+/* ---- The note of a line: a button beside the quantity, and its lines under the row ---- */
+.sv-note-slot { flex: none; width: 24px; height: 24px; margin-left: 6px; }
+.sv-note-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-left: 6px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--accent); cursor: pointer; }
+.sv-note-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sv-note-btn:hover, .sv-note-btn.open { background: #e6f3fb; }
+.sv-note-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sv-note-btn.sv-note-warn { color: #b25e00; }
+.sv-note-btn.sv-note-warn:hover, .sv-note-btn.sv-note-warn.open { background: #fdf0e0; }
+.sv-note-btn.sv-note-new { color: var(--ok); }
+.sv-note-btn.sv-note-new:hover, .sv-note-btn.sv-note-new.open { background: #e3f6e8; }
+.sv-note-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 12px 8px calc(var(--indent, 0px) + 72px); border-bottom: 1px solid var(--border); background: #f6f8fa; font-size: 12px; }
+.sv-note-line { margin: 0; padding-left: 14px; position: relative; line-height: 1.4; }
+.sv-note-line::before { content: ''; position: absolute; left: 0; top: .5em; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.sv-note-line.sv-note-warn { color: #8a4a00; }
+.sv-note-line.sv-note-warn::before { background: #d97706; }
+.sv-note-line.sv-note-update { color: #8a4a00; }
+.sv-note-line.sv-note-update::before { background: #d97706; }
+.sv-note-line.sv-note-new { color: #1c6b34; }
+.sv-note-line.sv-note-new::before { background: var(--ok); }
 .sv-matched svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .sv-qty-input { flex: none; box-sizing: border-box; width: 64px; height: 22px; padding: 0 6px; border: 1px solid var(--accent); border-radius: 4px; font: inherit; font-size: 12px; text-align: right; }
 /* The actions of a line: out of the way until the line is pointed at or has the keyboard (they stay focusable, so the keyboard reaches them). */
-/* They lie over the end of the label, just left of the quantity, with a fade so the text under them does not clash; nothing moves when they show. */
-.sv-actions { position: absolute; top: 0; bottom: 0; right: 72px; display: inline-flex; align-items: center; gap: 2px; padding: 0 2px 0 28px; background: linear-gradient(to right, transparent, var(--row-bg) 24px); opacity: 0; pointer-events: none; transition: opacity .12s; }
+/* They lie over the end of the label, just left of the quantity and its info button (8px padding, 64px quantity, 30px button), with a fade so the text under them does not clash; nothing moves when they show. */
+.sv-actions { position: absolute; top: 0; bottom: 0; right: 102px; display: inline-flex; align-items: center; gap: 2px; padding: 0 2px 0 28px; background: linear-gradient(to right, transparent, var(--row-bg) 24px); opacity: 0; pointer-events: none; transition: opacity .12s; }
 .sv-row:hover .sv-actions, .sv-row:focus-within .sv-actions { opacity: 1; pointer-events: auto; }
+.sv-tree-ebom .sv-matched { position: absolute; top: 50%; right: 72px; width: 24px; margin: 0; transform: translateY(-50%); }   /* the tick or cart stands where the plus button does (the last 24px of the icons' strip), so they line up */
+.sv-tree-ebom .sv-actions { right: 70px; }   /* the EBOM quantity is plain text in a 64px box (8px padding, 30px note slot): the icons end by its digits, not at the empty left of the box. A line with a tick has no icons, so they never meet. */
 .sv-act { width: 24px; height: 24px; }
 .sv-grip { display: inline-flex; align-items: center; width: 16px; color: var(--muted); cursor: grab; }
 .sv-more { display: block; width: 100%; padding: 6px 0; border: 0; border-top: 1px solid rgba(0, 0, 0, .06); background: transparent; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
 
 /* ---- Badges and marks ---- */
-.sv-badge { flex: none; padding: 0 6px; border-radius: 8px; background: #eceff1; color: #455a64; font-size: 11px; line-height: 16px; white-space: nowrap; }
-.sv-badge-missing { background: #fde7e9; color: var(--danger); }
-.sv-badge-quantity, .sv-badge-chg-quantity { background: #fff0cc; color: #8a5a00; }
-.sv-badge-moved, .sv-badge-chg-moved, .sv-badge-chg-reordered { background: #e3f0fb; color: #0b5a8a; }
-.sv-badge-chg-new { background: #e3f6e8; color: #1c6b34; }
-.sv-badge-exceeded { background: #fde7e9; color: var(--danger); }
-.sv-badge-cut { background: #fde7e9; color: var(--danger); }
-.sv-badge-mfg { background: #ede7f6; color: #4527a0; }
-.sv-chg-new .pub-tree-icon { border-right-color: var(--ok); }
-.sv-chg-new .pub-tree-icon svg { stroke: var(--ok); }
-.sv-chg-moved, .sv-chg-reordered { box-shadow: inset 3px 0 0 var(--accent); }
-.sv-chg-quantity { box-shadow: inset 3px 0 0 #e0a100; }
+/* The bar beside a line's icon takes the colour of its info button: amber for a warning or an update, green for a new line. */
+.sv-tone-warn .pub-tree-icon { border-right-color: #d97706; }
+.sv-tone-warn .pub-tree-icon svg { stroke: #d97706; }
+.sv-tone-new .pub-tree-icon { border-right-color: var(--ok); }
+.sv-tone-new .pub-tree-icon svg { stroke: var(--ok); }
 .sv-ghost { position: fixed; z-index: 1000; max-width: 280px; padding: 4px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; border: 1px solid var(--accent); border-radius: 4px; background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, .2); font-size: 12px; opacity: .92; }
-.sv-ghost[data-mode="copy"]::before { content: "+ "; color: var(--accent); font-weight: 600; }
+.sv-ghost[data-mode="add"]::before { content: "+ "; color: var(--accent); font-weight: 600; }
 .sv-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
 .sv-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
 .sv-drop-into { background: #dcecf9; outline: 1px dashed var(--accent); outline-offset: -2px; }
@@ -118,3 +122,31 @@ button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-sh
 .sv-info:hover, .sv-info:focus-visible { background: var(--accent); outline: 0; }
 .sv-tip { display: none; position: absolute; top: 20px; right: -8px; z-index: 30; width: 260px; padding: 8px 10px; border-radius: 6px; background: #2b3340; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.4; text-align: left; text-transform: none; letter-spacing: 0; white-space: normal; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
 .sv-info:hover .sv-tip, .sv-info:focus .sv-tip { display: block; }
+
+/* The "Add to assembly" menu: a search over a tree of the bill of materials, at the left of the action that opened it. */
+.sv-dest { position: fixed; z-index: 60; width: 340px; max-height: 360px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, .22); overflow: hidden; }
+.sv-dest-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 12px; border-bottom: 2px solid rgba(0, 0, 0, .14); background: #e9eaec; }   /* the same bar as the head of a pane */
+.sv-dest-title { font-size: 13px; font-weight: 500; line-height: 1; letter-spacing: .02em; color: #3c4249; }
+.sv-dest-tools { display: inline-flex; align-items: center; gap: 2px; }
+.sv-dest-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.sv-dest-btn:hover, .sv-dest-btn[aria-expanded="true"] { background: rgba(0, 0, 0, .07); color: var(--accent); }
+.sv-dest-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sv-dest-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.sv-dest-bar { flex: none; padding: 8px 12px 6px; border-bottom: 1px solid var(--border); }
+.sv-dest-bar[hidden] { display: none; }
+.sv-dest-search { width: 100%; height: 30px; box-sizing: border-box; }
+.sv-dest-count { margin-top: 4px; font-size: 11px; color: var(--muted); }
+.sv-dest-count:empty { display: none; }
+.sv-dest-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 6px; }
+.sv-dest-row { display: flex; align-items: center; min-height: 28px; padding: 0 8px 0 6px; font-size: 12px; }
+.sv-dest-guide { flex: none; align-self: stretch; width: 20px; background: linear-gradient(#d3d7dd, #d3d7dd) 9px 0 / 1px 100% no-repeat; }
+.sv-dest-row:hover { background: rgba(0, 0, 0, .05); }
+.sv-dest-hit .sv-dest-number { color: var(--accent); }
+.sv-dest-toggle { flex: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 24px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.sv-dest-toggle:disabled { cursor: default; }
+.sv-dest-toggle svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sv-dest-pick { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; height: 26px; padding: 0 4px; border: 0; border-radius: 4px; background: transparent; font: inherit; text-align: left; color: inherit; cursor: pointer; }
+.sv-dest-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sv-dest-number { flex: none; font-weight: 600; white-space: nowrap; }
+.sv-dest-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.sv-dest-more { padding: 6px 12px; font-size: 11px; color: var(--muted); }

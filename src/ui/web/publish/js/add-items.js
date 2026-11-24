@@ -96,6 +96,8 @@
   }
 
   function onAnswer(action, r) {
+    // The bridge keeps one listener for an action, so the dialog of the structure viewer (item-panel.js) reads its own picklist answers through here.
+    if (ns.pubItemPanel && ns.pubItemPanel.claims(action, r)) return;
     if (!dialog) return;
     if (!r.ok) { failAll(action === 'search_status' ? '' : action, r.error || t('publish.unknown_error')); return; }
     const entry = r.result;

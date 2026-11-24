@@ -1,0 +1,46 @@
+/* ==========================================================================
+   Publish Item panel: the dialog of the structure viewer (item-panel.js), a modal that holds the form for a new
+   manufacturing item or a bought version. The controls come from shared/css/form-controls.css; here every field is stacked: label over control.
+   ========================================================================== */
+
+.ic-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .5); }
+.ic-overlay[hidden] { display: none !important; }
+.ic-dialog { width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border-radius: 4px; box-shadow: 0 11px 15px -7px rgba(0, 0, 0, .2), 0 24px 38px 3px rgba(0, 0, 0, .14), 0 9px 46px 8px rgba(0, 0, 0, .12); }
+.ic-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: #e9eaec; border-bottom: 2px solid rgba(0, 0, 0, .14); }
+.ic-title-icon { flex: none; display: inline-flex; color: #3c4249; }
+.ic-title-icon svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic-title-icon .ic-plus { stroke: var(--accent); stroke-width: 2.4; }   /* the plus on the box icon's corner */
+.ic-title { flex: 1; margin: 0; min-width: 0; font-size: 13px; font-weight: 500; letter-spacing: .02em; color: #3c4249; overflow-wrap: anywhere; }
+.ic-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.ic-close:hover:not(:disabled) { background: rgba(0, 0, 0, .07); color: var(--text); }
+.ic-close:disabled { opacity: .4; cursor: not-allowed; }
+.ic-close:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ic-close svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ic-message { flex: none; margin: 0; padding: 8px 12px 0; text-align: left; }
+.ic-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; }
+.ic-foot { flex: none; display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+
+/* A field: its label over its control, whatever kind it is. */
+.ic-dialog .pf-field { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0; }
+.ic-dialog .pf-field .pf-label { display: flex; align-items: center; gap: 6px; text-align: left; font-size: 12px; font-weight: 600; color: #4a5560; }
+.ic-dialog .pf-field.top .pf-label { padding-top: 0; }
+.ic-dialog .pf-field > :last-child:empty { display: none; }
+.ic-body .section { flex: none; }
+.ic-section { display: flex; flex-direction: column; gap: 10px; }
+.ic-required { margin: 0; font-size: 12px; }
+.ic-saved { margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 4px; background: #eef7ee; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.ic-dialog .section-title { padding: 8px 12px; font-size: 13px; font-weight: 500; }
+.ic-dialog .section-body { padding: 10px 12px 12px; }
+.ic-dialog .form-auto { height: auto; min-height: 32px; overflow-wrap: break-word; line-height: 1.4; }   /* a long explanation grows the box instead of running out of it */
+.ic-dialog .pk-item { font-size: 12.5px; line-height: 1.35; overflow-wrap: break-word; text-wrap: pretty; }
+.ic-found { display: flex; flex-direction: column; gap: 16px; padding: 12px 4px; }
+.ic-found p { margin: 0; }
+.ic-found-lead { font-size: 14px; line-height: 1.5; color: var(--muted); }
+.ic-found-card { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 6px; background: #f6f8fa; }
+.ic-found-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ic-found-number { font-size: 15px; overflow-wrap: anywhere; }
+.ic-found-name { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.ic-found-open { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.ic-found-open:hover { background: #eef1f4; border-color: #b9bfc7; }
+.ic-found-open svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic-found-ask { font-size: 15px; font-weight: 600; }

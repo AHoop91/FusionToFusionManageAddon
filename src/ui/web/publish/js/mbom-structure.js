@@ -7,14 +7,14 @@
  * Pure data, no DOM and no requests: the viewer draws it and the publish plan turns it into requests.
  *
  * An EBOM node is ``{key, number, name, quantity, componentId, sequence, children}`` (``sequence`` is the line's number in the design, as the table shows it); ``ebomFromRows`` makes the tree from the rows the panel has read.
- * An MBOM node is ``{uid, kind, number, name, quantity, source, itemId, edgeId, isNew, cut, children}`` (an added item also has ``link`` and ``linkable``):
+ * An MBOM node is ``{uid, kind, number, name, quantity, source, itemId, edgeId, sequence (the BOM line number it has in Fusion Manage), isNew, cut, children}`` (an added item also has ``link`` and ``linkable``):
  *
  * * ``kind`` is ``component`` (made from an EBOM node, which is its ``source``), ``added`` (an existing item picked in Fusion Manage),
  *   ``assembly`` (a new manufacturing assembly) or ``phantom`` (a new phantom assembly);
  * * ``itemId`` is the id of the item Fusion Manage holds for it ("" for one that does not exist yet) and ``edgeId`` the id of its BOM line
  *   there ("" for a line that is not in Fusion Manage yet);
  * * ``cut`` is true for a line read at the deepest level whose own lines were not read (the answer shows it has some);
- * * ``isNew`` is true for a node the user made or copied, which has no BOM line in Fusion Manage yet.
+ * * ``isNew`` is true for a node the user made or added, which has no BOM line in Fusion Manage yet.
  *
  * Every edit that cannot be done throws an ``Error`` with a ``key`` (and ``params``) saying why, and changes nothing then. An edit that changes nothing is not a
  * step of the history. A place to put nodes is a parent and the sibling to go before (``before``, "" for the end). The tree is replaced by
@@ -69,13 +69,6 @@
     return String(n);
   }
 
-  /** A quantity worked out from others, which must come out as an ordinary number (no more than 6 decimals). */
-  function clean(value, what) {
-    const rounded = Number(value.toFixed(6));
-    if (!isFinite(value) || value <= 0 || Math.abs(rounded - value) > 1e-9 * Math.max(1, Math.abs(value))) throw fail('quantity_inexact', what);
-    return rounded;
-  }
-
   /** Where a drop on a line goes, from where in the line the pointer is: the top quarter is before it, the bottom quarter after it, and the middle
    *  inside it (``canHold``); a line that cannot hold lines has only before (top half) and after. */
   function zoneOf(offsetY, height, canHold) {
@@ -84,10 +77,11 @@
     return at < 0.25 ? 'before' : at > 0.75 ? 'after' : 'into';
   }
 
-  /** The MBOM tree as read, with each line's ``source`` set to the EBOM line with its item number (a copy; the tree given is left as it is).
+  /** The MBOM tree as read, with each line's ``source`` set to the EBOM line with its item number (a copy; the tree given is left as it is). ``suffix`` (that of
+   *  bought versions, from Settings) also maps a line that is an EBOM line's number and the suffix: see below.
    *  Where an item number is in the EBOM more than once, a line takes the one under the EBOM line its nearest mapped assembly is, then one
    *  not taken yet, then the first. A line with no item number is not mapped. */
-  function mapByNumber(tree, ebom) {
+  function mapByNumber(tree, ebom, suffix) {
     const byNumber = {};   // number -> [{key, parent, taken}]
     (function index(node) {
       node.children.forEach(function (c) {
@@ -108,7 +102,32 @@
       }
       return Object.assign({}, node, { source: source, children: (node.children || []).map(function (c) { return map(c, source || ancestor, false); }) });
     }
-    return map(tree, ebom.key, true);
+    const mapped = map(tree, ebom.key, true);
+    const tail = numberKey(suffix);
+    if (!tail) return mapped;
+    // A line left over whose number is an EBOM line's and the suffix of bought versions is the bought version of that line: it stands for it, as one
+    // added in the viewer does (``bought``). Only an EBOM line no line has the number of is taken, so a line with the same number always wins.
+    const taken = new Set();
+    (function used(node) { node.children.forEach(function (c) { if (c.source) taken.add(c.source); used(c); }); })(mapped);
+    const suffixed = {};   // the number of an EBOM line and the suffix -> [{key, parent}]
+    (function index(node) {
+      node.children.forEach(function (c) {
+        const k = numberKey(c.number);
+        if (k) (suffixed[k + tail] = suffixed[k + tail] || []).push({ key: c.key, parent: node.key });
+        index(c);
+      });
+    })(ebom);
+    function boughtPass(node, ancestor, isRoot) {
+      let source = node.source;
+      let bought = !!node.bought;
+      if (!isRoot && !source) {
+        const list = suffixed[numberKey(node.number)] || [];
+        const pick = list.find(function (c) { return !taken.has(c.key) && c.parent === ancestor; }) || list.find(function (c) { return !taken.has(c.key); });
+        if (pick) { taken.add(pick.key); source = pick.key; bought = true; }
+      }
+      return Object.assign({}, node, { source: source, bought: bought, children: node.children.map(function (c) { return boughtPass(c, source || ancestor, false); }) });
+    }
+    return boughtPass(mapped, ebom.key, true);
   }
 
   /** A new structure. ``options.ebom``: the EBOM; ``options.mbom``: the MBOM as read (``{number, name, itemId, children}``, lines with their
@@ -133,7 +152,7 @@
       const kind = read.kind && KINDS[read.kind] ? read.kind : KINDS.component;
       return { uid: isRoot ? ROOT : uid(), kind: kind, number: String(read.number || ''), name: String(read.name || ''),
                quantity: isRoot ? '' : quantityText(read.quantity), source: String(read.source || ''), itemId: String(read.itemId || ''),
-               edgeId: String(read.edgeId || ''), cut: !!read.cut, isNew: false, children: (read.children || []).map(function (c) { return adopt(c, false); }) };
+               bought: !!read.bought, edgeId: String(read.edgeId || ''), sequence: String(read.sequence === undefined || read.sequence === null ? '' : read.sequence), cut: !!read.cut, isNew: false, children: (read.children || []).map(function (c) { return adopt(c, false); }) };
     }
 
     function snapshot(node) { return JSON.parse(JSON.stringify(node)); }
@@ -179,16 +198,15 @@
       return node;
     }
 
-    /** Can lines go under ``node``: the MBOM itself, an assembly of manufacturing's own, or a line that has lines or whose EBOM node has. */
+    /** Is ``node`` an assembly already: the MBOM itself, an assembly of manufacturing's own, or a line that has lines or whose EBOM node has. (Any line
+     *  may still take a drop; this picks the place a new item goes.) */
     function holds(node) {
       if (node.uid === ROOT || node.kind === KINDS.phantom || node.kind === KINDS.assembly || node.children.length) return true;
       return !!(node.source && lookup[node.source] && lookup[node.source].children.length);
     }
 
     function target(id) {
-      const node = need(id);
-      if (!holds(node)) throw fail('not_assembly', { number: node.number });
-      return node;
+      return need(id);   // any line of the MBOM may take lines: manufacturing may build a BOM for a part the design has none for
     }
 
     function usedNumbers() {
@@ -233,10 +251,10 @@
       return found;
     }
 
-    /** One check for every edit that puts lines already in the MBOM somewhere (``moves``: they leave their place; a copy does not). Returns
-     *  ``{moving, anchor}``: the lines, once each in tree order, and the sibling to go before. A ``before`` that is not a line directly under
-     *  ``parentId`` is refused; one that is moving itself becomes the next sibling that stays. */
-    function guardPlacement(ids, parentId, before, moves) {
+    /** One check for every edit that moves lines already in the MBOM. Returns ``{moving, anchor}``: the lines, once each in tree order, and the
+     *  sibling to go before. A ``before`` that is not a line directly under ``parentId`` is refused; one that is moving itself becomes the next
+     *  sibling that stays. */
+    function guardPlacement(ids, parentId, before) {
       if (!ids.length) throw fail('nothing_selected');
       const moving = topmost(ids);
       moving.forEach(function (id) {
@@ -247,7 +265,7 @@
       if (anchor) {
         const at = parent.children.findIndex(function (c) { return c.uid === anchor; });
         if (at < 0) throw fail('before_not_under');
-        if (moves && moving.indexOf(anchor) >= 0) {
+        if (moving.indexOf(anchor) >= 0) {
           anchor = '';
           for (let i = at + 1; i < parent.children.length && !anchor; i++) {
             if (moving.indexOf(parent.children[i].uid) < 0) anchor = parent.children[i].uid;
@@ -278,6 +296,13 @@
       insert(parent, nodes, before);
     }
 
+    /** How much of the EBOM line ``key`` the MBOM holds: the quantities of the lines made from it, in every assembly. */
+    function heldOf(key) {
+      let total = 0;
+      (function walk(node) { node.children.forEach(function (c) { if (c.source === key) total += Number(c.quantity) || 0; walk(c); }); })(mbom);
+      return total;
+    }
+
     function fresh(kind, spec) {
       if (kind === KINDS.phantom && !phantomAllowed) throw fail('phantom_needs_settings');
       const number = String(spec.number || '').trim();
@@ -285,11 +310,6 @@
       if (usedNumbers()[numberKey(number)]) throw fail('number_used', { number: number });
       return { uid: uid(), kind: kind, number: number, name: String(spec.name || '').trim(), quantity: spec.quantity ? positive(spec.quantity) : '1', source: '',
                itemId: '', edgeId: '', isNew: true, cut: false, children: [] };
-    }
-
-    function clone(node) {
-      if (node.kind === KINDS.assembly || node.kind === KINDS.phantom) throw fail('copy_new_assembly', { number: node.number });
-      return Object.assign({}, node, { uid: uid(), isNew: true, edgeId: '', children: node.children.map(clone) });
     }
 
     const api = {
@@ -315,7 +335,7 @@
         return edit(function () {
           const node = fresh(kind, spec);
           if (adoptIds && adoptIds.length) {
-            const guard = guardPlacement(adoptIds, parentId, before, true);
+            const guard = guardPlacement(adoptIds, parentId, before);
             node.children = detach(guard.moving);
             insert(need(parentId), [node], guard.anchor);
           } else {
@@ -328,27 +348,37 @@
       /** Move lines (and what is under them) under ``parentId``, before ``before``: between assemblies and, under one, reordering. */
       move: function (ids, parentId, before) {
         edit(function () {
-          const guard = guardPlacement(ids, parentId, before, true);
+          const guard = guardPlacement(ids, parentId, before);
           insert(need(parentId), detach(guard.moving), guard.anchor);
         });
       },
 
-      /** Copy lines (with what is under them) to another place: a component used in several places. New assemblies cannot be copied. */
-      copy: function (ids, parentId, before) {
-        return edit(function () {
-          const guard = guardPlacement(ids, parentId, before, false);
-          const copies = guard.moving.map(function (id) { return clone(need(id)); });
-          insert(need(parentId), copies, guard.anchor);
-          return copies.map(function (c) { return c.uid; });
-        });
-      },
-
-      /** Add the EBOM nodes (``keys``) as components: just them, or with everything under them when ``deep``. */
+      /** Add the EBOM nodes (``keys``) as components: just them, or with everything under them when ``deep``. A line the MBOM holds some of already takes
+       *  what is left of its quantity (4 in the EBOM and 1 in the MBOM adds 3): added to the line under ``parentId`` that is made from it, when there is one, else as a
+       *  line of its own; one that has none left is refused. */
       addFromEbom: function (keys, parentId, before, deep) {
         return edit(function () {
-          const nodes = keys.map(function (key) {
+          const parent = target(parentId);
+          const standing = api.compare().ebom;
+          keys.forEach(function (key) {
+            if (standing[key] && standing[key].blocked) throw fail('under_purchased', { number: lookup[key].number });
+          });
+          const merged = [];   // lines of that assembly made from the same EBOM line that took the rest of its quantity
+          const nodes = [];
+          keys.forEach(function (key) {
             if (!lookup[key]) throw fail('no_such_ebom');
-            return fromEbom(lookup[key], !!deep);
+            const node = fromEbom(lookup[key], !!deep);
+            const wanted = Number(lookup[key].quantity || 1);
+            const left = Math.round((wanted - heldOf(key)) * 1e6) / 1e6;
+            if (left <= 0) throw fail('would_exceed', { number: node.number });
+            const same = parent.children.find(function (c) { return c.kind === KINDS.component && c.source === key; });
+            if (same) {   // the line is under this assembly already: it takes the rest, not a second line beside it
+              same.quantity = String(Math.round((Number(same.quantity) + left) * 1e6) / 1e6);
+              merged.push(same);
+              return;
+            }
+            if (left < wanted) node.quantity = String(left);
+            nodes.push(node);
           });
           placeNew(nodes, parentId, before);
           const states = api.compare().ebom;   // a line that would hold more than the EBOM has is refused, and the tree goes back as it was
@@ -358,15 +388,16 @@
               check(n.children);
             });
           })(nodes);
-          return nodes.map(function (n) { return n.uid; });
+          return merged.concat(nodes).map(function (n) { return n.uid; });
         });
       },
 
-      /** Add existing Fusion Manage items (``{id, number, name, link, linkable, quantity}``) as lines. */
+      /** Add existing Fusion Manage items (``{id, number, name, link, linkable, quantity, source}``) as lines. ``source`` (an EBOM key) is for the bought
+       *  version of a component: the line stands for that EBOM line in the comparison. */
       addItems: function (items, parentId, before) {
         return edit(function () {
           const nodes = items.map(function (item) {
-            return { uid: uid(), kind: KINDS.added, number: item.number, name: item.name || '', quantity: item.quantity ? positive(item.quantity) : '1', source: '',
+            return { uid: uid(), kind: KINDS.added, number: item.number, name: item.name || '', quantity: item.quantity ? positive(item.quantity) : '1', source: item.source || '',
                      itemId: item.id || '', edgeId: '', link: item.link || '', linkable: item.linkable || null, isNew: true, children: [] };
           });
           placeNew(nodes, parentId, before);
@@ -386,52 +417,6 @@
           const node = need(id);
           if (id === ROOT) throw fail('root_no_quantity');
           node.quantity = positive(value);
-        });
-      },
-
-      /** Split lines off an assembly into another one that is there already: ``ids`` (lines directly under ``assemblyId``, some of them and not all)
-       *  go into ``targetId`` (the MBOM itself or an assembly), with their quantities scaled to how many of the target are made. A line the target has
-       *  already (same item number, same kind, no lines under either) is not added twice: its quantity takes the other's, so it stays one line. */
-      splitInto: function (assemblyId, ids, targetId) {
-        edit(function () {
-          const assembly = need(assemblyId);
-          if (assemblyId === ROOT) throw fail('split_root');
-          const into = target(targetId);
-          if (targetId === assemblyId) throw fail('split_same');
-          const wanted = new Set(ids);
-          const chosen = assembly.children.filter(function (c) { return wanted.has(c.uid); });
-          if (!wanted.size || wanted.size >= assembly.children.length) throw fail('split_some');
-          if (chosen.length < wanted.size) throw fail('split_direct');
-          if (chosen.some(function (c) { return contains(c, targetId); })) throw fail('split_inside');
-          const factor = (Number(assembly.quantity) || 1) / (Number(into.quantity) || 1);
-          const what = { source: assembly.number, target: into.number };
-          const lines = chosen.map(function (child) { return { child: child, quantity: clean(Number(child.quantity) * factor, what) }; });
-          detach(chosen.map(function (c) { return c.uid; }));
-          lines.forEach(function (line) {
-            const child = line.child;
-            const same = into.children.find(function (c) {
-              return numberKey(c.number) === numberKey(child.number) && c.kind === child.kind && !c.children.length && !child.children.length;
-            });
-            if (same) same.quantity = String(clean(Number(same.quantity) + line.quantity, what));
-            else { child.quantity = String(line.quantity); into.children.push(child); }
-          });
-        });
-      },
-
-      /** Break an assembly in two: ``ids`` (lines directly under ``assemblyId``) go into a new assembly of ``kind`` next to it, with its quantity. */
-      split: function (assemblyId, ids, kind, spec) {
-        return edit(function () {
-          const assembly = need(assemblyId);
-          const parent = parentOf(assemblyId);
-          if (!parent) throw fail('split_root');
-          const wanted = new Set(ids);
-          const chosen = assembly.children.filter(function (c) { return wanted.has(c.uid); }).map(function (c) { return c.uid; });   // once each, in the assembly's order
-          if (!wanted.size || wanted.size >= assembly.children.length) throw fail('split_some');
-          if (chosen.length < wanted.size) throw fail('split_direct');
-          const node = fresh(kind, Object.assign({ quantity: assembly.quantity }, spec));
-          node.children = detach(chosen);
-          parent.children.splice(parent.children.findIndex(function (c) { return c.uid === assemblyId; }) + 1, 0, node);
-          return node.uid;
         });
       },
 
@@ -460,9 +445,9 @@
         return hits;
       },
 
-      /** How the MBOM stands against the EBOM. ``ebom`` has, for each EBOM key, ``{missing, quantity, exceeded, moved, matched}`` (``missing``: no MBOM line;
+      /** How the MBOM stands against the EBOM. ``ebom`` has, for each EBOM key, ``{missing, quantity, exceeded, moved, matched, bought}`` (``missing``: no MBOM line;
        *  ``quantity``: the quantities of its lines together are not the EBOM's; ``moved``: no line is under the assembly the EBOM has it in; the last
-       *  two can both be true; ``matched``: its quantity is all in the MBOM and so is everything under it), and ``mbom`` each line's state (``mapped`` or ``mfg``, a line with no EBOM node). Phantoms and assemblies of
+       *  two can both be true; ``matched``: its quantity is all in the MBOM and so is everything under it, unless a purchased item stands for it (``bought``: every line made from it is an added item, or a bought version read from Fusion Manage: ``mapByNumber`` with the suffix), and ``mbom`` each line's state (``mapped`` or ``mfg``, a line with no EBOM node). Phantoms and assemblies of
        *  manufacturing's own do not count as the parent: a line under one still has its EBOM parent. */
       compare: function () {
         const lines = {};   // EBOM key -> [{node, ancestor}]
@@ -475,10 +460,11 @@
           });
         })(mbom, mbom.source);
         const ebomState = {};
-        (function walk(node, parentKey) {   // gives whether every line under ``node`` is matched
+        (function walk(node, parentKey, under) {   // gives whether every line under ``node`` is matched; ``under``: a purchased item stands for an ancestor
           let all = true;
           node.children.forEach(function (child) {
             const held = lines[child.key] || [];
+            const bought = held.length > 0 && held.every(function (h) { return h.node.kind === KINDS.added || h.node.bought; });   // a purchased item stands for it (it has no lines under it)
             const total = held.reduce(function (sum, h) { return sum + Number(h.node.quantity); }, 0);   // over every MBOM line made from it, in every assembly
             const state = {
               missing: !held.length,
@@ -486,20 +472,22 @@
               moved: held.length > 0 && held.every(function (h) { return h.ancestor !== parentKey; }),
             };
             state.exceeded = state.quantity && total > Number(child.quantity);   // more in the MBOM than the EBOM has (``quantity`` is true too)
-            const below = walk(child, child.key);
-            state.matched = !state.missing && !state.quantity && below;
+            state.bought = bought;
+            state.blocked = under;   // the purchased item above it is bought whole: what is under it is not added
+            const below = walk(child, child.key, under || bought);
+            state.matched = !state.missing && !state.quantity && (below || state.bought);
             ebomState[child.key] = state;
             if (!state.matched) all = false;
           });
           return all;
-        })(ebom, ebom.key);
+        })(ebom, ebom.key, false);
         return { ebom: ebomState, mbom: mbomState };
       },
 
       /** What changed since the MBOM was read. ``changes`` maps a line's uid to its flags: ``{new}`` for a line with no BOM line yet, else any of
        *  ``moved`` (with ``oldParent``, a uid), ``quantity`` (with ``oldQuantity``) and ``reordered`` (its place among the siblings it kept
        *  changed), each independent, and ``edgeId``, the line it has in Fusion Manage. ``removed`` lists the lines of the read MBOM that are gone
-       *  and whose assembly is not (``{uid, number, parent, edgeId, itemId, quantity, cascade}``): ``cascade`` counts the lines under it that went
+       *  and whose assembly is not (``{uid, number, parent, edgeId, itemId, quantity, sequence, cascade}``): ``cascade`` counts the lines under it that went
        *  with it. With no MBOM read, every line is new. */
       changes: function () {
         const changes = {};
@@ -510,15 +498,27 @@
             node.children.forEach(function (c, at) { old[c.uid] = { node: c, parent: node.uid, at: at }; walk(c); });
           })(baseline);
         }
+        const present = new Set();   // the uids in the tree now, from one walk
+        (function walk(node) { node.children.forEach(function (c) { present.add(c.uid); walk(c); }); })(mbom);
+        const claimed = {};   // old uid -> true: a line that was removed and added again in the same edit stays the line it was
+        /** The line of the read MBOM that ``c`` (a line with no place in it) replaces: the same item removed from this assembly, with nothing under it. */
+        function readded(c, parent) {
+          if (c.children.length) return null;
+          const id = Object.keys(old).find(function (k) {
+            return !present.has(k) && !claimed[k] && old[k].parent === parent.uid && old[k].node.number === c.number && !old[k].node.children.length;
+          });
+          if (id) claimed[id] = true;
+          return id ? old[id] : null;
+        }
         (function walk(node) {
           const kept = [];   // the old places of the lines that were under this assembly before too, in the order they are now
           node.children.forEach(function (c) {
-            const was = old[c.uid];
+            const was = old[c.uid] || readded(c, node);
             if (!was) changes[c.uid] = { new: true };
             else {
               const flags = {};
               if (was.parent !== node.uid) { flags.moved = true; flags.oldParent = was.parent; }
-              else kept.push({ uid: c.uid, at: was.at });
+              else kept.push({ uid: c.uid, at: was.at, was: was });
               if (Number(was.node.quantity) !== Number(c.quantity)) { flags.quantity = true; flags.oldQuantity = was.node.quantity; }
               if (Object.keys(flags).length) { flags.edgeId = was.node.edgeId || ''; changes[c.uid] = flags; }
             }
@@ -541,18 +541,16 @@
           for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = from[i]) stays.add(kept[i].uid);
           kept.forEach(function (k) {
             if (stays.has(k.uid)) return;
-            changes[k.uid] = Object.assign(changes[k.uid] || { edgeId: old[k.uid].node.edgeId || '' }, { reordered: true });
+            changes[k.uid] = Object.assign(changes[k.uid] || { edgeId: k.was.node.edgeId || '' }, { reordered: true });
           });
         })(mbom);
-        const present = new Set();   // the uids in the tree now, from one walk
-        (function walk(node) { node.children.forEach(function (c) { present.add(c.uid); walk(c); }); })(mbom);
         const gone = {};
-        Object.keys(old).forEach(function (id) { if (!present.has(id)) gone[id] = true; });
+        Object.keys(old).forEach(function (id) { if (!present.has(id) && !claimed[id]) gone[id] = true; });
         function count(node) { return node.children.reduce(function (sum, c) { return sum + (gone[c.uid] ? 1 + count(c) : count(c)); }, 0); }
         Object.keys(gone).forEach(function (id) {
           if (gone[old[id].parent]) return;   // it went with its assembly: that one says so
           const n = old[id].node;
-          removed.push({ uid: id, number: n.number, parent: old[id].parent, edgeId: n.edgeId || '', itemId: n.itemId || '', quantity: n.quantity, cascade: count(n) });
+          removed.push({ uid: id, number: n.number, parent: old[id].parent, edgeId: n.edgeId || '', itemId: n.itemId || '', quantity: n.quantity, sequence: n.sequence || '', cascade: count(n) });
         });
         return { changes: changes, removed: removed };
       },

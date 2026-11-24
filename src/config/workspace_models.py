@@ -8,7 +8,9 @@ To support another workspace, add a ``WorkspaceKind`` to ``WORKSPACE_KINDS``.
 To offer another source field, add a ``SourceField`` to ``SOURCE_FIELDS``.
 """
 
+import re
 from dataclasses import asdict, dataclass, field
+from dataclasses import field as new_field   # ``MakeBuyConfig`` has a field named ``field``
 from typing import Any, Dict, List, Optional
 
 from ..core.shapes import dict_rows
@@ -205,6 +207,64 @@ class VariantsConfig:
         return cls(link_column=str(data.get("link_column", "")).strip() if isinstance(data, dict) else "")
 
 
+SUFFIX_MAX = 20   # most characters of the suffix a bought item's number takes after its source's number
+OPTION_PREFIX = "/api/v3/lookups/"   # the start of the link of a picklist option (``fm.client.LOOKUPS``, which this package cannot import: it imports this one)
+_SUFFIX = re.compile(r"[A-Za-z0-9._-]+")   # what an item number may hold, as the add-in writes numbers
+
+
+@dataclass
+class MakeBuyConfig:
+    """Make or buy on the Items workspace: which field says it, its two values, the field that links a bought item to the item it is bought as,
+    and the suffix that makes a bought item's number from its source's. The values are the links of picklist options. Nothing is known of the
+    tenant's field ids, so every part is chosen in Settings; the feature is off until all five are."""
+
+    field: str = ""
+    make_value: str = ""
+    buy_value: str = ""
+    source_field: str = ""
+    suffix: str = ""
+    # The ids of the fields a bought version does not copy from its source (besides what the add-in sets itself). Empty: every field the form holds is copied.
+    skip_fields: List[str] = new_field(default_factory=list)
+
+    def is_set(self) -> bool:
+        """Whether every part is chosen (a bought version can be made)."""
+        return all((self.field, self.make_value, self.buy_value, self.source_field, self.suffix))
+
+    def is_touched(self) -> bool:
+        """Whether any part is chosen."""
+        return any((self.field, self.make_value, self.buy_value, self.source_field, self.suffix))
+
+    def problems(self) -> List[Problem]:
+        """What is wrong with the choices (none when nothing is chosen). A field filled twice is reported by ``WorkspaceConfig._filled_twice``."""
+        if not self.is_touched():
+            return []
+        problems: List[Problem] = []
+        parts = (("field", self.field), ("make_value", self.make_value), ("buy_value", self.buy_value), ("source_field", self.source_field),
+                 ("suffix", self.suffix))
+        unset = next((part for part, value in parts if not value), "")
+        if unset:
+            problems.append(Problem(t("data.ws_make_buy_incomplete"), area="make_buy", part=unset))
+        if self.suffix and (len(self.suffix) > SUFFIX_MAX or not _SUFFIX.fullmatch(self.suffix)):
+            problems.append(Problem(t("data.ws_make_buy_suffix", max=SUFFIX_MAX), area="make_buy", part="suffix"))
+        for part, value in (("make_value", self.make_value), ("buy_value", self.buy_value)):
+            if value and not value.startswith(OPTION_PREFIX):   # a value is an option of the field's picklist, held as its link
+                problems.append(Problem(t("data.ws_make_buy_value_not_option"), area="make_buy", part=part))
+        if self.make_value and self.make_value == self.buy_value:
+            problems.append(Problem(t("data.ws_make_buy_same_value"), area="make_buy", part="buy_value"))
+        return problems
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "MakeBuyConfig":
+        data = data if isinstance(data, dict) else {}
+        left = data.get("skip_fields")
+        ids = [str(item).strip() for item in left] if isinstance(left, list) else []
+        return cls(**{name: str(data.get(name, "")).strip() for name in ("field", "make_value", "buy_value", "source_field", "suffix")},
+                   skip_fields=list(dict.fromkeys(item for item in ids if item)))
+
+
 @dataclass
 class WorkspaceConfig:
     """A workspace id, its field mapping and its static values."""
@@ -216,6 +276,8 @@ class WorkspaceConfig:
     component_field: str = ""
     # The Variants grid of a product (only a workspace of a kind that is assigned uses it).
     variants: VariantsConfig = field(default_factory=VariantsConfig)
+    # Make or buy (only the Items workspace uses it).
+    make_buy: MakeBuyConfig = field(default_factory=MakeBuyConfig)
     # Whether the feature of the workspace's kind is on at all (both the Items and the Portfolio Management kinds can be turned off).
     enabled: bool = True
 
@@ -252,6 +314,7 @@ class WorkspaceConfig:
         for index, row in enumerate(self.static_values):
             if not row.fm_field_id:
                 problems.append(Problem(t("data.ws_choose_field", name=t("data.ws_default_value", n=index + 1)), area="static", row=index, part="field"))
+        problems += self.make_buy.problems()
         problems += self._filled_twice()
         if self.workspace_id and not any(row.source == ITEM_NUMBER_SOURCE for row in self.mappings):
             problems.append(Problem(t("data.ws_item_number_not_mapped", field=LEGACY_NUMBER_FIELD), area="mappings"))
@@ -282,6 +345,8 @@ class WorkspaceConfig:
         filled: Dict[str, str] = {}
         places = ([("mapping", i, t("data.ws_mapped_field", n=i + 1), t("data.ws_mapped_field_inline", n=i + 1), r.fm_field_id) for i, r in enumerate(self.mappings)]
                   + [("component", 0, t("data.ws_component_field"), t("data.ws_component_field_inline"), self.component_field)]
+                  + [("make_buy", 0, t("data.ws_make_buy_field"), t("data.ws_make_buy_field_inline"), self.make_buy.field),
+                     ("make_buy", 0, t("data.ws_make_buy_source"), t("data.ws_make_buy_source_inline"), self.make_buy.source_field)]
                   + [("static", i, t("data.ws_default_value", n=i + 1), t("data.ws_default_value_inline", n=i + 1), r.fm_field_id)
                      for i, r in enumerate(self.static_values)])
         for area, index, name, inline, fm_field_id in places:
@@ -300,6 +365,7 @@ class WorkspaceConfig:
                 "static_values": [row.to_dict() for row in self.static_values],
                 "component_field": self.component_field,
                 "variants": self.variants.to_dict(),
+                "make_buy": self.make_buy.to_dict(),
                 "enabled": self.enabled}
 
     @classmethod
@@ -314,6 +380,7 @@ class WorkspaceConfig:
             workspace_id=str(data.get("workspace_id", "")).strip(),
             component_field=str(data.get("component_field", "")).strip(),
             variants=VariantsConfig.from_dict(data.get("variants")),
+            make_buy=MakeBuyConfig.from_dict(data.get("make_buy")),
             enabled=data.get("enabled", True) is not False,
             mappings=mappings,
             static_values=[StaticValue.from_dict(r) for r in dict_rows(data.get("static_values"))],

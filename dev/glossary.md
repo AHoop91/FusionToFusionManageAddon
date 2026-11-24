@@ -54,6 +54,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Build the request that creates or updates an item, or changes its BOM | `publish/item_requests.py`, `publish/bom_requests.py` | `publish/` | |
 | Send requests safely (once, logged, resumable) | `Dispatcher`, `SendRun`, `SendLog` | `publish/sender.py`, `publish/send_log.py` | |
 | Fit a value to the field it is sent to (picklist link, number, unit) | `PicklistResolver.link`, `convert_unit`, `fit_number` | `fm/picklists.py` | |
+| Make a manufacturing item, or a bought version of a made item (number = source number + suffix, Make or buy set, source link set, values copied, duplicates refused) | `BoughtItems`: `assembly_form`, `create_assembly`, `bought_form`, `create_bought`, `find_bought` (the bought version of an item, the `bought_find` action: the dialog asks it first and offers a hit) (the source is an item id or, from an EBOM line, an item number found with `ItemFinder`); `plan_copy` says what is copied and skipped (the `items_form`, `items_create`, `bought_form` and `bought_create` actions) | `publish/bought_items.py`, `ui/actions/item_create_actions.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Attach a file to an item (a new version if it is there) | `fm/attachments.py`, `ui/attachment_upload.py` | `fm/`, `ui/` | |
 
 ## The Manufacturing Data Model
@@ -100,6 +101,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | --- | --- | --- |
 | Load, save or resolve the configuration | `ConfigService` | `config/config_service.py` |
 | Model a workspace's settings (kinds, mappings, required permissions) | `WorkspaceConfig`, `WorkspaceKind` | `config/workspace_models.py` |
+| Say which field is Make or buy, its two values, the source link field, the suffix of a bought item's number and (optionally) the exact fields it copies (`skip_fields`, the unticked ones of a checklist by form section; none = every field the form holds) | `MakeBuyConfig` (`WorkspaceConfig.make_buy`, Items kind), checked by its `problems` and by `_filled_twice`; edited in the Make or buy section of the Items card (`buildMakeBuySection`: field and source pickers, Make and Buy value pickers that are the options of the field, suffix input; its problems are found by `findMakeBuy` in `validation.js`) | `config/workspace_models.py`, `settings/js/workspaces.js`, `settings/js/validation.js` | [publish-item-flow.md](publish-item-flow.md) |
 | Share settings through the hub or a network path | `config_transfer.py`, `shared_config.py`, `config_envelope.py` | `config/` |
 | Know the hub, tenant and workspace a piece of work is under | `HubContext` | `config/hub_context.py` |
 | Report a problem in the settings with where it is | `Problem`, `problem_payload` | `config/problems.py` |
@@ -128,6 +130,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Switch a command off until what it needs is ready | `SetupGate`, `GateWatcher` | `ui/availability.py` |
 | Add a ribbon tab or button | `ui/ribbon.py`, `ui/ui_text.py` | `ui/` |
 | Show a Fusion message box | `ui/file_dialogs.py` | `ui/` |
+| Read or write in the workspace of one kind from the settings, with the answer polled by token | Subclass `WorkspaceReads` (set `kind`, override `_problem`): `ProductReads` (Portfolio Management), `ItemCreateReads` (Items) | `ui/actions/product_actions.py`, `ui/actions/item_create_actions.py` | [workspace-forms.md](workspace-forms.md) |
 | Register a palette action | a `register_*_actions` function, called from `ui/actions/__init__.py` | `ui/actions/` |
 
 ## Web: shared scripts (`ui/web/shared/js/`)
@@ -143,7 +146,9 @@ Every script attaches to `window.MfgUi` (`ns`). Load order is in each `index.htm
 | A header with logo, avatar and account card | `shell.js`, `account.js` (also the hub role pill) | |
 | Sign-in and view switching | `auth.js` | |
 | Tab strips | `tabs.js` | |
-| A section card that folds (a form or item section) | `ns.section.make(title, content, {folded})`, styled by `shared/css/section.css` | The Product Portfolio form and the Item panel both use it |
+| A section card that folds (a form or item section) | `ns.section.make(title, content, {folded})`, styled by `shared/css/section.css` | The Product Portfolio form, the Item panel and the workspace tabs of Settings (`foldable` in `settings/js/workspaces.js`) use it |
+| One control per field of a workspace form spec, its value, required star, error line and Fusion Manage refusals | `ns.formControls.make({ask, failure, openLightbox, actions})` in `form-controls.js` (the Products page and the Publish dialog use it) | [workspace-forms.md](workspace-forms.md) |
+| Browser checks of Fusion Manage's validators | `ns.validators.check` in `validators.js` | [validation.md](validation.md) |
 | A short message at the bottom | `ns.toast.show` | |
 | A tooltip that shows quickly | `ns.tooltip` | |
 | A progress card for an upload | `ns.uploadProgress` | |
@@ -153,19 +158,21 @@ Shared stylesheets are in `ui/web/shared/css/`: `base.css` (tokens, reset, the s
 
 ## Web: reusable pieces that live inside one page
 
-These are built but are not yet shared, so a second page cannot call them. Move one into `shared/js/` when a second page needs it (see the notes), and do not paste it.
+The pieces below are built but not yet shared, so a second page cannot call them. Move one into `shared/js/` when a second page needs it (see the notes), and do not paste it.
 
 | Piece | Where it is | Note |
 | --- | --- | --- |
-| Field controls, sections, the form, the checklist | `products/js/products-page.js` | [workspace-forms.md](workspace-forms.md) |
+| Sections, the form layout, matrices, the filters above the form, the checklist | `products/js/products-page.js` | [workspace-forms.md](workspace-forms.md) |
 | The table of rows, column widths, pictures, view selector | `products/js/products-page.js` | [tableaus.md](tableaus.md) |
 | Filters and columns panel | `products/js/filters.js` | [tableaus.md](tableaus.md) |
-| Browser checks of Fusion Manage's validators | `products/js/validators.js` (`ns.validators.check`) | [validation.md](validation.md) |
 | Drag to reorder a list | `products/js/sortable.js` | [tableaus.md](tableaus.md) |
 | Show Fusion Manage's own markup safely | `item/js/safe-html.js` (`ns.safeHtml.render`, also used by the Products page) | |
-| The BOM table, tree, columns, filters and cells | `publish/js/bom-*.js`, `item/js/bom.js`, `item/js/tree.js` | |
-| The structure of an MBOM: the tree, its edits (move, copy, reorder, phantom and other assemblies, split into a new or an existing assembly, add, remove, quantity), undo and redo, and the EBOM and change comparisons | `publish/js/mbom-structure.js` (`ns.mbomStructure`) | |
+| The BOM tree (rows read, levels) and the data of a line | `publish/js/bom-tree.js`, `bom-model.js` (the table's own drawing, `bom-table.js` and its helpers, is no longer shown; `foldTools` is the viewer's Collapse and Expand all) | [publish-item-flow.md](publish-item-flow.md) |
+| The structure of an MBOM: the tree, its edits (move, reorder, phantom and other assemblies, add, remove, quantity), undo and redo, and the EBOM and change comparisons | `publish/js/mbom-structure.js` (`ns.mbomStructure`) | |
 | The Add Items picker | `publish/js/add-items.js` | [finding-items.md](finding-items.md) |
+| The dialog of the structure viewer: a modal with the Items form for a new manufacturing item (toolbar Create New Manufacturing Item) or a bought version of an EBOM line (row action Create bought version) | `publish/js/item-panel.js` (`ns.pubItemPanel.open({mode, sourceNumber, number})`), styles in `publish/css/item-panel.css` | [publish-item-flow.md](publish-item-flow.md) |
+| The look of a workspace form's controls (lines, star, text boxes, pickers, count, pictures) | `shared/css/form-controls.css`, loaded by the Products and Publish pages | [workspace-forms.md](workspace-forms.md) |
+| Turn the edited MBOM into the publish job (items and BOM operations; what it refuses is `problems`) | `publish/js/mbom-plan.js` (`ns.mbomPlan.build`), from `ns.mbomStructure.changes()` | [publish-item-flow.md](publish-item-flow.md) section 2 |
 | Show the EBOM beside the editable MBOM (two panes, drag and drop, search, undo), or map an MBOM read from Fusion Manage to the EBOM by item number | `publish/js/mbom-viewer.js` (`ns.mbomViewer`), `ns.mbomStructure.mapByNumber`, `zoneOf` | [publish-item-flow.md](publish-item-flow.md) |
 | Files, change log, where used, workflows | `item/js/files.js`, `change-log.js`, `where-used.js`, `associated-workflows.js` | |
 | Settings: workspaces, mappings, exports, language, hub picker | `settings/js/` | |

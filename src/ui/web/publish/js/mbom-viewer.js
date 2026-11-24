@@ -1,7 +1,8 @@
 /**
  * Publish Item panel: the structure viewer, as ``ns.mbomViewer``. Two panes side by side: the EBOM (the design's Bill of Materials, read-only) and the
  * MBOM (the manufacturing Bill of Materials, which can be edited). The MBOM is ``ns.mbomStructure``; this file draws it and turns what the user
- * does into its edits. Nothing here is sent to Fusion Manage: the Publish button still publishes what the table shows.
+ * does into its edits. Nothing here is sent to Fusion Manage by the viewer itself: the Publish button sends what ``plan()`` makes of the structure
+ * (mbom-plan.js).
  *
  * Where the trees come from: the EBOM from the rows the panel has read (all levels, so the whole tree is read first, as Expand all does); the
  * MBOM from the ``mbom_tree`` section (the target item read by its id, every level), mapped to the EBOM by item number. A design with no MBOM item
@@ -9,10 +10,11 @@
  *
  * The viewer keeps uids and EBOM keys only, never nodes: the structure replaces its tree by a copy on a refused edit, undo and redo. Only the
  * lines of an open assembly are drawn, and no more than ``LIMIT`` under one at first, so a large tree stays quick. Every edit goes through
- * ``run``, which shows the reason an edit was refused in the message line.
+ * ``run``, which says the reason an edit was refused in a toast.
  *
  * ``host``: ``design()`` (the open design's summary), ``rows()`` (compared rows read so far), ``partial()`` (levels not read yet), ``loadTree()``,
- * ``askMbom()``, ``targetId()``, ``target()`` (item number), ``phantom()`` (whether Settings allow phantoms).
+ * ``askMbom()``, ``targetId()``, ``target()`` (item number), ``phantom()`` (whether Settings allow phantoms), ``summary()`` (the design, under the
+ * target's item number) and ``planned()`` (called after each draw).
  */
 (function (ns) {
   'use strict';
@@ -20,19 +22,21 @@
   const ui = ns.pubUi;
   const el = ns.el;
   const S = ns.mbomStructure;
+  const model = ns.bomModel;
   function t(key, params) { return ns.i18n.t(key, params); }
 
+  const DEST_LIMIT = 300;   // lines drawn in the Add to assembly menu before it asks for a search
   const LIMIT = 200;   // lines drawn under an assembly before "Show more"
 
   const ICONS = {   // svg paths (24 x 24) of the buttons and of the actions on a line
-    copy: ['M9 9h10v10H9z', 'M5 15V5h10'],
     remove: ['M5 7h14', 'M9 7V4h6v3', 'M7 7l1 13h8l1-13', 'M10 11v6', 'M14 11v6'],
     assembly: ['M12 3l8 4.5v9L12 21l-8-4.5v-9z', 'M12 9.5v5', 'M9.5 12h5'],
     boxPlus: ['M10 3l7 4v6', 'M17 7l-7 4-7-4', 'M10 11v9', 'M3 7v10l7 4', 'M10 3L3 7', 'M18 14.5v7', 'M14.5 18h7'],   // a box like the BOM's, with a plus at its bottom right (the last two paths)
+    bought: ['M3 4h2.5l2 11h10l2-8H7', 'M10 19.5h.01', 'M17 19.5h.01'],   // a trolley
+    cart: ['M8 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M19 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M2 3h2l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L22 7H5.1'],   // a shopping cart: a purchased part
+    info: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5'],   // a circle with an i: the note of a line
     addItems: ['M4 6h11', 'M4 12h7', 'M4 18h7', 'M17 14v6', 'M14 17h6'],   // a list with a plus
-    split: ['M12 4v6', 'M12 10L6 20', 'M12 10l6 10'],
     grip: ['M9 6h.01', 'M15 6h.01', 'M9 12h.01', 'M15 12h.01', 'M9 18h.01', 'M15 18h.01'],
-    addDeep: ['M4 12h11', 'M11 7l5 5-5 5', 'M20 4v16'],
     addOne: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 8v8', 'M8 12h8'],
     search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M16 16l4.5 4.5'],
     undo: ['M9 14L4 9l5-5', 'M4 9h10a6 6 0 0 1 0 12h-3'],
@@ -42,12 +46,9 @@
   /** The words for what the structure refuses (it throws errors with a ``key`` and ``params``). */
   const ERRORS = {
     bad_quantity: function () { return t('publish.sv_err_bad_quantity'); },
-    quantity_inexact: function (p) { return t('publish.sv_err_quantity_inexact', p); },
     phantom_needs_settings: function () { return t('publish.sv_phantom_off'); },
     needs_number: function () { return t('publish.sv_err_needs_number'); },
     number_used: function (p) { return t('publish.sv_err_number_used', p); },
-    not_assembly: function (p) { return t('publish.sv_err_not_assembly', p); },
-    copy_new_assembly: function (p) { return t('publish.sv_err_copy_new_assembly', p); },
     root_immutable: function () { return t('publish.sv_err_root_immutable'); },
     nothing_selected: function () { return t('publish.sv_err_nothing_selected'); },
     inside_itself: function () { return t('publish.sv_err_inside_itself'); },
@@ -57,12 +58,8 @@
     unknown_place: function (p) { return t('publish.sv_err_unknown_place', p); },
     no_such_ebom: function () { return t('publish.sv_err_no_such_ebom'); },
     would_exceed: function (p) { return t('publish.sv_err_would_exceed', p); },
+    under_purchased: function (p) { return t('publish.sv_err_under_purchased', p); },
     root_no_quantity: function () { return t('publish.sv_err_root_no_quantity'); },
-    split_same: function () { return t('publish.sv_err_split_same'); },
-    split_inside: function () { return t('publish.sv_err_split_inside'); },
-    split_root: function () { return t('publish.sv_err_split_root'); },
-    split_some: function () { return t('publish.sv_err_split_some'); },
-    split_direct: function () { return t('publish.sv_err_split_direct'); },
   };
 
   /** An error of an edit in words; one that is not the structure's refusal is shown as it is, never hidden. */
@@ -79,7 +76,6 @@
   let note = '';             // what the viewer is waiting for, or the error
   let structure = null;
   let ebom = null;
-  let message = '';          // why the last edit was refused
   let drag = null;           // what is being dragged: { from: 'mbom' | 'ebom', ids }
   let dropMark = null;       // the row showing where a drop would go
   let searchText = '';
@@ -89,6 +85,8 @@
   const ebomOpened = new Set(['0']);  // keys of the EBOM lines that are open
   const more = {};           // parent id -> how many lines under it are drawn
   const selected = new Set();       // MBOM uids
+  const openNotes = new Set();      // the lines whose note is open: 'ebom:<key>' or 'mbom:<uid>'
+  let view = { held: {}, ebomAt: {}, parentOf: {} };   // for the notes: the MBOM lines made from each EBOM line (by key), the EBOM lines by key, and the assembly of each MBOM line (by uid)
   const ebomSelected = new Set();   // EBOM keys
   let anchor = '';                  // where a shift-click range starts, in the pane last clicked
   let visible = { mbom: [], ebom: [] };   // the lines drawn, in order, for ranges
@@ -98,7 +96,7 @@
   // ---- Making the structure ------------------------------------------------------------
 
   function mbomFromTree(node) {
-    return { number: node.number, name: node.name, quantity: node.quantity || '', itemId: node.item_id, edgeId: node.edge_id, cut: !!node.cut,
+    return { number: node.number, name: node.name, quantity: node.quantity || '', itemId: node.item_id, edgeId: node.edge_id, sequence: node.sequence, cut: !!node.cut,
              children: (node.children || []).map(mbomFromTree) };
   }
 
@@ -106,23 +104,24 @@
   function build(tree) {
     const design = host.design();
     ebom = S.ebomFromRows(host.rows(), { item_number: design.item_number, name: design.name || design.description || design.file_name, component_id: design.component_id });
-    const read = tree ? S.mapByNumber(mbomFromTree(tree), ebom) : null;
+    const read = tree ? S.mapByNumber(mbomFromTree(tree), ebom, host.boughtSuffix ? host.boughtSuffix() : '') : null;
     structure = S.create({ ebom: ebom, mbom: read, phantom: !!host.phantom() });
     phase = 'idle';
     clearState();
     reindex();
   }
 
-  /** What belongs to one structure: the form, a drag, the search, the selection and the folds (uids start again with each structure). */
+  /** What belongs to one structure: a drag, the search, the selection and the folds (uids start again with each structure). */
   function clearState() {
-    closeForm();
+    if (ns.pubItemPanel) ns.pubItemPanel.close();   // its line may be gone (it stays while a save is under way)
     clearMark();
     drag = null;
     searchText = '';
+    openNotes.clear();
     hitIndex = -1;
     dom.search.value = '';
     hits.clear(); selected.clear(); ebomSelected.clear();
-    anchor = ''; message = '';
+    anchor = '';
     opened.clear(); opened.add(S.ROOT); ebomOpened.clear(); ebomOpened.add('0');
     Object.keys(more).forEach(function (k) { delete more[k]; });
   }
@@ -219,14 +218,13 @@
     render();
   }
 
-  /** Run an edit. A refusal is shown in the message line and nothing changes. Returns ``{ok, value}``. */
+  /** Run an edit. A refusal is said in a toast and nothing changes. Returns ``{ok, value}``. */
   function run(change) {
     let value;
     try {
       value = change();
-      message = '';
     } catch (error) {
-      message = describe(error);
+      ns.toast.show(describe(error), { tone: 'error' });   // said for a moment, not in a line of its own above the panes
       reindex();   // a refused edit puts back a copy of the tree
       render();
       return { ok: false };
@@ -242,9 +240,6 @@
     if (drag.from === 'ebom') {
       const keys = drag.ids;
       run(function () { structure.addFromEbom(keys, place.parentId, place.before, !event.altKey); });
-    } else if (event.ctrlKey || event.metaKey) {
-      const ids = drag.ids;
-      run(function () { return structure.copy(ids, place.parentId, place.before); });
     } else {
       const ids = drag.ids;
       run(function () { structure.move(ids, place.parentId, place.before); });
@@ -300,8 +295,8 @@
 
   function parentUid(id) { return index.get(id).parent.uid; }
 
-  function undo() { structure.undo(); message = ''; changed(); }
-  function redo() { structure.redo(); message = ''; changed(); }
+  function undo() { structure.undo(); changed(); }
+  function redo() { structure.redo(); changed(); }
 
   /** Where new lines go: inside the one assembly that is selected, else at the end of the MBOM. */
   function placeForNew() {
@@ -310,50 +305,174 @@
     return { parentId: S.ROOT, before: '' };
   }
 
-  /** A new assembly (or phantom) that takes in ``ids`` (the selected lines when none are named), before the first of them. */
-  function assemblyForm(kind, named) {
-    const ids = named || chosenIds();
-    const first = ids[0];
-    const place = first ? { parentId: parentUid(first), before: first } : { parentId: S.ROOT, before: '' };
-    openForm({
-      title: t('publish.sv_form_assembly'),
-      fields: true,
-      submit: function (values) {
-        openPlace(place);
-        const done = run(function () { return structure.createAssembly(kind, place.parentId, place.before, values, ids); });
-        if (done.ok) { opened.add(done.value); render(); }
-        return done.ok;
-      },
-    });
+  let destMenu = null;   // the open "Add to assembly" menu: {close}
+
+  function closeDestMenu() {
+    if (destMenu) destMenu.close();
+    destMenu = null;
   }
 
-  /** Split off the lines selected directly under the assembly ``assemblyId``: into an assembly that is there already (one the lines are not in), where
-   *  an item it has already is joined to, or else into a new one named in the fields. */
-  function splitForm(assemblyId) {
-    const parent = index.get(assemblyId).node;
-    const ids = parent.children.filter(function (c) { return selected.has(c.uid); }).map(function (c) { return c.uid; });
-    const chosen = new Set(ids);
-    const inside = new Set();   // the lines being split off and what is under them: the target cannot be one of them
-    (function walk(list) { list.forEach(function (c) { inside.add(c.uid); walk(c.children); }); })(parent.children.filter(function (c) { return chosen.has(c.uid); }));
-    const targets = [structure.root()].concat(order).filter(function (n) { return n.uid !== parent.uid && !inside.has(n.uid) && structure.holds(n.uid); });
-    const label = function (uid) { const entry = index.get(uid); const n = entry && entry.node; return n ? [n.number, n.name].filter(Boolean).join(' - ') : ''; };
-    openForm({
-      title: t('publish.sv_form_split'),
-      picker: {
-        ariaLabel: t('publish.sv_split_target'), placeholder: t('publish.sv_split_target'), search: t('publish.sv_search_placeholder'), required: false,
-        label: label, groups: function () { return [{ title: '', items: targets.map(function (n) { return { value: n.uid, label: label(n.uid) }; }) }]; },
-      },
-      fields: true,
-      submit: function (values) {
-        if (values.target) {
-          opened.add(values.target);
-          return run(function () { structure.splitInto(parent.uid, ids, values.target); }).ok;
-        }
-        const done = run(function () { return structure.split(parent.uid, ids, 'assembly', values); });
-        if (done.ok) { opened.add(done.value); render(); }
-        return done.ok;
-      },
+  /** The "Add to assembly" menu, at the left of ``button``: the MBOM as a tree to fold and unfold (without ``targets`` and what is under them), with a
+   *  search on top. Choosing a line moves ``targets`` to the end of it. A search shows the lines that match with the ones above them, all open. Only
+   *  the lines in view are drawn, and no more than ``DEST_LIMIT``, so a large MBOM stays quick. */
+  function openDestMenu(button, targets) {
+    closeDestMenu();
+    const moving = new Set(targets);
+    const open = new Set([S.ROOT]);
+    let query = '';
+    const box = el('div', 'sv-dest');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', t('publish.sv_dest_title'));
+    const head = el('div', 'sv-dest-head');
+    const cross = el('button', 'sv-dest-btn sv-dest-close');
+    cross.type = 'button';
+    cross.setAttribute('aria-label', t('publish.sv_dest_close'));
+    cross.title = t('publish.sv_dest_close');
+    cross.appendChild(ns.svg(['M6 6l12 12', 'M18 6L6 18'], 14));
+    cross.addEventListener('click', function () { closeDestMenu(); button.focus(); });
+    const lens = el('button', 'sv-dest-btn sv-dest-find');
+    lens.type = 'button';
+    lens.setAttribute('aria-label', t('publish.sv_dest_search'));
+    lens.title = t('publish.sv_dest_search');
+    lens.setAttribute('aria-expanded', 'false');
+    lens.appendChild(ns.svg(ICONS.search, 14));
+    const tools = el('span', 'sv-dest-tools');
+    tools.append(lens, cross);
+    head.append(el('span', 'sv-dest-title', t('publish.sv_dest_title')), tools);
+    box.appendChild(head);
+    const find = el('input', 'sv-input sv-dest-search');
+    find.type = 'text';
+    find.autocomplete = 'off';
+    find.spellcheck = false;
+    find.placeholder = t('publish.sv_search_placeholder');
+    find.setAttribute('aria-label', t('publish.sv_search_placeholder'));
+    const count = el('div', 'sv-dest-count');
+    const list = el('div', 'sv-dest-list');
+    list.setAttribute('role', 'tree');
+    const bar = el('div', 'sv-dest-bar');   // the search opens under the top bar with the magnifier
+    bar.hidden = true;
+    bar.append(find, count);
+    box.append(bar, list);
+    lens.addEventListener('click', function () {
+      bar.hidden = !bar.hidden;
+      lens.setAttribute('aria-expanded', bar.hidden ? 'false' : 'true');
+      if (bar.hidden) { find.value = ''; query = ''; draw(); lens.focus(); } else find.focus();
     });
+
+    function matches(node) {
+      return (node.number + ' ' + node.name).toLowerCase().indexOf(query) >= 0;
+    }
+    /** Whether the line, or a line under it, matches the search. */
+    function wanted(node) {
+      if (moving.has(node.uid)) return false;
+      return matches(node) || node.children.some(wanted);
+    }
+
+    /** How many lines match the search, drawn or not. */
+    function countHits(node) {
+      if (moving.has(node.uid)) return 0;
+      return (matches(node) ? 1 : 0) + node.children.reduce(function (sum, c) { return sum + countHits(c); }, 0);
+    }
+
+    function draw() {
+      list.replaceChildren();
+      let drawn = 0;
+      let cut = false;
+      (function walk(node, depth) {
+        if (moving.has(node.uid) || (query && !wanted(node))) return;
+        const hit = !!query && matches(node);
+        if (drawn >= DEST_LIMIT) { cut = true; return; }
+        drawn += 1;
+        const kids = node.children.filter(function (c) { return !moving.has(c.uid); });
+        const isOpen = !!query || open.has(node.uid);
+        const row = el('div', 'sv-dest-row' + (hit ? ' sv-dest-hit' : ''));
+        row.setAttribute('role', 'treeitem');
+        row.setAttribute('aria-level', String(depth + 1));
+        if (kids.length) row.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        for (let g = 0; g < depth; g++) row.appendChild(el('span', 'sv-dest-guide'));   // a line down from each line above, so the tree reads as one
+        const toggle = el('button', 'sv-dest-toggle');
+        toggle.type = 'button';
+        toggle.tabIndex = -1;
+        toggle.dataset.id = node.uid;
+        toggle.disabled = !kids.length || !!query || node.uid === S.ROOT;
+        if (kids.length && node.uid !== S.ROOT) {
+          const chevron = ui.chevron();
+          ui.setChevron(chevron, !isOpen);
+          toggle.appendChild(chevron);
+        }
+        toggle.addEventListener('click', function () {
+          if (open.has(node.uid)) open.delete(node.uid); else open.add(node.uid);
+          draw();
+        });
+        const pick = el('button', 'sv-dest-pick');
+        pick.type = 'button';
+        pick.dataset.id = node.uid;
+        pick.appendChild(el('span', 'sv-dest-number', node.number));
+        if (node.name) pick.appendChild(el('span', 'sv-dest-name', node.name));
+        pick.addEventListener('mouseover', function (event) {   // the full text for the shared tooltip (it reads the title as the pointer arrives, after this), only when the line cuts it short
+          if (pick.contains(event.relatedTarget)) return;   // moving between the parts of this line, not arriving
+          const label = pick.querySelector('.sv-dest-name');
+          if (label && label.scrollWidth > label.clientWidth) pick.title = node.number + ' ' + node.name; else pick.removeAttribute('title');
+        });
+        pick.addEventListener('click', function () {
+          closeDestMenu();
+          openPlace({ parentId: node.uid });
+          run(function () { structure.move(targets, node.uid, ''); });
+        });
+        row.append(toggle, pick);
+        list.appendChild(row);
+        if (isOpen) kids.forEach(function (c) { walk(c, depth + 1); });
+      })(structure.root(), 0);
+      if (cut) list.appendChild(el('div', 'sv-dest-more', t('publish.sv_dest_more', { count: DEST_LIMIT })));
+      const hits = query ? countHits(structure.root()) : 0;
+      count.textContent = query ? (hits ? t('publish.sv_search_count', { count: hits }) : t('publish.sv_search_none')) : '';
+    }
+
+    function picks() { return Array.from(box.querySelectorAll('.sv-dest-pick')); }
+    function step(from, by) {
+      const all = picks();
+      const at = all.indexOf(from);
+      const next = all[Math.max(0, Math.min(all.length - 1, (at < 0 ? (by > 0 ? -1 : all.length) : at) + by))];
+      if (next) next.focus();
+    }
+
+    find.addEventListener('input', function () { query = find.value.trim().toLowerCase(); draw(); });
+    box.addEventListener('keydown', function (event) {
+      const on = document.activeElement;
+      if (event.key === 'ArrowDown') { event.preventDefault(); step(on, 1); }
+      else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (on === find) return;   // the search is the top of the menu
+        if (picks()[0] === on) { if (!bar.hidden) find.focus(); } else step(on, -1);
+      } else if (!query && on && on.classList.contains('sv-dest-pick') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+        const row = on.parentNode;
+        if (row.hasAttribute('aria-expanded') && on.dataset.id !== S.ROOT && (row.getAttribute('aria-expanded') === 'true') === (event.key === 'ArrowLeft')) {
+          event.preventDefault();
+          row.querySelector('.sv-dest-toggle').click();
+          const again = box.querySelector('.sv-dest-pick[data-id="' + on.dataset.id + '"]');
+          if (again) again.focus();
+        }
+      }
+    });
+
+    draw();
+    document.body.appendChild(box);
+    const spot = button.getBoundingClientRect();
+    const height = Math.min(360, window.innerHeight - 16);   // room for the menu at its tallest (opening a branch grows it), so it never runs off the window and its list scrolls
+    box.style.maxHeight = height + 'px';
+    box.style.right = Math.max(8, Math.min(window.innerWidth - spot.left + 4, window.innerWidth - box.offsetWidth - 8)) + 'px';   // kept inside the window
+    box.style.top = Math.max(8, Math.min(spot.top, window.innerHeight - height - 8)) + 'px';
+    function outside(event) { if (!box.contains(event.target) && !button.contains(event.target)) closeDestMenu(); }   // the button that opened it shuts it with its click
+    function key(event) { if (event.key === 'Escape') { event.stopPropagation(); closeDestMenu(); button.focus(); } }
+    document.addEventListener('mousedown', outside, true);
+    document.addEventListener('keydown', key, true);
+    destMenu = { button: button, close: function () {
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', key, true);
+      box.remove();
+    } };
+    const first = box.querySelector('.sv-dest-pick');
+    if (first) first.focus();
   }
 
   function addItems() {
@@ -378,24 +497,53 @@
     return ebomSelected.has(id) ? visible.ebom.filter(function (k) { return ebomSelected.has(k); }) : [id];
   }
 
+  /** The bought item ``made`` goes into the MBOM, standing for the EBOM line ``node`` it was made from, in the quantity that line has. */
+  function addBought(mine, node, made) {
+    if (structure !== mine) return;
+    const place = placeForNew();
+    openPlace(place);
+    run(function () {
+      return structure.addItems([{ id: made.id, number: made.number, name: made.name || node.name, link: made.link, quantity: node.quantity, source: node.key }], place.parentId, place.before);
+    });
+  }
+
+  /** Create Bought Version on an EBOM line: the dialog opens at once and looks in Fusion Manage first. A bought version that is there already is offered
+   *  in the dialog and, once confirmed, added to the MBOM (``onFound``) instead of making a second; else the form shows and the new item is added
+   *  (``onCreated``). */
+  function createBought(node) {
+    const mine = structure;
+    ns.pubItemPanel.open({ mode: 'bought', sourceNumber: node.number, number: node.number,
+                           onFound: function (found) { addBought(mine, node, found); },
+                           onCreated: function (made) { addBought(mine, node, made); } });
+  }
+
   /** An icon on a line was used. */
-  function rowAction(pane, id, act) {
+  function rowAction(pane, id, act, button) {
     const targets = targetsOf(pane, id);
-    if (pane === 'ebom') {
+    if (pane === 'ebom' && act === 'bought') {
+      const node = ebomNode(id);   // a component has no Fusion Manage item id: the dialog finds its item by number
+      createBought(node);
+    } else if (pane === 'ebom') {
       const place = placeForNew();
       openPlace(place);
-      run(function () { structure.addFromEbom(targets, place.parentId, place.before, act === 'add_deep'); });
-    } else if (act === 'copy') {
-      const place = structure.position('after', targets[targets.length - 1]);   // next to the last of them
-      openPlace(place);
-      run(function () { return structure.copy(targets, place.parentId, place.before); });
+      run(function () { structure.addFromEbom(targets, place.parentId, place.before, true); });   // an assembly comes with the lines under it, as a drag does
     } else if (act === 'remove') {
       run(function () { structure.remove(targets); });
-    } else if (act === 'assembly') {
-      assemblyForm('assembly', targets);
-    } else if (act === 'split') {
-      splitForm(id);
+    } else if (act === 'addTo') {
+      if (destMenu && destMenu.button === button) closeDestMenu(); else openDestMenu(button, targets);
     }
+  }
+
+  /** The component of the EBOM with this key. */
+  function ebomNode(key) {
+    return (function find(node) {
+      if (node.key === key) return node;
+      for (const child of node.children) {
+        const found = find(child);
+        if (found) return found;
+      }
+      return null;
+    })(ebom);
   }
 
   /** The state of each toolbar button: enabled, or disabled with the reason as its tooltip. */
@@ -406,68 +554,18 @@
     set(b.redo, structure.canRedo() ? '' : t('publish.sv_nothing_to_redo'));
   }
 
-  // ---- Form under the toolbar ------------------------------------------------------------
-
-  function closeForm() {
-    dom.form.hidden = true;
-    dom.form.replaceChildren();
-  }
-
-  /** The inline form: item number and name (``fields``) or a picker (``picker``), with Create and Cancel. ``submit(values)`` gives true when it was done. */
-  function openForm(spec) {
-    const form = dom.form;
-    form.replaceChildren(el('h4', 'sv-form-title', spec.title));
-    const values = { number: '', name: '', target: '' };
-    const inputs = [];
-    if (spec.fields) {
-      [['number', t('publish.sv_form_number')], ['name', t('publish.sv_form_name')]].forEach(function (pair) {
-        const input = el('input', 'sv-input');
-        input.type = 'text';
-        input.autocomplete = 'off';
-        input.spellcheck = false;
-        input.placeholder = pair[1];
-        input.setAttribute('aria-label', pair[1]);
-        input.addEventListener('input', function () { values[pair[0]] = input.value; });
-        inputs.push(input);
-        form.appendChild(input);
-      });
-    }
-    if (spec.picker) {
-      const picker = ns.picker.make(Object.assign({ className: 'sv-form-pk', searchFrom: 8 }, spec.picker), '');
-      picker.addEventListener('pick', function () { values.target = (picker.getPicked()[0] || {}).value || ''; });
-      form.appendChild(picker);
-    }
-    const ok = el('button', 'btn sv-btn', t('publish.sv_form_ok'));
-    ok.type = 'button';
-    const cancel = el('button', 'btn btn-secondary sv-btn', t('publish.cancel'));
-    cancel.type = 'button';
-    const actions = el('div', 'sv-form-actions');
-    actions.append(ok, cancel);
-    form.appendChild(actions);
-    function submit() { if (spec.submit(values)) closeForm(); }
-    ok.addEventListener('click', submit);
-    cancel.addEventListener('click', closeForm);
-    form.onkeydown = function (event) {
-      if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); submit(); }
-      else if (event.key === 'Escape') closeForm();
-    };
-    form.hidden = false;
-    if (inputs[0]) inputs[0].focus();
-  }
-
   // ---- Drawing -------------------------------------------------------------------------
 
   /** A quantity as shown: a whole number gets ".0", a decimal stays as it is. */
   function shownQuantity(text) { return /^\d+$/.test(text) ? text + '.0' : text; }
 
-  function badge(text, kind) { return el('span', 'sv-badge sv-badge-' + kind, text); }
-
-  /** A check mark for an EBOM line that is all in the MBOM. */
-  function matchedMark() {
-    const mark = el('span', 'sv-matched');
-    mark.title = t('publish.sv_matched');
-    mark.setAttribute('aria-label', t('publish.sv_matched'));
-    mark.appendChild(ns.svg(['M5 12.5l4.5 4.5L19 7'], 14));
+  /** A check mark for an EBOM line that is all in the MBOM (a shopping cart when a purchased part stands for it). */
+  function matchedMark(bought) {
+    const text = bought ? t('publish.sv_matched_bought') : t('publish.sv_matched');   // a purchased part standing for it is told apart: a blue cart, not a green check
+    const mark = el('span', bought ? 'sv-matched sv-matched-bought' : 'sv-matched');
+    mark.title = text;
+    mark.setAttribute('aria-label', text);
+    mark.appendChild(bought ? ns.svg(ICONS.cart, 15) : ns.svg(['M5 12.5l4.5 4.5L19 7'], 14));
     return mark;
   }
 
@@ -499,6 +597,84 @@
   /** The text of an action on a line, with how many lines it takes in when the line is one of several selected. */
   function actionLabel(text, count) { return count > 1 ? t('publish.sv_act_many', { action: text, count: count }) : text; }
 
+  /** The colour a line's notes give it: ``warn`` (amber) for a warning or a change to a line of Fusion Manage's, ``new`` (green) for a new line, else '' (blue). */
+  function toneOf(notes) {
+    const has = function (tone) { return notes.some(function (n) { return n.tone === tone; }); };
+    return has('warn') || has('update') ? 'warn' : has('new') ? 'new' : '';
+  }
+
+  /** The class that gives a line's icon bar the colour of its notes. */
+  function toneClass(notes) {
+    const tone = toneOf(notes);
+    return tone ? 'sv-tone-' + tone + ' ' : '';
+  }
+
+  /** The button beside a line's quantity that opens what is to be said of the line (``notes``: ``{tone, text}``, tone ``info`` or ``warn``); the same words are its tooltip. */
+  function noteButton(notes, key) {
+    const open = openNotes.has(key);
+    const tone = toneOf(notes);   // the same colour as the bar beside the line's icon
+    const button = el('button', 'sv-note-btn' + (tone ? ' sv-note-' + tone : '') + (open ? ' open' : ''));
+    button.type = 'button';
+    button.dataset.note = key;
+    button.title = notes.map(function (n) { return n.text; }).join('\n');
+    button.setAttribute('aria-label', t('publish.sv_note_label'));
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    button.appendChild(ns.svg(ICONS.info, 16));
+    return button;
+  }
+
+  /** The lines under a line whose note is open. */
+  function noteRow(notes, depth) {
+    const row = el('div', 'sv-note-row');
+    row.style.setProperty('--indent', (depth * 32) + 'px');
+    notes.forEach(function (n) { row.appendChild(el('p', 'sv-note-line sv-note-' + n.tone, n.text)); });
+    return row;
+  }
+
+  /** What is to be said of an EBOM line: what stands for it in the MBOM, and where the quantities do not agree. */
+  function ebomNotes(node, state) {
+    const notes = [];
+    if (!state) return notes;
+    const lines = view.held[node.key] || [];
+    const total = lines.reduce(function (sum, l) { return sum + Number(l.quantity); }, 0);
+    const words = { total: shownQuantity(String(total)), quantity: shownQuantity(node.quantity) };
+    if (state.bought) notes.push({ tone: 'info', text: t('publish.sv_note_bought', { numbers: lines.map(function (l) { return l.number; }).join(', ') }) });
+    if (state.exceeded) notes.push({ tone: 'warn', text: t('publish.sv_note_exceeds', words) });
+    else if (state.quantity) notes.push({ tone: 'warn', text: t('publish.sv_note_short', words) });
+    if (state.moved) {   // which assembly of the MBOM it is under, so it need not be looked for
+      const under = lines.map(function (l) { return (view.parentOf[l.uid] || {}).number || '-'; }).filter(function (n, i, all) { return all.indexOf(n) === i; });
+      notes.push({ tone: 'info', text: t('publish.sv_note_moved_ebom', { numbers: under.join(', ') }) });
+    }
+    return notes;
+  }
+
+  /** What is to be said of an MBOM line: what it stands for, what changed in it, and whether it holds more than the EBOM has. */
+  function mbomNotes(node, cmp, flags) {
+    const notes = [];
+    const from = node.source ? view.ebomAt[node.source] : null;
+    if (node.kind === 'added' && !from) notes.push({ tone: 'info', text: t('publish.sv_note_added') });
+    if (node.kind === 'assembly') notes.push({ tone: 'info', text: t('publish.sv_note_assembly') });
+    if (node.kind === 'phantom') notes.push({ tone: 'info', text: t('publish.sv_note_phantom') });
+    if (node.cut) notes.push({ tone: 'warn', text: t('publish.sv_note_cut') });
+    if (from && (node.bought || node.kind === 'added')) notes.push({ tone: 'info', text: t('publish.sv_note_bought_for', { number: from.number }) });
+    if (cmp.mbom[node.uid] === 'mfg' && node.kind === 'component') notes.push({ tone: 'info', text: t('publish.sv_note_mfg') });
+    const state = from ? cmp.ebom[node.source] : null;
+    if (state && state.exceeded) {
+      const total = (view.held[node.source] || []).reduce(function (sum, l) { return sum + Number(l.quantity); }, 0);
+      notes.push({ tone: 'warn', text: t('publish.sv_note_exceeds', { total: shownQuantity(String(total)), quantity: shownQuantity(from.quantity) }) });
+    }
+    if (flags) {
+      if (flags.new) notes.push({ tone: 'new', text: t('publish.sv_note_new') });
+      if (flags.moved) {
+        const was = structure.find(flags.oldParent);
+        notes.push({ tone: 'update', text: t('publish.sv_note_moved', { number: was ? was.number || '-' : '-' }) });
+      }
+      if (flags.quantity) notes.push({ tone: 'update', text: t('publish.sv_note_quantity', { from: shownQuantity(flags.oldQuantity), to: shownQuantity(node.quantity) }) });
+      if (flags.reordered) notes.push({ tone: 'update', text: t('publish.sv_note_reordered') });
+    }
+    return notes;
+  }
+
   function lineNode(spec) {
     const row = el('div', 'sv-row' + (spec.classes ? ' ' + spec.classes : ''));
     row.dataset.id = spec.id;
@@ -520,13 +696,18 @@
       toggle.disabled = true;
     }
     row.appendChild(toggle);
-    row.appendChild(ui.treeIcon(spec.depth === 0 ? 'root' : spec.hasKids ? 'assembly' : 'part'));   // the table's icon, with its bar on the right
+    const icon = ui.treeIcon(spec.depth === 0 ? 'root' : spec.hasKids ? 'assembly' : 'part');   // the table's icon, with its bar on the right
+    if (spec.purchased) {   // a purchased part is a cart, not a box
+      icon.replaceChildren(ns.svg(ICONS.cart, 16));
+      icon.title = t('publish.sv_purchased_part');
+    }
+    row.appendChild(icon);
     if (spec.seq) row.appendChild(el('span', 'sv-seq', spec.seq));   // the line's number, as the table shows it
     const label = el('span', 'sv-label');
     label.appendChild(el('span', 'sv-pn', spec.number || '-'));
     if (spec.name) label.appendChild(el('span', 'sv-name', spec.name));
     row.appendChild(label);
-    spec.badges.forEach(function (b) { row.appendChild(b); });
+    spec.badges.forEach(function (b) { row.appendChild(b); });   // the tick, just left of the quantity
     if (spec.actions && spec.actions.length) row.appendChild(actionsNode(spec.actions, spec.draggable));   // over the end of the label, left of the quantity
     if (spec.quantity !== '') {
       if (spec.editable) {
@@ -537,6 +718,8 @@
       } else {
         row.appendChild(el('span', 'sv-qty sv-qty-fixed', shownQuantity(spec.quantity)));
       }
+      // The note's button is right of the quantity; a line with none keeps the room, so the quantities stay in one column.
+      row.appendChild(spec.notes && spec.notes.length ? noteButton(spec.notes, spec.noteKey) : el('span', 'sv-note-slot'));
     }
     return row;
   }
@@ -550,26 +733,29 @@
 
   function drawEbom(container, cmp) {
     const list = [];
-    const texts = { quantity: t('publish.sv_state_quantity'), exceeded: t('publish.sv_state_exceeded'), moved: t('publish.sv_state_moved') };
     (function walk(node, depth) {
       const state = cmp.ebom[node.key];
       const badges = [];
-      if (state) ['quantity', 'moved'].forEach(function (k) {
-        if (!state[k]) return;
-        const kind = k === 'quantity' && state.exceeded ? 'exceeded' : k;   // over the EBOM's quantity is told apart from short of it
-        badges.push(badge(texts[kind], kind));
-      });
-      if (state && state.matched) badges.unshift(matchedMark());
+      if (state && state.matched) badges.push(matchedMark(state.bought));
       const isOpen = ebomOpened.has(node.key);
       if (depth) list.push(node.key);
       const count = ebomSelected.has(node.key) ? ebomSelected.size : 1;
-      const full = !!(state && (state.exceeded || state.matched));   // all of it is in the MBOM: adding it again would be more than the EBOM has
-      const actions = depth && !full ? [{ act: 'add_one', icon: 'addOne', label: actionLabel(t('publish.sv_act_add_one'), count) }] : [];
-      if (actions.length && node.children.length) actions.unshift({ act: 'add_deep', icon: 'addDeep', label: actionLabel(t('publish.sv_act_add_deep'), count) });
+      const full = !!(state && (state.exceeded || state.matched || state.blocked));   // all of it is in the MBOM (adding it again would be more than the EBOM has), or a purchased part above it stands for it
+      const actions = [];
+      // A bought version is for a component not built in the MBOM: one already in it has none. Off, with the reason, until Make or buy is set up.
+      // A component with no item in Fusion Manage is told by the dialog, which looks for it when asked. Always first, then add with its children, then add.
+      if (depth && !(state && !state.missing) && !(state && state.blocked)) {
+        const reason = !host.boughtReady() ? t('publish.item_bought_not_set_up') : '';
+        actions.push({ act: 'bought', icon: 'bought', label: t('publish.item_act_bought', { number: node.number }), reason: reason });   // one that exists is offered by the dialog
+      }
+      if (depth && !full) actions.push({ act: 'add', icon: 'addOne', label: actionLabel(t('publish.sv_act_add'), count) });
+      const notes = depth ? ebomNotes(node, state) : [];
+      const bar = toneClass(notes);
       const row = lineNode({ id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: node.children.length > 0,
-                             isOpen: isOpen, badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '',
-                             classes: (ebomSelected.has(node.key) ? 'selected ' : '') + (state && state.missing ? 'sv-row-missing ' : '') + (state && state.matched ? 'sv-row-matched' : '') });
+                             isOpen: isOpen, badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '', notes: notes, noteKey: 'ebom:' + node.key,
+                             classes: (ebomSelected.has(node.key) ? 'selected ' : '') + (state && state.missing && !state.blocked ? 'sv-row-missing ' : '') + (state && (state.matched || state.blocked) ? 'sv-row-matched ' : '') + bar });
       container.appendChild(row);
+      if (notes.length && openNotes.has('ebom:' + node.key)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
       const shown = more[node.key] || LIMIT;
       node.children.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
@@ -580,32 +766,25 @@
 
   function drawMbom(container, cmp, chg) {
     const list = [];
-    const flagTexts = { new: t('publish.sv_chg_new'), moved: t('publish.sv_chg_moved'), quantity: t('publish.sv_chg_quantity'), reordered: t('publish.sv_chg_reordered') };
-    const kindTexts = { assembly: t('publish.sv_kind_assembly'), phantom: t('publish.sv_kind_phantom'), added: t('publish.sv_kind_added') };
     (function walk(node, depth) {
       const badges = [];
       let classes = selected.has(node.uid) ? 'selected ' : '';
-      if (kindTexts[node.kind]) badges.push(badge(kindTexts[node.kind], 'kind'));
-      if (node.cut) badges.push(badge(t('publish.sv_cut'), 'cut'));
-      if (depth && cmp.mbom[node.uid] === 'mfg' && node.kind === 'component') badges.push(badge(t('publish.sv_unmapped'), 'mfg'));
       const flags = chg.changes[node.uid];
-      if (flags) ['new', 'moved', 'quantity', 'reordered'].forEach(function (k) { if (flags[k]) { badges.push(badge(flagTexts[k], 'chg-' + k)); classes += 'sv-chg-' + k + ' '; } });
       if (hits.has(node.uid)) classes += 'sv-hit ';
       const isOpen = opened.has(node.uid);
       if (depth) list.push(node.uid);
       const count = selected.has(node.uid) ? selected.size : 1;
       const actions = [];
-      if (depth) {   // always in this order: split (an assembly), copy, new assembly, and the bin last
-        if (node.children.length || node.kind === 'assembly' || node.kind === 'phantom') {
-          const some = node.children.filter(function (c) { return selected.has(c.uid); }).length;
-          actions.push({ act: 'split', icon: 'split', label: t('publish.sv_act_split'), reason: some > 0 && some < node.children.length ? '' : t('publish.sv_need_some_lines') });
-        }
-        actions.push({ act: 'copy', icon: 'copy', label: actionLabel(t('publish.sv_act_copy'), count) },
-                     { act: 'assembly', icon: 'assembly', label: actionLabel(t('publish.sv_act_assembly'), count) },
+      if (depth) {   // always in this order: add to an assembly, and the bin last
+        actions.push({ act: 'addTo', icon: 'assembly', label: actionLabel(t('publish.sv_act_add_to'), count) },
                      { act: 'remove', icon: 'remove', label: actionLabel(t('publish.sv_act_remove'), count) });
       }
+      const notes = depth ? mbomNotes(node, cmp, flags) : [];
+      classes += toneClass(notes);
       container.appendChild(lineNode({ id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
-                                       hasKids: node.children.length > 0, isOpen: isOpen, badges: badges, draggable: depth > 0, actions: actions, seq: depth ? String(index.get(node.uid).at + 1) : '', classes: classes.trim() }));
+                                       hasKids: node.children.length > 0, isOpen: isOpen, badges: badges, draggable: depth > 0, actions: actions, seq: depth ? String(index.get(node.uid).at + 1) : '', classes: classes.trim(),
+                                       notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source) }));
+      if (notes.length && openNotes.has('mbom:' + node.uid)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
       const shown = more[node.uid] || LIMIT;
       node.children.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
@@ -614,7 +793,14 @@
     visible.mbom = list;
   }
 
+  /** Draw the structure, and tell the panel it may have changed (what publishing covers). */
   function render() {
+    paint();
+    if (host && host.planned) host.planned();
+  }
+
+  function paint() {
+    closeDestMenu();
     if (!dom) return;
     const showing = !!structure && phase !== 'error';
     dom.panes.hidden = !showing;
@@ -623,11 +809,12 @@
     dom.state.hidden = showing;
     if (!structure && (phase === 'structure' || phase === 'tree' || phase === 'mbom')) dom.state.replaceChildren(el('p', 'muted sv-wait', note));
     if (!structure && phase === 'idle') dom.state.replaceChildren();
-    dom.message.hidden = !message;
-    dom.message.textContent = message;
     if (!showing) return;
     const cmp = structure.compare();
     const chg = structure.changes();
+    view = { held: {}, ebomAt: {}, parentOf: {} };
+    (function indexEbom(node) { view.ebomAt[node.key] = node; node.children.forEach(indexEbom); })(ebom);
+    (function indexMbom(node) { node.children.forEach(function (c) { view.parentOf[c.uid] = node; if (c.source) (view.held[c.source] = view.held[c.source] || []).push(c); indexMbom(c); }); })(structure.root());
     const scroll = [dom.ebomTree.scrollTop, dom.mbomTree.scrollTop];
     dom.ebomTree.replaceChildren();
     dom.mbomTree.replaceChildren();
@@ -702,11 +889,18 @@
   function paneClick(pane, event) {
     const moreButton = event.target.closest('.sv-more');
     if (moreButton) { moreClick(moreButton.dataset.more); return; }
+    const noteButtonClicked = event.target.closest('.sv-note-btn');
+    if (noteButtonClicked) {   // the note of a line opens or closes under it
+      const key = noteButtonClicked.dataset.note;
+      if (openNotes.has(key)) openNotes.delete(key); else openNotes.add(key);
+      render();
+      return;
+    }
     const row = event.target.closest('.sv-row');
     if (!row) return;
     const id = row.dataset.id;
     const act = event.target.closest('.sv-act');
-    if (act) { if (!act.disabled) rowAction(pane, id, act.dataset.act); return; }
+    if (act) { if (!act.disabled) rowAction(pane, id, act.dataset.act, act); return; }
     if (event.target.closest('.sv-grip')) return;
     if (event.target.closest('.sv-toggle')) {
       const set = pane === 'mbom' ? opened : ebomOpened;
@@ -738,7 +932,7 @@
     if (!row) return { place: { parentId: S.ROOT, before: '' }, row: null, zone: '' };
     const id = row.dataset.id;
     const box = row.getBoundingClientRect();
-    const zone = id === S.ROOT ? 'into' : S.zoneOf(event.clientY - box.top, box.height, structure.holds(id));
+    const zone = id === S.ROOT ? 'into' : S.zoneOf(event.clientY - box.top, box.height, true);   // a drop in the middle of any line goes under it
     return { place: structure.position(zone, id), row: row, zone: zone };
   }
 
@@ -788,7 +982,7 @@
     const ghost = pressed.ghost;
     ghost.style.left = (event.clientX + 14) + 'px';
     ghost.style.top = (event.clientY + 10) + 'px';
-    ghost.dataset.mode = drag.from === 'mbom' && !(event.ctrlKey || event.metaKey) ? 'move' : 'copy';
+    ghost.dataset.mode = drag.from === 'mbom' ? 'move' : 'add';
     clearMark();
     const over = mbomTarget(event);
     if (!over) return;
@@ -899,25 +1093,21 @@
     tools.fold = ns.bomTable.foldTools(function () { expandAll(false); }, function () { expandAll(true); }, false, '');   // the table's own pair of buttons
     const history = el('div', 'sv-pair');   // undo and redo, as a pair like collapse and expand
     history.append(tools.undo, tools.redo);
-    tools.assembly = iconButton('boxPlus', t('publish.sv_create_assembly'), function () { assemblyForm('assembly'); });
     tools.add = iconButton('addItems', t('publish.sv_add_items'), addItems);
+    tools.newItem = iconButton('boxPlus', t('publish.item_new'), function () { ns.pubItemPanel.open({ mode: 'assembly' }); });
     const searchBox = el('div', 'sv-search-box');   // the field with a magnifier inside it
     searchBox.append(ns.svg(ICONS.search, 16), search);
-    tools.bar.append(searchBox, found, tools.fold, history, tools.assembly, tools.add);
-    const form = el('div', 'sv-form');
-    form.hidden = true;
-    const messageLine = el('p', 'error sv-message');
-    messageLine.setAttribute('role', 'alert');
-    messageLine.hidden = true;
+    tools.bar.append(searchBox, found, tools.fold, history, tools.add, tools.newItem);
     const state = el('div', 'sv-state');
     const left = pane(t('publish.sv_ebom_title'), t('publish.sv_ebom_tip'));
+    left.tree.classList.add('sv-tree-ebom');   // its hover icons sit nearer the quantity: no quantity box to clear
     const right = pane(t('publish.sv_mbom_title'), t('publish.sv_mbom_tip'));
     const panes = el('div', 'sv-panes');
     panes.append(left.box, right.box);
     const removed = el('p', 'muted sv-removed');
     const footer = el('div', 'sv-footer');
     footer.appendChild(removed);
-    root.replaceChildren(tools.bar, form, messageLine, state, panes, footer);
+    root.replaceChildren(tools.bar, state, panes, footer);
 
     left.tree.addEventListener('click', function (event) { paneClick('ebom', event); });
     right.tree.addEventListener('click', function (event) { paneClick('mbom', event); });
@@ -926,32 +1116,38 @@
       pair[1].addEventListener('click', function (event) { if (justDragged) { event.stopPropagation(); justDragged = false; } }, true);   // the end of a drag selects nothing
     });
     right.tree.addEventListener('keydown', keyMbom);
-    return { root: root, tools: tools, search: search, form: form, message: messageLine, state: state, panes: panes, footer: footer, removed: removed, found: found,
+    return { root: root, tools: tools, search: search, state: state, panes: panes, footer: footer, removed: removed, found: found,
              ebomTree: left.tree, mbomTree: right.tree };
   }
 
-  /** Show the Structure view (``on``) or the table. What was built is kept while the table is on, so edits are not lost. */
+  /** Show the structure (``on``) or the area beside it, which holds the loading skeleton, a message, an error or the choice of the MBOM. What was
+   *  built is kept while that is on, so edits are not lost. */
   function show(on) {
     active = on;
     ns.$('pub-bom').hidden = on;
     ns.$('pub-structure').hidden = !on;
-    ns.$('pub-add-items').hidden = on;
-    ns.$('pub-view-table').setAttribute('aria-pressed', on ? 'false' : 'true');
-    ns.$('pub-view-structure').setAttribute('aria-pressed', on ? 'true' : 'false');
     if (on) refresh();
   }
 
-  /** ``hostApi`` is the panel (see the header). Wires the two buttons that switch between the table and the structure. */
+  /** What publishing would do with the structure now (``mbom-plan.js``), or null while there is none to publish. */
+  function plan() {
+    if (!structure || phase === 'error') return null;
+    const summary = host.summary();
+    const skipped = {};   // the components the design's own rules leave out (no item number, a number Fusion Manage shares): ``{component id: item number}``
+    model.buildItems(host.rows(), summary).forEach(function (item) { if (item.status === 'skipped' && item.lineId) skipped[item.lineId] = item.design.pn || item.componentName; });
+    return ns.mbomPlan.build({ structure: structure, ebom: ebom, rows: host.rows(), summary: summary, skipped: skipped });
+  }
+
+  /** ``hostApi`` is the panel (see the header). */
   function init(hostApi) {
     host = hostApi;
     dom = makeDom(ns.$('pub-structure'));
-    ns.$('pub-view-table').addEventListener('click', function () { show(false); });
-    ns.$('pub-view-structure').addEventListener('click', function () { show(true); });
   }
 
   ns.mbomViewer = {
     init: init, reset: reset, answer: answer, treeDone: treeDone,
     structureRead: function () { ready = true; refresh(); },
-    showTable: function () { show(false); },   // the MBOM has to be chosen, and the choice is drawn in the table's place
+    show: show, plan: plan,
+    showTable: function () { show(false); },   // the MBOM has to be chosen, and the choice is drawn in the area beside the structure
   };
 })(window.MfgUi);

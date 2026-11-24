@@ -34,7 +34,7 @@ function openPanel() {
   ns.auth = { init() {}, refresh() {}, onChange: (fn) => { panel.authChanged = fn; } };
   panel.reading = [];   // what the progress dialog was told about the read that Publish waits for
   ns.pubJobs = {
-    init() {}, start: (job) => panel.started.push(job), setStamp: (stamp) => { panel.stamp = stamp; },
+    init: (options) => { panel.jobsOptions = options; }, start: (job) => panel.started.push(job), setStamp: (stamp) => { panel.stamp = stamp; },
     reading: (step) => panel.reading.push(step.done ? 'done' : step.status), stopReading: () => panel.reading.push('stopped'),
   };
   ns.pubAddItems = { open() {} };
@@ -57,28 +57,25 @@ function openPanel() {
   return panel;
 }
 
-test('the lazy Bill of Materials, from the first level to publishing', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('the structure, from the first level to publishing', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
   const panel = openPanel();
-  const { w, sent, handlers, started, reading } = panel;
+  const { w, sent, handlers, started } = panel;
   const $ = (id) => w.document.getElementById(id);
   const reply = (slot, entry, via) => handlers[via || 'load_publish_section']({ ok: true, result: Object.assign({
     section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, stage: '' }, entry) });
   const sentOf = (section) => sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section);
   const lastSent = (section) => sentOf(section).pop();
-  const rowsText = () => [...$('pub-bom').querySelectorAll('tr.pub-cmp-row')].filter((tr) => !tr.hidden).map((tr) => tr.textContent.trim().replace(/\s+/g, ' '));
   const click = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
-  const rowOf = (text) => [...$('pub-bom').querySelectorAll('tr.pub-cmp-row')].find((tr) => tr.textContent.includes(text));
   const reload = () => $('pub-refresh').click();   // the refresh button: reads everything again at once
+  const operations = (job) => plain(job.operations.map((o) => o.op + ':' + o.parent + '>' + o.number));
+  const lines = (pane) => [...$('pub-structure').querySelectorAll('.sv-pane')[pane].querySelectorAll('.sv-row .sv-pn')].map((n) => n.textContent);
   const openDesign = (rows) => {
     reply('summary', { data: SUMMARY });
     reply('mbom', { data: [] });
     reply('structure', { data: { rows: rows, shared: false, fm_item_id: '9' } });
   };
   const firstLevel = () => [row('A', 'PN-A', { has_children: true }), row('P', 'PN-P', { status: 'new' })];
-  const wholeTree = [
-    row('A', 'PN-A', { has_children: true }), row('X', 'PN-X', { has_children: true, level: 1 }),
-    row('Z', 'PN-Z', { level: 2, status: 'changed', quantity: '2', fm_quantity: '1' }), row('P', 'PN-P', { status: 'new' }),
-  ];
+  const wholeTree = (extra) => [row('A', 'PN-A', { has_children: true }), row('X', 'PN-X', { level: 1, status: 'new' }), row('P', 'PN-P', { status: 'new' })].concat(extra || []);
 
   // Open the panel: the summary, then the first level only.
   $('view-app').hidden = false;
@@ -90,123 +87,44 @@ test('the lazy Bill of Materials, from the first level to publishing', { skip: J
   reply('mbom', { data: [] });
   assert.ok(lastSent('structure'), 'the Bill of Materials follows the lookup');
   assert.ok($('pub-publish').disabled, 'publish waits for the Bill of Materials');
-  reply('structure', { data: { rows: [row('A', 'PN-A', { has_children: true }), row('B', 'PN-B', { status: 'new' }),
-    row('S', '', { status: 'skipped', skip: 'no_number', has_children: true })], shared: false, fm_item_id: '9' } });
+  assert.ok(!$('pub-bom').hidden && $('pub-structure').hidden, 'the skeleton is shown while it loads');
+  assert.ok(!$('pub-view-table'), 'there is no table to switch to');
+
+  // The first level: the structure takes over and asks for the rest of the tree, and Publish waits for it.
+  openDesign(firstLevel());
+  assert.ok($('pub-bom').hidden && !$('pub-structure').hidden, 'the structure is the view');
   assert.ok(lastSent('properties'), 'the design\'s own properties are read quietly after the Bill of Materials');
-  assert.strictEqual(rowsText().length, 4, 'the design and its first level');
+  assert.ok(lastSent('tree') && lastSent('tree')[1].force === true, 'the whole tree is read for the structure');
+  assert.ok($('pub-publish').disabled, 'nothing to publish until the structure is built');
+  reply('tree', { data: { rows: wholeTree(), shared: false, fm_item_id: '9' } });
+  assert.ok(lines(0).includes('PN-A') && lines(0).includes('PN-P'), 'the EBOM is drawn');
+  assert.ok(lines(1).includes('PN-A'), 'and the MBOM starts as a copy of it');
   assert.ok(!$('pub-publish').disabled);
+  assert.strictEqual($('pub-pills'), null, 'there is no count of items in the footer: the lines say what is happening');
 
-  // Open an assembly: a spinner and grey rows, then its lines.
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));
-  const asked = lastSent('children')[1];
-  assert.deepStrictEqual(plain([asked.id, asked.item_number, asked.compared, asked.skip, asked.force]), ['A', 'PN-A', '1', '', true]);
-  assert.ok(rowOf('A name').querySelector('.pub-spin'), 'a spinner replaces the chevron');
-  assert.strictEqual($('pub-bom').querySelectorAll('.pub-skel-tr').length, 3, 'grey rows stand under it');
-  reply('children:A', { pending: true });
-  assert.ok(rowOf('A name').querySelector('.pub-spin'), 'still reading');
-  reply('children:A', { data: { rows: [row('X', 'PN-X', { has_children: true }), row('Y', 'PN-Y', { status: 'new' })] } });
-  assert.ok(!rowOf('A name').querySelector('.pub-spin'));
-  assert.strictEqual($('pub-bom').querySelectorAll('.pub-skel-tr').length, 0);
-  assert.strictEqual(rowsText().length, 6, 'its two lines are in');
-
-  // A skipped assembly says so when it is read; a failure is that assembly's alone, with a retry.
-  click(rowOf('S name').querySelector('.pub-tree-toggle'));
-  const skippedAsk = lastSent('children')[1];
-  assert.deepStrictEqual(plain([skippedAsk.id, skippedAsk.skip]), ['S', '1']);
-  reply('children:S', { ok: false, message: 'boom' });
-  assert.ok($('pub-bom').querySelector('.pub-cmp-fail'), 'a failure row');
-  assert.strictEqual(rowsText().length, 7, 'the rest of the table stays');
-  const asks = sentOf('children').length;
-  click($('pub-bom').querySelector('.pub-cmp-fail-retry'));
-  assert.strictEqual(sentOf('children').length, asks + 1, 'retry asks again');
-  reply('children:S', { data: { rows: [row('T', 'PN-T', { status: 'skipped', skip: 'parent' })] } });
-  assert.ok(!$('pub-bom').querySelector('.pub-cmp-fail'));
-
-  // Reading an assembly leaves the table where it was scrolled.
-  const wrapOf = () => $('pub-bom').querySelector('.pub-cmp-wrap');
-  wrapOf().scrollTop = 150;
-  wrapOf().dispatchEvent(new w.Event('scroll'));   // jsdom has no layout, so it does not scroll by itself
-  click(rowOf('X name').querySelector('.pub-tree-toggle'));   // the table is drawn again, with the spinner
-  assert.strictEqual(wrapOf().scrollTop, 150, 'still where it was while the lines are read');
-
-  // An answer from before a reload is ignored.
-  reload();
-  reply('children:X', { data: { rows: [row('Z', 'PN-Z')] } });
-  assert.ok(!$('pub-bom').querySelector('table'), 'the old table is gone and the late answer is not drawn');
-  openDesign(firstLevel());
-  assert.strictEqual(rowsText().length, 3, 'a fresh first level');
-  assert.strictEqual($('pub-bom').querySelectorAll('.pub-spin').length, 0);
-
-  // Expand all reads the rest, once, and the buttons and Publish wait for it.
-  click($('pub-bom').querySelector('.pub-cmp-tool-expand'));
-  assert.ok(lastSent('tree') && lastSent('tree')[1].force === true);
-  assert.ok($('pub-bom').querySelector('.pub-cmp-tool-expand').disabled && $('pub-publish').disabled);
-  const treeAsks = sentOf('tree').length;
-  click($('pub-bom').querySelector('.pub-cmp-tool-expand'));
-  assert.strictEqual(sentOf('tree').length, treeAsks, 'a second click asks nothing more');
-  reply('tree', { pending: true, progress: 1200 });
-  assert.match($('pub-bom').querySelector('.pub-cmp-tool-busy').title, /1,200|1200/, 'how far it is goes in the tooltip of the spinning button');
-  assert.ok($('pub-bom').querySelector('.pub-cmp-tool-collapse').disabled, 'Collapse all waits');
-  assert.ok(!$('pub-bom').querySelector('.pub-cmp-busy'), 'no message under the toolbar');
-  reply('tree', { data: { rows: wholeTree, shared: false, fm_item_id: '9' } });
-  assert.strictEqual(rowsText().length, 5, 'every level shows');
-  assert.ok(!$('pub-publish').disabled);
-
-  // Publish covers the whole design: with levels unread it reads the tree first, then goes on by itself.
-  const pills = () => [...$('pub-pills').querySelectorAll('.pub-pill')].map((p) => p.textContent.trim().replace(/\s+/g, ' '));
-  const operations = (job) => plain(job.operations.map((o) => o.op + ':' + o.parent + '>' + o.number));
-  reload();
-  openDesign(firstLevel());
-  assert.deepStrictEqual(plain(pills()), ['3 Items'], 'closed assemblies are not skipped: no such pill');
-  const treeReads = sentOf('tree').length;
+  // Publish sends what the structure holds.
   click($('pub-publish'));
-  assert.strictEqual(sentOf('tree').length, treeReads + 1, 'the rest of the tree is read to publish');
-  assert.strictEqual(started.length, 0, 'nothing is queued until it is read');
-  assert.deepStrictEqual(plain(reading), ["Reading every level of the Bill of Materials before publishing."], 'the dialog opens at once, saying it is reading');
-  reply('tree', { data: { rows: [
-    row('A', 'PN-A', { has_children: true }), row('X', 'PN-X', { level: 1, status: 'new' }), row('P', 'PN-P', { status: 'new' })] } });
   assert.strictEqual(started.length, 1);
-  assert.deepStrictEqual(plain(reading.slice(1)), ['done'], 'the dialog hands over to the job');
   assert.deepStrictEqual(plain(started[0].items.map((i) => i.id)), ['R', 'A', 'X', 'P']);
-  assert.deepStrictEqual(operations(started[0]), ['add:PN-A>PN-X', 'add:TOP>PN-P']);
+  assert.deepStrictEqual(operations(started[0]), ['add:TOP>PN-A', 'add:PN-A>PN-X', 'add:TOP>PN-P']);
+  assert.strictEqual(started[0].root_number, 'TOP');
 
-  // Fully read already: nothing more is read to publish.
-  const reads = sent.length;
-  click($('pub-publish'));
-  assert.strictEqual(sent.length, reads);
-  assert.strictEqual(started.length, 2);
-
-  // The read failing publishes nothing.
-  reload();
-  openDesign(firstLevel());
-  click($('pub-publish'));
-  reply('tree', { ok: false, message: 'no' });
-  assert.strictEqual(started.length, 2);
-  assert.ok(!$('pub-publish').disabled);
-
-  // Skipped lines are counted, and left out.
+  // A line the design leaves out of publishing is said, and holds Publish back.
   reload();
   openDesign([row('S', '', { status: 'skipped', skip: 'no_number' }), row('P', 'PN-P', { status: 'new' })]);
-  assert.deepStrictEqual(plain(pills()), ['2 Items', '1 Lines Skipped']);
+  assert.ok(lastSent('tree'));
+  reply('tree', { data: { rows: [row('S', '', { status: 'skipped', skip: 'no_number' }), row('P', 'PN-P', { status: 'new' })], shared: false, fm_item_id: '9' } });
+  assert.ok($('pub-publish').disabled, 'it cannot be published');
+  assert.match($('pub-publish').title, /no item number/);
+  click($('pub-publish'));
+  assert.strictEqual(started.length, 1, 'and nothing is sent');
 
-  // A line that waits for a choice blocks publishing, folded or not.
+  // The whole tree failing publishes nothing, and the structure says why.
   reload();
-  openDesign([row('A', 'PN-A', { has_children: true })]);
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));
-  reply('children:A', { data: { rows: [
-    row('', 'PN-OLD', { status: 'extra', pair: 'PN-N', part_number: 'PN-OLD', edge_id: 'e' }), row('N', 'PN-N', { status: 'new' })] } });
-  assert.ok($('pub-bom').querySelector('.pub-cmp-act-add'), 'the line is in view');
-  assert.ok($('pub-publish').disabled, 'publishing waits for the choice');
-  click(rowOf('A name').querySelector('.pub-tree-toggle'));   // close A: the line still counts
-  assert.ok($('pub-publish').disabled, 'a line folded away still holds publishing back');
-
-  // The whole tree failing leaves the table and the buttons working.
-  reload();
-  openDesign([row('A', 'PN-A', { has_children: true })]);
-  click($('pub-bom').querySelector('.pub-cmp-tool-expand'));
+  openDesign(firstLevel());
   reply('tree', { ok: false, message: 'no' });
-  assert.ok($('pub-bom').querySelector('table'));
-  assert.ok(!$('pub-bom').querySelector('.pub-cmp-tool-expand').disabled);
+  assert.ok($('pub-publish').disabled);
+  assert.strictEqual(started.length, 1);
 });
 
 test('choosing another MBOM reads the Bill of Materials again, compared with that item', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
@@ -223,6 +141,9 @@ test('choosing another MBOM reads the Bill of Materials again, compared with tha
   panel.mbomHost.choose('M-1');
   assert.deepStrictEqual(plain(targets('structure')), ['M-1'], 'the one chosen is what the Bill of Materials is read for');
   reply('structure', { data: { rows: [row('P', 'PN-P', { status: 'new' })], shared: false, fm_item_id: '9' } });
+  reply('tree', { data: { rows: [row('P', 'PN-P', { status: 'new' })], shared: false, fm_item_id: '9' } });
+  const mbomAsk = panel.sent.filter(([action, p]) => action === 'load_publish_section' && p.section === 'mbom_tree').pop();
+  assert.ok(mbomAsk && mbomAsk[1].force === true, 'the MBOM is read afresh each time, never from a copy kept in Python');
   panel.mbomHost.choose('M-2');
   assert.deepStrictEqual(plain(targets('structure')), ['M-1', 'M-2'], 'another MBOM: the Bill of Materials is asked for again');
   const ids = panel.sent.filter(([action, p]) => action === 'load_publish_section' && p.section === 'structure').map(([, p]) => p.target_id);
@@ -282,4 +203,32 @@ test('the up-to-date check button says what the design and its lines come to', {
   doc.querySelector('#pub-bom .btn, #pub-bom button').dispatchEvent(new broken.panel.w.MouseEvent('click', { bubbles: true }));
   assert.strictEqual(broken.panel.sent.filter(([action, p]) => action === 'load_publish_section' && p.section === 'structure').length, asks + 1, 'retry reads the structure again');
   assert.notStrictEqual(broken.state(), 'error', 'and the failure is cleared');
+});
+
+test('when a publish ends the whole panel is read again, the MBOM included, and never from a copy kept before', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  const panel = openPanel();
+  const { w, sent, handlers } = panel;
+  const $ = (id) => w.document.getElementById(id);
+  const reply = (slot, entry) => handlers.load_publish_section({ ok: true, result: Object.assign({
+    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, stage: '' }, entry) });
+  const asks = (section) => sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section);
+  const rows = [row('P', 'PN-P', { status: 'new' })];
+  const read = () => {
+    reply('summary', { data: SUMMARY });
+    reply('mbom', { data: [{ id: '1', number: 'M-1' }] });
+    reply('structure', { data: { rows: rows, shared: false, fm_item_id: '1' } });
+    reply('tree', { data: { rows: rows, shared: false, fm_item_id: '1' } });
+  };
+  $('view-app').hidden = false;
+  panel.authChanged(true);
+  read();
+  assert.strictEqual(asks('mbom_tree').length, 1);
+  assert.deepStrictEqual(plain(asks('mbom_tree')[0][1].target_id), '1', 'the MBOM item is read by its id');
+  panel.jobsOptions.onFinished({ id: 'job' });   // the run ended: Fusion Manage has changed
+  assert.ok(asks('summary').length === 2 && asks('summary')[1][1].force === true, 'the design is read again, past the copies kept');
+  read();
+  assert.strictEqual(asks('mbom_tree').length, 2, 'and so is the MBOM');
+  assert.strictEqual(asks('mbom_tree')[1][1].force, true);
+  assert.strictEqual(asks('structure')[1][1].force, true);
+  assert.strictEqual(asks('mbom')[1][1].force, true, 'the lookup of the MBOM item too');
 });

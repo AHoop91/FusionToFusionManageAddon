@@ -7,6 +7,7 @@ from unittest import mock
 from src.config.config_service import SharedStatus
 from src.config.export_models import ExportSettings
 from src.config.models import AppConfig, ConnectionSettings
+from src.config.workspace_models import MakeBuyConfig
 from tests.without_fusion import fusion_modules_stubbed
 
 # The actions package imports Fusion's modules (for its dialogs), which only Fusion has.
@@ -35,6 +36,38 @@ class SettingsPayloadTests(unittest.TestCase):
         self.assertEqual(payload["callback_url"], stored.local.callback_url)
         for key in ("workspaces", "exports", "catalog", "company_source", "hub_file"):
             self.assertIn(key, payload)
+
+
+class MakeBuySettingsTests(unittest.TestCase):
+    CHOSEN = {"field": "MAKE_BUY", "make_value": "/api/v3/lookups/M/options/1", "buy_value": "/api/v3/lookups/M/options/2", "source_field": "SRC", "suffix": "-B"}
+
+    def setUp(self):
+        self.stored = AppConfig(local=ConnectionSettings(client_id="cid", tenant="acme"))
+        self.stored.workspaces.get("items").make_buy = MakeBuyConfig(**self.CHOSEN)
+        self.service = config_service(self.stored)
+
+    def request(self, items):
+        return {"hub_id": "hub-1", "workspaces": {"items": dict(items, workspace_id="242")}}
+
+    def saved(self):
+        return self.service.update.call_args[0][2].get("items").make_buy
+
+    def test_a_request_that_does_not_name_make_or_buy_keeps_what_is_set(self):
+        save_settings(self.service, self.request({}), lambda: True)
+        self.assertEqual(self.saved(), MakeBuyConfig(**self.CHOSEN))
+
+    def test_a_member_who_sends_it_back_unchanged_saves_the_other_settings(self):
+        save_settings(self.service, self.request({"make_buy": self.CHOSEN}), lambda: True)
+        self.assertEqual(self.saved(), MakeBuyConfig(**self.CHOSEN))
+
+    def test_a_member_may_not_change_it(self):
+        with self.assertRaisesRegex(ValueError, "Hub Admin"):
+            save_settings(self.service, self.request({"make_buy": dict(self.CHOSEN, suffix="-X")}), lambda: True)
+        self.service.update.assert_not_called()
+
+    def test_an_admin_or_an_unknown_role_may_change_it(self):
+        save_settings(self.service, self.request({"make_buy": dict(self.CHOSEN, suffix="-X")}), lambda: False)   # admin, or a role not read yet
+        self.assertEqual(self.saved().suffix, "-X")
 
 
 class SaveSettingsTests(unittest.TestCase):

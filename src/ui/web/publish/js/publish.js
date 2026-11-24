@@ -1,7 +1,7 @@
 /**
  * Publish Item panel: summary of the open model and the loading of what it shows. It asks Python for the sections of the model, one
- * after the other, and hands each answer on: the Bill of Materials to publish-bom.js (and its table, bom-table.js), the up-to-date
- * check to publish-check.js, and a row click, through the table, to the Details Panel (details.js).
+ * after the other, and hands each answer on: the Bill of Materials to publish-bom.js (which gives the structure to mbom-viewer.js, what Publish
+ * sends), the up-to-date check to publish-check.js and the design's own details to details.js.
  */
 (function (ns) {
   'use strict';
@@ -120,7 +120,6 @@
   /** The answer to a section that is still loading: show how far it is and ask again shortly. */
   function waitFor(name, entry) {
     if (name === 'structure') bom.status(entry);
-    if (name === 'tree') bom.treeStatus(entry);
     timers[name] = setTimeout(function () {
       bridge.send('load_publish_section_status', { section: name });
     }, POLL_INTERVAL_MS);
@@ -202,7 +201,6 @@
     if (entry.pending) { waitFor(name, entry); return; }
     inflight[name] = false;
     if (name === 'tree') { bom.finishTree(entry); return; }
-    if (name.indexOf('children:') === 0) { bom.finishKids(name.slice('children:'.length), entry); return; }
     if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
     if (name === 'summary') { answerSummary(entry); return; }
     if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
@@ -265,15 +263,19 @@
       check: function (number) { request('mbom_number', { section: 'mbom_number', target: number, target_id: '' }); },
       choose: chooseTarget,
     });
-    bom.init({ summary: summary, ask: ask, changed: check.update, treeDone: viewer.treeDone });
+    bom.init({ summary: summary, ask: ask, changed: check.update, treeDone: viewer.treeDone, plan: viewer.plan, showStructure: function () { viewer.show(true); }, showNotice: viewer.showTable });
     viewer.init({
       design: function () { return currentSummary || {}; },   // the design's own item number, not the target's
+      summary: summary,   // with the target's, for what publishing sends
+      planned: bom.refreshScope,
       rows: bom.rows,
       partial: bom.partial,
       loadTree: bom.loadTree,
-      askMbom: function () { ask('mbom_tree', { section: 'mbom_tree' }); },
+      askMbom: function () { ask('mbom_tree', { section: 'mbom_tree', force: true }); },   // never a copy kept from before: its line ids are what edits are sent against, and Fusion Manage changes under the panel
       targetId: function () { return mbom.idOf(target); },   // empty for a design with no MBOM item: the viewer starts from the EBOM
       target: function () { return target; },
+      boughtSuffix: function () { return (currentSummary || {}).bought_suffix || ''; },   // the suffix of bought versions: a line with an EBOM line's number and it is that line's bought version
+      boughtReady: function () { return !!(currentSummary || {}).make_buy; },   // Make or buy is set up in Settings
       phantom: function () { return false; },   // Settings do not name the Type field and its Phantom value yet
     });
     check.init({
@@ -293,7 +295,7 @@
         loadSection('properties');
       },
     });
-    jobs.init({ onFinished: function () { refresh(true, true); }, onChecks: ns.bomTable.markChecks });   // Fusion Manage changed: read the whole panel again, not the cached copies
+    jobs.init({ onFinished: function () { refresh(true, true); } });   // Fusion Manage changed: read the whole panel again, not the cached copies
     bridge.on('load_publish_section', handleSection);
     bridge.on('load_publish_section_status', handleSection);
     $('pub-refresh').addEventListener('click', function () { refresh(true, true); });   // a click is always wanted: not merged with another trigger
