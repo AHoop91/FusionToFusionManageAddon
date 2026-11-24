@@ -315,7 +315,6 @@
     const api = {
       root: function () { return mbom; },
       find: function (id) { return find(id); },
-      parentOf: function (id) { return parentOf(id); },
       holds: function (id) { return holds(need(id)); },
 
       /** The place a drop on line ``id`` means: ``zone`` is ``before``, ``after`` or ``into``; gives ``{parentId, before}``. */
@@ -445,10 +444,13 @@
         return hits;
       },
 
-      /** How the MBOM stands against the EBOM. ``ebom`` has, for each EBOM key, ``{missing, quantity, exceeded, moved, matched, bought}`` (``missing``: no MBOM line;
-       *  ``quantity``: the quantities of its lines together are not the EBOM's; ``moved``: no line is under the assembly the EBOM has it in; the last
-       *  two can both be true; ``matched``: its quantity is all in the MBOM and so is everything under it, unless a purchased item stands for it (``bought``: every line made from it is an added item, or a bought version read from Fusion Manage: ``mapByNumber`` with the suffix), and ``mbom`` each line's state (``mapped`` or ``mfg``, a line with no EBOM node). Phantoms and assemblies of
-       *  manufacturing's own do not count as the parent: a line under one still has its EBOM parent. */
+      /** How the MBOM stands against the EBOM: ``{ebom, mbom}``. ``ebom`` has, for each EBOM key, ``{missing, quantity, exceeded, moved, matched, bought, blocked}``:
+       *  ``missing``: no MBOM line is made from it; ``quantity``: the quantities of its lines together are not the EBOM's; ``exceeded``: they are more (``quantity``
+       *  is true too); ``moved``: no line is under the assembly the EBOM has it in (it and ``quantity`` can both be true); ``matched``: its quantity is all in the
+       *  MBOM and so is everything under it, unless a purchased item stands for it; ``bought``: every line made from it is an added item or a bought version
+       *  read from Fusion Manage (``mapByNumber`` with the suffix); ``blocked``: a purchased item above it is bought whole, so what is under it is not added.
+       *  ``mbom`` has each line's state: ``mapped``, or ``mfg`` for a line with no EBOM node. Phantoms and assemblies of manufacturing's own do not count as
+       *  the parent: a line under one still has its EBOM parent. */
       compare: function () {
         const lines = {};   // EBOM key -> [{node, ancestor}]
         const mbomState = {};

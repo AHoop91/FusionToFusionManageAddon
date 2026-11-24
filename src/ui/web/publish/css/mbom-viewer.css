@@ -8,7 +8,6 @@
 /* ---- The area ---- */
 .pub-structure { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; overflow: hidden; }
 .pub-structure [hidden] { display: none !important; }
-.sv-wait { margin: 24px 0; text-align: center; }
 .sv-state { flex: 1; min-height: 0; overflow: auto; }
 
 /* ---- Toolbar and form ---- */
@@ -40,7 +39,10 @@
 .sv-pane-title { font-size: 13px; font-weight: 500; line-height: 1; letter-spacing: .02em; color: #3c4249; white-space: nowrap; }
 .sv-tree { flex: 1; min-height: 0; overflow: auto; outline: none; }
 .sv-footer { flex: none; }
-.sv-removed { margin: 0; font-size: 12px; }
+.sv-removed, .sv-status { margin: 0; font-size: 12px; }
+/* The wait: the toolbar is there but not usable, and the tables hold grey bars (the same rows as the loading of the rest of the panel). */
+.sv-bar[inert] { opacity: .5; }
+.sv-tree[aria-busy="true"] { padding: 0 14px; overflow: hidden; }
 @container bompane (max-width: 640px) {
   .sv-panes { flex-direction: column; }
   .sv-pane { flex: 1 1 50%; }
@@ -65,12 +67,12 @@
 button.sv-qty { border-color: #cfd4d9; background: #fff; cursor: text; }
 button.sv-qty:hover { border-color: var(--accent); }
 button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6, 150, 215, .18); }
+.sv-row > .pub-tree-icon + .sv-label { margin-left: 12px; }   /* the root has no line number, so its title would touch the icon's bar */
 .sv-row > .sv-seq { flex: none; min-width: 14px; margin: 0 8px 0 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* An EBOM line that is all in the MBOM is quiet (it can still be dragged or added again). */
 .sv-row-matched .sv-label, .sv-row-matched .sv-qty, .sv-row-matched .sv-seq { color: var(--muted); }
 .sv-row-matched .sv-pn { font-weight: 500; }
 .sv-matched { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 24px; margin-right: 4px; color: var(--ok); }   /* touches the quantity: 24px with its gap */
-.sv-matched-bought { color: var(--accent); }
 
 /* ---- The note of a line: a button beside the quantity, and its lines under the row ---- */
 .sv-note-slot { flex: none; width: 24px; height: 24px; margin-left: 6px; }

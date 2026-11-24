@@ -35,7 +35,7 @@ function dataWindow() {
   const window = vm.createContext({ console: console });
   window.window = window;
   window.MfgUi = {};
-  pageScripts().filter(function (src) { return /\/(bom-(tree|model|plan|scope)|mbom-(structure|plan))\.js$/.test(src); }).forEach(function (src) { run(window, src); });
+  pageScripts().filter(function (src) { return /\/(bom-(tree|model)|mbom-(structure|plan))\.js$/.test(src); }).forEach(function (src) { run(window, src); });
   return window.MfgUi;
 }
 

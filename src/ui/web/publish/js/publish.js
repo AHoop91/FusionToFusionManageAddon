@@ -1,7 +1,7 @@
 /**
  * Publish Item panel: summary of the open model and the loading of what it shows. It asks Python for the sections of the model, one
  * after the other, and hands each answer on: the Bill of Materials to publish-bom.js (which gives the structure to mbom-viewer.js, what Publish
- * sends), the up-to-date check to publish-check.js and the design's own details to details.js.
+ * sends), the design's own details to details.js.
  */
 (function (ns) {
   'use strict';
@@ -12,7 +12,6 @@
   const details = ns.pubDetails;
   const jobs = ns.pubJobs;
   const bom = ns.pubBom;
-  const check = ns.pubCheck;
   const mbom = ns.pubMbom;
   const viewer = ns.mbomViewer;
   function t(key, params) { return ns.i18n.t(key, params); }
@@ -104,7 +103,6 @@
 
   function loadSection(name) {
     inflight[name] = true;
-    if (name === 'structure') bom.showLoading();
     const force = !!forceNext[name];
     forceNext[name] = false;
     request(name, { section: name, force: force });
@@ -119,7 +117,7 @@
 
   /** The answer to a section that is still loading: show how far it is and ask again shortly. */
   function waitFor(name, entry) {
-    if (name === 'structure') bom.status(entry);
+    if (name === 'structure' || name === 'tree') bom.status(entry);   // the tree is the long read: its line count is told too
     timers[name] = setTimeout(function () {
       bridge.send('load_publish_section_status', { section: name });
     }, POLL_INTERVAL_MS);
@@ -140,7 +138,7 @@
     renderSummary(entry.data);
     ensureSections(SECTIONS);
     mbom.loading();
-    bom.showLoading();   // the Bill of Materials area is not blank while the MBOM lookup is on its way
+    bom.showChecking();   // the Bill of Materials area is not blank while the MBOM lookup is on its way
   }
 
   /** The design's own properties, compared with Fusion Manage. */
@@ -148,19 +146,16 @@
     const failure = entry.ok ? '' : entry.message || t('publish.unknown_error');
     if (entry.ok) details.setRoot(entry.data.compare);
     else details.setRootError(failure);
-    check.setRoot(entry.ok ? entry.data.compare : null, failure);
   }
 
   /** The first level of the Bill of Materials, compared with Fusion Manage. */
   function answerStructure(entry) {
     if (!entry.ok) {
-      check.fail(entry.message || t('publish.unknown_error'));
-      bom.showError(entry.message, function () { check.clearFailure(); loaded.structure = false; loadSection('structure'); check.update(); });
+      bom.showError(entry.message, function () { loaded.structure = false; viewer.show(true); loadSection('structure'); });
       return;
     }
     bom.showFirstLevel(entry.data);
     viewer.structureRead();   // the structure viewer can ask for the rest of the tree now
-    check.setNew(entry.data.design_new);
     if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
 
@@ -168,6 +163,7 @@
   function chooseTarget(number) {
     target = number;
     restartBom(false);
+    viewer.show(true);   // the skeleton of the two tables, until the structure is built
     ensureSections(AFTER_MBOM);
   }
 
@@ -183,13 +179,13 @@
         return;
       }
       target = chosen;
+      viewer.show(true);   // the skeleton of the two tables, until the structure is built
       ensureSections(AFTER_MBOM);
       return;
     }
     const failure = entry.message || t('publish.unknown_error');
     mbom.reset();
-    check.fail(failure);
-    bom.showError(failure, function () { check.clearFailure(); loaded.mbom = false; loadSection('mbom'); check.update(); });
+    bom.showError(failure, function () { loaded.mbom = false; bom.showChecking(); loadSection('mbom'); });
   }
 
   function handleSection(r) {
@@ -231,7 +227,6 @@
     });
     bom.clear();
     viewer.reset();
-    check.reset();
     details.reset(force);
   }
 
@@ -263,7 +258,7 @@
       check: function (number) { request('mbom_number', { section: 'mbom_number', target: number, target_id: '' }); },
       choose: chooseTarget,
     });
-    bom.init({ summary: summary, ask: ask, changed: check.update, treeDone: viewer.treeDone, plan: viewer.plan, showStructure: function () { viewer.show(true); }, showNotice: viewer.showTable });
+    bom.init({ summary: summary, ask: ask, treeDone: viewer.treeDone, plan: viewer.plan, say: viewer.say, showNotice: viewer.showTable });
     viewer.init({
       design: function () { return currentSummary || {}; },   // the design's own item number, not the target's
       summary: summary,   // with the target's, for what publishing sends
@@ -277,12 +272,6 @@
       boughtSuffix: function () { return (currentSummary || {}).bought_suffix || ''; },   // the suffix of bought versions: a line with an EBOM line's number and it is that line's bought version
       boughtReady: function () { return !!(currentSummary || {}).make_buy; },   // Make or buy is set up in Settings
       phantom: function () { return false; },   // Settings do not name the Type field and its Phantom value yet
-    });
-    check.init({
-      summary: summary,
-      rows: bom.rows,
-      structureLoaded: function () { return !!loaded.structure; },
-      partial: bom.partial,
     });
     details.init({
       request: request,

@@ -54,7 +54,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Build the request that creates or updates an item, or changes its BOM | `publish/item_requests.py`, `publish/bom_requests.py` | `publish/` | |
 | Send requests safely (once, logged, resumable) | `Dispatcher`, `SendRun`, `SendLog` | `publish/sender.py`, `publish/send_log.py` | |
 | Fit a value to the field it is sent to (picklist link, number, unit) | `PicklistResolver.link`, `convert_unit`, `fit_number` | `fm/picklists.py` | |
-| Make a manufacturing item, or a bought version of a made item (number = source number + suffix, Make or buy set, source link set, values copied, duplicates refused) | `BoughtItems`: `assembly_form`, `create_assembly`, `bought_form`, `create_bought`, `find_bought` (the bought version of an item, the `bought_find` action: the dialog asks it first and offers a hit) (the source is an item id or, from an EBOM line, an item number found with `ItemFinder`); `plan_copy` says what is copied and skipped (the `items_form`, `items_create`, `bought_form` and `bought_create` actions) | `publish/bought_items.py`, `ui/actions/item_create_actions.py` | [publish-item-flow.md](publish-item-flow.md) |
+| Make a manufacturing item, or a bought version of a made item (number = source number + suffix, Make or buy set, source link set, values copied, duplicates refused) | `BoughtItems`: `assembly_form`, `create_assembly`, `open`, `create_bought` (`open` is the `bought_open` action: one request that answers the bought version of an item there is already, which the dialog offers, or the form, with the `source_id` the create is then sent with) (the source is an item id, which `bought_open` takes from the Data Model's link of the EBOM line's component, or an item number found with `ItemFinder` when there is none); `plan_copy` says what is copied and skipped; `specs_of` lists the fields of a form by id and `form_value` turns a value an item holds into the shape the form sends (the `items_form`, `items_create`, `bought_open` and `bought_create` actions) | `publish/bought_items.py`, `ui/actions/item_create_actions.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Attach a file to an item (a new version if it is there) | `fm/attachments.py`, `ui/attachment_upload.py` | `fm/`, `ui/` | |
 
 ## The Manufacturing Data Model
@@ -152,7 +152,7 @@ Every script attaches to `window.MfgUi` (`ns`). Load order is in each `index.htm
 | A short message at the bottom | `ns.toast.show` | |
 | A tooltip that shows quickly | `ns.tooltip` | |
 | A progress card for an upload | `ns.uploadProgress` | |
-| A report of what differs from Fusion Manage | `ns.diffReport` | |
+| A report of what differs from Fusion Manage (the Item panel) | `ns.diffReport` | |
 
 Shared stylesheets are in `ui/web/shared/css/`: `base.css` (tokens, reset, the scrollbar), `components.css` (buttons, cards, fields), `layout.css`, `header.css`, `picker.css`, `section.css`, `toast.css`, `tooltip.css`, `progress.css`, `upload-progress.css`, `diff-report.css`. Use their classes and tokens; do not restyle a button or a scrollbar.
 
@@ -167,7 +167,7 @@ The pieces below are built but not yet shared, so a second page cannot call them
 | Filters and columns panel | `products/js/filters.js` | [tableaus.md](tableaus.md) |
 | Drag to reorder a list | `products/js/sortable.js` | [tableaus.md](tableaus.md) |
 | Show Fusion Manage's own markup safely | `item/js/safe-html.js` (`ns.safeHtml.render`, also used by the Products page) | |
-| The BOM tree (rows read, levels) and the data of a line | `publish/js/bom-tree.js`, `bom-model.js` (the table's own drawing, `bom-table.js` and its helpers, is no longer shown; `foldTools` is the viewer's Collapse and Expand all) | [publish-item-flow.md](publish-item-flow.md) |
+| The BOM tree (rows read, levels) and the data of a line | `publish/js/bom-tree.js`, `bom-model.js` (there is no table view: the structure viewer draws the lines; `pubUi.foldTools` in `ui.js` is its Collapse and Expand all) | [publish-item-flow.md](publish-item-flow.md) |
 | The structure of an MBOM: the tree, its edits (move, reorder, phantom and other assemblies, add, remove, quantity), undo and redo, and the EBOM and change comparisons | `publish/js/mbom-structure.js` (`ns.mbomStructure`) | |
 | The Add Items picker | `publish/js/add-items.js` | [finding-items.md](finding-items.md) |
 | The dialog of the structure viewer: a modal with the Items form for a new manufacturing item (toolbar Create New Manufacturing Item) or a bought version of an EBOM line (row action Create bought version) | `publish/js/item-panel.js` (`ns.pubItemPanel.open({mode, sourceNumber, number})`), styles in `publish/css/item-panel.css` | [publish-item-flow.md](publish-item-flow.md) |

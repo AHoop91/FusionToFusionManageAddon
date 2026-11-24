@@ -116,14 +116,6 @@ test('the same assembly in two places with the same change is changed once', () 
   assert.deepStrictEqual(plan(s).operations, [{ op: 'update', parent: 'A', number: 'A1', quantity: '2', fm_quantity: '1', sequence: '1', edge: 'eA1' }], 'one update, not two');
 });
 
-test('for a design with no MBOM item the structure gives the same job as the table did', () => {
-  const old = plain(ns.bomPlan.publishPlan(ROWS, SUMMARY));
-  const now = plan(S.create({ ebom: EBOM }));
-  const short = (o) => [o.op, o.parent, o.number, o.quantity, o.sequence].join('|');
-  assert.deepStrictEqual(now.operations.map(short).sort(), old.operations.map(short).sort());
-  assert.deepStrictEqual(now.components.map((c) => c.id).sort(), old.components.map((c) => c.id).sort());
-});
-
 // TOP-M [P (10), Q (20), R (30), S (40)] as read from Fusion Manage.
 const four = () => S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP-M', itemId: 'i0', children: ['P', 'Q', 'R', 'S'].map((n, i) => (
   { number: n, quantity: '1', itemId: 'i' + n, edgeId: 'e' + n, sequence: String((i + 1) * 10), children: [] })) }, EBOM) });

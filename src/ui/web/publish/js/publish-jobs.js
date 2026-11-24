@@ -24,8 +24,6 @@
   let unseen = '';         // id of a running job whose dialog was closed: still followed, to call onFinished when it ends
   let timer = null;
   let confirming = false;   // the dialog asks whether to cancel the publish
-  let readStep = null;      // the read of the Bill of Materials a publish starts with, as drawn in the dialog (see ``reading``); null when the publish has none
-  let onAbandon = null;     // called when the dialog is closed while that read is still going
   let watched = '';   // id of the job the progress dialog follows ("" = no dialog)
 
   function listOpen() { return !!$('pub-jobs-list'); }   // only the Jobs window has the list
@@ -491,11 +489,6 @@
     $('progress-badge').className = 'pub-badge pub-badge-' + badgeOf(view, job);
     showTally(job);
     showBar('publish', view.percent, view.tone);
-    $('read-step').hidden = !readStep;
-    if (readStep) {
-      $('read-count').textContent = percentText(readStep.percent, readStep.count);
-      showBar('read', readStep.percent, readStep.tone);
-    }
     const check = job ? validation(job) : { percent: 0, count: '', tone: '' };
     $('validate-count').textContent = percentText(check.percent, check.count);
     showBar('validate', check.percent, check.tone);
@@ -512,9 +505,6 @@
 
   /** Close the dialog. A publish still running keeps being followed (``unseen``), so the panel is refreshed when it ends all the same. */
   function closeProgress() {
-    const abandon = readStep && !readStep.done ? onAbandon : null;   // closed while the Bill of Materials was still being read: the publish is dropped
-    endReading();
-    if (abandon) abandon();
     const job = watchedJob();
     unseen = job && !isFinished(job) ? job.id : '';
     watched = '';
@@ -599,41 +589,13 @@
     release = null;
     if (s.error) {
       watched = '';
-      endReading();
       showProgress({ title: t('jobs.could_not_publish'), status: s.error, count: '', percent: 100, tone: 'error' }, null);
       return;
     }
-    if (s.cancelled) {   // the folder dialog was cancelled: the dialog that was waiting for the job goes
-      stopReading();
-      return;
-    }
+    if (s.cancelled) return;   // the folder dialog was cancelled
     jobs = s.jobs || [];
     watched = s.queued;
     if (updateProgress()) schedule();
-  }
-
-  /**
-   * The first step of a publish that has levels of the Bill of Materials to read: the dialog opens at once and says how far the read is, so the
-   * wait is not a silent one. ``step`` is ``status``, ``count`` (what the step says while it has no percent: the read has no total) and ``done``
-   * (read: the job follows). ``onClose`` is called if the dialog is closed before the read ends.
-   */
-  function reading(step, onClose) {
-    readStep = { percent: step.done ? 100 : null, count: step.count || '', tone: step.done ? 'ok' : '', done: !!step.done };
-    onAbandon = onClose || null;
-    showProgress({ title: step.done ? t('jobs.title_starting') : t('jobs.title_reading_bom'), status: step.status, count: '', percent: 0, tone: '' }, null);
-  }
-
-  /** Forget the read step: the dialog goes on without it. */
-  function endReading() {
-    readStep = null;
-    onAbandon = null;
-  }
-
-  /** The read ended without a publish (it failed, or lines need a choice): take the dialog down. */
-  function stopReading() {
-    if (!readStep) return;
-    endReading();
-    $('progress').hidden = true;
   }
 
   /** Queue a publish of ``payload`` (summary, items, operations); Python asks for the folder first. */
@@ -679,5 +641,5 @@
     }
   }
 
-  ns.pubJobs = { init: init, start: start, setStamp: setStamp, reading: reading, stopReading: stopReading, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
+  ns.pubJobs = { init: init, start: start, setStamp: setStamp, describe: describe, validation: validation, checks: checks, tally: tally, elapsedText: elapsedText, line: jobLine, listed: listed };
 })(window.MfgUi);

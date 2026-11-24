@@ -52,9 +52,10 @@ def _keep_make_buy(workspaces: Dict[str, Any], current: WorkspaceSettings, is_me
     settings = WorkspaceSettings.from_dict(workspaces)
     for kind_id, cfg in settings.workspaces.items():
         sent = workspaces.get(kind_id)
+        old = current.get(kind_id).make_buy
         if not isinstance(sent, dict) or "make_buy" not in sent:
-            cfg.make_buy = current.get(kind_id).make_buy
-        elif cfg.make_buy != current.get(kind_id).make_buy and is_member():
+            cfg.make_buy = old
+        elif cfg.make_buy != old and is_member():
             raise ValueError(t("app.settings_make_buy_admin_only"))
     return settings
 

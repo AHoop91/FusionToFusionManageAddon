@@ -20,7 +20,6 @@
   <link rel="stylesheet" href="css/item-panel.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
   <link rel="stylesheet" href="../shared/css/tooltip.css">
-  <link rel="stylesheet" href="../shared/css/diff-report.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
 </head>
 <body>
@@ -72,18 +71,12 @@
         <button id="pub-refresh" class="pub-tool" type="button" title="Refresh from Fusion Manage" aria-label="Refresh from Fusion Manage" data-i18n-attr="title:publish.refresh_title;aria-label:publish.refresh_title">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
         </button>
-        <!-- Is the design up to date in Fusion Manage? Scans in the background; filled in by publish.js. -->
-        <button id="pub-check" class="pub-check" type="button" data-state="idle" aria-label="Checking Fusion Manage" data-i18n-attr="aria-label:publish.check_aria">
-          <svg class="pub-check-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15"/></svg>
-          <svg class="pub-check-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="pub-check-tick" d="M6 12.5l4 4 8-9"/><path class="pub-check-bang" d="M12 7v6.5M12 17v.2"/></svg>
-          <span id="pub-check-count" class="pub-check-count" hidden></span>
-        </button>
         </div>
         <!-- The manufacturing bills of materials Fusion Manage holds for the design, to choose which one the Bill of Materials is compared with; filled in by publish-mbom.js. -->
         <div id="pub-mbom" class="pub-mbom" hidden></div>
       </div>
 
-      <!-- The bill of materials; a row click opens that component's details beside it. -->
+      <!-- The bill of materials: the loading skeleton, then the structure viewer; the details of a component open beside it. -->
       <main class="pub-main">
         <div class="pub-bom-pane">
           <div class="pub-pane-header">
@@ -120,13 +113,7 @@
           <p id="progress-status" class="progress-status"></p>
         </div>
       </div>
-      <!-- Steps, one after the other: the levels of the Bill of Materials not read yet are read (only then), every item number is looked up in Fusion Manage, then the items and their Bill of Materials are published. -->
-      <div id="read-step" class="progress-step" hidden>
-        <p class="progress-step-head"><span class="progress-step-name" data-i18n="publish.step_reading">Reading</span><span id="read-count" class="muted"></span></p>
-        <div id="read-bar" class="progress-bar" role="progressbar" aria-label="Reading" data-i18n-attr="aria-label:publish.step_reading" aria-valuemin="0" aria-valuemax="100">
-          <div id="read-fill" class="progress-fill"></div>
-        </div>
-      </div>
+      <!-- Steps, one after the other: every item number is looked up in Fusion Manage, then the items and their Bill of Materials are published. -->
       <div id="validate-step" class="progress-step">
         <p class="progress-step-head"><span class="progress-step-name" data-i18n="publish.step_validating">Validating</span><span id="validate-count" class="muted"></span></p>
         <div id="validate-bar" class="progress-bar" role="progressbar" aria-label="Validating" data-i18n-attr="aria-label:publish.step_validating" aria-valuemin="0" aria-valuemax="100">
@@ -176,22 +163,15 @@
   <script src="js/ui.js"></script>
   <script src="../shared/js/toast.js"></script>
   <script src="../shared/js/tooltip.js"></script>
-  <script src="../shared/js/diff-report.js"></script>
   <script src="js/bom-tree.js"></script>
   <script src="js/bom-model.js"></script>
-  <script src="js/bom-plan.js"></script>
   <script src="js/mbom-structure.js"></script>
   <script src="js/mbom-plan.js"></script>
-  <script src="js/bom-cells.js"></script>
-  <script src="js/bom-filters.js"></script>
-  <script src="js/bom-columns.js"></script>
-  <script src="js/bom-table.js"></script>
   <script src="js/details.js"></script>
   <script src="js/add-items.js"></script>
   <script src="js/item-panel.js"></script>
   <script src="js/mbom-viewer.js"></script>
   <script src="js/publish-jobs.js"></script>
-  <script src="js/publish-check.js"></script>
   <script src="js/publish-bom.js"></script>
   <script src="js/publish-mbom.js"></script>
   <script src="js/publish.js"></script>

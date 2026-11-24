@@ -5,6 +5,8 @@
  * ``make(title, content, options)`` returns the card (a <section>). ``content`` is the element of the section's rows (the card gives it
  * the class ``section-body``); ``options.folded`` starts it folded, and ``options.onOpen`` is called the first time it is open (a section that
  * starts folded calls it when it is first unfolded). A section with no ``title`` has no bar and cannot be folded.
+ *
+ * ``unfold(node)`` opens the folded card that is ``node`` or holds it (nothing when none does), so what is inside is not left hidden.
  */
 (function (ns) {
   'use strict';
@@ -44,5 +46,10 @@
     return card;
   }
 
-  ns.section = { make: make };
+  function unfold(node) {
+    const card = node.closest('.section.folded');
+    if (card) card.querySelector('.section-title').click();
+  }
+
+  ns.section = { make: make, unfold: unfold };
 })(window.MfgUi);

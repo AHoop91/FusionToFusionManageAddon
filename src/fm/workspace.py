@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import quote_plus
 
 from ..auth.errors import AuthError
-from ..config.workspace_models import WorkspaceKind, kind_texts
+from ..config.workspace_models import ITEMS_KIND, WorkspaceKind, kind_texts
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in, whole
@@ -166,7 +166,7 @@ class WorkspaceService:
         if lacking:
             return _verdict(kind, False, t("data.fm_workspace_lacking", name=name, missing=", ".join(title(p) for p in lacking)))
         fields, fields_error = self.fields(base)   # read once: the schema check and the mapping picker both use it
-        if not fields_error:
+        if kind.kind_id == ITEMS_KIND and not fields_error:   # only the Items workspace's copy checklist in Settings lays the fields out by section
             self._place(fields, workspace_id)
         if kind.schema is not None:
             wrong = fields_error or self._schema_problem(kind, name, workspace_id, fields)

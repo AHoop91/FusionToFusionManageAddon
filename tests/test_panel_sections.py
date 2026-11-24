@@ -37,7 +37,6 @@ class Fixture:
             mock.patch.object(panel_sections, "read_section", side_effect=self.read),
             mock.patch.object(panel_sections, "search_design", return_value=[]),
             mock.patch.object(panel_sections, "compare_design_bom", side_effect=lambda rows, *_: {"rows": rows, "shared": False}),
-            mock.patch.object(panel_sections, "compare_level", side_effect=lambda rows, *_: {"rows": rows}),
         ]
         for p in self.patches:
             p.start()
@@ -187,23 +186,15 @@ class SectionTests(unittest.TestCase):
         self.assertEqual([r["id"] for r in whole["data"]["rows"]], ["c1", "c2"])
         self.assertEqual({r[0] for r in self.fx.reads}, {"summary", "level", "structure"})
 
-    def test_each_assembly_has_a_slot_of_its_own(self):
+    def test_each_component_has_a_slot_of_its_own(self):
         self.fx.ask("summary")
         self.fx.wait("summary")
-        self.fx.ask("children", id="A", item_number="PN-A", compared="1")
-        self.fx.ask("children", id="B", item_number="PN-B", compared="1")
-        a, b = self.fx.wait("children:A"), self.fx.wait("children:B")
-        self.assertEqual((a["section"], b["section"]), ("children:A", "children:B"))
+        self.fx.ask("thumbnail", id="A")
+        self.fx.ask("thumbnail", id="B")
+        a, b = self.fx.wait("thumbnail:A"), self.fx.wait("thumbnail:B")
+        self.assertEqual((a["section"], b["section"]), ("thumbnail:A", "thumbnail:B"))
         self.assertTrue(a["ok"] and b["ok"])
-        self.assertEqual(sorted(r[1] for r in self.fx.reads if r[0] == "level"), ["A", "B"])
-
-    def test_a_children_load_carries_what_the_comparison_needs(self):
-        self.fx.ask("summary")
-        self.fx.wait("summary")
-        self.fx.ask("children", id="A", item_number="PN-A", skip="1", compared="1")
-        self.fx.wait("children:A")
-        args = panel_sections.compare_level.call_args[0]
-        self.assertEqual(args[1:4], ("PN-A", True, True))
+        self.assertEqual(sorted(r[1] for r in self.fx.reads if r[0] == "thumbnail"), ["A", "B"])
 
     def test_a_summary_without_an_item_number_is_a_denial_not_an_error(self):
         fx = Fixture(summary={**SUMMARY, "item_number": ""})
@@ -299,11 +290,11 @@ class SectionTests(unittest.TestCase):
     def test_the_other_slots_of_the_design_are_left_alone_by_another_target(self):
         self.fx.ask("summary")
         self.fx.wait("summary")
-        self.fx.ask("children", id="c1", item_number="PN-1")
-        self.fx.wait("children:c1")
+        self.fx.ask("thumbnail", id="c1")
+        self.fx.wait("thumbnail:c1")
         self.fx.ask("structure", target="A")
         self.fx.wait("structure")
-        self.assertTrue(self.fx.sections.status({"section": "children:c1"})["ok"])
+        self.assertTrue(self.fx.sections.status({"section": "thumbnail:c1"})["ok"])
 
     def test_the_number_check_asks_whether_the_item_number_it_is_given_is_taken(self):
         panel_sections.MbomService.return_value.number_taken.return_value = True
@@ -347,26 +338,26 @@ class SectionTests(unittest.TestCase):
     def test_the_slots_of_components_of_another_design_are_dropped(self):
         self.fx.ask("summary")
         self.fx.wait("summary")
-        self.fx.ask("children", id="A", item_number="PN-A")
-        self.fx.wait("children:A")
+        self.fx.ask("thumbnail", id="A")
+        self.fx.wait("thumbnail:A")
         self.fx.model = ("m2", "t1")
         self.fx.ask("summary")
         self.fx.wait("summary")
-        self.assertEqual(self.fx.sections.status({"section": "children:A"})["pending"], False)
-        self.assertIn("Unknown section", self.fx.sections.status({"section": "children:A"})["message"])
-        self.assertNotIn("children:A", self.fx.sections._slots)
+        self.assertEqual(self.fx.sections.status({"section": "thumbnail:A"})["pending"], False)
+        self.assertIn("Unknown section", self.fx.sections.status({"section": "thumbnail:A"})["message"])
+        self.assertNotIn("thumbnail:A", self.fx.sections._slots)
 
     def test_a_load_whose_slot_was_dropped_ends_quietly(self):
         self.fx.ask("summary")
         self.fx.wait("summary")
         self.fx.gate = threading.Event()
-        self.fx.ask("children", id="A", item_number="PN-A")
+        self.fx.ask("thumbnail", id="A")
         self.fx.model = ("m2", "t1")
-        self.fx.ask("summary")   # drops children:A while its read is still going
+        self.fx.ask("summary")   # drops thumbnail:A while its read is still going
         self.fx.gate.set()
         self.fx.wait("summary")
         time.sleep(0.1)   # the dropped load finishes, and finds nothing waiting for it
-        self.assertNotIn("children:A", self.fx.sections._slots)
+        self.assertNotIn("thumbnail:A", self.fx.sections._slots)
 
     def test_a_failure_making_the_clients_is_reported_not_left_pending(self):
         panel_sections.FmClient.side_effect = RuntimeError("no settings")

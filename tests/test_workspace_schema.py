@@ -1,12 +1,21 @@
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
-from src.config.workspace_models import FieldNeed, WorkspaceKind, WorkspaceSchema
+from src.config.workspace_models import FieldMapping, FieldNeed, MakeBuyConfig, WorkspaceConfig, WorkspaceKind, WorkspaceSchema
 from src.fm.workspace import WorkspaceService
 from src.fm.workspace_schema import Layout, problems, read_layout
 
 SCHEMA = WorkspaceSchema(tabs=("ITEM_DETAILS", "GRID"),
                          fields=(FieldNeed("STATUS", "Single Selection", "Basic"), FieldNeed("OWNER"), FieldNeed("DUE", section="Dates")))
+
+
+MAKE, BUY = "/api/v3/lookups/MAKEBUY/options/1", "/api/v3/lookups/MAKEBUY/options/2"
+
+
+def config(**more):
+    return WorkspaceConfig(**{"workspace_id": "242", "mappings": [FieldMapping("item_number", "NUMBER")], "component_field": "COMPONENT",
+                              "make_buy": MakeBuyConfig("MAKE_BUY", MAKE, BUY, "SOURCE", "-B"), **more})
 
 
 def _layout(**changes):
@@ -78,7 +87,6 @@ class ValidateTests(unittest.TestCase):
     def _service(self, layout):
         service = WorkspaceService(mock.Mock())
         service.fields = mock.Mock(return_value=([], ""))
-        service._place = mock.Mock()
         patcher = mock.patch("src.fm.workspace.read_layout", return_value=layout)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -96,6 +104,51 @@ class ValidateTests(unittest.TestCase):
         with mock.patch("src.fm.workspace.parse_granted", return_value={"view_items"}):
             verdict = self._service(_layout()).validate(self.KIND, "9")
         self.assertTrue(verdict["valid"])
+
+
+class SettingsTests(unittest.TestCase):
+    def test_make_buy_survives_a_save_and_a_file_that_has_none_loads_empty(self):
+        cfg = config()
+        self.assertEqual(WorkspaceConfig.from_dict(cfg.to_dict()).make_buy, cfg.make_buy)
+        self.assertEqual(WorkspaceConfig.from_dict({"workspace_id": "1"}).make_buy, MakeBuyConfig())
+        self.assertEqual(WorkspaceConfig.from_dict({"make_buy": "x"}).make_buy, MakeBuyConfig())
+
+    def test_nothing_chosen_is_no_problem_and_the_feature_is_off(self):
+        self.assertEqual(config(make_buy=MakeBuyConfig()).validate(), [])
+        self.assertFalse(MakeBuyConfig().is_set())
+
+    def test_a_complete_choice_is_valid(self):
+        self.assertEqual(config().validate(), [])
+        self.assertTrue(config().make_buy.is_set())
+
+    def test_a_half_chosen_section_is_a_problem(self):
+        problems = config(make_buy=MakeBuyConfig("MAKE_BUY", MAKE, "", "SOURCE", "-B")).validate()
+        self.assertEqual([p.where["part"] for p in problems], ["buy_value"])
+
+    def test_the_suffix_is_an_item_number_ending_of_at_most_twenty_characters(self):
+        for suffix in ("-B ", "B/1", "é", "x" * 21):
+            cfg = config()
+            cfg.make_buy.suffix = suffix
+            self.assertEqual([p.where.get("part") for p in cfg.validate()], ["suffix"], suffix)
+        cfg = config()
+        cfg.make_buy.suffix = "x" * 20
+        self.assertEqual(cfg.validate(), [])
+
+    def test_the_two_values_must_differ_and_be_picklist_option_links(self):
+        cfg = config()
+        cfg.make_buy.buy_value = MAKE
+        self.assertEqual([p.where["part"] for p in cfg.validate()], ["buy_value"])
+        cfg.make_buy.buy_value = "Buy"
+        self.assertEqual([p.where["part"] for p in cfg.validate()], ["buy_value"])
+
+    def test_a_field_cannot_be_the_make_or_buy_field_and_something_else(self):
+        for clash in (lambda c: setattr(c.make_buy, "source_field", "MAKE_BUY"),   # the source link is the Make or buy field
+                      lambda c: setattr(c.make_buy, "field", "COMPONENT"),   # the component field
+                      lambda c: setattr(c.make_buy, "source_field", "NUMBER"),   # a mapped field
+                      lambda c: c.static_values.append(SimpleNamespace(fm_field_id="SOURCE", to_dict=lambda: {}))):
+            cfg = config()
+            clash(cfg)
+            self.assertEqual(len(cfg.validate()), 1)
 
 
 if __name__ == "__main__":

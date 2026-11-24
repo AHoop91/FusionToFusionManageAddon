@@ -45,6 +45,36 @@
     return node;
   }
 
+  // ---- Collapse all and Expand all ----------------------------------------------
+
+  // The icons of the structure viewer's bar: a solid box with a minus (collapse all) or a plus (expand all).
+  const FOLD_ICONS = {
+    collapse: ['M8 12h8'],
+    expand: ['M8 12h8', 'M12 8v8'],
+  };
+
+  function foldTool(kind, title, onClick) {
+    const b = el('button', 'pub-cmp-tool pub-cmp-tool-' + kind);
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    const icon = svg(FOLD_ICONS[kind]);
+    const box = document.createElementNS(SVG_NS, 'rect');
+    [['x', 4], ['y', 4], ['width', 16], ['height', 16], ['rx', 2]].forEach(function (a) { box.setAttribute(a[0], String(a[1])); });
+    icon.insertBefore(box, icon.firstChild);
+    b.appendChild(icon);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  /** Collapse all and expand all, as a pair of buttons. */
+  function foldTools(collapseAll, expandAll) {
+    const pair = el('div', 'pub-cmp-pair');
+    pair.appendChild(foldTool('collapse', t('publish.collapse_all'), collapseAll));
+    pair.appendChild(foldTool('expand', t('publish.expand_all'), expandAll));
+    return pair;
+  }
+
   // ---- Loading, empty and error states ------------------------------------------
 
   const SLOW_MS = 15000;          // a wait this long gets a "taking longer" note
@@ -64,8 +94,8 @@
     }, SLOW_MS));
   }
 
-  /** Bouncing balls with a caption. */
-  function loaderNode() {
+  /** Bouncing balls with a caption (``text``, "Loading..." when it is not given). */
+  function loaderNode(text) {
     const box = el('div', 'loader');
     const balls = el('div', 'balls');
     balls.setAttribute('role', 'status');
@@ -74,8 +104,20 @@
     box.appendChild(balls);
     const caption = el('p', 'muted');
     box.appendChild(caption);
-    warnWhenSlow(caption, t('publish.loading'));
+    warnWhenSlow(caption, text || t('publish.loading'));
     return box;
+  }
+
+  /** ``count`` rows of grey bars with the thumbnail's sweep: the shape of a table that is on its way. Hidden from assistive technology. */
+  function skeletonRows(count) {
+    const rows = [];
+    for (let n = 0; n < count; n++) {
+      const row = el('div', 'pub-skel-row');
+      row.setAttribute('aria-hidden', 'true');
+      ['pub-skel-wide', 'pub-skel-mid', 'pub-skel-short'].forEach(function (width) { row.appendChild(el('span', 'pub-skel ' + width)); });
+      rows.push(row);
+    }
+    return rows;
   }
 
   /** Centred failure message with a warning icon and a Retry button. A timeout gets its own wording. */
@@ -107,6 +149,6 @@
 
   ns.pubUi = {
     busy: busy, el: el, svg: svg, treeIcon: treeIcon, chevron: chevron, setChevron: setChevron,
-    loaderNode: loaderNode, warnWhenSlow: warnWhenSlow, errorState: errorState,
+    loaderNode: loaderNode, skeletonRows: skeletonRows, warnWhenSlow: warnWhenSlow, errorState: errorState, foldTools: foldTools,
   };
 })(window.MfgUi);

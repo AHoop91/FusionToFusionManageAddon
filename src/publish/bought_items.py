@@ -17,8 +17,8 @@ The v3 search reads an index that lags a little behind a save, so two creations 
 
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, NamedTuple, Tuple
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from ..config.workspace_models import MakeBuyConfig, WorkspaceConfig
 from ..core.i18n import t
@@ -29,17 +29,19 @@ from ..fm.item_view import load_image
 from ..fm.items import ItemService, display_text
 from ..fm.mbom import MbomService
 from ..fm.refusal import FmRefused
+from ..fm.bom import name_of
 from ..fm.v3_search import ItemFinder, resolve_hits
 from ..fm.mbom import DESCRIPTOR_FIELD, WORKING_FIELD
 from ..fm.pages import page_url
 from ..fm.v1_search import CONTAINS, DESCRIPTOR_TAB, IS_TRUE, LIFECYCLE, Field, Filter, Sort, V1Row, V1SearchService
 from ..fm.workspace_form import (AUTO, CHECKBOX, DATE, IMAGE, INFO, INTEGER, LINK, LINKS, NUMBER, RADIO, SELECT, TEXT, TEXTAREA,
                                  WorkspaceFormService)
-from .products import BAD_REQUEST, UNPROCESSABLE, ProductService, _link_of
+from .products import BAD_REQUEST, UNPROCESSABLE, ProductService, link_of
 
 log = get_logger("publish.bought_items")
 
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")   # what the form's date control holds
+_NOT_FILLED = (INFO, AUTO, IMAGE)   # the kinds of form field a person does not fill in
 _LOCK_GUARD = threading.Lock()
 _LOCKS: Dict[Tuple[str, str], threading.Lock] = {}   # (workspace, item number) -> the lock around checking the number and creating the item
 
@@ -108,10 +110,10 @@ def form_value(spec: Spec, value: Any) -> Any:
 
 
 def plan_copy(form: Dict[str, Any], source: Dict[str, Any], make_buy: MakeBuyConfig, number_field: str, component_field: str
-              ) -> Tuple[Dict[str, Any], List[str], List[Dict[str, str]]]:
-    """What a bought item takes from its source: ``(values, copied, skipped)``. ``values`` is ``{field id: value as the form takes it}`` for each
+              ) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
+    """What a bought item takes from its source: ``(values, skipped)``. ``values`` is ``{field id: value as the form takes it}`` for each
     field of the form the source has a value in (a field the form leaves out, being hidden, computed or never edited, is never copied: the form
-    has already decided that, and a field in ``make_buy.skip_fields`` is left out); ``copied`` is their ids; ``skipped`` is ``[{"field", "reason"}]`` for the fields that are set by the add-in or
+    has already decided that, and a field in ``make_buy.skip_fields`` is left out); ``skipped`` is ``[{"field", "reason"}]`` for the fields that are set by the add-in or
     are not the bought item's (the item number, Make or buy, the source link and the component link) or are not chosen on the form (a picture: ``create_bought`` copies it as it is). An ``info`` field is never sent."""
     reasons = {number_field: t("data.bought_skip_number"), make_buy.field: t("data.bought_skip_make_buy"),
                make_buy.source_field: t("data.bought_skip_source")}
@@ -126,22 +128,23 @@ def plan_copy(form: Dict[str, Any], source: Dict[str, Any], make_buy: MakeBuyCon
             continue
         if spec["kind"] == IMAGE:   # not on the form: ``create_bought`` copies the picture as it is
             skipped.append({"field": field, "reason": t("data.bought_skip_image")})
-        elif spec["kind"] not in (INFO, AUTO):
+        elif spec["kind"] not in _NOT_FILLED:
             value = form_value(spec, source.get(field))
             if value is not None:
                 values[field] = value
-    return values, list(values), skipped
-
-
-_NOT_FILLED = (INFO, AUTO, IMAGE)   # the kinds of form field a person does not fill in
+    return values, skipped
 
 
 def _names(text: str, source_number: str, descriptor: str) -> bool:
-    """Whether the title of a source link names the source item itself: its descriptor, its number alone, or its number then " - " and the name.
+    """Whether the title of a source link names the source item itself: its descriptor, or its number alone or then " - " and the name.
     (Not ``number_matches``: it takes "PN-1-2" for "PN-1" too.)"""
-    text = text.strip().lower()
-    number = source_number.lower()
-    return text in (number, (descriptor or "").strip().lower()) or text.startswith(number + " - ")
+    title, number = text.strip().lower(), source_number.strip().lower()
+    return title == number or title.startswith(number + " - ") or title == (descriptor or "").strip().lower()
+
+
+def _texts(row: V1Row, field_id: str) -> List[str]:
+    """The titles a row of a v1 search holds in the field ``field_id`` (a blank one is left out)."""
+    return [text for key, text in row.entries if key.upper() == field_id.upper() and text]
 
 
 class Plan(NamedTuple):
@@ -232,61 +235,72 @@ class BoughtItems:
                 raise FmRefused(message, UNPROCESSABLE, {number_field: message})
             return self._create(sent, number)
 
-    def _source_id(self, source_id: str, source_number: str) -> str:
-        """The id of the source: ``source_id`` as it is, or the item the working version search finds for ``source_number`` (a component of the
-        EBOM has no id, only its item number). Exactly one of the two is given. Raises ``FmApiError`` when neither or both are, when no item has
+    def _source(self, source_id: str, source_number: str) -> Tuple[str, str]:
+        """``(id, descriptor)`` of the source: ``source_id`` as it is (its descriptor is not known, ""), or the item the working version search finds
+        for ``source_number`` with its descriptor. Exactly one of the two is given. Raises ``FmApiError`` when neither or both are, when no item has
         the number (publish it first) and when several share it. The search is made on every call: the answer is never kept from the form."""
         if bool(source_id) == bool(source_number.strip()):
             raise FmApiError(t("app.bought_no_source"), UNPROCESSABLE)
         if source_id:
             if not source_id.isdigit():   # it goes into an address
                 raise FmApiError(t("app.bought_no_source"), UNPROCESSABLE)
-            return source_id
+            return source_id, ""
         number = source_number.strip()
         picked, competing = resolve_hits(ItemFinder(self._client).search(self._workspace, number), number)
         if not competing:
             raise FmApiError(t("app.bought_source_not_published", number=number), UNPROCESSABLE)
         if picked is None:
             raise FmApiError(t("app.bought_source_shared", number=number), UNPROCESSABLE)
-        return picked["id"]
+        return picked["id"], picked["descriptor"]
 
     def _plan(self, source_id: str, source_number: str) -> Plan:
-        """Read the source (given by its id or its item number, see ``_source_id``) and the form, and check what a bought version needs: the
+        """Read the source (given by its id or its item number, see ``_source``) and the form, and check what a bought version needs: the
         settings, a source that is set to Make and has a number, and a new number that fits its field. Raises ``FmApiError`` (or ``ValueError``
         for an item number that is not mapped) with the reason."""
         make_buy = self._make_buy
         if not make_buy.is_set():
             raise FmApiError(t("app.make_buy_not_set_up"), UNPROCESSABLE)
-        source_id = self._source_id(source_id, source_number)
+        source_id, _ = self._source(source_id, source_number)
         with ThreadPoolExecutor(max_workers=2) as pair:   # the source and the form do not depend on each other
             read = pair.submit(ItemService(self._client).read_named, self._workspace, source_id)
             form, specs = self._form()
             descriptor, source = read.result()
+        return self._planned(source_id, form, specs, descriptor, source)
+
+    def _planned(self, source_id: str, form: Dict[str, Any], specs: Dict[str, Spec], descriptor: str, source: Dict[str, Any]) -> Plan:
+        """The ``Plan`` for the source item read (``descriptor``, ``source``) and the form, after the checks ``_plan`` describes."""
+        make_buy = self._make_buy
         number_field, form = self._number_spec(specs, form)
         self._check_make_buy(specs, source=True)
-        source_number = display_text(source.get(number_field)).strip()
-        if not source_number:
+        item_number = display_text(source.get(number_field)).strip()
+        if not item_number:
             raise FmApiError(t("app.bought_source_no_number"), UNPROCESSABLE)
-        if _link_of(source.get(make_buy.field)) == make_buy.buy_value:   # a bought item is not made, so there is nothing to buy a version of; one never classified is fine
-            raise FmApiError(t("app.bought_source_is_bought", number=source_number), UNPROCESSABLE)
-        number = source_number + make_buy.suffix
+        if link_of(source.get(make_buy.field)) == make_buy.buy_value:   # a bought item is not made, so there is nothing to buy a version of; one never classified is fine
+            raise FmApiError(t("app.bought_source_is_bought", number=item_number), UNPROCESSABLE)
+        number = item_number + make_buy.suffix
         limit = specs[number_field]["max_length"]
         if limit and len(number) > limit:
             raise FmApiError(t("app.bought_number_too_long", number=number, length=len(number), max=limit), UNPROCESSABLE)
-        return Plan(form, specs, source_id, f"{WORKSPACES}/{self._workspace}/items/{source_id}", descriptor, source_number, number, source)
+        return Plan(form, specs, source_id, f"{WORKSPACES}/{self._workspace}/items/{source_id}", descriptor, item_number, number, source)
 
-    def _editable(self, values: Dict[str, Any], specs: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Only the values of fields the form holds and a person may fill: a page cannot send a hidden, computed, picture or information field."""
-        return {field: value for field, value in values.items() if field in specs and specs[field]["kind"] not in _NOT_FILLED}
+    @staticmethod
+    def _editable(values: Dict[str, Any], specs: Dict[str, Dict[str, Any]], left_out: Tuple[str, ...] = ()) -> Dict[str, Any]:
+        """Only the values of fields the form holds and a person may fill, except those of ``left_out``: a page cannot send a hidden, computed, picture
+        or information field."""
+        return {field: value for field, value in values.items() if field in specs and specs[field]["kind"] not in _NOT_FILLED and field not in left_out}
 
     def _refuse_if_made(self, plan: Plan) -> None:
         """Raises ``FmRefused`` when the number is taken or the source has a bought version already (an item numbered from the source's whose
         source link field names the source). A failed search raises: it is not "free"."""
-        if MbomService(self._client).number_taken(self._workspace, plan.number):
+        self._refuse(plan, MbomService(self._client).number_taken(self._workspace, plan.number), self._rows_containing(plan.source_number))
+
+    def _refuse(self, plan: Plan, taken: bool, rows: List[V1Row]) -> None:
+        """``_refuse_if_made`` for the answers of its two searches: whether the number is ``taken`` and the ``rows`` whose number contains the source's."""
+        if taken:
             raise FmRefused(t("app.item_number_taken", number=plan.number), UNPROCESSABLE, {})
         number_field = self._cfg.item_number_field()
-        for row in self._rows_containing(plan.source_number):
-            if any(_names(text, plan.source_number, plan.descriptor) for text in self._source_links(row)):
+        for row in rows:
+            if any(_names(text, plan.source_number, plan.descriptor) for text in _texts(row, self._make_buy.source_field)):
                 raise FmRefused(t("app.bought_made_from", source=plan.source_number, number=row.values.get(number_field, "")), UNPROCESSABLE, {})
 
     def _rows_containing(self, text: str) -> List[V1Row]:
@@ -295,67 +309,90 @@ class BoughtItems:
         return V1SearchService(self._client).rows(self._workspace, [Field(self._make_buy.source_field), Field(number_field)], [Sort(number_field)],
                                                   [Filter(number_field, CONTAINS, text)])
 
-    def _source_links(self, row: V1Row) -> List[str]:
-        """The titles in the source link field of a row of ``_rows_containing`` (a blank one is left out)."""
-        source_field = self._make_buy.source_field
-        return [text for key, text in row.entries if key.upper() == source_field.upper() and text]
+    def _bought_rows(self, number: str) -> List[V1Row]:
+        """The rows of the working versions whose source link contains ``number`` (source link, number, Make or buy and descriptor): one v1 search.
+        A failed search raises. The filter ``CONTAINS`` on the source link field has not been checked against a live tenant."""
+        make_buy, number_field = self._make_buy, self._cfg.item_number_field()
+        fields = [Field(make_buy.source_field), Field(number_field), Field(make_buy.field), Field(DESCRIPTOR_FIELD, DESCRIPTOR_TAB)]
+        filters = [Filter(make_buy.source_field, CONTAINS, number), Filter(WORKING_FIELD, IS_TRUE, "", LIFECYCLE)]
+        return V1SearchService(self._client).rows(self._workspace, fields, [Sort(number_field)], filters)
 
-    def find_bought(self, source_number: str) -> Dict[str, Any]:
-        """The bought version of the item numbered ``source_number`` there is already: ``{"found": {"id", "link", "number", "name", "url"}}`` (``url``: its page in Fusion Manage), or
-        ``{"found": None}``. One v1 search of the working versions whose source link contains the number, kept when the item is a bought one (its Make
-        or buy is the Buy value) and its source link names the source item itself (``_names``), so another item whose number only contains it is not
-        taken for it. The first by item number is answered when several qualify. Raises ``FmApiError`` when Make or buy is not set up, the source is
-        not found or shared, or a search fails: a failed search is not "none". The filter ``CONTAINS`` on the source link field has not been checked
-        against a live tenant."""
+    def _found(self, rows: List[V1Row], buy_title: str, number: str, descriptor: str) -> Optional[Dict[str, str]]:
+        """``{"id", "link", "number", "name", "url"}`` (``url``: its page in Fusion Manage) of the first row (by item number) that is a bought item (its
+        Make or buy is ``buy_title``, lower case) whose source link names the source item itself (``_names``), so another item whose number only
+        contains the source's is not taken for it; None when none is."""
+        make_buy, number_field = self._make_buy, self._cfg.item_number_field()
+        for row in rows:
+            bought = any(text.strip().lower() == buy_title for text in _texts(row, make_buy.field))
+            if bought and any(_names(text, number, descriptor) for text in _texts(row, make_buy.source_field)):
+                return {"id": row.dms_id, "link": f"{WORKSPACES}/{self._workspace}/items/{row.dms_id}", "number": row.values.get(number_field, ""),
+                        "url": page_url(self._client.base_url, self._client.tenant, self._workspace, row.dms_id),
+                        "name": name_of(row.values.get(DESCRIPTOR_FIELD, ""))}
+        return None
+
+    def _look(self, pool: ThreadPoolExecutor, number: str) -> Tuple[Future, Future, Future]:
+        """Start the three searches that depend on the source's item number, on ``pool``: ``(number_taken for the new number, the rows that contain
+        the number (``_refuse_if_made``), the bought versions (``_bought_rows``))``."""
+        return (pool.submit(MbomService(self._client).number_taken, self._workspace, number + self._make_buy.suffix),
+                pool.submit(self._rows_containing, number), pool.submit(self._bought_rows, number))
+
+    def open(self, source_id: str = "", source_number: str = "") -> Dict[str, Any]:
+        """What the dialog of a bought version shows for the source ``source_id`` (or, when none is given, the item numbered ``source_number``): either
+        ``{"found": {"id", "link", "number", "name", "url"}}``, the bought version there is already, or the form for a new one: ``{"form", "number",
+        "number_field", "values", "locked", "source_id"}`` (``source_id`` is the source the page sends on with the create, which then searches for nothing).
+        When both are given the id is used and ``source_number`` is only the number the page expects it to have, so the searches that need the number
+        can start with the item's read; if the item has another number they are made again with its own.
+
+        The item, the form and the searches are read together, after the id is known (a search by ``source_number`` only when no id is given).
+        A bought version is decided before anything is refused, as the two requests this replaces did: one bought item whose source link names the source
+        (``_found``) is offered, else ``_planned`` and ``_refuse_if_made`` refuse a source that is bought, a number that is too long or taken, and a source
+        that has a bought version under another number. Raises ``FmApiError`` or ``FmRefused`` with the reason, and whatever a read raises (a failed search
+        is not "none")."""
         make_buy = self._make_buy
         if not make_buy.is_set():
             raise FmApiError(t("app.make_buy_not_set_up"), UNPROCESSABLE)
-        source_id = self._source_id("", source_number)
-        descriptor, _ = ItemService(self._client).read_named(self._workspace, source_id)
-        number = source_number.strip()
-        _, specs = self._form()
-        buy_title = self._option_title(self._check_make_buy(specs, source=True), make_buy.buy_value).strip().lower()
+        expected = source_number.strip()
+        source_id, _ = self._source(source_id, "" if source_id else expected)
         number_field = self._cfg.item_number_field()
-        fields = [Field(make_buy.source_field), Field(number_field), Field(make_buy.field), Field(DESCRIPTOR_FIELD, DESCRIPTOR_TAB)]
-        filters = [Filter(make_buy.source_field, CONTAINS, number), Filter(WORKING_FIELD, IS_TRUE, "", LIFECYCLE)]
-        for row in V1SearchService(self._client).rows(self._workspace, fields, [Sort(number_field)], filters):
-            bought = any(key.upper() == make_buy.field.upper() and text.strip().lower() == buy_title for key, text in row.entries)
-            if bought and any(_names(text, number, descriptor) for text in self._source_links(row)):
-                found = row.values.get(DESCRIPTOR_FIELD, "")
-                return {"found": {"id": row.dms_id, "link": f"{WORKSPACES}/{self._workspace}/items/{row.dms_id}", "number": row.values.get(number_field, ""),
-                                  "url": page_url(self._client.base_url, self._client.tenant, self._workspace, row.dms_id),
-                                  "name": found.split(" - ", 1)[1] if " - " in found else ""}}
-        return {"found": None}
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            read = pool.submit(ItemService(self._client).read_named, self._workspace, source_id)
+            form_read = pool.submit(self._form)
+            looks = self._look(pool, expected) if expected else None
+            descriptor, source = read.result()
+            number = display_text(source.get(number_field)).strip()
+            if number.casefold() != expected.casefold():   # not the item the page expects: what was started was for another number
+                looks = self._look(pool, number) if number else None
+            form, specs = form_read.result()
+            buy_title = self._option_title(self._check_make_buy(specs, source=True), make_buy.buy_value).strip().lower()
+            found = self._found(looks[2].result(), buy_title, number, descriptor) if looks else None
+            if found:
+                return {"found": found}
+            plan = self._planned(source_id, form, specs, descriptor, source)   # refuses a source with no number: ``looks`` is set from here on
+            self._refuse(plan, looks[0].result(), looks[1].result())
+        values, skipped = plan_copy(plan.form, plan.source, make_buy, number_field, self._cfg.component_field)
+        locked = self._locked(plan)
+        form = without(plan.form, {item["field"] for item in skipped} - set(locked))
+        return {"form": form, "number": plan.number, "number_field": number_field, "values": values, "locked": locked, "source_id": source_id}
 
-    def bought_form(self, source_id: str = "", source_number: str = "") -> Dict[str, Any]:
-        """The form for a bought version of the item ``source_id`` (or the one numbered ``source_number``; give one of the two): ``{"form", "number", "number_field", "values", "copied", "skipped", "locked"}``.
-        ``form`` holds the fields the person may change and, in their own sections, those the add-in sets; ``locked`` is ``{field id: value as text}``
-        for the latter (the item number, Make or buy, the source link and the component link, which stays empty), shown and never sent. ``values`` are
-        the source's values for the others (``copied`` is their ids), ``number`` the new item's number, ``skipped`` ``[{"field", "reason"}]`` what is
-        not copied. Raises ``FmApiError`` or ``FmRefused`` with the reason: a source that is already bought, a number that is taken."""
-        plan = self._plan(source_id, source_number)
-        self._refuse_if_made(plan)
+    def _locked(self, plan: Plan) -> Dict[str, str]:
+        """``{field id: value as text}`` of what the add-in sets in a bought version: the item number, Make or buy, the source link and, when the form
+        holds it, the component link (empty)."""
         make_buy = self._make_buy
-        number_field = self._cfg.item_number_field()
-        values, copied, skipped = plan_copy(plan.form, plan.source, make_buy, number_field, self._cfg.component_field)
-        buy = plan.specs[make_buy.field]
-        locked = {number_field: plan.number, make_buy.field: self._option_title(buy, make_buy.buy_value),
+        locked = {self._cfg.item_number_field(): plan.number, make_buy.field: self._option_title(plan.specs[make_buy.field], make_buy.buy_value),
                   make_buy.source_field: plan.descriptor or plan.source_number}
         if self._cfg.component_field in plan.specs:
             locked[self._cfg.component_field] = t("data.bought_locked_none")
-        form = without(plan.form, {item["field"] for item in skipped} - set(locked))
-        return {"form": form, "number": plan.number, "number_field": number_field, "values": values, "copied": copied, "skipped": skipped, "locked": locked}
+        return locked
 
     def create_bought(self, source_id: str, values: Dict[str, Any], source_number: str = "") -> Dict[str, Any]:
         """Create the bought version of ``source_id`` (or of the item numbered ``source_number``, found again here) from ``values`` (what the form holds, ``{field id: value}``). The number, Make or buy and the
-        source link are set here whatever ``values`` hold. Answers ``{"id", "link", "number"}``. Raises as ``bought_form`` does, and ``FmApiError``
+        source link are set here whatever ``values`` hold. Answers ``{"id", "link", "number"}``. Raises as ``open`` does, and ``FmApiError``
         with Fusion Manage's reason (``FmRefused`` names the fields)."""
         plan = self._plan(source_id, source_number)
         make_buy = self._make_buy
         number_field = self._cfg.item_number_field()
         forced = {number_field: plan.number, make_buy.field: make_buy.buy_value, make_buy.source_field: {"link": plan.source_link}}
-        wanted = {field: value for field, value in self._editable(values, plan.specs).items() if field != self._cfg.component_field}
-        sent = {**{field: value for field, value in wanted.items() if field not in forced}, **forced}
+        sent = {**self._editable(values, plan.specs, (self._cfg.component_field,)), **forced}
         with _creation_lock(self._workspace, plan.number):
             self._refuse_if_made(plan)
             return self._create({**self._pictures(plan), **sent}, plan.number)
@@ -368,8 +405,7 @@ class BoughtItems:
         for field, spec in plan.specs.items():
             if spec["kind"] != IMAGE or field in left_out:
                 continue
-            value = plan.source.get(field)
-            link = str(value.get("link") or "") if isinstance(value, dict) else ""
+            link = link_of(plan.source.get(field))
             if not link:
                 continue
             picture = load_image(self._client, link)

@@ -9,7 +9,6 @@ A native `<select>` is not used because its popup was slow to open in Fusion's e
 - A button that opens a list laid out in the window, so a scrolling card does not cut it off. The list opens up or down, whichever has room.
 - Arrow keys, Enter, Space and Escape, with ARIA listbox roles.
 - A search box (at the top of the list, or typed into the field itself with `inlineSearch`, as the form controls do), a clear entry, greyed-out taken items, and groups with headings.
-- A search box, a clear entry, greyed-out taken items, and groups with headings.
 - A single value, or several values shown as chips (`multi`).
 - Items the page holds, or items read from somewhere else in batches.
 
@@ -40,8 +39,8 @@ A row can carry small buttons of its own: give an item `actions`, a list of `{la
 | --- | --- |
 | `settings/js/workspaces.js`, `settings/js/language.js` | Grouped static lists, taken items, clear entry |
 | `products/js/filters.js` (`dropdown`) | Short required or clearable list |
-| `products/js/products-page.js` (`linkPicker`) | `source` with batches, single or `multi` |
-| `products/js/products-page.js` (`selectPicker`) | Fixed choices of a form field, clear entry, search from 8 items |
+| `shared/js/form-controls.js` (`linkPicker`) | `source` with batches, single or `multi` |
+| `shared/js/form-controls.js` (`selectPicker`) | Fixed choices of a form field, clear entry, search from 8 items |
 | `products/js/products-page.js` (`makeViewPicker`) | The view of the list: required, `actions` on each view (rename, delete), a `footer` to create one |
 | `item/js/bom.js` | The BOM view of the item: required, no search |
 | `publish/js/add-items.js` (`versionPicker`, `combo`) | Required static list, and `source` with a round clear button |
@@ -53,8 +52,6 @@ Copy the nearest caller when you add a new one.
 `settings/js/hub-picker.js` browses hub folders and files in a dialog. It is not a drop-down and stays separate.
 
 The action menus (the Actions menu of the Products list, the item actions, the account menu) run commands and hold no choice, so they are not pickers.
-
-The Filters menu of the Publish bill of materials (`publish/js/bom-filters.js`) is a tick list: several filters on at once, the list staying open while they are ticked, a count on each, a note and a Clear button in the list, and a count on its button. The picker's `multi` mode closes after each choice and shows chips, so it cannot host this list with the same behaviour. It stays as it is until the picker has a tick-list mode.
 
 ## Rules for changes
 

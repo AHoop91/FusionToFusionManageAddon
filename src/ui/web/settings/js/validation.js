@@ -118,7 +118,7 @@
   function mark(problem, target, message) {
     target.classList.add('invalid');
     problem.target = target;
-    unfold(target);
+    ns.section.unfold(target);
     problem.note = el('p', 'field-error', message);
     problem.note.setAttribute('role', 'alert');
     place(problem.note, target);
@@ -130,15 +130,9 @@
     problem.stop = function () { target.removeEventListener(event, done); };
   }
 
-  /** Open the folded section that holds ``target``, so a problem in it is seen. */
-  function unfold(target) {
-    const card = target.closest('.section.folded');
-    if (card) card.querySelector('.section-title').click();
-  }
-
   /** Bring the field of a problem into view, on the tab that holds it. */
   function reveal(target) {
-    unfold(target);
+    ns.section.unfold(target);
     const panel = target.closest('[id^="sub-"]');
     const tab = panel && document.querySelector('.tab[data-tab="' + panel.id.slice(4) + '"]');
     if (tab && !tab.classList.contains('active')) tab.click();

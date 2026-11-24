@@ -4,8 +4,8 @@ The panel asks for a section; the answer is a snapshot of its slot, which the pa
 worker threads, so Fusion's UI thread is never blocked. Loaded sections are kept for the open design, so asking again does not query
 again unless it is forced.
 
-The panel's "structure" is the first level of the Bill of Materials only. "children" is the level under one assembly (a slot of its own
-for each), and "tree" is the whole tree (Expand all, and publishing, which needs every line). "mbom" is the manufacturing bills of
+The panel's "structure" is the first level of the Bill of Materials only, and "tree" is the whole tree (Expand all, and publishing, which needs
+every line). "mbom" is the manufacturing bills of
 materials of the design that Fusion Manage already holds, found by the design's lineage id and the asset id of its Components record,
 and "mbom_number" whether an item number is taken by an item already (for a new one). "mbom_tree" is the whole Bill of Materials of the target
 item as one tree (down to ``MBOM_DEPTH`` levels, each line with its item id and line id), for the structure viewer; it needs the target's id.
@@ -37,22 +37,21 @@ from ..fm.mbom import MbomService
 from ..fm.permissions import denial
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import LEVEL, SECTION_NAMES, STRUCTURE, read_manage_item, read_section
-from ..sync.bom_levels import compare_design_bom, compare_level, search_design
+from ..sync.bom_levels import compare_design_bom, search_design
 from ..sync.item_compare import read_and_compare
 from ..sync.item_number import item_number_of
 from ..config.hub_context import HubContext, HubContexts
 
 log = get_logger("panel_sections")
 
-SUMMARY, PROPERTIES, COMPONENT, STRUCTURE_VIEW, TREE, CHILDREN, MBOM = "summary", "properties", "component", "structure", "tree", "children", "mbom"
+SUMMARY, PROPERTIES, COMPONENT, STRUCTURE_VIEW, TREE, MBOM = "summary", "properties", "component", "structure", "tree", "mbom"
 MBOM_NUMBER, MBOM_TREE = "mbom_number", "mbom_tree"
 MBOM_DEPTH = BOM_DEPTH   # levels of the target's Bill of Materials read for the structure viewer, as the Item panel reads its tree: a line at the last level shows no lines under it
-PANEL_SECTIONS = (*SECTION_NAMES, TREE, CHILDREN, MBOM, MBOM_NUMBER, MBOM_TREE)
+PANEL_SECTIONS = (*SECTION_NAMES, TREE, MBOM, MBOM_NUMBER, MBOM_TREE)
 TARGETED = (PROPERTIES, STRUCTURE_VIEW, TREE, MBOM_NUMBER, MBOM_TREE)   # sections about one item of Fusion Manage: they read the target's
-PER_COMPONENT = (COMPONENT, "thumbnail", CHILDREN)   # sections with a slot for each component
-READS = {STRUCTURE_VIEW: LEVEL, TREE: STRUCTURE, CHILDREN: LEVEL}   # what the Data Model is asked for, where it is not the section's own name
-COMPONENT_KEYS = ("id", "item_number", "part_number", "description",
-                  "skip", "compared")   # ``skip`` and ``compared`` ("1" or ""): only a ``children`` read uses them, to compare the level with Fusion Manage
+PER_COMPONENT = (COMPONENT, "thumbnail")   # sections with a slot for each component
+READS = {STRUCTURE_VIEW: LEVEL, TREE: STRUCTURE}   # what the Data Model is asked for, where it is not the section's own name
+COMPONENT_KEYS = ("id", "item_number", "part_number", "description")
 
 
 class PublishDenied(Exception):
@@ -263,9 +262,6 @@ class PublishSections:
             if not load.target_id:
                 raise ValueError(t("run.section_no_mbom_item"))
             return BomService(load.fm).tree(load.cfg.workspace_id, load.target_id, MBOM_DEPTH)
-        if load.name == CHILDREN:
-            c = load.component
-            return compare_level(read(), c["item_number"], bool(c["skip"]), bool(c["compared"]), load.cfg, load.fm)
         if load.name in (STRUCTURE_VIEW, TREE):
             known = [{"id": load.target_id}] if load.target_id else None   # found by lineage and asset: the number may have been changed since
             with ThreadPoolExecutor(max_workers=1) as pool:

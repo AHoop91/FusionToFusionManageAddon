@@ -150,16 +150,17 @@ const BOUGHT = {
   skipped: [{ field: 'NUMBER', reason: 'The number is the source number and the suffix.' }, { field: 'IMG', reason: 'Pictures are not copied.' }],
   locked: { NUMBER: 'MFG-1-B', SRC: 'MFG-1' },
   can_create: true,
+  source_id: '17',
 };
 
-test('a bought version shows its number read only, copies the values into the controls and says what is not copied', { skip }, () => {
+test('a bought version is opened with one request that carries the line, then shows its number read only, copies the values into the controls and says what is not copied', { skip }, () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1' });
-  assert.strictEqual(s.last().action, 'bought_find', 'it looks for a bought version before reading the form');
-  s.reply({ ok: true, result: { found: null } });
-  assert.strictEqual(s.last().action, 'bought_form');
+  assert.strictEqual(s.last().action, 'bought_open', 'one request looks for a bought version and reads the form');
   assert.strictEqual(s.last().payload.source_number, 'MFG-1');
+  const n = s.sent.length;
   s.reply({ ok: true, result: BOUGHT });
+  assert.strictEqual(s.sent.length, n, 'nothing more is asked');
   assert.strictEqual(s.$('.ic-title').textContent, 'Create Purchased Version of MFG-1');
   const first = s.$('.ic-body .section .pf-field');
   assert.match(first.querySelector('.pf-label').textContent, /^Item number/, 'the number is in the first section, in its place');
@@ -172,15 +173,15 @@ test('a bought version shows its number read only, copies the values into the co
   assert.strictEqual(s.w.document.querySelectorAll('.ic-body .section').length, 1, 'no section of what the add-in sets');
 });
 
-test('saving a bought version sends the source item number and the values, and shows the number it was given', { skip }, () => {
+test('saving a bought version sends the source id the open gave, with the values, and shows the number it was given', { skip }, () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1' });
-  s.reply({ ok: true, result: { found: null } });
   s.reply({ ok: true, result: BOUGHT });
   s.type('TITLE', 'Frame bought');
   s.save().click();
   assert.strictEqual(s.last().action, 'bought_create');
-  assert.strictEqual(s.last().payload.source_number, 'MFG-1');
+  assert.strictEqual(s.last().payload.source_id, '17', 'the create is not left to search for the item number again');
+  assert.strictEqual(s.last().payload.source_number, undefined);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(s.last().payload.values)), { TITLE: 'Frame bought', TYPE: '/o/2', SUPPLIER: { link: '/api/v3/lookups/SUPPLIERS/9' }, LINKS: [{ link: '/api/v3/workspaces/1/items/5' }] });
   s.reply({ ok: false, message: 'MFG-1-B exists already.', fields: { NUMBER: 'The number is taken.' } });
   assert.match(s.message().textContent, /MFG-1-B exists already\./);
@@ -288,7 +289,8 @@ test('a bought version that exists is offered in the dialog; Use this item hands
   const used = [];
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1', onFound: (item) => used.push(item.number) });
   s.reply({ ok: true, result: { found: FOUND } });
-  assert.strictEqual(s.sent.filter((r) => r.action === 'bought_form').length, 0, 'the form is not read');
+  assert.deepStrictEqual(s.sent.map((r) => r.action), ['bought_open'], 'it was one request, and the form is not painted');
+  assert.strictEqual(s.w.document.querySelectorAll('.ic-body .section').length, 0);
   assert.match(s.$('.ic-found-lead').textContent, /A purchased version of MFG-1 already exists in Fusion Manage/);
   assert.strictEqual(s.$('.ic-found-number').textContent, 'MFG-1-B');
   assert.strictEqual(s.$('.ic-found-name').textContent, 'Frame');
@@ -311,7 +313,7 @@ test('Cancel on the offer of an existing bought version uses nothing; a failed s
   s.reply({ ok: false, message: 'Search is down' });
   assert.match(s.$('.ic-body').textContent, /Search is down/);
   s.$('.ic-body button').click();
-  assert.strictEqual(s.last().action, 'bought_find', 'Try again looks again');
+  assert.strictEqual(s.last().action, 'bought_open', 'Try again looks again');
   s.reply({ ok: true, result: { found: FOUND } });
   s.$('.ic-cancel').click();
   assert.deepStrictEqual(used, []);
@@ -322,7 +324,6 @@ test('a bought version that is saved tells onCreated; a refused save tells nobod
   const s = setup();
   const made = [];
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1', onCreated: (r) => made.push(r.number) });
-  s.reply({ ok: true, result: { found: null } });
   s.reply({ ok: true, result: BOUGHT });
   s.save().click();
   s.reply({ ok: false, message: 'No.', fields: {} });

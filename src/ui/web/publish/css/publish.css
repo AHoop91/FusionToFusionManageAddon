@@ -46,9 +46,7 @@
 .pub-mbom-hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .pub-mbom-error { margin: 8px 0 0; font-size: 12px; text-align: left; }
 .pub-mbom-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-/* Skeleton of the table while the Bill of Materials loads: rows of bars with the same sweep as the thumbnail. */
-.pub-bom-status { margin: 0 0 10px; }
-.pub-skel-table { padding: 6px 14px; }
+/* Skeleton of the tables while the Bill of Materials loads (the structure viewer's): rows of bars with the same sweep as the thumbnail. */
 .pub-skel-row { display: flex; align-items: center; gap: 24px; height: 34px; border-bottom: 1px solid var(--border); }
 .pub-skel-row:last-child { border-bottom: 0; }
 .pub-skel {
@@ -77,26 +75,6 @@
 .pub-tool { flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; cursor: pointer; color: var(--muted); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: color .2s, box-shadow .2s; }
 .pub-tool:hover { color: var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.25); }
 .pub-tool svg { display: block; width: 20px; height: 20px; margin: auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.pub-check { position: relative; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; cursor: pointer; color: var(--muted); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: color .2s, box-shadow .2s; }
-.pub-check:hover { box-shadow: 0 2px 6px rgba(0,0,0,.25); }
-.pub-check svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.pub-check-ring circle { stroke-dasharray: 94.2; stroke-dashoffset: 0; opacity: .25; transition: opacity .2s; }
-.pub-check-icon { padding: 8px; box-sizing: border-box; opacity: 0; transition: opacity .2s; }
-.pub-check-bang { display: none; }
-.pub-check-count { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #a86400; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
-.pub-check[data-state="idle"] { display: none; }
-.pub-check[data-state="checking"] { color: #0b6bb5; }
-.pub-check[data-state="checking"] .pub-check-ring { animation: pub-check-spin 1s linear infinite; }
-.pub-check[data-state="checking"] .pub-check-ring circle { stroke-dasharray: 28 66; opacity: 1; }
-.pub-check[data-state="ok"] { color: #2e9d4f; }
-.pub-check[data-state="ok"] .pub-check-ring circle, .pub-check[data-state="changes"] .pub-check-ring circle, .pub-check[data-state="error"] .pub-check-ring circle { opacity: 1; }
-.pub-check[data-state="ok"] .pub-check-icon, .pub-check[data-state="changes"] .pub-check-icon, .pub-check[data-state="error"] .pub-check-icon { opacity: 1; }
-.pub-check[data-state="changes"] { color: #a86400; }
-.pub-check[data-state="error"] { color: #b3262a; }
-.pub-check[data-state="changes"] .pub-check-tick, .pub-check[data-state="error"] .pub-check-tick { display: none; }
-.pub-check[data-state="changes"] .pub-check-bang, .pub-check[data-state="error"] .pub-check-bang { display: inline; }
-@keyframes pub-check-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .pub-check[data-state="checking"] .pub-check-ring { animation-duration: 3s; } }
 .pub-summary .pub-label { width: 90px; }
 
 /* ---- Bill of materials on the left; the details pane takes the right when a row is picked ---- */
@@ -158,6 +136,7 @@
 .pub-modal .progress-status { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 .pub-badge { flex: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); color: var(--muted); font-size: 18px; font-weight: 700; }
+@keyframes pub-spin { to { transform: rotate(360deg); } }
 .pub-badge-busy { border: 3px solid rgba(0, 0, 0, .08); border-top-color: var(--accent); background: transparent; animation: pub-spin .9s linear infinite; }
 .pub-badge-ok { background: rgba(45, 164, 78, .14); color: var(--ok); }
 .pub-badge-ok::before { content: "\2713"; }

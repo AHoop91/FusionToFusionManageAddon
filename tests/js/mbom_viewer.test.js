@@ -25,24 +25,14 @@ function open(options) {
   ns.toast = { show: (text) => toasts.push(text) };
   const added = [];
   ns.pubAddItems = { open: (o) => added.push(o) };
-  ns.bomTable = { foldTools: (collapse, expand) => {   // the table's pair of buttons (tested with the table)
-    const pair = w.document.createElement('div');
-    [['Collapse all', collapse], ['Expand all', expand]].forEach(([label, run]) => {
-      const b = w.document.createElement('button');
-      b.setAttribute('aria-label', label);
-      b.addEventListener('click', run);
-      pair.appendChild(b);
-    });
-    return pair;
-  } };
   ['js/ui.js', 'js/mbom-structure.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
-  const calls = { loadTree: 0, askMbom: 0 };
+  const calls = { loadTree: 0, askMbom: 0, planned: 0 };
   const state = { partial: opts.partial };
   ns.mbomViewer.init({
-    design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R' }), rows: () => opts.rows, partial: () => state.partial,
+    design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R', composition: 'WORKING' }), rows: () => opts.rows, partial: () => state.partial,
     loadTree: () => { calls.loadTree++; }, askMbom: () => { calls.askMbom++; }, targetId: () => opts.targetId, target: () => (opts.targetId ? 'TOP-M' : ''),
     phantom: () => opts.phantom,
-    boughtReady: () => opts.bought,
+    boughtReady: () => opts.bought, boughtSuffix: () => '', planned: () => { calls.planned++; },
   });
   const $ = (id) => w.document.getElementById(id);
   const api = {
@@ -90,7 +80,7 @@ test('the viewer waits for the first level, reads the whole tree, then draws bot
   v.show();
   assert.strictEqual(v.w.document.getElementById('pub-structure').hidden, false);
   assert.strictEqual(v.w.document.getElementById('pub-bom').hidden, true);
-  assert.match(v.w.document.getElementById('pub-structure').textContent, /Reading the Bill of Materials/);
+  assert.match(v.w.document.getElementById('pub-structure').textContent, /Reading the Fusion Component structure/);
   v.ns.mbomViewer.structureRead();
   assert.strictEqual(v.calls.loadTree, 1);
   assert.strictEqual(v.ebom().querySelector('.sv-row'), null, 'nothing is drawn before the tree is read');
@@ -288,7 +278,7 @@ test('reading the Bill of Materials again drops the structure, the selection and
   const box = search(v, 'c');
   v.ns.mbomViewer.reset();
   assert.strictEqual(box.value, '');
-  assert.match(v.w.document.getElementById('pub-structure').textContent, /Reading the Bill of Materials/);
+  assert.match(v.w.document.getElementById('pub-structure').textContent, /Reading the Fusion Component structure/);
   v.ns.mbomViewer.structureRead();
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C']);
   assert.strictEqual(v.mbom().querySelectorAll('.sv-row.selected').length, 0);
@@ -563,15 +553,15 @@ test('a bought version created in the dialog is added to the MBOM in the quantit
   assert.strictEqual(v.rowOf(v.mbom(), 'B-B').querySelector('.sv-qty').textContent, '1.0', 'in the quantity of the EBOM line');
 });
 
-test('an EBOM line a purchased part stands for gets a blue check mark, not the green one', skip, () => {
+test('an EBOM line a purchased part stands for gets a check mark that says a purchased part matched it', skip, () => {
   const { v, opened } = withPanel();
   assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-matched'), null);
   v.act(v.ebom(), 'B', 'bought').click();
   opened[0].onCreated({ id: '9', number: 'B-B', link: '/api/v3/workspaces/1/items/9' });
-  const mark = v.rowOf(v.ebom(), 'B').querySelector('.sv-matched-bought');
+  const mark = v.rowOf(v.ebom(), 'B').querySelector('.sv-matched');
   assert.ok(mark, 'the line shows it was matched by a purchased part');
   assert.strictEqual(mark.title, 'Matched by a purchased part');
-  assert.strictEqual(v.rowOf(v.ebom(), 'C').querySelector('.sv-matched-bought'), null, 'a line made as it is has the green one');
+  assert.notStrictEqual(v.rowOf(v.ebom(), 'C').querySelector('.sv-matched').title, mark.title, 'a line made as it is has its own tooltip');
 });
 
 test('an EBOM line a purchased part stands for says which one, and a quantity that does not agree says by how much', skip, () => {
@@ -660,4 +650,18 @@ test('a line read from Fusion Manage whose quantity was edited is amber (an upda
   assert.ok(line.classList.contains('sv-tone-warn'), 'an update is amber');
   assert.ok(line.querySelector('.sv-note-btn').classList.contains('sv-note-warn'));
   assert.ok(![...line.classList].some((k) => k.startsWith('sv-chg-')), 'no bar at the left');
+});
+
+test('the panel is told to plan again only when the structure or its data changed, not by a selection, a fold, a note or the search', skip, () => {
+  const v = built();
+  const planned = v.calls.planned;
+  assert.ok(planned > 0, 'the first draw tells the panel');
+  v.click(v.rowOf(v.mbom(), 'A'));
+  v.openAll();
+  v.click(v.rowOf(v.mbom(), 'A').querySelector('.sv-toggle'));
+  assert.strictEqual(v.calls.planned, planned, 'selecting and folding leave what publishing covers as it was');
+  v.click(v.act(v.mbom(), 'B', 'remove'));
+  assert.strictEqual(v.calls.planned, planned + 1, 'an edit tells it once');
+  v.ns.mbomViewer.treeDone({ ok: true });
+  assert.strictEqual(v.calls.planned, planned + 2, 'so does reading more of the design');
 });

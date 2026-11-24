@@ -8,13 +8,15 @@ from unittest import mock
 from src.config.workspace_models import PORTFOLIO_KIND, VariantsConfig, WorkspaceConfig
 from src.fm.client import FmApiError, SendResult
 from src.fm.components import Candidate
+from src.fm.refusal import FmRefused
 from src.publish import products
 from src.publish.products import ProductService
 from src.ui.item_number_error import NoItemNumber
 from tests.without_fusion import fusion_modules_stubbed
 
 with fusion_modules_stubbed():
-    from src.ui.actions import product_actions
+    from src.ui.actions import item_create_actions, product_actions
+    from src.ui.actions.item_create_actions import ItemCreateReads
     from src.ui.actions.product_actions import ProductReads
     from src.ui.message_bridge import MessageBridge
     from src.ui.product_mode import BROWSE, PRODUCT_MODE, USAGE
@@ -587,6 +589,83 @@ class ActionTests(unittest.TestCase):
         for action in ("products_views", "products_rows", "products_form", "products_options", "products_create", "products_item", "products_update", "products_picture", "products_usage", "products_design", "products_design_file", "products_status"):
             with self.subTest(action=action):
                 self.assertTrue(bridge.dispatch(action, '{"token": "x"}')["ok"])
+
+
+class ItemCreateActionTests(unittest.TestCase):
+    def setUp(self):
+        self.settings = {"items": WorkspaceConfig(workspace_id="242")}
+        self.problem = ""
+        self.config = SimpleNamespace(config=SimpleNamespace(workspaces=self.settings), effective_settings=lambda: object(),
+                                      items_setup_problem=lambda: self.problem)
+        self.queued = []
+        self.reads = ItemCreateReads(self.config, lambda: object(), self.queued.append)
+        self.maker = mock.Mock()
+        for patcher in (mock.patch.object(item_create_actions, "BoughtItems", self.maker), mock.patch.object(item_create_actions, "may", return_value=True)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def finish(self, token="t1"):
+        for work in self.queued:
+            work()
+        self.queued.clear()
+        return self.reads.status({"token": token})
+
+    def test_each_action_answers_pending_and_the_poll_gives_the_result(self):
+        self.maker.return_value.assembly_form.return_value = {"form": {}, "locked": {}, "number_field": "NUMBER"}
+        self.assertTrue(self.reads.form({"token": "t1", "kind": "assembly"})["pending"])
+        answer = self.finish()
+        self.assertEqual((answer["ok"], answer["result"]), (True, {"form": {}, "locked": {}, "number_field": "NUMBER", "can_create": True}))
+        self.assertEqual(self.maker.call_args[0][1:], ("242", self.settings["items"]))
+
+    def test_a_kind_other_than_assembly_is_refused(self):
+        for payload in ({"token": "t1", "kind": "other"}, {"token": "t1"}):
+            answer = self.reads.form(payload)
+            self.assertEqual((answer["pending"], answer["ok"]), (False, False))
+        self.assertEqual(self.queued, [])
+
+    def test_the_items_workspace_not_set_up_or_off_is_said_without_a_read(self):
+        self.problem = "The Items workspace is turned off in the settings."
+        for answer in (self.reads.form({"token": "t1", "kind": "assembly"}), self.reads.bought_open({"token": "t1", "source_number": "PN-1"}),
+                       self.reads.bought_create({"token": "t1", "source_id": "17", "values": {"TITLE": "x"}}),
+                       self.reads.create({"token": "t1", "values": {"TITLE": "x"}})):
+            self.assertEqual((answer["pending"], answer["message"]), (False, self.problem))
+        self.assertEqual(self.queued, [])
+
+    def test_the_bought_create_passes_the_source_and_the_values(self):
+        self.maker.return_value.create_bought.return_value = {"id": "901", "link": "/l", "number": "PN-1-B"}
+        self.reads.bought_create({"token": "t2", "source_id": "17", "values": {"TITLE": "x", "NOTES": ""}})
+        self.assertEqual(self.finish("t2")["result"], {"id": "901", "link": "/l", "number": "PN-1-B"})
+        self.maker.return_value.create_bought.assert_called_once_with("17", {"TITLE": "x", "NOTES": ""}, "")
+        self.reads.bought_create({"token": "t4", "source_number": "PN-1", "values": {"TITLE": "x"}})
+        self.finish("t4")
+        self.maker.return_value.create_bought.assert_called_with("", {"TITLE": "x"}, "PN-1")
+
+    def open(self):
+        self.reads.bought_open({"token": "t1", "source_number": "PN-1"})
+        return self.finish()
+
+    def test_open_searches_for_the_line_by_its_number_and_the_form_answer_says_if_it_can_be_made(self):
+        self.maker.return_value.open.return_value = {"number": "PN-1-B", "source_id": "77"}
+        answer = self.open()
+        self.assertEqual((answer["ok"], answer["result"]), (True, {"number": "PN-1-B", "source_id": "77", "can_create": True}))
+        self.maker.return_value.open.assert_called_once_with("", "PN-1")
+
+    def test_open_answers_a_bought_version_found_as_it_is(self):
+        self.maker.return_value.open.return_value = {"found": {"id": "30"}}
+        self.assertEqual(self.open()["result"], {"found": {"id": "30"}})
+
+    def test_a_create_with_no_values_is_refused_and_a_refusal_names_its_fields(self):
+        self.assertFalse(self.reads.create({"token": "t1", "values": {"TITLE": " "}})["pending"])
+        self.maker.return_value.create_assembly.side_effect = FmRefused("Validation failed", 422, {"TITLE": "Too long"})
+        self.reads.create({"token": "t2", "values": {"TITLE": "x"}})
+        answer = self.finish("t2")
+        self.assertEqual((answer["ok"], answer["message"], answer["fields"]), (False, "Validation failed", {"TITLE": "Too long"}))
+
+    def test_every_action_is_registered(self):
+        bridge = MessageBridge()
+        with mock.patch.object(item_create_actions, "FmClient"):
+            item_create_actions.register_item_create_actions(bridge, self.config, mock.Mock())
+        self.assertEqual(set(bridge._handlers), {"items_form", "items_create", "bought_open", "bought_create", "items_status"})
 
 
 class SetupProblemTests(unittest.TestCase):

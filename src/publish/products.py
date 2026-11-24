@@ -82,7 +82,7 @@ def _latest_revision(hits: List[Candidate]) -> Candidate:
     return max(released or hits, key=_item_id)
 
 
-def _link_of(value: Any) -> str:
+def link_of(value: Any) -> str:
     """The link a field value holds ("" when it is not a link)."""
     link = as_dict(value).get("link")
     return link if isinstance(link, str) else ""
@@ -90,7 +90,7 @@ def _link_of(value: Any) -> str:
 
 def _picture_link(values: Dict[str, Any]) -> str:
     """The link of the first picture among the field values of an item ("" when it holds none)."""
-    return next((link for link in map(_link_of, values.values()) if PICTURE_LINK.fullmatch(link)), "")
+    return next((link for link in map(link_of, values.values()) if PICTURE_LINK.fullmatch(link)), "")
 
 
 class NotAllowed(Exception):
@@ -182,7 +182,7 @@ class ProductService:
             self._add_variant(workspace_id, item_id, number, link_column, chosen, row_values or {})
             return {**answer, "status": ADDED}
         if mode == REPLACE_MOVE and held:   # the one that is replaced is kept, as a variant (first: a refusal leaves the product as it was)
-            old = _link_of(current)
+            old = link_of(current)
             if not old:
                 raise FmApiError(t("app.product_move_no_link", current=named))
             self._post_variant(workspace_id, item_id, link_column, old, row_values or {})
@@ -206,7 +206,7 @@ class ProductService:
 
         primary = None
         if _has_value(current):
-            primary = stand(_link_of(current), display_text(current).strip())
+            primary = stand(link_of(current), display_text(current).strip())
         columns, rows = self._grid(workspace_id, item_id, link_column, stand)
         return {"product": product, "number": number, "component": chosen.link, "revision": chosen.version, "title": chosen.title,
                 "primary": primary, "primary_state": primary["state"] if primary else "", "link_column": link_column, "columns": columns, "rows": rows}
@@ -225,7 +225,7 @@ class ProductService:
         current = values.get(field_id)
         primary = None
         if _has_value(current):
-            primary = {"link": _link_of(current), "title": display_text(current).strip()}
+            primary = {"link": link_of(current), "title": display_text(current).strip()}
         return {"product": product, "primary": primary, "link_column": link_column, "columns": columns, "rows": rows}
 
     def _grid(self, workspace_id: str, item_id: str, link_column: str,
@@ -283,7 +283,7 @@ class ProductService:
         for item in dict.fromkeys([*primary, *variants]):
             descriptor, values = service.read_named(workspace_id, item)
             code, name = split_title(descriptor)
-            cards[item] = {"id": item, "number": code, "name": name, "picture": _picture_link(values), "component": _link_of(values.get(field_id)),
+            cards[item] = {"id": item, "number": code, "name": name, "picture": _picture_link(values), "component": link_of(values.get(field_id)),
                            "url": page_url(self._client.base_url, self._client.tenant, workspace_id, item)}
         log.info("Component %s is the Primary Component of %d product(s) and a variant of %d", number, len(primary), len(variants))
         return {"number": number, "variants_checked": bool(link_column), "primary": [cards[item] for item in primary],

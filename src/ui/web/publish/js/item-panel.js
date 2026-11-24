@@ -1,7 +1,7 @@
 /**
  * Publish Item panel: the dialog of the structure viewer, as ``ns.pubItemPanel``. A modal dialog over the page holds a form for
- * (a) a new manufacturing item (``items_form`` / ``items_create``) or (b) a bought version of an item the MBOM holds (``bought_form`` /
- * ``bought_create``). Both forms are the Items workspace's own, drawn with the shared ``ns.formControls`` (dev/workspace-forms.md); Python sets
+ * (a) a new manufacturing item (``items_form`` / ``items_create``) or (b) a bought version of an item the MBOM holds (``bought_open``, which answers
+ * the bought version there is already or the form, then ``bought_create``). Both forms are the Items workspace's own, drawn with the shared ``ns.formControls`` (dev/workspace-forms.md); Python sets
  * the item number of a bought version, Make or buy and the source link itself: those fields stay in their sections of the form, locked, showing the
  * value they will have (``locked``).
  *
@@ -10,9 +10,10 @@
  * for an action, so ``add-items.js`` hands this file the ``search_*`` answers through ``claims``. A picklist is asked for by its name alone, so
  * the action is not tied to the Items workspace.
  *
- * ``open({mode: 'assembly'})`` or ``open({mode: 'bought', sourceNumber, number, onCreated})``; a bought dialog looks for a bought version first and offers it (``onFound``); ``close()``; ``busy()``. The values typed are kept when saving
- * fails, and Save stays off while a request runs, so one click makes one item. A saved item is told in the dialog with its number; nothing is
- * added to the structure.
+ * ``open({mode: 'assembly'})`` or ``open({mode: 'bought', sourceNumber, number, onFound, onCreated})`` (the create is sent with the ``source_id`` the answer holds); a bought dialog offers the bought
+ * version found (``onFound``) and ``close()``. The values typed are kept when saving
+ * fails, and Save stays off while a request runs, so one click makes one item. A saved item is told in the dialog with its number and given to
+ * ``onCreated`` (a bought one found in Fusion Manage, to ``onFound``): the viewer adds it to the structure.
  */
 (function (ns) {
   'use strict';
@@ -28,7 +29,7 @@
   const ICON_NEW = ['M10 3l7 4v6', 'M17 7l-7 4-7-4', 'M10 11v9', 'M3 7v10l7 4', 'M10 3L3 7', 'M18 14.5v7', 'M14.5 18h7'];
   const ICON_BOUGHT = ['M3 4h2.5l2 11h10l2-8H7', 'M10 19.5h.01', 'M17 19.5h.01'];
   const ICON_OPEN = ['M15 3h6v6', 'M10 14L21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'];   // a square with an arrow out of it
-  const OWN = ['items_form', 'items_create', 'bought_form', 'bought_create', 'bought_find'];
+  const OWN = ['items_form', 'items_create', 'bought_open', 'bought_create'];
 
   // ---- Talking to Python -------------------------------------------------------------
 
@@ -80,8 +81,7 @@
   // ---- The dialog -------------------------------------------------------------------------
 
   let modal = null;   // {root (the overlay), title, message, body, save, close} once made
-  let view = null;     // the open form: {gen, mode, sourceNumber, number, working, saved}
-  let generation = 0;
+  let view = null;     // the open form: {mode, sourceNumber, sourceId, working, saved}
 
   function ensure() {
     if (modal) return modal;
@@ -133,7 +133,6 @@
   /** Close the dialog. A request under way cannot be taken back, so it keeps the dialog until its answer is in. */
   function close_() {
     if (!modal || busy()) return;
-    generation++;
     view = null;
     fc.reset();
     modal.root.hidden = true;
@@ -232,6 +231,9 @@
 
   // ---- Reading and saving ---------------------------------------------------------------
 
+  /** Read what the dialog shows. A bought version is one request, ``bought_open``: ``{found: {id, link, number, name, url}}``, the bought version there is
+   *  already (offered with ``paintFound`` so a second is not made), or the form, which holds ``source_id``, the item the create is sent with (it searches for
+   *  nothing). A new item reads the Items form. */
   function load() {
     const mine = view;
     mine.ready = false;
@@ -239,9 +241,11 @@
     modal.body.replaceChildren(ui.loaderNode());
     setButtons();
     const bought = mine.mode === 'bought';
-    ask(bought ? 'bought_form' : 'items_form', bought ? { source_number: mine.sourceNumber } : { kind: 'assembly' }, function (answer) {
+    ask(bought ? 'bought_open' : 'items_form', bought ? { source_number: mine.sourceNumber } : { kind: 'assembly' }, function (answer) {
       if (view !== mine) return;
       if (!answer.ok) { paintFailure(failure(answer)); return; }
+      if (bought && answer.result.found) { paintFound(answer.result.found); return; }
+      mine.sourceId = answer.result.source_id || '';
       paintForm(answer.result);
     });
   }
@@ -260,7 +264,7 @@
   /** Unfold the sections that hold a field with a message, so none is left hidden behind a folded bar. */
   function reveal() {
     [].forEach.call(modal.body.querySelectorAll('.section.folded'), function (card) {
-      if ([].some.call(card.querySelectorAll('.pf-error'), function (line) { return !line.hidden; })) card.querySelector('.section-title').click();
+      if ([].some.call(card.querySelectorAll('.pf-error'), function (line) { return !line.hidden; })) ns.section.unfold(card);
     });
   }
 
@@ -285,7 +289,7 @@
     const bought = mine.mode === 'bought';
     mine.working = true;
     setButtons();
-    ask(bought ? 'bought_create' : 'items_create', bought ? { source_number: mine.sourceNumber, values: picked.values } : { values: picked.values }, function (answer) {
+    ask(bought ? 'bought_create' : 'items_create', bought ? { source_id: mine.sourceId, values: picked.values } : { values: picked.values }, function (answer) {
       mine.working = false;
       if (view !== mine) return;
       if (!answer.ok) {   // the values stay as they were typed
@@ -302,21 +306,6 @@
       say('');
       setButtons();
       modal.cancel.focus();
-    });
-  }
-
-  /** Look for the bought version of the item the dialog is for, before the form: ``{found: {id, link, number, name} or null}``. One that is there is
-   *  offered (``paintFound``) so a second is not made; else the form is read. */
-  function check() {
-    const mine = view;
-    mine.ready = false;
-    say('');
-    modal.body.replaceChildren(ui.loaderNode());
-    setButtons();
-    ask('bought_find', { source_number: mine.sourceNumber }, function (answer) {
-      if (view !== mine) return;
-      if (!answer.ok) { paintFailure(failure(answer), check); return; }
-      if (answer.result.found) paintFound(answer.result.found); else load();
     });
   }
 
@@ -349,8 +338,8 @@
     ensure();
     if (busy()) return;
     fc.reset();
-    view = { gen: ++generation, mode: spec.mode, sourceNumber: spec.sourceNumber || '', number: spec.number || '', working: false, saved: false, ready: false,
-             onCreated: spec.onCreated, onFound: spec.onFound, found: null };
+    view = { mode: spec.mode, sourceNumber: spec.sourceNumber || '', sourceId: '',
+             working: false, saved: false, ready: false, onCreated: spec.onCreated, onFound: spec.onFound, found: null };
     const title = spec.mode === 'bought' ? t('publish.item_title_bought', { number: spec.number }) : t('publish.item_title_assembly');
     modal.title.textContent = title;
     const icon = ns.svg(spec.mode === 'bought' ? ICON_BOUGHT : ICON_NEW, 20);
@@ -358,11 +347,11 @@
     modal.lead.replaceChildren(icon);
     modal.dialog.setAttribute('aria-label', title);
     modal.root.hidden = false;
-    if (spec.mode === 'bought') check(); else load();
+    load();
     modal.close.focus();
   }
 
   OWN.concat(['items_status']).forEach(function (action) { bridge.on(action, function (r) { onAnswer(action, r); }); });
 
-  ns.pubItemPanel = { open: open, close: close_, busy: busy, claims: claims };
+  ns.pubItemPanel = { open: open, close: close_, claims: claims };
 })(window.MfgUi);

@@ -189,7 +189,7 @@
       if ((fmFields[kind] || []).length) return t('settings.ws_no_match_fields');
       return fmFieldsError[kind] || t('settings.ws_no_fields_loaded');
     },
-    takenValues: function (wrap) { return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap), makeBuyFields(wrap)); },
+    takenValues: function (wrap) { return takenFields(wrap, ''); },
     label: function (value) {
       // Show the title with the id that is actually stored.
       for (const kind in fmFields) {
@@ -283,6 +283,11 @@
     }).filter(Boolean);
   }
 
+  /** The Fusion Manage fields the workspace has chosen already (mapped, linking components, or Make or buy), except the Make or buy one whose value is ``except``. */
+  function takenFields(wrap, except) {
+    return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap), makeBuyFields(wrap).filter(function (v) { return v !== except; }));
+  }
+
   /** Picker config for one Make or buy field: its ``valueClass``, what it lists (``keep(field)``) and its ``text`` (functions: the language is not known when this file loads). */
   function makeBuyFieldCfg(valueClass, keep, text) {
     return {
@@ -298,7 +303,7 @@
       },
       takenValues: function (wrap) {
         const own = wrap.querySelector('.' + valueClass);
-        return valuesInOtherRows(wrap, 'ws-fm-field').concat(componentValue(wrap), makeBuyFields(wrap).filter(function (v) { return !own || v !== own.value; }));
+        return takenFields(wrap, own ? own.value : '');
       },
       label: fmFieldCfg.label,
       groups: function (current, wrap) {
@@ -361,10 +366,10 @@
      *  never written, and once the sections are known, a field in none of them is not on the form). */
     function parts() {
       const panel = box.closest('.ws-kind');
-      const all = (panel && fmFields[kindId]) || [];
-      const laidOut = all.some(function (f) { return !!f.section; });
+      const known = (panel && fmFields[kindId]) || [];
+      const laidOut = known.some(function (f) { return !!f.section; });
       const set = panel ? makeBuyFields(box).concat(componentValue(box), numberValue(box)) : [];
-      const fields = all.filter(function (f) { return !/image/i.test(f.type || ''); });
+      const fields = known.filter(function (f) { return !/image/i.test(f.type || ''); });
       const onForm = function (f) { return f.shown !== false && !f.computed && (!laidOut || !!f.section); };
       return { fixed: fields.filter(function (f) { return set.indexOf(f.id) >= 0; }), free: fields.filter(function (f) { return set.indexOf(f.id) < 0 && onForm(f); }) };
     }
@@ -950,6 +955,13 @@
     return section;
   }
 
+  /** ``body`` as a card that folds under the bar ``title``. */
+  function foldCard(title, body, folded) {
+    const card = ns.section.make(title, body, { folded: folded });
+    card.classList.add('ws-fold');
+    return card;
+  }
+
   /** A section as a card that folds (``ns.section``): its heading becomes the card's bar, and the rest of the section is the body. */
   function foldable(section, folded) {
     const title = section.querySelector('.ws-heading');
@@ -957,18 +969,14 @@
     const text = title.textContent;
     title.remove();
     if (holder !== section && holder.classList.contains('ws-section-head') && holder.children.length === 0) holder.remove();   // it held only the heading
-    const card = ns.section.make(text, section, { folded: folded });
-    card.classList.add('ws-fold');
-    return card;
+    return foldCard(text, section, folded);
   }
 
   /** Several sections in one card that folds: each keeps its own heading, under the card's bar ``title``. */
   function group(title, sections, folded) {
     const body = el('div', 'ws-group');
     sections.forEach(function (section) { body.appendChild(section); });
-    const card = ns.section.make(title, body, { folded: folded });
-    card.classList.add('ws-fold');
-    return card;
+    return foldCard(title, body, folded);
   }
 
   // ---- Workspace panels and the card --------------------------------------

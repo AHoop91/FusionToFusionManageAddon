@@ -2,9 +2,10 @@
  * Publish Item panel: the Bill of Materials area, as ``ns.pubBom``.
  *
  * Reads the design's Bill of Materials (the first level, then the whole tree) and hands it to the structure viewer (mbom-viewer.js), which is
- * what the user works in and what Publish sends. This area shows only what comes before it: the loading skeleton, a message or an error. It
- * reads the whole tree when the viewer asks for it, keeps the rows that were read and
- * queues the publish from the plan the viewer gives (mbom-plan.js). The panel (publish.js) sends the requests and hands the answers back,
+ * what the user works in and what Publish sends. This area shows only what is not the viewer: the balls while Fusion Manage is checked for
+ * existing Bills of Materials, a message or an error (the skeleton of the two tables is the viewer's own). It
+ * reads the whole tree when the viewer asks for it, keeps the rows that were read and queues the publish from the plan the viewer gives
+ * (mbom-plan.js). The panel (publish.js) sends the requests and hands the answers back,
  * through ``host``.
  */
 (function (ns) {
@@ -18,10 +19,9 @@
   const tree = ns.bomTree;
   function t(key, params) { return ns.i18n.t(key, params); }
 
-  let host = null;          // { summary(), ask(slot, payload), changed(), treeDone(entry), plan(), showStructure(), showNotice() }, given to ``init``
+  let host = null;          // { summary(), ask(slot, payload), treeDone(entry), plan(), say(text), showNotice() }, given to ``init``
   let rows = [];            // compared rows of the Bill of Materials read so far
   let treeLoading = false;  // the whole tree is being read
-  let statusText = '';      // what the loading line last said
 
   // ---- Publish -------------------------------------------------------------------
 
@@ -55,33 +55,18 @@
     return area;
   }
 
-  /** What the Bill of Materials is doing: reading it (and how far, once it takes several pages), then comparing it with Fusion Manage. */
+  /** What the Bill of Materials is doing: reading it (and how far, once it takes several pages), then comparing it with Fusion Manage. The viewer
+   *  says it under the skeleton. */
   function status(entry) {
-    const note = $('pub-bom-status');
-    if (!note) return;
-    const text = entry.stage === 'comparing' ? t('publish.comparing')
+    host.say(entry.stage === 'comparing' ? t('publish.comparing')
       : entry.progress ? t('publish.reading_bom_lines', { count: Number(entry.progress).toLocaleString() })
-      : t('publish.reading_bom');
-    if (text === statusText && note.textContent) return;   // the same words must not restart the "taking longer" timer
-    statusText = text;
-    ui.warnWhenSlow(note, text);   // adds a note if nothing new has been said for a long while
+      : t('publish.reading_bom'));
   }
 
-  /** Rows of grey bars while it loads, with a line saying what is happening. */
-  function showLoading() {
-    const area = clear();
-    const note = ui.el('p', 'muted pub-bom-status');
-    note.id = 'pub-bom-status';
-    area.appendChild(note);
-    const skeleton = ui.el('div', 'card pub-skel-table');
-    skeleton.setAttribute('aria-hidden', 'true');
-    for (let n = 0; n < 8; n++) {
-      const line = ui.el('div', 'pub-skel-row');
-      ['pub-skel-wide', 'pub-skel-mid', 'pub-skel-short'].forEach(function (width) { line.appendChild(ui.el('span', 'pub-skel ' + width)); });
-      skeleton.appendChild(line);
-    }
-    area.appendChild(skeleton);
-    status({});
+  /** Bouncing balls, in the middle of the area, while Fusion Manage is checked for Bills of Materials the design already has. */
+  function showChecking() {
+    clear().classList.add('pub-loading');
+    $('pub-bom').appendChild(ui.loaderNode(t('publish.checking_mbom')));
   }
 
   function showMessage(text) {
@@ -96,7 +81,8 @@
     $('pub-bom').appendChild(ui.errorState(message, onRetry));
   }
 
-  /** The first level has been read and compared: the structure viewer takes over (it asks for the rest). A design whose number is shared says so instead. */
+  /** The first level has been read and compared: the structure viewer, already on screen as a skeleton, asks for the rest. A design whose number is
+   *  shared says so instead. */
   function showFirstLevel(data) {
     tree.setTop(data.rows);   // the rest is read when the viewer asks for it
     rows = tree.rows();
@@ -106,8 +92,6 @@
       details.open(model.rootComponent(host.summary()));
       return;
     }
-    clear();
-    host.showStructure();
   }
 
   // ---- Reading the whole tree ----------------------------------------------------
@@ -124,7 +108,6 @@
     if (entry.ok) {
       tree.setAll(entry.data.rows);
       rows = tree.rows();
-      host.changed();
     }
     host.treeDone(entry);
   }
@@ -165,8 +148,8 @@
 
   /**
    * ``hostApi`` is the panel: ``summary()`` of the open design, ``ask(slot, payload)`` to request a section (its answer comes back to ``finishTree``),
-   * ``changed()`` to say what was read has changed, ``treeDone(entry)`` to say the whole tree was read (or failed), ``plan()`` for what the structure
-   * would publish (null before it is shown), and ``showStructure()`` / ``showNotice()`` for which of the viewer and this area is on screen.
+   * ``treeDone(entry)`` to say the whole tree was read (or failed), ``plan()`` for what the structure
+   * would publish (null before it is shown), ``say(text)`` for the line under the viewer's skeleton, and ``showNotice()`` to put this area on screen in place of the viewer.
    */
   function init(hostApi) {
     host = hostApi;
@@ -174,7 +157,7 @@
   }
 
   ns.pubBom = {
-    init: init, clear: clear, showLoading: showLoading, showError: showError, showFirstLevel: showFirstLevel, status: status,
+    init: init, clear: clear, showChecking: showChecking, showError: showError, showFirstLevel: showFirstLevel, status: status,
     finishTree: finishTree, reset: reset, loadTree: loadTree, refreshScope: refreshScope,
     rows: function () { return rows; }, partial: function () { return tree.unloaded().length > 0; },
   };

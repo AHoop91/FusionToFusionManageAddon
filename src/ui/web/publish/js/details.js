@@ -1,11 +1,11 @@
 /**
  * Publish Item panel: the Details Panel beside the bill of materials, as ``ns.pubDetails``.
  *
- * It shows one component at a time: its properties compared with Fusion Manage. Components are read when their row is clicked, then kept. The design's own
- * properties are read by publish.js, when its row is first opened, and handed in with ``setRoot``.
+ * It shows one component at a time: its properties compared with Fusion Manage. Components are read when they are opened (from a line of the up-to-date
+ * check's list, or the design itself), then kept. The design's own properties are read by publish.js, when they are first opened, and handed in with ``setRoot``.
  *
  * ``init`` takes: ``request(slot, payload)`` to ask Python for a component,
- * ``onRootLoad()`` when the design's row is opened (read its properties unless that is done or under way),
+ * ``onRootLoad()`` when the design is opened (read its properties unless that is done or under way),
  * ``onRootRetry()`` to read the design's properties again.
  */
 (function (ns) {
@@ -335,7 +335,6 @@
     $('pub-detail').hidden = true;
     $('pub-backdrop').hidden = true;
     pane.textContent = '';
-    ns.bomTable.select(null);
   }
 
   /** The design's own properties have been read. */
@@ -404,6 +403,6 @@
 
   ns.pubDetails = {
     init: init, open: open, reset: reset, setRoot: setRoot, setRootError: setRootError,
-    changeState: changeState, handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail,
+    handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail,
   };
 })(window.MfgUi);

@@ -34,14 +34,15 @@
   /**
    * ``input``: ``structure`` (``ns.mbomStructure``'s), ``ebom`` (its tree), ``rows`` (every compared row of the design), ``summary`` (the design as
    * the panel reads it, with the target's item number in place of its own) and ``skipped`` (the ids of the rows that are left out of publishing, from
-   * ``bomModel.buildItems``, with their item numbers: ``{id: number}``).
+   * ``bomModel.buildItems``, with their item numbers: ``{id: number}``) and, when the caller has it, ``changes`` (the structure's ``changes()``, so it is not
+   * worked out twice).
    * Returns ``{components, operations, problems}``.
    */
   function build(input) {
     const structure = input.structure;
     const root = structure.root();
     const rootNumber = String(input.summary.item_number || root.number || '');
-    const found = structure.changes();
+    const found = input.changes || structure.changes();
     const changes = found.changes;
     const problems = [];
     function problem(kind, number) {

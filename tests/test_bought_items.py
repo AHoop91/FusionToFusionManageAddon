@@ -1,8 +1,7 @@
-"""A new manufacturing item and a bought version of a made one: the rules of ``publish.bought_items`` and the actions that carry them."""
+"""A new manufacturing item and a bought version of a made one: the rules of ``publish.bought_items`` (the actions that carry them are tested in ``test_products``)."""
 
 import threading
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
 from src.config.workspace_models import FieldMapping, MakeBuyConfig, WorkspaceConfig
@@ -12,12 +11,6 @@ from src.fm.v1_search import V1Row
 from src.fm.workspace_form import parse_form
 from src.publish import bought_items, products
 from src.publish.bought_items import BoughtItems, form_value, plan_copy, specs_of, without
-from tests.without_fusion import fusion_modules_stubbed
-
-with fusion_modules_stubbed():
-    from src.ui.actions import item_create_actions
-    from src.ui.actions.item_create_actions import ItemCreateReads
-    from src.ui.message_bridge import MessageBridge
 
 MAKE, BUY = "/api/v3/lookups/MAKEBUY/options/1", "/api/v3/lookups/MAKEBUY/options/2"
 OPTIONS = {"MAKEBUY": [{"value": MAKE, "title": "Make"}, {"value": BUY, "title": "Buy"}]}
@@ -75,7 +68,6 @@ class Rig(unittest.TestCase):
         self.form.return_value.form.side_effect = lambda ws: FORM
         self.items = mock.Mock()
         self.items.return_value.read_named.side_effect = lambda ws, item: ("PN-1 - Axle", self.source)
-        self.items.return_value.read.side_effect = lambda ws, item: self.source
         self.mbom = mock.Mock()
         self.mbom.return_value.number_taken = lambda ws, number: self.taken(ws, number)
         self.v1 = mock.Mock()
@@ -87,7 +79,7 @@ class Rig(unittest.TestCase):
         self.sections.return_value.field_sections.return_value = SECTION_LINKS
         for module, name, fake in ((bought_items, "WorkspaceFormService", self.form), (bought_items, "ItemService", self.items),
                                    (bought_items, "MbomService", self.mbom), (bought_items, "load_image", self.picture), (bought_items, "ItemFinder", self.finder), (bought_items, "V1SearchService", self.v1),
-                                   (products, "SectionService", self.sections), (products, "ItemService", self.items)):
+                                   (products, "SectionService", self.sections)):
             patcher = mock.patch.object(module, name, fake)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -100,51 +92,6 @@ class Rig(unittest.TestCase):
         (method, url, body), = [call[0] for call in self.client.send_json.call_args_list]
         self.assertEqual((method, url), ("POST", f"/api/v3/workspaces/{WS}/items"))
         return {f["__self__"].rsplit("/", 1)[1]: f["value"] for s in body["sections"] for f in s["fields"]}
-
-
-class SettingsTests(unittest.TestCase):
-    def test_make_buy_survives_a_save_and_a_file_that_has_none_loads_empty(self):
-        cfg = config()
-        self.assertEqual(WorkspaceConfig.from_dict(cfg.to_dict()).make_buy, cfg.make_buy)
-        self.assertEqual(WorkspaceConfig.from_dict({"workspace_id": "1"}).make_buy, MakeBuyConfig())
-        self.assertEqual(WorkspaceConfig.from_dict({"make_buy": "x"}).make_buy, MakeBuyConfig())
-
-    def test_nothing_chosen_is_no_problem_and_the_feature_is_off(self):
-        self.assertEqual(config(make_buy=MakeBuyConfig()).validate(), [])
-        self.assertFalse(MakeBuyConfig().is_set())
-
-    def test_a_complete_choice_is_valid(self):
-        self.assertEqual(config().validate(), [])
-        self.assertTrue(config().make_buy.is_set())
-
-    def test_a_half_chosen_section_is_a_problem(self):
-        problems = config(make_buy=MakeBuyConfig("MAKE_BUY", MAKE, "", "SOURCE", "-B")).validate()
-        self.assertEqual([p.where["part"] for p in problems], ["buy_value"])
-
-    def test_the_suffix_is_an_item_number_ending_of_at_most_twenty_characters(self):
-        for suffix in ("-B ", "B/1", "é", "x" * 21):
-            cfg = config()
-            cfg.make_buy.suffix = suffix
-            self.assertEqual([p.where.get("part") for p in cfg.validate()], ["suffix"], suffix)
-        cfg = config()
-        cfg.make_buy.suffix = "x" * 20
-        self.assertEqual(cfg.validate(), [])
-
-    def test_the_two_values_must_differ_and_be_picklist_option_links(self):
-        cfg = config()
-        cfg.make_buy.buy_value = MAKE
-        self.assertEqual([p.where["part"] for p in cfg.validate()], ["buy_value"])
-        cfg.make_buy.buy_value = "Buy"
-        self.assertEqual([p.where["part"] for p in cfg.validate()], ["buy_value"])
-
-    def test_a_field_cannot_be_the_make_or_buy_field_and_something_else(self):
-        for clash in (lambda c: setattr(c.make_buy, "source_field", "MAKE_BUY"),   # the source link is the Make or buy field
-                      lambda c: setattr(c.make_buy, "field", "COMPONENT"),   # the component field
-                      lambda c: setattr(c.make_buy, "source_field", "NUMBER"),   # a mapped field
-                      lambda c: c.static_values.append(SimpleNamespace(fm_field_id="SOURCE", to_dict=lambda: {}))):
-            cfg = config()
-            clash(cfg)
-            self.assertEqual(len(cfg.validate()), 1)
 
 
 class FormValueTests(unittest.TestCase):
@@ -182,27 +129,25 @@ class PlanCopyTests(unittest.TestCase):
         return plan_copy(FORM, {**SOURCE, **source}, config().make_buy, "NUMBER", "COMPONENT")
 
     def test_what_the_form_takes_is_copied_in_the_shape_the_form_sends(self):
-        values, copied, _ = self.plan()
+        values, _ = self.plan()
         self.assertEqual(values, {"TITLE": "Axle", "NOTES": "Steel", "SUPPLIER": {"link": "/api/v3/workspaces/9/items/4"}, "WEIGHT": "2.5",
                                   "DUE": "2026-12-01", "ACTIVE": True, "COUNT": "3"})
-        self.assertEqual(copied, list(values))
 
     def test_the_skips_are_the_number_make_or_buy_the_source_link_the_component_link_and_pictures(self):
-        _, _, skipped = self.plan()
+        _, skipped = self.plan()
         self.assertEqual({item["field"] for item in skipped}, {"NUMBER", "MAKE_BUY", "SOURCE", "COMPONENT", "PICTURE"})
         self.assertTrue(all(item["reason"] for item in skipped))
 
     def test_a_computed_hidden_or_unknown_field_is_never_copied_because_the_form_does_not_have_it(self):
-        values, _, skipped = self.plan(TOTAL=9, HIDDEN="x", UNKNOWN="y")
+        values, skipped = self.plan(TOTAL=9, HIDDEN="x", UNKNOWN="y")
         self.assertFalse({"TOTAL", "HIDDEN", "UNKNOWN"} & (set(values) | {item["field"] for item in skipped}))
 
     def test_a_field_that_settings_leaves_out_is_not_copied(self):
         cfg = config()
         cfg.make_buy.skip_fields = ["NOTES", "COUNT", "UNKNOWN"]
-        values, copied, _ = plan_copy(FORM, SOURCE, cfg.make_buy, "NUMBER", "COMPONENT")
+        values, _ = plan_copy(FORM, SOURCE, cfg.make_buy, "NUMBER", "COMPONENT")
         self.assertNotIn("NOTES", values)
         self.assertNotIn("COUNT", values)
-        self.assertEqual(copied, list(values))
         self.assertIn("TITLE", values)
 
     def test_leaving_out_every_field_copies_nothing(self):
@@ -225,7 +170,7 @@ class PlanCopyTests(unittest.TestCase):
         self.assertNotIn("NOTES", self.plan(NOTES="")[0])
 
     def test_the_form_without_the_skipped_fields_holds_the_rest(self):
-        _, _, skipped = self.plan()
+        _, skipped = self.plan()
         shown = set(specs_of(without(FORM, {item["field"] for item in skipped})))
         self.assertEqual(shown, {"TITLE", "NOTES", "SUPPLIER", "WEIGHT", "DUE", "ACTIVE", "COUNT"})
 
@@ -270,12 +215,12 @@ class AssemblyTests(Rig):
 
 
 class BoughtFormTests(Rig):
-    def test_the_form_gives_the_new_number_the_copied_values_and_what_is_skipped_and_fixed(self):
-        answer = self.maker().bought_form("17")
+    def test_the_form_gives_the_new_number_the_copied_values_and_what_is_locked(self):
+        answer = self.maker().open("17")
         self.assertEqual(answer["number"], "PN-1-B")
         self.assertEqual(answer["values"]["TITLE"], "Axle")
-        self.assertEqual(answer["copied"], list(answer["values"]))
-        self.assertEqual({item["field"] for item in answer["skipped"]}, {"NUMBER", "MAKE_BUY", "SOURCE", "COMPONENT", "PICTURE"})
+        self.assertEqual(set(answer), {"form", "number", "number_field", "values", "locked", "source_id"})
+        self.assertEqual(answer["source_id"], "17")
         locked = {"NUMBER": "PN-1-B", "MAKE_BUY": "Buy", "SOURCE": "PN-1 - Axle"}
         self.assertEqual({field: text for field, text in answer["locked"].items() if field != "COMPONENT"}, locked)
         self.assertEqual(answer["number_field"], "NUMBER")
@@ -286,44 +231,83 @@ class BoughtFormTests(Rig):
     def test_a_source_that_is_already_bought_is_refused(self):
         self.source["MAKE_BUY"] = {"link": BUY, "title": "Buy"}
         with self.assertRaisesRegex(FmApiError, "already a purchased item"):
-            self.maker().bought_form("17")
+            self.maker().open("17")
 
     def test_a_source_not_yet_classified_is_allowed(self):
         for held in (None, "", {"link": MAKE, "title": "Make"}):
             self.source["MAKE_BUY"] = held
-            self.assertEqual(self.maker().bought_form("17")["number"], "PN-1-B")
+            self.assertEqual(self.maker().open("17")["number"], "PN-1-B")
 
     def test_make_or_buy_not_set_up_is_said(self):
         with self.assertRaisesRegex(FmApiError, "not set up"):
-            self.maker(config(make_buy=MakeBuyConfig())).bought_form("17")
+            self.maker(config(make_buy=MakeBuyConfig())).open("17")
 
     def test_a_source_that_is_not_an_id_is_refused_before_anything_is_read(self):
         for source in ("", "17/../x", "abc"):
             with self.assertRaises(FmApiError):
-                self.maker().bought_form(source)
+                self.maker().open(source)
         self.items.return_value.read_named.assert_not_called()
 
-    def test_a_source_given_by_both_or_neither_is_refused_before_anything_is_read(self):
-        for source, number in (("", ""), ("", "  "), ("17", "PN-1")):
+    def test_a_source_given_by_neither_is_refused_before_anything_is_read(self):
+        for source, number in (("", ""), ("", "  ")):
             with self.assertRaisesRegex(FmApiError, "Choose the item"):
-                self.maker().bought_form(source, number)
+                self.maker().open(source, number)
         self.finder.return_value.search.assert_not_called()
         self.items.return_value.read_named.assert_not_called()
+
+    def test_an_id_with_the_number_the_page_expects_is_used_and_nothing_is_searched_by_number(self):
+        answer = self.maker().open("17", "PN-1")
+        self.assertEqual((answer["source_id"], answer["number"]), ("17", "PN-1-B"))
+        self.finder.return_value.search.assert_not_called()
+        self.assertEqual(self.items.return_value.read_named.call_args[0], (WS, "17"))
+
+    def test_an_item_with_another_number_than_the_page_expects_is_shown_by_its_own_number_and_checked_by_it(self):
+        self.source["NUMBER"] = "PN-2"
+        self.taken.side_effect = lambda ws, number: number == "PN-2-B"
+        with self.assertRaisesRegex(FmRefused, "PN-2-B"):   # the number the item has is checked, not the one the page expected
+            self.maker().open("17", "PN-1")
+        self.taken.side_effect = None
+        self.assertEqual(self.maker().open("17", "PN-1")["number"], "PN-2-B")
+
+    def test_the_item_the_form_and_the_three_searches_are_read_together(self):
+        started = threading.Barrier(5, timeout=5)
+
+        def meet(read):
+            def go(*args):
+                started.wait()   # the item, the form and the three searches are all under way before any answers
+                return read(*args)
+            return go
+        self.items.return_value.read_named.side_effect = meet(lambda ws, item: ("PN-1 - Axle", self.source))
+        self.form.return_value.form.side_effect = meet(lambda ws: FORM)
+        self.taken.side_effect = meet(lambda ws, number: False)
+        self.v1.return_value.rows.side_effect = meet(lambda *args: [])
+        self.assertEqual(self.maker().open("17", "PN-1")["number"], "PN-1-B")   # a barrier that is not met in 5 seconds raises
+
+    def test_a_search_or_a_read_that_fails_surfaces(self):
+        for target in (self.items.return_value.read_named, self.form.return_value.form, self.v1.return_value.rows):
+            saved = target.side_effect
+            target.side_effect = FmApiError("down", 500)
+            with self.assertRaisesRegex(FmApiError, "down"):
+                self.maker().open("17", "PN-1")
+            target.side_effect = saved
+        self.mbom.return_value.number_taken = mock.Mock(side_effect=FmApiError("taken search down", 500))
+        with self.assertRaisesRegex(FmApiError, "taken search down"):
+            self.maker().open("17", "PN-1")
 
     def test_a_source_number_nothing_carries_is_refused_saying_to_publish_it_first(self):
         self.hits[:] = []
         with self.assertRaisesRegex(FmApiError, r"PN-1 is not in Fusion Manage yet. Publish it first"):
-            self.maker().bought_form(source_number="PN-1")
+            self.maker().open(source_number="PN-1")
         self.items.return_value.read_named.assert_not_called()
 
     def test_a_source_number_several_items_share_is_refused(self):
         self.hits[:] = [{"id": "17", "descriptor": "PN-1 - Axle"}, {"id": "18", "descriptor": "PN-1 - Shaft"}]
         with self.assertRaisesRegex(FmApiError, r"Several Fusion Manage items carry item number PN-1"):
-            self.maker().bought_form(source_number=" PN-1 ")
+            self.maker().open(source_number=" PN-1 ")
         self.items.return_value.read_named.assert_not_called()
 
     def test_a_source_number_with_one_hit_goes_on_as_that_items_id(self):
-        form = self.maker().bought_form(source_number="PN-1")
+        form = self.maker().open(source_number="PN-1")
         self.assertEqual(form["number"], "PN-1-B")
         self.assertEqual(self.items.return_value.read_named.call_args[0], (WS, "17"))
         self.finder.assert_called_once_with(self.client)
@@ -332,7 +316,7 @@ class BoughtFormTests(Rig):
     def test_a_source_with_no_number_is_refused(self):
         self.source["NUMBER"] = ""
         with self.assertRaisesRegex(FmApiError, "no item number"):
-            self.maker().bought_form("17")
+            self.maker().open("17")
 
     def test_a_number_longer_than_its_field_takes_is_refused(self):
         self.source["NUMBER"] = "N" * 19   # the form's number field holds 20; the suffix makes 21
@@ -340,44 +324,44 @@ class BoughtFormTests(Rig):
         rows = [FORM_NUMBER] + ROWS[1:]
         self.form.return_value.form.side_effect = lambda ws: parse_form(rows, SECTIONS, OPTIONS)
         with self.assertRaisesRegex(FmApiError, "20"):
-            self.maker().bought_form("17")
+            self.maker().open("17")
 
     def test_the_suffix_is_added_to_the_number_the_source_holds(self):
         cfg = config()
         cfg.make_buy.suffix = ".BUY"
-        self.assertEqual(self.maker(cfg).bought_form("17")["number"], "PN-1.BUY")
+        self.assertEqual(self.maker(cfg).open("17")["number"], "PN-1.BUY")
 
     def test_a_taken_number_is_refused_naming_it(self):
         self.taken.return_value = True
         with self.assertRaisesRegex(FmRefused, "PN-1-B"):
-            self.maker().bought_form("17")
+            self.maker().open("17")
 
     def test_a_source_that_has_a_bought_version_already_is_refused_naming_it(self):
         self.found = [V1Row("30", {"NUMBER": "PN-1-OLD"}, (("SOURCE", "PN-1 - Axle [REV:w]"), ("NUMBER", "PN-1-OLD")))]
         with self.assertRaisesRegex(FmRefused, "PN-1-OLD"):
-            self.maker().bought_form("17")
+            self.maker().open("17")
 
     def test_an_item_whose_source_is_another_number_is_not_a_bought_version(self):
         self.found = [V1Row("30", {"NUMBER": "PN-10-B"}, (("SOURCE", "PN-10 - Gear"), ("NUMBER", "PN-10-B")))]
-        self.assertEqual(self.maker().bought_form("17")["number"], "PN-1-B")
+        self.assertEqual(self.maker().open("17")["number"], "PN-1-B")
 
     def test_an_item_made_from_a_number_that_starts_with_the_source_number_is_not_a_bought_version(self):
         self.found = [V1Row("30", {"NUMBER": "PN-1-2-B"}, (("SOURCE", "PN-1-2 - Axle"), ("NUMBER", "PN-1-2-B")))]
-        self.assertEqual(self.maker().bought_form("17")["number"], "PN-1-B")
+        self.assertEqual(self.maker().open("17")["number"], "PN-1-B")
 
     def test_a_search_that_fails_is_not_taken_as_free(self):
         self.v1.return_value.rows.side_effect = FmApiError("down", 500)
         with self.assertRaises(FmApiError):
-            self.maker().bought_form("17")
+            self.maker().open("17")
 
     def test_a_source_link_field_that_does_not_link_to_an_item_is_said(self):
         cfg = config()
         cfg.make_buy.source_field = "NOTES"
         with self.assertRaisesRegex(FmApiError, "links to one item"):
-            self.maker(cfg).bought_form("17")
+            self.maker(cfg).open("17")
 
 
-class FindBoughtTests(Rig):
+class OpenFoundTests(Rig):
     def row(self, number, link, make_buy="Buy", item_id="30"):
         return V1Row(item_id, {"NUMBER": number, "DESCRIPTOR": number + " - Axle"},
                      (("SOURCE", link), ("NUMBER", number), ("MAKE_BUY", make_buy), ("DESCRIPTOR", number + " - Axle")))
@@ -386,43 +370,56 @@ class FindBoughtTests(Rig):
         self.client.base_url, self.client.tenant = "https://acme.autodeskplm360.net", "acme"
         self.found = [self.row("PN-1-B", "PN-1 - Axle [REV:w]")]
         url = f"https://acme.autodeskplm360.net/plm/workspaces/{WS}/items/itemDetails?view=full&tab=details&mode=view&itemId=urn%60adsk%2Cplm%60tenant%2Cworkspace%2Citem%60acme%2C{WS}%2C30"
-        self.assertEqual(self.maker().find_bought("PN-1"), {"found": {"id": "30", "link": f"/api/v3/workspaces/{WS}/items/30", "number": "PN-1-B", "url": url, "name": "Axle"}})
+        self.assertEqual(self.maker().open(source_number="PN-1"), {"found": {"id": "30", "link": f"/api/v3/workspaces/{WS}/items/30", "number": "PN-1-B", "url": url, "name": "Axle"}})
 
     def test_the_search_is_of_working_versions_whose_source_link_contains_the_number(self):
-        self.maker().find_bought("PN-1")
-        _, fields, _, filters = self.v1.return_value.rows.call_args[0]
+        self.maker().open(source_number="PN-1")
+        searches = [call[0] for call in self.v1.return_value.rows.call_args_list]
+        self.assertEqual(len(searches), 2, "the other is the search for an item made from the source under another number")
+        _, fields, _, filters = next(call for call in searches if len(call[3]) == 2)
         self.assertEqual([f.id for f in fields][:3], ["SOURCE", "NUMBER", "MAKE_BUY"])
         self.assertEqual([(f.field_id, f.filter_id, f.value) for f in filters][0], ("SOURCE", bought_items.CONTAINS, "PN-1"))
-        self.assertEqual(len(filters), 2)
 
     def test_an_item_that_is_not_a_bought_one_or_names_another_source_is_not_taken(self):
-        self.found = [self.row("PN-1-X", "PN-1 - Axle", make_buy="Make"), self.row("PN-1-2-B", "PN-1-2 - Other"), self.row("PN-10-B", "PN-10 - Axle")]
-        self.assertEqual(self.maker().find_bought("PN-1"), {"found": None})
+        self.found = [self.row("PN-1-2-B", "PN-1-2 - Other"), self.row("PN-10-B", "PN-10 - Axle")]
+        self.assertEqual(self.maker().open(source_number="PN-1")["number"], "PN-1-B", "the form is answered")
+        self.found = [self.row("PN-1-X", "PN-1 - Axle", make_buy="Make")]   # not set to Buy: not offered, and refused as made from the source, as the form was
+        with self.assertRaisesRegex(FmRefused, "PN-1-X"):
+            self.maker().open(source_number="PN-1")
 
-    def test_the_first_of_several_is_answered_and_none_found_is_none(self):
+    def test_the_first_of_several_is_answered_and_none_found_gives_the_form(self):
         self.found = [self.row("PN-1-B", "PN-1", item_id="31"), self.row("PN-1-C", "PN-1", item_id="32")]
-        self.assertEqual(self.maker().find_bought("PN-1")["found"]["id"], "31")
+        self.assertEqual(self.maker().open(source_number="PN-1")["found"]["id"], "31")
         self.found = []
-        self.assertEqual(self.maker().find_bought("PN-1"), {"found": None})
+        self.assertNotIn("found", self.maker().open(source_number="PN-1"))
+
+    def test_a_bought_version_is_found_before_a_taken_number_or_a_made_from_item_is_refused(self):
+        self.taken.return_value = True   # the number is taken by that very item
+        self.found = [self.row("PN-1-B", "PN-1 - Axle")]
+        self.assertEqual(self.maker().open(source_number="PN-1")["found"]["id"], "30")
+        self.taken.return_value = False
+        self.found = [V1Row("30", {"NUMBER": "PN-1-OLD"}, (("SOURCE", "PN-1 - Axle"), ("NUMBER", "PN-1-OLD")))]   # made from it, not set to Buy: refused as before
+        with self.assertRaisesRegex(FmRefused, "PN-1-OLD"):
+            self.maker().open(source_number="PN-1")
 
     def test_a_source_that_is_not_in_fusion_manage_or_a_failed_search_raises(self):
         self.hits = []
         with self.assertRaisesRegex(FmApiError, "not in Fusion Manage"):
-            self.maker().find_bought("PN-1")
+            self.maker().open(source_number="PN-1")
         self.hits = [{"id": "17", "descriptor": "PN-1 - Axle"}]
         self.v1.return_value.rows.side_effect = FmApiError("down", 500)
         with self.assertRaises(FmApiError):
-            self.maker().find_bought("PN-1")
+            self.maker().open(source_number="PN-1")
 
     def test_not_set_up_is_refused_without_a_search(self):
         with self.assertRaisesRegex(FmApiError, "Make or buy"):
-            self.maker(config(make_buy=MakeBuyConfig())).find_bought("PN-1")
+            self.maker(config(make_buy=MakeBuyConfig())).open(source_number="PN-1")
         self.v1.return_value.rows.assert_not_called()
 
 
 class BoughtCreateTests(Rig):
     def test_a_source_number_is_found_again_by_the_create_and_a_repeat_is_refused(self):
-        self.maker().bought_form(source_number="PN-1")
+        self.maker().open(source_number="PN-1")
         answer = self.maker().create_bought("", {"TITLE": "x"}, "PN-1")
         self.assertEqual(answer["number"], "PN-1-B")
         self.assertEqual(self.sent()["SOURCE"], {"link": f"/api/v3/workspaces/{WS}/items/17"})
@@ -439,7 +436,7 @@ class BoughtCreateTests(Rig):
         self.client.send_json.assert_not_called()
 
     def test_the_values_of_the_form_are_sent_with_the_number_make_or_buy_and_the_source_set_here(self):
-        form = self.maker().bought_form("17")
+        form = self.maker().open("17")
         posted = {**form["values"], "TITLE": "Axle, bought", "NUMBER": "HACKED", "MAKE_BUY": MAKE, "SOURCE": {"link": "/other"}, "COMPONENT": {"link": "/c/9"}}
         answer = self.maker().create_bought("17", posted)
         self.assertEqual(answer, {"id": "901", "link": f"/api/v3/workspaces/{WS}/items/901", "number": "PN-1-B"})
@@ -450,13 +447,13 @@ class BoughtCreateTests(Rig):
         self.assertNotIn("COMPONENT", sent)
 
     def test_values_of_fields_the_form_does_not_hold_are_not_sent(self):
-        form = self.maker().bought_form("17")
+        form = self.maker().open("17")
         self.maker().create_bought("17", {**form["values"], "NOT_ON_THE_FORM": "x"})
         self.assertNotIn("NOT_ON_THE_FORM", self.sent())
 
     def test_what_the_form_gave_round_trips_to_the_values_of_the_item(self):
         self.client.send_json.reset_mock()
-        self.maker().create_bought("17", self.maker().bought_form("17")["values"])
+        self.maker().create_bought("17", self.maker().open("17")["values"])
         sent = self.sent()
         for field in ("TITLE", "NOTES", "WEIGHT", "DUE", "ACTIVE", "COUNT"):
             self.assertEqual(sent[field], form_value(specs_of(FORM)[field], SOURCE[field]), field)
@@ -520,81 +517,6 @@ class BoughtCreateTests(Rig):
             thread.join()
         self.assertEqual(self.client.send_json.call_count, 1)
         self.assertEqual(sorted(outcomes, key=str.isdigit)[0].count("exists already"), 1)
-
-
-class ActionTests(unittest.TestCase):
-    def setUp(self):
-        self.settings = {"items": config()}
-        self.problem = ""
-        self.config = SimpleNamespace(config=SimpleNamespace(workspaces=self.settings), effective_settings=lambda: object(),
-                                      items_setup_problem=lambda: self.problem)
-        self.queued = []
-        self.reads = ItemCreateReads(self.config, lambda: object(), self.queued.append)
-        self.maker = mock.Mock()
-        for patcher in (mock.patch.object(item_create_actions, "BoughtItems", self.maker), mock.patch.object(item_create_actions, "may", return_value=True)):
-            patcher.start()
-            self.addCleanup(patcher.stop)
-
-    def finish(self, token="t1"):
-        for work in self.queued:
-            work()
-        self.queued.clear()
-        return self.reads.status({"token": token})
-
-    def test_each_action_answers_pending_and_the_poll_gives_the_result(self):
-        self.maker.return_value.assembly_form.return_value = {"form": {}, "locked": {}, "number_field": "NUMBER"}
-        self.assertTrue(self.reads.form({"token": "t1", "kind": "assembly"})["pending"])
-        answer = self.finish()
-        self.assertEqual((answer["ok"], answer["result"]), (True, {"form": {}, "locked": {}, "number_field": "NUMBER", "can_create": True}))
-        self.assertEqual(self.maker.call_args[0][1:], ("242", self.settings["items"]))
-
-    def test_a_kind_other_than_assembly_is_refused(self):
-        for payload in ({"token": "t1", "kind": "other"}, {"token": "t1"}):
-            answer = self.reads.form(payload)
-            self.assertEqual((answer["pending"], answer["ok"]), (False, False))
-        self.assertEqual(self.queued, [])
-
-    def test_the_items_workspace_not_set_up_or_off_is_said_without_a_read(self):
-        self.problem = "The Items workspace is turned off in the settings."
-        for answer in (self.reads.form({"token": "t1", "kind": "assembly"}), self.reads.bought_form({"token": "t1", "source_id": "17"}),
-                       self.reads.bought_create({"token": "t1", "source_id": "17", "values": {"TITLE": "x"}}),
-                       self.reads.create({"token": "t1", "values": {"TITLE": "x"}})):
-            self.assertEqual((answer["pending"], answer["message"]), (False, self.problem))
-        self.assertEqual(self.queued, [])
-
-    def test_the_bought_actions_pass_the_source_and_the_values(self):
-        self.maker.return_value.bought_form.return_value = {"number": "PN-1-B"}
-        self.maker.return_value.create_bought.return_value = {"id": "901", "link": "/l", "number": "PN-1-B"}
-        self.reads.bought_form({"token": "t1", "source_id": "17"})
-        self.assertEqual(self.finish()["result"]["number"], "PN-1-B")
-        self.reads.bought_create({"token": "t2", "source_id": "17", "values": {"TITLE": "x", "NOTES": ""}})
-        self.assertEqual(self.finish("t2")["result"], {"id": "901", "link": "/l", "number": "PN-1-B"})
-        self.maker.return_value.create_bought.assert_called_once_with("17", {"TITLE": "x", "NOTES": ""}, "")
-        self.reads.bought_form({"token": "t3", "source_number": "PN-1"})
-        self.finish("t3")
-        self.maker.return_value.bought_form.assert_called_with("", "PN-1")
-        self.reads.bought_create({"token": "t4", "source_number": "PN-1", "values": {"TITLE": "x"}})
-        self.finish("t4")
-        self.maker.return_value.create_bought.assert_called_with("", {"TITLE": "x"}, "PN-1")
-
-    def test_find_answers_the_bought_version_of_a_number_from_one_pending_request(self):
-        self.maker.return_value.find_bought.return_value = {"found": None}
-        self.assertTrue(self.reads.bought_find({"token": "t1", "source_number": "PN-1"})["pending"])
-        self.assertEqual(self.finish()["result"], {"found": None})
-        self.maker.return_value.find_bought.assert_called_with("PN-1")
-
-    def test_a_create_with_no_values_is_refused_and_a_refusal_names_its_fields(self):
-        self.assertFalse(self.reads.create({"token": "t1", "values": {"TITLE": " "}})["pending"])
-        self.maker.return_value.create_assembly.side_effect = FmRefused("Validation failed", 422, {"TITLE": "Too long"})
-        self.reads.create({"token": "t2", "values": {"TITLE": "x"}})
-        answer = self.finish("t2")
-        self.assertEqual((answer["ok"], answer["message"], answer["fields"]), (False, "Validation failed", {"TITLE": "Too long"}))
-
-    def test_every_action_is_registered(self):
-        bridge = MessageBridge()
-        with mock.patch.object(item_create_actions, "FmClient"):
-            item_create_actions.register_item_create_actions(bridge, self.config, mock.Mock())
-        self.assertEqual(set(bridge._handlers), {"items_form", "items_create", "bought_form", "bought_create", "bought_find", "items_status"})
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ To offer another source field, add a ``SourceField`` to ``SOURCE_FIELDS``.
 import re
 from dataclasses import asdict, dataclass, field
 from dataclasses import field as new_field   # ``MakeBuyConfig`` has a field named ``field``
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.shapes import dict_rows
 from ..core.i18n import t
@@ -226,22 +226,25 @@ class MakeBuyConfig:
     # The ids of the fields a bought version does not copy from its source (besides what the add-in sets itself). Empty: every field the form holds is copied.
     skip_fields: List[str] = new_field(default_factory=list)
 
+    def _parts(self) -> Tuple[Tuple[str, str], ...]:
+        """``(name, value)`` of each of the five parts, in the order they are checked."""
+        return (("field", self.field), ("make_value", self.make_value), ("buy_value", self.buy_value), ("source_field", self.source_field),
+                ("suffix", self.suffix))
+
     def is_set(self) -> bool:
         """Whether every part is chosen (a bought version can be made)."""
-        return all((self.field, self.make_value, self.buy_value, self.source_field, self.suffix))
+        return all(value for _, value in self._parts())
 
     def is_touched(self) -> bool:
         """Whether any part is chosen."""
-        return any((self.field, self.make_value, self.buy_value, self.source_field, self.suffix))
+        return any(value for _, value in self._parts())
 
     def problems(self) -> List[Problem]:
         """What is wrong with the choices (none when nothing is chosen). A field filled twice is reported by ``WorkspaceConfig._filled_twice``."""
         if not self.is_touched():
             return []
         problems: List[Problem] = []
-        parts = (("field", self.field), ("make_value", self.make_value), ("buy_value", self.buy_value), ("source_field", self.source_field),
-                 ("suffix", self.suffix))
-        unset = next((part for part, value in parts if not value), "")
+        unset = next((part for part, value in self._parts() if not value), "")
         if unset:
             problems.append(Problem(t("data.ws_make_buy_incomplete"), area="make_buy", part=unset))
         if self.suffix and (len(self.suffix) > SUFFIX_MAX or not _SUFFIX.fullmatch(self.suffix)):
