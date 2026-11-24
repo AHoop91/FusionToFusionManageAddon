@@ -96,6 +96,12 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
     return children
 
 
+def _line_order(line: Dict[str, str]) -> int:
+    """The sort key of a line: its BOM item number as a number, a line with none last."""
+    text = str(line.get("sequence") or "").strip()
+    return int(text) if text.isascii() and text.isdigit() else 10 ** 12
+
+
 TREE_NODE_CAP = 20000   # lines of one tree: an item used in many places has its lines in each, so a tree can be far larger than the answer
 
 
@@ -117,7 +123,7 @@ def build_tree(lines: Dict[str, List[Dict[str, str]]], data: Any, root_id: str, 
 
     def under(number: str, level: int, path: frozenset) -> List[Dict[str, Any]]:
         out = []
-        for line in lines.get(number, []):
+        for line in sorted(lines.get(number, []), key=_line_order):   # the BOM lists lines by their item number, not in the order the answer holds the edges
             if not line["item_id"]:
                 raise FmApiError(t("data.fm_bom_line_no_item", number=line["number"]))
             if line["item_id"] in path:

@@ -25,7 +25,7 @@ function open(options) {
   ns.toast = { show: (text) => toasts.push(text) };
   const added = [];
   ns.pubAddItems = { open: (o) => added.push(o) };
-  ['js/ui.js', 'js/mbom-structure.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
+  ['js/ui.js', 'js/mbom-structure.js', 'js/mbom-plan.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
   const calls = { loadTree: 0, askMbom: 0, planned: 0 };
   const state = { partial: opts.partial };
   ns.mbomViewer.init({
@@ -664,4 +664,56 @@ test('the panel is told to plan again only when the structure or its data change
   assert.strictEqual(v.calls.planned, planned + 1, 'an edit tells it once');
   v.ns.mbomViewer.treeDone({ ok: true });
   assert.strictEqual(v.calls.planned, planned + 2, 'so does reading more of the design');
+});
+
+test('quick add asks before it overrides the lines Fusion Manage has, and matches the MBOM to the EBOM once it is confirmed', skip, () => {
+  const v = open({ targetId: '77' });
+  const asked = [];
+  v.ns.pubItemPanel = { open: () => {}, close: () => {}, confirm: (o) => asked.push(o) };
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('OIL', '1'), treeLine('C', '1')]) });
+  const tool = v.button('Quick add: match Fusion Manage to Fusion Component');
+  assert.ok(tool, 'the toolbar has the quick add button');
+  v.click(tool);
+  assert.strictEqual(asked.length, 1);
+  assert.strictEqual(asked[0].title, 'Match to Fusion Component');
+  assert.match(asked[0].ask, /override Fusion Manage/);
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'OIL', 'C'], 'nothing changes until it is confirmed');
+  asked[0].onConfirm();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'B', 'C'], 'the lines are shown at once, the top one open');
+  v.openAll();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'A1', 'A2', 'B', 'B1', 'C']);
+  v.click(v.button('Undo'));
+  v.openAll();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'OIL', 'C'], 'undo gives the lines back');
+});
+
+test('quick add with no lines in Fusion Manage matches at once, with no question', skip, () => {
+  const v = open({ targetId: '77' });
+  const asked = [];
+  v.ns.pubItemPanel = { open: () => {}, close: () => {}, confirm: (o) => asked.push(o) };
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([]) });
+  v.click(v.button('Quick add: match Fusion Manage to Fusion Component'));
+  assert.strictEqual(asked.length, 0);
+  v.openAll();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'A1', 'A2', 'B', 'B1', 'C']);
+});
+
+test('the MBOM shows the line numbers Fusion Manage has, in their order, until an edit gives the assembly the numbers of its places', skip, () => {
+  const v = open({ targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '2', { sequence: '1' }), treeLine('B', '1', { sequence: '2' }), treeLine('C', '1', { sequence: '8' })]) });
+  const numbers = () => [...v.mbom().querySelectorAll('.sv-row')].slice(1).map((r) => r.querySelector('.sv-seq').textContent);
+  assert.deepStrictEqual(numbers(), ['1', '2', '8'], 'as Fusion Manage has them, not 1, 2, 3');
+  v.act(v.mbom(), 'B', 'remove').click();
+  assert.deepStrictEqual(numbers(), ['1', '8'], 'a removal leaves the others as they are');
+  v.click(v.button('Undo'));
+  v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'A'));   // C goes into A (no layout in jsdom: the middle of a line is "into")
+  v.openAll();
+  assert.deepStrictEqual(v.lines(v.mbom()).slice(1), ['A', 'C', 'B']);
+  assert.deepStrictEqual(numbers(), ['1', '1', '2'], 'A and B keep their numbers; C is line 1 of A, as it will be sent');
 });

@@ -10,6 +10,7 @@
  * for an action, so ``add-items.js`` hands this file the ``search_*`` answers through ``claims``. A picklist is asked for by its name alone, so
  * the action is not tied to the Items workspace.
  *
+ * ``confirm({title, lead, ask, confirm, icon, onConfirm})`` asks a yes or no in the same dialog (the viewer's quick add, before it overrides the MBOM).
  * ``open({mode: 'assembly'})`` or ``open({mode: 'bought', sourceNumber, number, onFound, onCreated})`` (the create is sent with the ``source_id`` the answer holds); a bought dialog offers the bought
  * version found (``onFound``) and ``close()``. The values typed are kept when saving
  * fails, and Save stays off while a request runs, so one click makes one item. A saved item is told in the dialog with its number and given to
@@ -146,7 +147,7 @@
     const saved = !!(view && view.saved);
     modal.save.hidden = saved;
     modal.save.disabled = working || !view || !view.ready;
-    modal.save.textContent = working ? t('publish.item_saving') : view && view.found ? t('publish.item_use_existing') : t('publish.item_save');
+    modal.save.textContent = working ? t('publish.item_saving') : view && view.confirmLabel ? view.confirmLabel : view && view.found ? t('publish.item_use_existing') : t('publish.item_save');
     modal.cancel.disabled = working;
     modal.close.disabled = working;
     modal.cancel.textContent = saved ? t('products.close') : t('products.cancel');
@@ -270,6 +271,12 @@
 
   function submit() {
     if (!view || !view.ready || view.working) return;
+    if (view.mode === 'confirm') {
+      const go = view.onConfirm;
+      close_();
+      go();
+      return;
+    }
     if (view.found) {   // the bought version that is there already is used: nothing is made
       const found = view.found;
       const use = view.onFound;
@@ -351,7 +358,26 @@
     modal.close.focus();
   }
 
+  /** Ask the user to confirm before something is overridden: ``{title, lead, ask, confirm (the label of the button), icon (svg paths), onConfirm}``. The dialog
+   *  opens on Cancel, so a stray Enter keeps things as they are. */
+  function confirm(spec) {
+    ensure();
+    if (busy()) return;
+    fc.reset();
+    view = { mode: 'confirm', sourceNumber: '', sourceId: '', working: false, saved: false, ready: true, onConfirm: spec.onConfirm, confirmLabel: spec.confirm, found: null };
+    modal.title.textContent = spec.title;
+    modal.lead.replaceChildren(ns.svg(spec.icon, 20));
+    modal.dialog.setAttribute('aria-label', spec.title);
+    say('');
+    const wrap = el('div', 'ic-found');
+    wrap.append(el('p', 'ic-found-lead', spec.lead), el('p', 'ic-found-ask', spec.ask));
+    modal.body.replaceChildren(wrap);
+    setButtons();
+    modal.root.hidden = false;
+    modal.cancel.focus();
+  }
+
   OWN.concat(['items_status']).forEach(function (action) { bridge.on(action, function (r) { onAnswer(action, r); }); });
 
-  ns.pubItemPanel = { open: open, close: close_, claims: claims };
+  ns.pubItemPanel = { open: open, confirm: confirm, close: close_, claims: claims };
 })(window.MfgUi);

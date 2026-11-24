@@ -11,10 +11,10 @@
  * * the components are the design (the root) and every line made from an EBOM component (``source``), once each: all go through the comparison
  *   with Fusion Manage, so an item whose properties differ is updated. An added item (a bought version, or one picked in Fusion Manage) is never one
  *   of them: it exists already;
- * * a BOM line number (``sequence``) is unique under its assembly and follows the tree: lines of an assembly with nothing in Fusion Manage are
- *   numbered 1, 2, 3; under one that has some, the lines up to the first that is new, moved in or out of order keep their numbers, and that line and
- *   every one after it get numbers above the highest the assembly has had (a kept line is ``renumber``ed, a new one is added with its number), so
- *   Fusion Manage lists them in the tree's order and no two requests ever want the same number;
+ * * a BOM line number (``sequence``) is unique under its assembly and follows the tree: an assembly with a line that is new, moved in or out of order
+ *   has its lines numbered 1, 2, 3 in the tree's order (a line that has its number already is left alone; a kept line is ``renumber``ed, a new one is
+ *   added with its number). Where a line would take a number another still holds, the lines that change go by a number above the others first (a second
+ *   ``renumber``), so no two requests ever want the same number;
  *
  * What it will not publish, it says in ``problems`` (``{kind, numbers}``) and the panel refuses the publish, so no edit is dropped quietly:
  * ``unpublishable`` (a line with no item behind it, such as a new manufacturing assembly),
@@ -29,6 +29,57 @@
   function numeric(text) {
     const n = parseInt(String(text), 10);
     return isFinite(n) ? n : 0;
+  }
+
+  /** The numbers the lines of the assembly tree under ``root`` are given (``changes`` is the structure's ``changes().changes``): ``sequences`` (uid -> number, for each
+   *  line that has none yet or takes another), ``staged`` (the passage numbers) and ``rank`` (the order the lines that go at once are sent in). */
+  function numbering(root, changes) {
+  // The BOM line numbers. An assembly with any line that is new, moved in or out of order is numbered 1, 2, 3 in the tree's order, so the numbers
+  // are the places of the lines and Fusion Manage lists them as the tree does. A line that has its place's number already is left alone. A number is
+  // unique under its assembly, so when a line is to take a number a line that stays still holds, every line that has to change goes by a number
+  // above all the others first (``staged``) and then to its own: no two lines ever hold the same number in a request.
+  const sequences = {};   // uid -> the number the line is given (a line that keeps its own has none here)
+  const rank = {};        // uid -> when a line that goes by its own number is sent, among its assembly's
+  const staged = {};      // uid -> the number it passes through on the way (only where a line would take a number another holds)
+  (function assign(node) {
+    const flagged = function (c) { const f = changes[c.uid]; return !!(f && (f.new || f.moved || f.reordered)); };
+    if (node.children.some(flagged)) {
+      const entering = function (c) { return !!(changes[c.uid] && (changes[c.uid].new || changes[c.uid].moved)); };   // no line of this assembly in Fusion Manage yet
+      const moving = [];   // the lines Fusion Manage has under this assembly that take another number
+      node.children.forEach(function (c, at) {
+        const place = at + 1;
+        if (entering(c)) sequences[c.uid] = String(place);
+        else if (!String(c.sequence).trim() || numeric(c.sequence) !== place) { sequences[c.uid] = String(place); moving.push(c); }
+      });
+      // A line goes once the number it takes is free, so one that takes the number of another goes after it (lines shifted down by an insert go from
+      // the last one up). What is left is lines that take each other's numbers: they go through a number above all the others.
+      const heldBy = {};   // number -> the uid of the line that holds it now
+      node.children.forEach(function (c) { if (!entering(c) && String(c.sequence).trim()) heldBy[numeric(c.sequence)] = c.uid; });
+      const left = moving.slice();
+      let turn = 0;
+      while (left.length) {
+        const at = left.findIndex(function (c) { return heldBy[numeric(sequences[c.uid])] === undefined; });
+        if (at < 0) break;
+        const c = left.splice(at, 1)[0];
+        rank[c.uid] = turn++;
+        if (String(c.sequence).trim()) delete heldBy[numeric(c.sequence)];
+      }
+      let above = node.children.reduce(function (high, c) { return Math.max(high, numeric(c.sequence)); }, node.children.length) + 1;
+      left.forEach(function (c) { staged[c.uid] = String(above++); });
+    }
+    node.children.forEach(assign);
+  })(root);
+  return { sequences: sequences, staged: staged, rank: rank };
+  }
+
+  /** The BOM line number of every line of the structure as Fusion Manage will have it once published: ``{uid: number}``. A line the publish does not number again
+   *  has the number it has now (the one Fusion Manage gave it); a new line has the one it will be added with. */
+  function lineNumbers(structure, changes) {
+    const root = structure.root();
+    const given = numbering(root, changes.changes).sequences;
+    const out = {};
+    (function walk(node) { node.children.forEach(function (c) { out[c.uid] = given[c.uid] !== undefined ? given[c.uid] : String(c.sequence === undefined || c.sequence === null ? '' : c.sequence); walk(c); }); })(root);
+    return out;
   }
 
   /**
@@ -58,28 +109,15 @@
     (function index(node) { node.children.forEach(function (c) { nodeAt[c.uid] = { node: c, parent: node }; index(c); }); })(root);
     function numberOf(parent) { return parent.uid === root.uid ? rootNumber : String(parent.number); }
 
-    // The BOM line numbers. Under an assembly, the lines up to the first one that is new, moved in or out of order keep their numbers; that line and
-    // every one after it is given a number above the highest the assembly has had, in tree order: so Fusion Manage lists them as the tree does, and no
-    // number is taken that another line holds now, held a moment ago (a line the same publish removes or moves away) or is given.
-    const freed = {};   // assembly uid -> the numbers of its lines this publish removes or moves away (they go while the new ones come: not to be taken)
-    function noteFreed(uid, sequence) { (freed[uid] = freed[uid] || {})[numeric(sequence)] = true; }
-    found.removed.forEach(function (r) { noteFreed(r.parent, r.sequence); });
-    Object.keys(changes).forEach(function (uid) { if (changes[uid].moved && nodeAt[uid]) noteFreed(changes[uid].oldParent, nodeAt[uid].node.sequence); });
-    const sequences = {};   // uid -> the number the line is given (a line that keeps its own has none here)
-    (function assign(node) {
-      const flagged = function (c) { const f = changes[c.uid]; return !!(f && (f.new || f.moved || f.reordered)); };
-      const from = node.children.findIndex(flagged);
-      if (from >= 0) {
-        let next = node.children.reduce(function (high, c) { return changes[c.uid] && (changes[c.uid].new || changes[c.uid].moved) ? high : Math.max(high, numeric(c.sequence)); }, 0) + 1;
-        node.children.slice(from).forEach(function (c) {
-          while ((freed[node.uid] || {})[next]) next++;
-          sequences[c.uid] = String(next++);
-        });
-      }
-      node.children.forEach(assign);
-    })(root);
+    const numbers = numbering(root, changes);
+    const sequences = numbers.sequences;
+    const staged = numbers.staged;
+    const rank = numbers.rank;
 
     const operations = [];
+    const direct = [];   // the lines that take their number at once, with their ``rank``
+    const passage = [];   // the first step of the lines that go through a number of passage
+    const later = [];   // the second step of the lines that go through a number of passage: after every line was moved aside
     const seen = {};
     function push(operation) {
       const id = JSON.stringify(operation);
@@ -103,10 +141,17 @@
             const line = { op: 'add', parent: parent, number: c.number, quantity: c.quantity, sequence: given };
             if (c.kind === 'added') { line.link = c.link || ''; line.linkable = c.linkable || null; }   // it has its item already: only the line is added
             push(line);
-          } else if (given) {   // a line of Fusion Manage's that takes another number; its new quantity goes with it, in the one request
-            const line = { op: 'renumber', parent: parent, number: c.number, from_sequence: c.sequence || '', sequence: given, edge: (flags && flags.edgeId) || c.edgeId || '' };
+          } else if (given) {   // a line of Fusion Manage's that takes another number; its new quantity goes with it, in the one request that gives its number
+            const edge = (flags && flags.edgeId) || c.edgeId || '';
+            const line = { op: 'renumber', parent: parent, number: c.number, from_sequence: c.sequence || '', sequence: given, edge: edge };
             if (flags && flags.quantity) line.quantity = c.quantity;
-            push(line);
+            if (staged[c.uid]) {   // by a number nobody holds first; every line has been moved aside before the first one is given its own
+              passage.push({ op: 'renumber', parent: parent, number: c.number, from_sequence: c.sequence || '', sequence: staged[c.uid], edge: edge });
+              line.from_sequence = staged[c.uid];
+              later.push(line);
+            } else {
+              direct.push({ rank: rank[c.uid], line: line });
+            }
           } else if (flags && flags.quantity) {
             push({ op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: flags.oldQuantity, sequence: c.sequence || '', edge: flags.edgeId || '' });
           }
@@ -114,6 +159,9 @@
         walk(c);
       });
     })(root);
+    direct.sort(function (x, y) { return x.rank - y.rank; }).forEach(function (d) { push(d.line); });   // sort is stable: lines of other assemblies keep their places
+    passage.forEach(push);
+    later.forEach(push);
     found.removed.forEach(function (r) {
       const was = nodeAt[r.parent];
       if (was) push({ op: 'remove', parent: numberOf(was.node), number: r.number, sequence: r.sequence || '', edge: r.edgeId || '' });
@@ -151,9 +199,10 @@
         collect(c);
       });
     })(root);
-    operations.sort(function (x, y) { return (x.op === 'remove' ? 0 : 1) - (y.op === 'remove' ? 0 : 1); });   // a line is freed before another takes its number (stable)
+    const phase = { remove: 0, renumber: 1 };
+    operations.sort(function (x, y) { return (x.op in phase ? phase[x.op] : 2) - (y.op in phase ? phase[y.op] : 2); });   // a line is freed, then moved, before another takes its number (stable)
     return { components: components, operations: operations, problems: problems };
   }
 
-  ns.mbomPlan = { build: build };
+  ns.mbomPlan = { build: build, lineNumbers: lineNumbers };
 })(window.MfgUi);

@@ -57,7 +57,8 @@ test('a purchased item added is one add with its link and no component; the line
   const p = plan(s);
   assert.deepStrictEqual(p.operations, [
     { op: 'remove', parent: 'TOP-M', number: 'B', sequence: '20', edge: 'eB' },
-    { op: 'add', parent: 'TOP-M', number: 'B-B', quantity: '1', sequence: '11', link: '/api/v3/workspaces/1/items/9', linkable: null },
+    { op: 'renumber', parent: 'TOP-M', number: 'A', from_sequence: '10', sequence: '1', edge: 'eA' },   // the lines are numbered 1, 2 in the tree's order
+    { op: 'add', parent: 'TOP-M', number: 'B-B', quantity: '1', sequence: '2', link: '/api/v3/workspaces/1/items/9', linkable: null },
   ]);
   assert.ok(!p.components.some((c) => c.id === 'b'), 'B is gone from the MBOM, and a bought item is never an item to publish');
   assert.deepStrictEqual(p.problems, []);
@@ -155,16 +156,30 @@ test('a line moved up or down among its siblings is renumbered, so Fusion Manage
   assert.strictEqual(after(last).order, 'QRSP');
 });
 
-test('lines before the first change keep their numbers, and a new line in the middle takes the lines after it with it', () => {
+test('an assembly with a change is numbered 1, 2, 3 in the order of the tree, and a line that has its number already is left alone', () => {
   const s = four();
-  s.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, uidOf(s, 'R'));   // P Q N R S
+  s.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, uidOf(s, 'R'));   // P Q N R S, from 10 20 30 40
   const r = after(s);
   assert.strictEqual(r.order, 'PQNRS');
-  assert.deepStrictEqual(r.plan.operations.filter((o) => o.op === 'renumber').map((o) => o.number), ['R', 'S'], 'P and Q are not touched');
-  const end = four();
-  end.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, '');   // appended
-  assert.deepStrictEqual(plan(end).operations.map((o) => o.op), ['add'], 'an appended line is only added');
-  assert.strictEqual(after(end).order, 'PQRSN');
+  assert.deepStrictEqual(r.plan.operations.filter((o) => o.op === 'add').map((o) => o.sequence), ['3'], 'N is line 3');
+  assert.strictEqual(r.plan.operations.find((o) => o.op === 'renumber' && o.number === 'S').sequence, '5', 'S ends at 5');
+  const tidy = () => S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP-M', itemId: 'i0', children: ['P', 'Q', 'R', 'S'].map((n, i) => (
+    { number: n, quantity: '1', itemId: 'i' + n, edgeId: 'e' + n, sequence: String(i + 1), children: [] })) }, EBOM) });
+  const end = tidy();
+  end.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, '');   // appended to lines 1 to 4
+  const ops = plan(end).operations;
+  assert.deepStrictEqual(ops.map((o) => o.op + o.sequence), ['add5'], 'an appended line is only added, as line 5');
+  const middle = tidy();
+  middle.addItems([{ id: '9', number: 'N', quantity: '1' }], S.ROOT, uidOf(middle, 'R'));   // P Q N R S: lines 1 and 2 are left alone
+  assert.deepStrictEqual(plan(middle).operations.filter((o) => o.op === 'renumber').map((o) => o.number + o.sequence), ['S5', 'R4'], 'shifted from the last one up, so none waits for a number');
+});
+
+test('lines that would take a number another still holds go by a number above the others first, so no number is held twice', () => {
+  const s = S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP-M', itemId: 'i0', children: ['P', 'Q'].map((n, i) => (
+    { number: n, quantity: '1', itemId: 'i' + n, edgeId: 'e' + n, sequence: String(i + 1), children: [] })) }, EBOM) });
+  s.move([uidOf(s, 'Q')], S.ROOT, uidOf(s, 'P'));   // Q P: P takes 2 which Q holds, and Q takes 1 which P holds
+  const ops = plan(s).operations;
+  assert.deepStrictEqual(ops.map((o) => [o.number, o.from_sequence, o.sequence].join(':')), ['Q:2:3', 'P:1:4', 'Q:3:1', 'P:4:2']);
 });
 
 test('a reorder together with a quantity change is one request for the line, and a removal that frees a number does not clash with it', () => {

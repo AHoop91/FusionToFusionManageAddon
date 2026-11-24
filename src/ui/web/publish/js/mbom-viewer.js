@@ -37,6 +37,7 @@
     bought: ['M3 4h2.5l2 11h10l2-8H7', 'M10 19.5h.01', 'M17 19.5h.01'],   // a trolley
     cart: ['M8 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M19 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M2 3h2l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L22 7H5.1'],   // a shopping cart: a purchased part
     info: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5'],   // a circle with an i: the note of a line
+    match: ['M3 12h12', 'M11 7l5 5-5 5', 'M20 5v14'],   // an arrow into a bar: the EBOM carried over to the MBOM
     addItems: ['M4 6h11', 'M4 12h7', 'M4 18h7', 'M17 14v6', 'M14 17h6'],   // a list with a plus
     grip: ['M9 6h.01', 'M15 6h.01', 'M9 12h.01', 'M15 12h.01', 'M9 18h.01', 'M15 18h.01'],
     addOne: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 8v8', 'M8 12h8'],
@@ -506,6 +507,21 @@
     if (first) first.focus();
   }
 
+  /** Quick add: the MBOM becomes a copy of the EBOM, item numbers and all. When Fusion Manage has lines already, the user is asked first, as this replaces them
+   *  (they are only replaced in the viewer: nothing is written until Publish, and undo gives them back). */
+  function matchEbom() {
+    const mine = structure;
+    function go() {
+      if (structure !== mine) return;   // the Bill of Materials was read again while the question was open
+      opened.clear();
+      opened.add(S.ROOT);   // the MBOM itself stays open, or the lines just made would be folded away
+      run(function () { structure.matchEbom(); });
+    }
+    if (!mine.hasLines()) { go(); return; }
+    ns.pubItemPanel.confirm({ title: t('publish.sv_match_title'), lead: t('publish.sv_match_lead'), ask: t('publish.sv_match_ask'), confirm: t('publish.sv_match_confirm'),
+                              icon: ICONS.match, onConfirm: go });
+  }
+
   function addItems() {
     const place = placeForNew();
     const staged = [];
@@ -574,6 +590,7 @@
     function set(button, reason) { button.disabled = !!reason; button.title = reason || button.getAttribute('aria-label'); }   // the reason is the tooltip of one that cannot be used
     set(b.undo, structure.canUndo() ? '' : t('publish.sv_nothing_to_undo'));
     set(b.redo, structure.canRedo() ? '' : t('publish.sv_nothing_to_redo'));
+    set(b.match, ebom.children.length ? '' : t('publish.sv_match_nothing'));
   }
 
   // ---- Drawing -------------------------------------------------------------------------
@@ -785,6 +802,7 @@
   }
 
   function drawMbom(container, cmp, chg) {
+    const numbers = ns.mbomPlan.lineNumbers(structure, chg);   // the line numbers Fusion Manage has, or will have when published
     const list = [];
     (function walk(node, depth) {
       const badges = [];
@@ -800,7 +818,7 @@
       const notes = depth ? mbomNotes(node, cmp, flags) : [];
       const tone = toneOf(notes);
       container.appendChild(lineNode({ id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
-                                       hasKids: node.children.length > 0, isOpen: isOpen, selected: selected.has(node.uid), badges: badges, draggable: depth > 0, actions: actions, seq: depth ? String(index.get(node.uid).at + 1) : '',
+                                       hasKids: node.children.length > 0, isOpen: isOpen, selected: selected.has(node.uid), badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
                                        classes: [hits.has(node.uid) ? 'sv-hit' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source) }));
       if (notes.length && openNotes.has('mbom:' + node.uid)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
@@ -1133,7 +1151,8 @@
     tools.newItem = iconButton('boxPlus', t('publish.item_new'), function () { ns.pubItemPanel.open({ mode: 'assembly' }); });
     const searchBox = el('div', 'sv-search-box');   // the field with a magnifier inside it
     searchBox.append(ns.svg(ICONS.search, 16), search);
-    tools.bar.append(searchBox, found, tools.fold, history, tools.add, tools.newItem);
+    tools.match = iconButton('match', t('publish.sv_match'), matchEbom);
+    tools.bar.append(searchBox, found, tools.fold, history, tools.add, tools.newItem, tools.match);
     const state = el('div', 'sv-state');
     const left = pane(t('publish.sv_ebom_title'), t('publish.sv_ebom_tip'));
     left.tree.classList.add('sv-tree-ebom');   // its hover icons sit nearer the quantity: no quantity box to clear

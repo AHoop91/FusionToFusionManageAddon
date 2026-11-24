@@ -391,6 +391,18 @@
         });
       },
 
+      /** Does the MBOM have any line under it? */
+      hasLines: function () { return mbom.children.length > 0; },
+
+      /** Quick add: make the MBOM a copy of the EBOM, every line with what is under it and the item numbers it has. The lines it had are replaced (one step of
+       *  the history, so undo gives them back). A line that was there and has the same number under the same assembly, with nothing under it, stays the line it was. */
+      matchEbom: function () {
+        return edit(function () {
+          if (!ebom.children.length) throw fail('no_such_ebom');
+          mbom.children = ebom.children.map(function (c) { return fromEbom(c, true); });
+        });
+      },
+
       /** Add existing Fusion Manage items (``{id, number, name, link, linkable, quantity, source}``) as lines. ``source`` (an EBOM key) is for the bought
        *  version of a component: the line stands for that EBOM line in the comparison. */
       addItems: function (items, parentId, before) {

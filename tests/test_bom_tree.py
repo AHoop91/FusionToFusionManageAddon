@@ -34,6 +34,13 @@ class Client:
 
 
 class BomTreeTests(unittest.TestCase):
+    def test_a_tree_lists_lines_by_their_item_number_not_in_the_order_of_the_edges(self):
+        # Fusion Manage answers the edges by id: the Block (number 8) comes before the Sub-Axle (number 3)
+        answer = {"nodes": [node(1, "TOP-M - Top [REV:w]"), node(2, "A - A [REV:1]"), node(3, "B - B [REV:1]"), node(4, "C - C [REV:1]")],
+                  "edges": [edge(1, 2, 1), edge(1, 3, 8), edge(1, 4, 3)]}
+        tree = build_tree(parse_bom(answer), answer, "1", 3)
+        self.assertEqual([(l["number"], l["sequence"]) for l in tree["children"]], [("A", "1"), ("C", "3"), ("B", "8")])
+
     def test_lines_carry_the_id_of_their_item(self):
         lines = parse_bom(ANSWER)
         self.assertEqual([(l["number"], l["item_id"]) for l in lines["TOP-M"]], [("ASM", "2"), ("PH", "4")])

@@ -486,3 +486,40 @@ test('what is under a purchased part is blocked: not addable, and the structure 
   assert.throws(() => s.addFromEbom(['0.0.0'], S.ROOT, '', true), failsWith('under_purchased'));
   assert.throws(() => s.addFromEbom(['0.0.0.0'], S.ROOT, '', false), failsWith('under_purchased'));
 });
+
+test('quick add makes the MBOM a copy of the EBOM, one step that undo gives back', () => {
+  const { s, outline } = fromReadFresh();
+  assert.strictEqual(s.hasLines(), true);
+  s.matchEbom();
+  assert.strictEqual(outline(), 'A[A1,A2],B[B1],C');
+  assert.strictEqual(s.root().children[0].quantity, '2');
+  assert.strictEqual(s.root().children[0].source, '0.0');
+  assert.strictEqual(s.compare().ebom['0.1'].matched, true, 'B and what is under it now match');
+  s.undo();
+  assert.strictEqual(outline(), 'OIL,C');
+  assert.strictEqual(s.canUndo(), false, 'it was the one step');
+});
+
+test('quick add keeps a line that was there with the same number and nothing under it, and removes the rest', () => {
+  const { s } = fromReadFresh();
+  s.matchEbom();
+  const { changes, removed } = s.changes();
+  assert.deepStrictEqual(plain(removed.map((r) => r.number)), ['OIL']);   // C stayed the line it was; the others are new
+  const c = s.root().children.find((n) => n.number === 'C');
+  assert.strictEqual(changes[c.uid], undefined);
+});
+
+test('quick add on an MBOM with no lines needs no question, and one with an EBOM of no lines is refused', () => {
+  const empty = S.create({ ebom: EBOM, mbom: { number: 'TOP', name: 'Top', itemId: '1', children: [] } });
+  assert.strictEqual(empty.hasLines(), false);
+  empty.matchEbom();
+  assert.strictEqual(empty.root().children.length, 3);
+  const none = S.create({ ebom: S.ebomFromRows([], { item_number: 'TOP' }), mbom: { number: 'TOP', children: [] } });
+  assert.throws(() => none.matchEbom(), failsWith('no_such_ebom'));
+});
+
+function fromReadFresh() {
+  const s = fromRead(EBOM, [line('OIL', '1'), line('C', '1')]);
+  const outline = (node) => (node || s.root()).children.map((c) => c.children.length ? c.number + '[' + outline(c) + ']' : c.number).join(',');
+  return { s: s, outline: outline };
+}
