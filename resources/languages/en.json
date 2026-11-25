@@ -364,6 +364,8 @@
     "publish.mbom_placeholder": "None yet",
     "publish.mbom_new": "New Bill of Materials",
     "publish.mbom_pill": "New",
+    "publish.mbom_col_number": "Item number",
+    "publish.mbom_col_descriptor": "Descriptor",
     "publish.mbom_choose_title": "Choose a Bill of Materials",
     "publish.mbom_choose_hint": "This design has more than one. Choose the one to work on.",
     "publish.mbom_new_title": "New Bill of Materials",

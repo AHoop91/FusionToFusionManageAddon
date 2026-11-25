@@ -21,6 +21,8 @@
 
   const NUMBER = /^[A-Za-z0-9._-]+$/;   // what a new number may hold
   const PLUS = ['M12 5v14', 'M5 12h14'];
+  const SEARCH = ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M16 16l4.5 4.5'];
+  const CHEVRON = ['M9 6l6 6-6 6'];
 
   let host = null;
   let found = [];     // the items Fusion Manage holds for the design: {id, number, descriptor}
@@ -59,18 +61,59 @@
     return selected;
   }
 
-  /** Several items were found and none is chosen: list them in ``area`` (the Bill of Materials' place) for the user to pick the one to work on. */
+  /** The text a row of the list of choices shows after the number: the item's descriptor ("" when the item is not made yet). */
+  function descriptorOf(number) {
+    const item = itemOf(number);
+    return item && item.descriptor ? item.descriptor : '';
+  }
+
+  /** One row of the list of items to choose from: its number (with a pill when the item is not made yet), its descriptor and an arrow. */
+  function choiceRow(number) {
+    const choice = el('button', 'pub-mbom-choice');
+    choice.type = 'button';
+    const first = el('span', 'pub-mbom-choice-number');
+    first.appendChild(el('span', 'pub-mbom-choice-text', number));
+    if (!itemOf(number)) first.appendChild(el('span', 'pub-mbom-pill', t('publish.mbom_pill')));
+    choice.appendChild(first);
+    choice.appendChild(el('span', 'pub-mbom-choice-text', descriptorOf(number)));
+    const arrow = el('span', 'pub-mbom-choice-arrow');
+    arrow.appendChild(ns.svg(CHEVRON, 16));
+    choice.appendChild(arrow);
+    choice.addEventListener('click', function () { draw(number); host.choose(number); });
+    return choice;
+  }
+
+  /** Several items were found and none is chosen: list them in ``area`` (the Bill of Materials' place) as a table in the style of the structure viewer's: a bar with a
+   *  search field over a pane, and a footer that counts the rows. The user picks the one to work on. */
   function offer(area) {
-    const card = el('div', 'card pub-mbom-choices');
-    card.appendChild(el('h4', 'pub-mbom-choose-title', t('publish.mbom_choose_title')));
-    card.appendChild(el('p', 'muted', t('publish.mbom_choose_hint')));
-    numbers().forEach(function (number) {
-      const choice = el('button', 'pub-mbom-choice', labelOf(number));
-      choice.type = 'button';
-      choice.addEventListener('click', function () { draw(number); host.choose(number); });
-      card.appendChild(choice);
-    });
-    area.appendChild(card);
+    const all = numbers();
+    const wrap = el('div', 'pub-mbom-choices');
+    const search = el('input', 'sv-input sv-search');
+    search.type = 'search';
+    search.placeholder = t('publish.sv_search_placeholder');
+    search.setAttribute('aria-label', t('publish.sv_search_placeholder'));
+    const searchBox = el('div', 'sv-search-box');
+    searchBox.append(ns.svg(SEARCH, 16), search);
+    const bar = el('div', 'sv-bar');
+    bar.append(searchBox, el('span', 'muted pub-mbom-choose-hint', t('publish.mbom_choose_hint')));
+    const box = el('div', 'sv-pane');
+    const titles = el('div', 'sv-pane-head pub-mbom-choice-titles');   // the column titles are the pane's header
+    titles.append(el('span', '', t('publish.mbom_col_number')), el('span', '', t('publish.mbom_col_descriptor')), el('span'));
+    const list = el('div', 'pub-mbom-choice-list');
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', t('publish.mbom_choose_title'));
+    const count = el('div', 'pub-mbom-choice-footer');   // the pane's footer: how many rows show
+    box.append(titles, list, count);
+    function fill() {
+      const wanted = search.value.trim().toLowerCase();
+      const shown = all.filter(function (number) { return (number + ' ' + descriptorOf(number)).toLowerCase().indexOf(wanted) >= 0; });
+      count.textContent = t('publish.sv_search_count', { count: shown.length });
+      list.replaceChildren.apply(list, shown.length ? shown.map(choiceRow) : [el('p', 'pub-mbom-choice-none', t('publish.sv_search_none'))]);
+    }
+    search.addEventListener('input', fill);
+    wrap.append(bar, box);
+    fill();
+    area.appendChild(wrap);
   }
 
   /** A small "New" pill at the right of the button when the item chosen is not made yet (the list's entries carry theirs as their detail). */
