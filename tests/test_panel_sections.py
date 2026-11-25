@@ -36,7 +36,7 @@ class Fixture:
             mock.patch.object(panel_sections, "publish_denial", return_value=denied),
             mock.patch.object(panel_sections, "read_section", side_effect=self.read),
             mock.patch.object(panel_sections, "search_design", return_value=[]),
-            mock.patch.object(panel_sections, "compare_design_bom", side_effect=lambda rows, *_: {"rows": rows, "shared": False}),
+            mock.patch.object(panel_sections, "mark_design_bom", side_effect=lambda rows, *_: {"rows": rows, "shared": False}),
         ]
         for p in self.patches:
             p.start()
@@ -49,8 +49,6 @@ class Fixture:
             self.gate.wait(5)
         if section == "summary":
             return dict(self.summary)
-        if section == "level":
-            return [{"id": "c1", "level": 0, "item_number": "PN-1"}]
         if section == "structure":
             return [{"id": "c1", "level": 0, "item_number": "PN-1"}, {"id": "c2", "level": 1, "item_number": "PN-2"}]
         return {}
@@ -176,15 +174,13 @@ class SectionTests(unittest.TestCase):
         self.fx.wait("summary")
         self.assertEqual(len(self.fx.reads), 2)
 
-    def test_the_first_level_is_one_level_and_the_tree_is_the_whole(self):
+    def test_the_structure_is_read_whole_at_once(self):
         self.fx.ask("summary")
         self.fx.wait("summary")
         self.fx.ask("structure")
-        self.fx.ask("tree")
-        top, whole = self.fx.wait("structure"), self.fx.wait("tree")
-        self.assertEqual([r["id"] for r in top["data"]["rows"]], ["c1"])
+        whole = self.fx.wait("structure")
         self.assertEqual([r["id"] for r in whole["data"]["rows"]], ["c1", "c2"])
-        self.assertEqual({r[0] for r in self.fx.reads}, {"summary", "level", "structure"})
+        self.assertEqual([r[0] for r in self.fx.reads], ["summary", "structure"])
 
     def test_each_component_has_a_slot_of_its_own(self):
         self.fx.ask("summary")
@@ -262,7 +258,7 @@ class SectionTests(unittest.TestCase):
         done = self.fx.wait("structure")
         self.assertEqual(done["target_id"], "55")
         panel_sections.search_design.assert_not_called()
-        self.assertEqual(panel_sections.compare_design_bom.call_args.args[4], [{"id": "55"}])
+        self.assertEqual(panel_sections.mark_design_bom.call_args.args[2], [{"id": "55"}])
 
     def test_a_target_without_an_item_id_is_searched_for_by_its_number(self):
         self.fx.ask("summary")
@@ -277,7 +273,7 @@ class SectionTests(unittest.TestCase):
         for item_id in ("55", "55", "56"):
             self.fx.ask("structure", target="MBOM-2", target_id=item_id)
             self.fx.wait("structure")
-        self.assertEqual([r for r in self.fx.reads if r[0] == "level"].__len__(), 2)
+        self.assertEqual([r for r in self.fx.reads if r[0] == "structure"].__len__(), 2)
 
     def test_another_target_is_read_afresh_and_the_same_one_is_kept(self):
         self.fx.ask("summary")
@@ -285,7 +281,7 @@ class SectionTests(unittest.TestCase):
         for target in ("A", "A", "B"):
             self.fx.ask("structure", target=target)
             self.fx.wait("structure")
-        self.assertEqual([r for r in self.fx.reads if r[0] == "level"].__len__(), 2)
+        self.assertEqual([r for r in self.fx.reads if r[0] == "structure"].__len__(), 2)
 
     def test_the_other_slots_of_the_design_are_left_alone_by_another_target(self):
         self.fx.ask("summary")

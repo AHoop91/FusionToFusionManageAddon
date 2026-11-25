@@ -226,10 +226,10 @@ The panel reads the BOM one level at a time, so a large assembly opens quickly. 
 
 A line that needs a choice (**Review**) holds **Publish** back, whether its assembly is open or closed.
 
-Each read is made a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. The filter counts and the check button cover only the levels read so far, and say so. If a read is bigger than the add-in can handle, the panel says so instead of showing a table when the first level fails, and shows a message and keeps the table when **Expand All** fails:
+The whole Bill of Materials is read in one go, a page of 250 lines at a time, and the panel shows how many lines it has read so far. The add-in never shows part of a BOM as if it were all of it. If a read is bigger than the add-in can handle, the panel says so instead of showing the structure:
 
-- More than **25,000 lines** in one read (a level, or the whole tree for **Expand All**).
-- Nested **50 levels deep or more** (checked on the whole-tree read).
+- More than **25,000 lines** in one read.
+- Nested **50 levels deep or more**.
 - A component that contains itself.
 
 ### How lines are compared

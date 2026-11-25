@@ -14,7 +14,7 @@ const row = (level, number, quantity, extra) => Object.assign({ level: level, id
 const ROWS = [row(0, 'A', '2'), row(1, 'A1'), row(1, 'A2'), row(0, 'B'), row(1, 'B1'), row(0, 'C')];
 
 function open(options) {
-  const opts = Object.assign({ rows: ROWS, targetId: '', phantom: false, partial: false, bought: true }, options || {});
+  const opts = Object.assign({ rows: ROWS, targetId: '', phantom: false, bought: true }, options || {});
   const dom = new JSDOM('<section id="pub-bom"></section><section id="pub-structure" hidden></section>', { runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   w.MfgUi = {};
@@ -26,17 +26,16 @@ function open(options) {
   const added = [];
   ns.pubAddItems = { open: (o) => added.push(o) };
   ['js/ui.js', 'js/mbom-structure.js', 'js/mbom-plan.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
-  const calls = { loadTree: 0, askMbom: 0, planned: 0 };
-  const state = { partial: opts.partial };
+  const calls = { askMbom: 0, planned: 0 };
   ns.mbomViewer.init({
-    design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R', composition: 'WORKING' }), rows: () => opts.rows, partial: () => state.partial,
-    loadTree: () => { calls.loadTree++; }, askMbom: () => { calls.askMbom++; }, targetId: () => opts.targetId, target: () => (opts.targetId ? 'TOP-M' : ''),
+    design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R', composition: 'WORKING' }), rows: () => opts.rows,
+    askMbom: () => { calls.askMbom++; }, targetId: () => opts.targetId, target: () => (opts.targetId ? 'TOP-M' : ''),
     phantom: () => opts.phantom,
     boughtReady: () => opts.bought, boughtSuffix: () => '', planned: () => { calls.planned++; },
   });
   const $ = (id) => w.document.getElementById(id);
   const api = {
-    w: w, ns: ns, calls: calls, state: state, added: added, toasts: toasts,
+    w: w, ns: ns, calls: calls, added: added, toasts: toasts,
     show: () => ns.mbomViewer.show(true),
     ebom: () => $('pub-structure').querySelectorAll('.sv-pane')[0],
     mbom: () => $('pub-structure').querySelectorAll('.sv-pane')[1],
@@ -75,31 +74,17 @@ function built(options) {
   return v;
 }
 
-test('the viewer waits for the first level, reads the whole tree, then draws both panes', skip, () => {
-  const v = open({ partial: true });
+test('the viewer waits for the structure, then draws both panes', skip, () => {
+  const v = open();
   v.show();
   assert.strictEqual(v.w.document.getElementById('pub-structure').hidden, false);
   assert.strictEqual(v.w.document.getElementById('pub-bom').hidden, true);
   assert.match(v.w.document.getElementById('pub-structure').textContent, /Reading the Fusion Component structure/);
+  assert.strictEqual(v.ebom().querySelector('.sv-row'), null, 'nothing is drawn before the structure is read');
   v.ns.mbomViewer.structureRead();
-  assert.strictEqual(v.calls.loadTree, 1);
-  assert.strictEqual(v.ebom().querySelector('.sv-row'), null, 'nothing is drawn before the tree is read');
-  v.state.partial = false;
-  v.ns.mbomViewer.treeDone({ ok: true });
   assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'B', 'C']);
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C']);
   assert.strictEqual(v.calls.askMbom, 0, 'a design with no MBOM item starts as a copy of the EBOM');
-});
-
-test('a failed read of the tree is shown with a way to retry', skip, () => {
-  const v = open({ partial: true });
-  v.show();
-  v.ns.mbomViewer.structureRead();
-  v.ns.mbomViewer.treeDone({ ok: false, message: 'Fusion Manage said no' });
-  assert.match(v.w.document.getElementById('pub-structure').textContent, /Fusion Manage said no/);
-  v.state.partial = false;
-  v.click(v.w.document.querySelector('.pub-retry'));
-  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C']);
 });
 
 test('lines open and close one at a time and all at once, and only open lines are drawn', skip, () => {
@@ -268,8 +253,6 @@ test('a second answer, or one after the Bill of Materials was read again, never 
   v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1'), treeLine('D', '1')]) });
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'C'], 'the late answer is dropped');
   assert.strictEqual(v.rowOf(v.mbom(), 'C').querySelector('.sv-qty').textContent, '6.0');
-  v.ns.mbomViewer.treeDone({ ok: true });
-  assert.strictEqual(v.rowOf(v.mbom(), 'C').querySelector('.sv-qty').textContent, '6.0', 'neither does a tree read for the table');
 });
 
 test('reading the Bill of Materials again drops the structure, the selection and the search', skip, () => {
@@ -662,8 +645,6 @@ test('the panel is told to plan again only when the structure or its data change
   assert.strictEqual(v.calls.planned, planned, 'selecting and folding leave what publishing covers as it was');
   v.click(v.act(v.mbom(), 'B', 'remove'));
   assert.strictEqual(v.calls.planned, planned + 1, 'an edit tells it once');
-  v.ns.mbomViewer.treeDone({ ok: true });
-  assert.strictEqual(v.calls.planned, planned + 2, 'so does reading more of the design');
 });
 
 test('quick add asks before it overrides the lines Fusion Manage has, and matches the MBOM to the EBOM once it is confirmed', skip, () => {

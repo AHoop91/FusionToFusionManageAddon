@@ -117,7 +117,7 @@
 
   /** The answer to a section that is still loading: show how far it is and ask again shortly. */
   function waitFor(name, entry) {
-    if (name === 'structure' || name === 'tree') bom.status(entry);   // the tree is the long read: its line count is told too
+    if (name === 'structure') bom.status(entry);   // the long read: its line count is told
     timers[name] = setTimeout(function () {
       bridge.send('load_publish_section_status', { section: name });
     }, POLL_INTERVAL_MS);
@@ -148,14 +148,14 @@
     else details.setRootError(failure);
   }
 
-  /** The first level of the Bill of Materials, compared with Fusion Manage. */
+  /** The whole Bill of Materials, compared with Fusion Manage. */
   function answerStructure(entry) {
     if (!entry.ok) {
       bom.showError(entry.message, function () { loaded.structure = false; viewer.show(true); loadSection('structure'); });
       return;
     }
-    bom.showFirstLevel(entry.data);
-    viewer.structureRead();   // the structure viewer can ask for the rest of the tree now
+    bom.showStructure(entry.data);
+    viewer.structureRead();   // the structure viewer can go on to the MBOM now
     if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
 
@@ -196,7 +196,6 @@
     clearTimeout(timers[name]);
     if (entry.pending) { waitFor(name, entry); return; }
     inflight[name] = false;
-    if (name === 'tree') { bom.finishTree(entry); return; }
     if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
     if (name === 'summary') { answerSummary(entry); return; }
     if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
@@ -258,14 +257,12 @@
       check: function (number) { request('mbom_number', { section: 'mbom_number', target: number, target_id: '' }); },
       choose: chooseTarget,
     });
-    bom.init({ summary: summary, ask: ask, treeDone: viewer.treeDone, plan: viewer.plan, say: viewer.say, showNotice: viewer.showTable });
+    bom.init({ summary: summary, plan: viewer.plan, say: viewer.say, showNotice: viewer.showTable });
     viewer.init({
       design: function () { return currentSummary || {}; },   // the design's own item number, not the target's
       summary: summary,   // with the target's, for what publishing sends
       planned: bom.refreshScope,
       rows: bom.rows,
-      partial: bom.partial,
-      loadTree: bom.loadTree,
       askMbom: function () { ask('mbom_tree', { section: 'mbom_tree', force: true }); },   // never a copy kept from before: its line ids are what edits are sent against, and Fusion Manage changes under the panel
       targetId: function () { return mbom.idOf(target); },   // empty for a design with no MBOM item: the viewer starts from the EBOM
       target: function () { return target; },

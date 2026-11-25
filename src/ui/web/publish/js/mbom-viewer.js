@@ -4,7 +4,7 @@
  * does into its edits. Nothing here is sent to Fusion Manage by the viewer itself: the Publish button sends what ``plan()`` makes of the structure
  * (mbom-plan.js).
  *
- * Where the trees come from: the EBOM from the rows the panel has read (all levels, so the whole tree is read first, as Expand all does); the
+ * Where the trees come from: the EBOM from the rows the panel has read (all levels, read at once); the
  * MBOM from the ``mbom_tree`` section (the target item read by its id, every level), mapped to the EBOM by item number. A design with no MBOM item
  * starts as a copy of the EBOM.
  *
@@ -12,7 +12,7 @@
  * lines of an open assembly are drawn, and no more than ``LIMIT`` under one at first, so a large tree stays quick. Every edit goes through
  * ``run``, which says the reason an edit was refused in a toast.
  *
- * ``host``: ``design()`` (the open design's summary), ``rows()`` (compared rows read so far), ``partial()`` (levels not read yet), ``loadTree()``,
+ * ``host``: ``design()`` (the open design's summary), ``rows()`` (the rows of the Bill of Materials that was read),
  * ``askMbom()``, ``targetId()``, ``target()`` (item number), ``phantom()`` (whether Settings allow phantoms), ``summary()`` (the design, under the
  * target's item number), ``boughtSuffix()``, ``boughtReady()`` and ``planned()`` (called when the structure may have changed: what publishing covers is
  * worked out again).
@@ -78,8 +78,8 @@
   let host = null;
   let dom = null;            // the elements of the viewer, made when it is first shown
   let active = false;        // the Structure view is the one on screen
-  let ready = false;         // the first level of the Bill of Materials has been read: the whole tree can be asked for
-  let phase = 'idle';        // idle, structure / tree / mbom (what is being waited for: each asked once) or error
+  let ready = false;         // the Bill of Materials (every level) has been read: the MBOM can be asked for
+  let phase = 'idle';        // idle, structure / mbom (what is being waited for: each asked once) or error
   let note = '';             // what the viewer is waiting for, or the error
   let skeleton = false;      // the tables hold the grey bars of the wait
   let structure = null;
@@ -164,17 +164,13 @@
     })(structure.root(), null, 0);
   }
 
-  /** Go as far as the data allows: wait for the first level, read the whole EBOM, read the MBOM, then build and draw. Each read is asked once:
+  /** Go as far as the data allows: wait for the EBOM, read the MBOM, then build and draw. Each read is asked once:
    *  while one is on its way the viewer only waits, and a structure that exists (with edits) is never replaced. */
   function refresh() {
     if (!active) return;
     if (structure) { update(); return; }
     if (phase === 'mbom') return;
     if (!ready) { wait('structure', t('publish.reading_bom')); return; }
-    if (host.partial()) {
-      if (phase !== 'tree') { wait('tree', t('publish.reading_bom')); host.loadTree(); }
-      return;
-    }
     if (host.targetId()) { wait('mbom', t('publish.sv_reading_mbom')); host.askMbom(); return; }
     build(null);
     update();
@@ -207,15 +203,6 @@
     if (!entry.ok) { fail(entry.message || t('publish.unknown_error'), function () { phase = 'idle'; refresh(); }); return; }
     build(entry.data);
     update();
-  }
-
-  /** The whole tree was read (or failed) for the panel's table; the viewer may have been waiting for it. */
-  function treeDone(entry) {
-    if (!entry.ok) {
-      if (active && !structure && phase === 'tree') fail(entry.message || t('publish.unknown_error'), function () { phase = 'idle'; refresh(); });
-      return;
-    }
-    refresh();
   }
 
   /** The Bill of Materials is read again: what was built from the old one is dropped. */
@@ -1302,7 +1289,7 @@
   }
 
   ns.mbomViewer = {
-    init: init, reset: reset, answer: answer, treeDone: treeDone, say: say,
+    init: init, reset: reset, answer: answer, say: say,
     structureRead: function () { ready = true; refresh(); },
     show: show, plan: plan,
     showTable: function () { show(false); },   // the MBOM has to be chosen, and the choice is drawn in the area beside the structure

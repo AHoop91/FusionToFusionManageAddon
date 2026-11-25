@@ -497,7 +497,6 @@
     "publish.plan_skipped": "{numbers} has no item number, or shares it with another item in Fusion Manage, so it cannot be published. Fix it in Fusion Manage or remove it from the structure.",
     "publish.plan_ambiguous": "{numbers} is in more than one place with different lines, but Fusion Manage keeps one bill of materials for it. Make its lines the same in each place.",
     "publish.waiting_bom": "Waiting for the Bill of Materials.",
-    "publish.comparing": "Comparing with Fusion Manage...",
     "publish.checking_mbom": "Checking for existing Bill of Materials in Fusion Manage...",
     "publish.reading_bom_lines": "Reading the Fusion Component structure... {count} lines so far",
     "publish.reading_bom": "Reading the Fusion Component structure...",

@@ -4,8 +4,7 @@ Each row gets a status: ``new`` (not under that parent in Fusion Manage yet), ``
 Fusion Manage extends the design BOM (oil, panels and other manufacturing lines), so lines only Fusion Manage has are ``extra``
 rows, never deletions. An extra sits next to a ``new`` row of the same parent when there is one, and the two carry each other's
 item number in ``pair``: the item number differs at that position, which may be a replaced item, so the user decides. Extras
-without a partner go after the parent's other children. Parents that Fusion Manage does not know yet have every child ``new``;
-a design that is not in Fusion Manage at all has its lines ``uncompared``.
+without a partner go after the parent's other children. Parents that Fusion Manage does not know yet have every child ``new``.
 """
 
 import math
@@ -17,8 +16,6 @@ from ..fm.client import FmClient
 from .item_number import item_number_of
 
 NEW, CHANGED, MATCH, EXTRA = "new", "changed", "match", "extra"
-# The design is not in Fusion Manage at all: its lines are not compared, and not asked about one by one.
-UNCOMPARED = "uncompared"
 # No item number: not in the Components workspace, so no item is created; neither is anything below it.
 SKIPPED = "skipped"
 # The design's lines that Fusion Manage lacks under that parent or holds with another quantity.

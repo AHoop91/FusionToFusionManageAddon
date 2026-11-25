@@ -1,8 +1,7 @@
 /**
- * Publish Item panel: the Bill of Materials as it has been read so far, as ``ns.bomTree``.
+ * Publish Item panel: the Bill of Materials of the design, as ``ns.bomTree``.
  *
- * Only the first level is read at first; the lines under an assembly are read when it is opened (or all of them, for Expand all and for
- * publishing). Each read gives the lines directly under one component. They are kept by that component's id, so a component used in
+ * The whole tree is read at once (``setAll``). It is kept as the lines directly under each component. They are kept by that component's id, so a component used in
  * several places is read once and shows its lines in every place. ``rows`` lays them out again as one flat list in tree order, each row
  * with its ``level`` (0 = directly under the design), which is what bom-model.js turns into the lines of the table.
  */

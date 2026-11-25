@@ -78,7 +78,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | I need to | Use | Where |
 | --- | --- | --- |
 | Compare a design or component with its item | `sync/item_compare.py` | `sync/` |
-| Compare properties, or a BOM, or one level of a BOM | `sync/property_compare.py`, `sync/bom_compare.py`, `sync/bom_levels.py` | `sync/` |
+| Compare properties, or a BOM; or mark what a design's BOM cannot publish | `sync/property_compare.py`, `sync/bom_compare.py`, `sync/bom_levels.py` (`mark_design_bom`) | `sync/` |
 | Say whether the item panel's tabs are up to date | `sync/up_to_date.py` | `sync/` |
 | Get the item number a design or component is looked up by | `item_number_of` | `sync/item_number.py` |
 
