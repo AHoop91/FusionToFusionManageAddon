@@ -97,9 +97,7 @@
     loaded[name] = true;
     const target = $('item-' + name);
     if (name === 'files') {
-      ns.itemFiles.render(target, currentView, function (file) {
-        if (file.url) bridge.send('open_url', { url: file.url });   // the file's page in Fusion Manage
-      }, uploadTool);
+      ns.itemFiles.render(target, currentView, ns.itemFiles.open, uploadTool);
     } else {
       ({ bom: ns.itemBom, whereused: ns.itemWhereUsed, workflows: ns.itemWorkflows, changelog: ns.itemChangeLog })[name].render(target, currentView);
     }
@@ -111,11 +109,7 @@
       const tab = view.tabs[key];
       const button = $('item-tab-' + key);
       button.hidden = !tab;
-      if (!tab) return;
-      button.textContent = tab.allowed && tab.count ? tab.label + ' (' + tab.count + ')' : tab.label;
-      button.disabled = !tab.allowed;
-      if (tab.allowed) button.removeAttribute('title');
-      else button.title = t('item.tab_no_permission');
+      if (tab) ns.itemTree.labelTab(button, tab);
     });
   }
 

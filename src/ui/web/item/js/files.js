@@ -174,5 +174,11 @@
     return function (found) { stale = found; table.draw(); };   // mark the files found out of date
   }
 
-  ns.itemFiles = { render: render, icon: icon };
+  // A page that has no open document to export and attach from (a product, a line of the Publish viewer) gives this as ``tools``.
+  const NO_TOOLS = { actions: [], busy: false, run: function () {}, listen: function () {}, refresh: function () {} };
+
+  /** What a click on a file does on a page with no viewer of its own: its page in Fusion Manage opens. */
+  function open(file) { if (file.url) ns.bridge.send('open_url', { url: file.url }); }
+
+  ns.itemFiles = { render: render, icon: icon, open: open, NO_TOOLS: NO_TOOLS };
 })(window.MfgUi);

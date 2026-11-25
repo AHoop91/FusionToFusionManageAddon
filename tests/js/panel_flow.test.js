@@ -47,7 +47,7 @@ function openPanel() {
   ns.diffReport = { open() {}, COLUMN_VALUE: 'v', COLUMN_FM: 'f' };
   ns.pubDetails = {
     init() {}, open() {}, setRoot() {}, setRootError() {}, handleComponent() {}, handleThumbnail() {},
-    setThumbnail() {}, reset() {}, changeState: () => panel.own,
+    setThumbnail() {}, reset() {}, close() {}, handleItemTabs() {}, handleItemView() {}, changeState: () => panel.own,
   };
   const scripts = pageScripts();
   scripts.filter((src) => /(^|\/)dom\.js$/.test(src)).forEach((src) => run(w, src));

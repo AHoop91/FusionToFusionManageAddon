@@ -17,10 +17,9 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
 from ..core.logging_setup import get_logger
-from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
-from .items import display_text
+from .items import ItemService, display_text
 from .pages import field_id, item_page, link_page, tenant_of
 from .sections import SectionService
 from .tabs import TabService
@@ -246,24 +245,29 @@ class ItemViewService:
                 except (FmApiError, AuthError) as exc:
                     log.debug("Preparing workspace %s: %s", workspace_id, exc)
 
-    def read(self, workspace_id: str, item_id: str, held: Set[str], with_grid: bool = False, pictures: bool = True) -> Dict[str, Any]:
-        """The item laid out for display; ``held`` is the user's permissions in the workspace (they decide which tabs can be opened).
-        ``with_grid`` adds the Grid tab to ``tabs`` (see ``TabService.read``). ``pictures`` False leaves the image fields empty, each with its
-        ``link``, so the page can draw the item at once and ask for the pictures afterwards (they are the slowest part of a read)."""
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            # the other tabs are read when they are opened; only their names and counts come with the item
-            tabs = pool.submit(TabService(self._client).read, workspace_id, item_id, held, with_grid)   # asked while the item is read
+    def layout(self, workspace_id: str, item_id: str, pictures: bool = True) -> Dict[str, Any]:
+        """The item laid out for display (title, header, state, url, ``sections``, ``item_id``, ``workspace_id``, ``item_urn``), with no ``tabs`` and so no
+        permissions read. ``pictures`` False leaves the image fields empty, each with its ``link``, so the page can draw the item at once and ask for the
+        pictures afterwards (they are the slowest part of a read)."""
+        with ThreadPoolExecutor(max_workers=2) as pool:   # the workspace's layout is read while the item is
             layouts = pool.submit(self._layouts, workspace_id)
             hidden = pool.submit(self._hidden_fields, workspace_id)
-            data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
-            if not isinstance(data, dict):
-                raise FmApiError(t("data.fm_no_item", item=item_id, workspace=workspace_id))
+            data = ItemService(self._client).item(workspace_id, item_id)
             loader = self._pictures(data) if pictures else no_image
             view = build_view(data, layouts.result(), loader, self._client.base_url, hidden.result())
-            if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
-                log.error("No sections could be built for item %s: %s", item_id, str(data)[:LOG_CHARS])
-            view["tabs"] = tabs.result()
+        if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
+            log.error("No sections could be built for item %s: %s", item_id, str(data)[:LOG_CHARS])
         view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
+        return view
+
+    def read(self, workspace_id: str, item_id: str, held: Set[str], with_grid: bool = False, pictures: bool = True) -> Dict[str, Any]:
+        """``layout`` with the item's ``tabs`` (see ``TabService.read``); ``held`` is the user's permissions in the workspace (they decide which tabs can
+        be opened) and ``with_grid`` adds the Grid tab."""
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            # the other tabs are read when they are opened; only their names and counts come with the item
+            tabs = pool.submit(TabService(self._client).read, workspace_id, item_id, held, with_grid)   # asked while the item is read
+            view = self.layout(workspace_id, item_id, pictures)
+            view["tabs"] = tabs.result()
         return view
 
     def _layouts(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:

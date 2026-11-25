@@ -25,17 +25,21 @@ function open(options) {
   ns.toast = { show: (text) => toasts.push(text) };
   const added = [];
   ns.pubAddItems = { open: (o) => added.push(o) };
-  ['js/ui.js', 'js/mbom-structure.js', 'js/mbom-plan.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
+  const opened = [];   // the lines the Details Panel was opened for
+  const closes = [];   // one entry each time the Details Panel closes, as opened does for opening
+  ns.pubDetails = { open: (line) => opened.push(line), close: () => { closes.push(true); ns.mbomViewer.detailsClosed(); } };   // as the real one: closing tells the viewer
+  ['js/ui.js', 'js/bom-model.js', 'js/mbom-structure.js', 'js/mbom-plan.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
   const calls = { askMbom: 0, planned: 0 };
   ns.mbomViewer.init({
     design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R', composition: 'WORKING' }), rows: () => opts.rows,
+    summary: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R', description: '' }),
     askMbom: () => { calls.askMbom++; }, targetId: () => opts.targetId, target: () => (opts.targetId ? 'TOP-M' : ''),
     phantom: () => opts.phantom,
     boughtReady: () => opts.bought, boughtSuffix: () => '', planned: () => { calls.planned++; },
   });
   const $ = (id) => w.document.getElementById(id);
   const api = {
-    w: w, ns: ns, calls: calls, added: added, toasts: toasts,
+    w: w, ns: ns, calls: calls, added: added, toasts: toasts, opened: opened, closes: closes,
     show: () => ns.mbomViewer.show(true),
     ebom: () => $('pub-structure').querySelectorAll('.sv-pane')[0],
     mbom: () => $('pub-structure').querySelectorAll('.sv-pane')[1],
@@ -406,9 +410,9 @@ test('the icons on a line: add to assembly, the bin last, and a handle to drag i
   v.openAll();
   assert.ok(v.rowOf(v.mbom(), 'B').querySelector('.sv-grip'));
   const order = (id) => [...v.rowOf(v.mbom(), id).querySelectorAll('.sv-act')].map((b) => b.dataset.act);
-  assert.deepStrictEqual(order('A'), ['position', 'split', 'addTo', 'remove'], 'the position first, the bin always last');
-  assert.deepStrictEqual(order('C'), ['position', 'split', 'addTo', 'remove']);
-  assert.strictEqual(v.rowOf(v.mbom(), 'TOP').querySelector('.sv-act'), null, 'the MBOM itself has none');
+  assert.deepStrictEqual(order('A'), ['details', 'position', 'split', 'addTo', 'remove'], 'the magnifier first, the position next, the bin always last');
+  assert.deepStrictEqual(order('C'), ['details', 'position', 'split', 'addTo', 'remove']);
+  assert.deepStrictEqual(order('TOP'), ['details'], 'the MBOM itself has the magnifier only');
   v.click(v.rowOf(v.mbom(), 'B'));
   v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
 });
@@ -923,4 +927,79 @@ test('the tree of assemblies numbers lines from the top down, locks the assembly
   pick('A').click();
   assert.strictEqual(pick('A').parentNode.getAttribute('aria-selected'), 'true', 'the one chosen is said');
   assert.strictEqual(v.w.document.activeElement, pick('A'), 'the focus stays on it after the tree is drawn again');
+});
+
+/* ---- The magnifier: the Details Panel ---- */
+
+/** The viewer built from the EBOM and an MBOM read from Fusion Manage: A (with A1), and OIL, which only Fusion Manage has. */
+function withMbom() {
+  const v = open({ targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '2', { children: [treeLine('A1', '1')] }), treeLine('OIL', '1')]) });
+  v.ns.mbomViewer.structureRead();
+  v.openAll();
+  return v;
+}
+
+test('the magnifier is the first icon on every line of both panes, the roots too, with its tooltip', skip, () => {
+  const v = built();
+  v.openAll();
+  [v.ebom(), v.mbom()].forEach((pane) => [...pane.querySelectorAll('.sv-row')].forEach((r) => {
+    const first = r.querySelector('.sv-act');
+    assert.strictEqual(first.dataset.act, 'details');
+    assert.strictEqual(first.title, 'Show details');
+    assert.strictEqual(first.disabled, false);
+  }));
+});
+
+test('the magnifier opens the Details Panel for the line: the design for a root, the component for a line, no component for a line only Fusion Manage has', skip, () => {
+  const v = withMbom();
+  v.click(v.act(v.ebom(), 'TOP', 'details'));
+  assert.deepStrictEqual([v.opened[0].root, v.opened[0].id, v.opened[0].key, v.opened[0].pane], [true, 'R', '0', 'ebom'], 'the EBOM root is the design');
+  v.click(v.act(v.mbom(), 'TOP-M', 'details'));
+  assert.deepStrictEqual([v.opened[1].root, v.opened[1].id, v.opened[1].pane], [true, 'R', 'mbom'], 'the MBOM root is the design too');
+  v.click(v.act(v.ebom(), 'A1', 'details'));
+  assert.deepStrictEqual([v.opened[2].root, v.opened[2].id, v.opened[2].item_number, v.opened[2].itemId, v.opened[2].noComponent], [false, 'cA1', 'A1', '', undefined], 'an EBOM line is its component');
+  v.click(v.act(v.mbom(), 'A1', 'details'));
+  assert.deepStrictEqual([v.opened[3].id, v.opened[3].itemId, v.opened[3].pane, v.opened[3].noComponent], ['cA1', 'iA1', 'mbom', undefined], 'an MBOM line of the same item is the component, and has its item');
+  v.click(v.act(v.mbom(), 'OIL', 'details'));
+  assert.deepStrictEqual([v.opened[4].id, v.opened[4].itemId, v.opened[4].noComponent, v.opened[4].title], ['', 'iOIL', true, 'OIL - OIL name'], 'a line only Fusion Manage has: its item, no component');
+});
+
+test('a plain click on a line opens nothing, and the marked line is the one whose panel is open until the panel closes', skip, () => {
+  const v = withMbom();
+  v.click(v.rowOf(v.ebom(), 'A1'));
+  v.click(v.rowOf(v.mbom(), 'A1'));
+  assert.strictEqual(v.opened.length, 0, 'only the magnifier opens it');
+  v.click(v.act(v.mbom(), 'A1', 'details'));
+  assert.ok(v.rowOf(v.mbom(), 'A1').classList.contains('sv-details'));
+  assert.strictEqual(v.rowOf(v.mbom(), 'A1').getAttribute('aria-current'), 'true');
+  assert.strictEqual(v.w.document.querySelectorAll('.sv-details').length, 1);
+  assert.ok(!v.rowOf(v.ebom(), 'A1').classList.contains('sv-details'), 'the same item in the other pane is not marked');
+  v.ns.mbomViewer.detailsClosed();
+  assert.strictEqual(v.w.document.querySelectorAll('.sv-details').length, 0, 'the mark goes with the panel');
+});
+
+test('the mark moves from line to line and clears on close without drawing the trees again', skip, () => {
+  const v = withMbom();
+  const first = v.rowOf(v.mbom(), 'A1');
+  const second = v.rowOf(v.ebom(), 'A1');
+  v.click(v.act(v.mbom(), 'A1', 'details'));
+  v.click(v.act(v.ebom(), 'A1', 'details'));
+  assert.ok(first.isConnected && second.isConnected, 'the same lines are still in the page: no redraw');
+  assert.ok(!first.classList.contains('sv-details') && first.getAttribute('aria-current') === null, 'the mark left the first line');
+  assert.ok(second.classList.contains('sv-details') && second.getAttribute('aria-current') === 'true', 'and is on the second');
+  assert.strictEqual(v.w.document.querySelectorAll('.sv-details').length, 1);
+  v.ns.mbomViewer.detailsClosed();
+  assert.ok(second.isConnected, 'closing does not redraw either');
+  assert.ok(!second.classList.contains('sv-details') && second.getAttribute('aria-current') === null, 'the mark clears on close');
+});
+
+test('the panel closes when its line is removed', skip, () => {
+  const v = withMbom();
+  v.click(v.act(v.mbom(), 'OIL', 'details'));
+  assert.strictEqual(v.closes.length, 0);
+  v.click(v.act(v.mbom(), 'OIL', 'remove'));
+  assert.strictEqual(v.closes.length, 1, 'its line is gone');
+  assert.strictEqual(v.w.document.querySelectorAll('.sv-details').length, 0);
 });

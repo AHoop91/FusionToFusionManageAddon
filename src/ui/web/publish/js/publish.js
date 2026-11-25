@@ -206,6 +206,9 @@
     if ((name === 'structure' || name === 'mbom_tree') && entry.target_id !== mbom.idOf(target)) return;   // read for an MBOM that is no longer the one chosen
     inflight[name] = false;
     if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
+    if (name.indexOf('item_tabs:') === 0) { details.handleItemTabs(name.slice('item_tabs:'.length), entry); return; }
+    if (name.indexOf('item_picture:') === 0) { details.handlePicture(name.slice('item_picture:'.length), entry); return; }
+    if (name.indexOf('item_view:') === 0) { details.handleItemView(name.slice('item_view:'.length), entry); return; }
     if (name === 'summary') { answerSummary(entry); return; }
     if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
     if (name === 'mbom_tree') { viewer.answer(entry); return; }   // the MBOM of the target, for the structure viewer
@@ -281,6 +284,7 @@
     });
     details.init({
       request: request,
+      onClose: viewer.detailsClosed,   // the line of the viewer that was marked is not any more
       // The design's row was opened: read its own properties the first time.
       onRootLoad: function () {
         if (loaded.structure && !loaded.properties && !inflight.properties) loadSection('properties');   // the Bill of Materials is in, so the lookup has answered

@@ -19,12 +19,10 @@
   const el = ns.el;
   const t = ns.i18n.t;
 
-  // A product is not the open design, so there is nothing to export and attach to it from here.
-  const NO_TOOLS = { actions: [], busy: false, run: function () {}, listen: function () {}, refresh: function () {} };
   const ORDER = ['item', 'files', 'grid', 'bom', 'whereused', 'workflows', 'changelog'];   // the tabs, left to right, when the workspace has them
   const LAZY = {   // the tabs read when they are opened, and what draws each (the Item panel's own code)
     files: function (pane, view) {
-      ns.itemFiles.render(pane, view, function (file) { if (file.url) bridge.send('open_url', { url: file.url }); }, NO_TOOLS);
+      ns.itemFiles.render(pane, view, ns.itemFiles.open, ns.itemFiles.NO_TOOLS);   // a product is not the open design: nothing to export and attach to it
     },
     bom: function (pane, view) { ns.itemBom.render(pane, view); },
     whereused: function (pane, view) { ns.itemWhereUsed.render(pane, view); },
@@ -127,12 +125,6 @@
     return link;
   }
 
-  /** A tab's button text: its name as the workspace gives it, and how many entries it holds. */
-  function tabText(key) {
-    const info = view.tabs[key];
-    return info.allowed && info.count ? info.label + ' (' + info.count + ')' : info.label;
-  }
-
   /** The balls and a line in the middle of ``pane`` (across and down) while it is read. */
   function loading(pane) {
     ns.itemTree.loading(pane, '', t('products.browse_loading'));
@@ -165,11 +157,10 @@
     buttons = {};
     loaded = {};
     ORDER.filter(function (key) { return view.tabs[key]; }).forEach(function (key) {
-      const button = el('button', 'item-tab', tabText(key));
+      const button = el('button', 'item-tab');
+      ns.itemTree.labelTab(button, view.tabs[key]);
       button.type = 'button';
       button.setAttribute('role', 'tab');
-      button.disabled = !view.tabs[key].allowed;
-      if (button.disabled) button.title = t('item.tab_no_permission');
       button.addEventListener('click', function () { select(key); });
       strip.appendChild(button);
       const pane = el('div', 'view-scroll');

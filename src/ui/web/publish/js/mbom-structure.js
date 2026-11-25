@@ -691,5 +691,5 @@
     return api;
   }
 
-  ns.mbomStructure = { create: create, ebomFromRows: ebomFromRows, mapByNumber: mapByNumber, zoneOf: zoneOf, ROOT: ROOT };
+  ns.mbomStructure = { numberKey: numberKey, create: create, ebomFromRows: ebomFromRows, mapByNumber: mapByNumber, zoneOf: zoneOf, ROOT: ROOT };
 })(window.MfgUi);

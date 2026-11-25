@@ -1,12 +1,19 @@
 /**
  * Publish Item panel: the Details Panel beside the bill of materials, as ``ns.pubDetails``.
  *
- * It shows one component at a time: its properties compared with Fusion Manage. Components are read when they are opened (from a line of the up-to-date
- * check's list, or the design itself), then kept. The design's own properties are read by publish.js, when they are first opened, and handed in with ``setRoot``.
+ * It shows one line at a time (opened by the magnifier of a line of the structure viewer, or for the design itself), then keeps what it read. The
+ * Overview tab decides from the comparison with Fusion Manage whether the item exists: when no item has the number it says so and shows the properties
+ * that publishing would send (no other tab); when one does, it shows the comparison and a tab strip, with the item's own tabs beside it (``ITEM_TABS``:
+ * Item details, then Attachments). A line with no Fusion Component (one only Fusion Manage has, or one added) has no comparison, only the item's tabs when it has an item.
+ * The design's own properties are read by publish.js, when they are first opened, and handed in with ``setRoot``.
  *
- * ``init`` takes: ``request(slot, payload)`` to ask Python for a component,
+ * ``open(line)`` takes ``{id, root, item_number, part_number, description, name, title}`` as ``bomModel.lineComponent`` makes it, with, from the viewer,
+ * ``key`` and ``pane`` (the line to mark), ``itemId`` (the Fusion Manage item, when known) and ``noComponent``.
+ *
+ * ``init`` takes: ``request(slot, payload)`` to ask Python for a component, an item's tabs or an item's view (its sections of fields),
  * ``onRootLoad()`` when the design is opened (read its properties unless that is done or under way),
- * ``onRootRetry()`` to read the design's properties again.
+ * ``onRootRetry()`` to read the design's properties again,
+ * ``onClose()`` when the panel closes, or is opened for something that is not a line of the viewer (its mark goes).
  */
 (function (ns) {
   'use strict';
@@ -50,12 +57,36 @@
   const errors = {};            // component id -> message
   const loading = {};           // component id -> true while being read
   const collapsed = {};         // sub header -> true while collapsed; kept across components
+  const NEW_WIDTHS = [30, 62, 8];   // Property, Fusion, status: the table of a component with no item has no Fusion Manage column
   const DEFAULT_WIDTHS = [24, 34, 34, 8];   // Property, Fusion, Fusion Manage, status: Fusion and Fusion Manage share the room equally
   const MIN_COLUMN_PCT = 12;
   const colWidths = DEFAULT_WIDTHS.slice();   // as dragged
   const thumbs = {};            // component id -> thumbnail url ('' none, null while being read)
+  const itemTabs = {};          // Fusion Manage item id -> its tabs (``item_tabs``: workspace_id, item_id, item_urn, tabs) and the ``stamp`` it was read under
+  const itemTabErrors = {};     // item id -> message
+  const itemTabLoading = {};    // item id -> true while being read
+  const itemViews = {};         // item id -> the item as the Item panel lays it out (``item_view``: sections of fields and matrices)
+  const itemViewErrors = {};    // item id -> message
+  const itemViewLoading = {};   // item id -> true while being read
+  const pictures = {};          // picture link -> its data uri ('' none), once read
+  const pictureWaiting = {};    // picture link -> the ``done`` callbacks of the image fields that wait for it
+  let drawn = {};               // item tab key -> the item id whose content it holds (read once per item and line opened)
+  let tabItem = '';             // the item whose tabs the strip shows, '' when it is hidden
 
-  function compareOf(item) { return item.root ? rootCompare : compares[item.id]; }
+  /** The tabs of an item, beside Overview. The keys are the keys of ``item_tabs``' ``tabs`` (item, files, bom, whereused, workflows, changelog). A tab is one button
+   *  in index.html (``data-tab``), one panel there (``pubtab-<key>``, holding a ``pub-<key>`` div to draw into: the drawing sets its class) and one entry here:
+   *  ``draw(target, view)`` where ``view`` is ``{workspace_id, item_id, stamp, item_urn}``. */
+  const ITEM_TABS = {
+    item: { draw: function (target, view) { drawItemView(target, view.item_id); } },
+    files: { draw: function (target, view) { ns.itemFiles.render(target, view, ns.itemFiles.open, ns.itemFiles.NO_TOOLS); } },
+  };
+
+  function compareOf(item) { return item.noComponent ? undefined : item.root ? rootCompare : compares[item.id]; }
+
+  /** The Fusion Manage item a line is: the one the viewer knows, else the one the comparison found. */
+  function itemIdOf(item, compare) {
+    return item.itemId || (compare && compare.fm && compare.fm.state === 'found' ? compare.fm.item_id : '');
+  }
 
   /** Why a component's details could not be read: the design's own properties fail separately from the rest. */
   function errorOf(item) { return (item.root && rootError) || errors[item.id] || ''; }
@@ -117,8 +148,92 @@
     if (selected && selected.id === id) paint();
   }
 
+  // ---- Reading an item's tabs ---------------------------------------------------
+
+  function loadItemTabs(itemId, skipCache) {
+    if (!itemId || itemTabs[itemId] || itemTabLoading[itemId] || itemTabErrors[itemId]) return;   // read, under way, or failed (Retry asks again)
+    itemTabLoading[itemId] = true;
+    hooks.request('item_tabs:' + itemId, { section: 'item_tabs', id: itemId, force: skipCache || force });
+  }
+
+  /** The answer for an item's tabs read by ``loadItemTabs``. */
+  function handleItemTabs(itemId, entry) {
+    if (!itemTabLoading[itemId]) return;   // asked before ``reset``: not wanted
+    itemTabLoading[itemId] = false;
+    if (entry.ok) {
+      delete itemTabErrors[itemId];
+      itemTabs[itemId] = Object.assign({}, entry.data, { stamp: entry.stamp });
+    } else {
+      itemTabErrors[itemId] = entry.message || t('publish.unknown_error');
+    }
+    paint();
+  }
+
+  // ---- Reading an item's fields (the Item details tab) ---------------------------
+
+  /** Ask for the item's sections the first time its tab is opened, once for the design (Refresh forgets them). */
+  function loadItemView(itemId, skipCache) {
+    if (!itemId || itemViews[itemId] || itemViewLoading[itemId]) return;
+    itemViewLoading[itemId] = true;
+    delete itemViewErrors[itemId];
+    hooks.request('item_view:' + itemId, { section: 'item_view', id: itemId, force: skipCache || force });
+  }
+
+  /** The answer for an item's view read by ``loadItemView``. */
+  function handleItemView(itemId, entry) {
+    if (!itemViewLoading[itemId]) return;   // asked before ``reset``: not wanted
+    itemViewLoading[itemId] = false;
+    if (entry.ok) {
+      itemViews[itemId] = entry.data;
+    } else {
+      itemViewErrors[itemId] = entry.message || t('publish.unknown_error');
+    }
+    if (drawn.item === itemId) drawItemView($('pub-item'), itemId);   // the tab is still showing this item
+  }
+
+  /** A picture an image field holds, asked for once the sections are drawn (each field is a skeleton until ``done(src)`` is given the picture, or '' when it
+   *  cannot be read): read once for the design, whoever waits for it is told together. */
+  function loadPicture(link, done) {
+    if (pictures[link] !== undefined) { done(pictures[link]); return; }
+    if (pictureWaiting[link]) { pictureWaiting[link].push(done); return; }
+    pictureWaiting[link] = [done];
+    hooks.request('item_picture:' + link, { section: 'item_picture', id: link, force: force });
+  }
+
+  /** The answer for a picture asked for by ``loadPicture``: a picture that could not be read leaves its field empty. */
+  function handlePicture(link, entry) {
+    if (!pictureWaiting[link]) return;   // asked before ``reset``: not wanted
+    pictures[link] = entry.ok ? entry.data.image : '';
+    const waiting = pictureWaiting[link];
+    delete pictureWaiting[link];
+    waiting.forEach(function (done) { done(pictures[link]); });
+  }
+
+  /** The Item details tab: the item's sections as the Item panel draws them, a loader while they are read, the error (with Retry) when they could not be.
+   *  The pictures of its image fields come after (a click on one does nothing: this page has no viewer for them). */
+  function drawItemView(target, itemId) {
+    target.replaceChildren();
+    const view = itemViews[itemId];
+    if (view) {
+      view.sections.forEach(function (section) { target.appendChild(ns.itemSections.section(section, function () {}, loadPicture)); });
+      if (!view.sections.length) target.appendChild(el('p', 'muted', t('item.no_fields')));
+    } else if (itemViewErrors[itemId]) {
+      target.appendChild(ui.errorState(itemViewErrors[itemId], function () { loadItemView(itemId, true); drawItemView(target, itemId); }));
+    } else {
+      const wait = el('div', 'card pub-props-wait');
+      wait.appendChild(ui.loaderNode());
+      target.appendChild(wait);
+      loadItemView(itemId);
+    }
+  }
+
   function retry() {
     if (!selected) return;
+    const itemId = itemIdOf(selected, compareOf(selected));
+    if (itemId && itemTabErrors[itemId]) {
+      delete itemTabErrors[itemId];
+      loadItemTabs(itemId, true);
+    }
     if (selected.root && rootError) {
       rootError = '';
       hooks.onRootRetry();
@@ -174,18 +289,21 @@
     return grip;
   }
 
-  function propertyTable(rows) {
-    const table = el('table', 'pub-table pub-property-table');
-    // Column widths (used in the wide layout), in percent; the user can drag them and they stay for the next component.
+  /** The table of properties. With ``withFm`` it has the Fusion Manage column too, and its widths can be dragged (they stay for the next component); without
+   *  (a component with no item to compare with) it has fixed widths. */
+  function propertyTable(rows, withFm) {
+    const table = el('table', 'pub-table pub-property-table' + (withFm ? '' : ' pub-table-new'));
+    // Column widths (used in the wide layout), in percent.
+    const widths = withFm ? colWidths : NEW_WIDTHS;
     const cols = el('colgroup');
-    function apply() { colWidths.forEach(function (w, i) { cols.children[i].style.width = w + '%'; }); }
-    colWidths.forEach(function () { cols.appendChild(el('col')); });
+    function apply() { widths.forEach(function (w, i) { cols.children[i].style.width = w + '%'; }); }
+    widths.forEach(function () { cols.appendChild(el('col')); });
     apply();
     table.appendChild(cols);
     const head = el('tr');
-    [t('publish.prop_col_property'), t('publish.col_component'), t('publish.prop_col_fm'), ''].forEach(function (h, i) {
+    (withFm ? [t('publish.prop_col_property'), t('publish.col_component'), t('publish.prop_col_fm'), ''] : [t('publish.prop_col_property'), t('publish.col_component'), '']).forEach(function (h, i) {
       const th = el('th', '', h);
-      if (i < 2) th.appendChild(columnGrip(i, table, apply));   // moves the edge it shares with the next column
+      if (withFm && i < 2) th.appendChild(columnGrip(i, table, apply));   // moves the edge it shares with the next column
       head.appendChild(th);
     });
     table.appendChild(head);
@@ -193,9 +311,10 @@
     rows.forEach(function (r) {
       const tr = el('tr');
       const hasFm = r.fm_field && r.fm_value;
-      [[t('publish.prop_col_property'), el('td', '', r.name)],
-       [t('publish.col_component'), valueCell(r.value, r.shown, r.unit, r.original)],
-       [t('publish.prop_col_fm'), valueCell(hasFm ? r.fm_value : '', '', r.unit)]].forEach(function (c) {
+      const cells = [[t('publish.prop_col_property'), el('td', '', r.name)],
+                     [t('publish.col_component'), valueCell(r.value, r.shown, r.unit, r.original)]];
+      if (withFm) cells.push([t('publish.prop_col_fm'), valueCell(hasFm ? r.fm_value : '', '', r.unit)]);
+      cells.forEach(function (c) {
         c[1].setAttribute('data-label', c[0]);
         tr.appendChild(c[1]);
       });
@@ -211,18 +330,18 @@
     return table;
   }
 
-  /** Properties of one component, as they would be published. */
-  function propertiesCard(compare) {
+  /** Properties of one component, as they would be published. ``withFm`` (false for a component with no item) leaves out the Fusion Manage column and message. */
+  function propertiesCard(compare, withFm) {
     const card = el('div', 'card');
     if (!compare.rows.length) {
       card.appendChild(el('p', 'muted', t('publish.prop_none')));
       return card;
     }
-    if (compare.fm.message) {
+    if (withFm && compare.fm.message) {
       card.appendChild(el('p', compare.fm.state === 'unknown' ? 'pub-error' : 'muted', compare.fm.message));
     }
     const mapped = compare.rows.filter(function (r) { return r.status !== 'unmapped'; });
-    if (mapped.length) card.appendChild(propertyTable(mapped));
+    if (mapped.length) card.appendChild(propertyTable(mapped, withFm));
     else card.appendChild(el('p', 'muted', t('publish.prop_none_mapped')));
     return card;
   }
@@ -237,6 +356,21 @@
       line.title = c.descriptor;
       card.appendChild(line);
     });
+    return card;
+  }
+
+  /** No Fusion Manage item has the component's item number: say so, and what publishing would do. */
+  function noItemCard(fm) {
+    const card = el('div', 'card pub-pick-card');
+    card.appendChild(el('h4', 'pub-pick-title', t('publish.detail_no_item_title')));
+    card.appendChild(el('p', 'muted', t('publish.detail_no_item_text', { number: fm.item_number })));
+    return card;
+  }
+
+  /** A plain note on a line that has no Fusion Component to compare with. */
+  function noteCard(text) {
+    const card = el('div', 'card pub-pick-card');
+    card.appendChild(el('p', 'muted', text));
     return card;
   }
 
@@ -297,37 +431,91 @@
     return head;
   }
 
+  /** The Overview tab: what is known of the line against Fusion Manage. Whether an item exists is the comparison's ``fm.state`` (new: none; found: one; multiple:
+   *  several share the number) or, for a line the viewer knows the item of, ``selected.itemId``, which is never called "no item". */
+  function paintDetails(compare) {
+    const known = !!selected.itemId;
+    if (selected.noComponent) {
+      pane.appendChild(noteCard(known ? t('publish.detail_no_component') : t('publish.detail_no_component_new')));
+    } else if (!compare) {
+      let content;
+      if (errorOf(selected)) {
+        content = ui.errorState(errorOf(selected), retry);
+      } else {
+        content = el('div', 'card pub-props-wait');
+        content.appendChild(ui.loaderNode());
+      }
+      pane.appendChild(section(t('publish.properties'), content));
+    } else if (isShared(compare)) {   // only the explanation, nothing else
+      pane.appendChild(sharedCard(compare.fm));
+    } else if (compare.fm.state === 'new' && !known) {
+      pane.appendChild(noItemCard(compare.fm));
+      pane.appendChild(section(t('publish.properties'), propertiesCard(compare, false)));
+    } else {   // the old view; also the message of an unknown or unchecked line
+      pane.appendChild(section(t('publish.properties'), propertiesCard(compare, true)));
+    }
+  }
+
+  /** The strip beside Overview, shown once the item's tabs are read: a tab is hidden when the workspace has none, and disabled when the user may not use it. */
+  function labelTabs(data) {
+    Object.keys(ITEM_TABS).forEach(function (key) {
+      const tab = data.tabs[key];
+      const button = $('pub-tabs').querySelector('[data-tab="' + key + '"]');
+      button.hidden = !tab;
+      if (tab) ns.itemTree.labelTab(button, tab);
+    });
+  }
+
+  function selectOverviewTab() { $('pub-tabs').querySelector('[data-tab="overview"]').click(); }
+
+  /** Show the strip when the line has an item whose tabs are read; read them first. Until then, or on a failure (said under the overview), only Overview shows. */
+  function paintTabs(itemId) {
+    const data = itemId ? itemTabs[itemId] : null;
+    if (itemId) loadItemTabs(itemId);
+    if (itemId && itemTabErrors[itemId]) pane.appendChild(ui.errorState(t('publish.detail_tabs_error', { error: itemTabErrors[itemId] }), retry));
+    $('pub-tabs').closest('.tabs-scroller').hidden = !data;
+    tabItem = data ? itemId : '';
+    if (data) labelTabs(data);
+    else selectOverviewTab();   // nothing else to be on
+  }
+
   function paint() {
     if (!selected) return;
     pane.textContent = '';
     const compare = compareOf(selected);
     pane.appendChild(headCard(compare));
-    if (isShared(compare)) {   // only the explanation, nothing else
-      pane.appendChild(sharedCard(compare.fm));
-      return;
-    }
-    let content;
-    if (compare) {
-      content = propertiesCard(compare);
-    } else if (errorOf(selected)) {
-      content = ui.errorState(errorOf(selected), retry);
-    } else {
-      content = el('div', 'card pub-props-wait');
-      content.appendChild(ui.loaderNode());
-    }
-    pane.appendChild(section(t('publish.properties'), content));
+    paintDetails(compare);
+    paintTabs(itemIdOf(selected, compare));   // '' for a line with no item (no number found, or shared): no strip
+  }
+
+  /** A tab of the item was opened: draw it, once for each item (Refresh forgets what was read). */
+  function drawTab(key) {
+    if (!tabItem || drawn[key] === tabItem) return;
+    drawn[key] = tabItem;
+    const data = itemTabs[tabItem];
+    ITEM_TABS[key].draw($('pub-' + key), { workspace_id: data.workspace_id, item_id: data.item_id, stamp: data.stamp, item_urn: data.item_urn });
+  }
+
+  /** Nothing of the item's tabs is kept on screen, and what they were reading is cancelled. */
+  function leaveTabs() {
+    ns.itemTree.leave('files');
+    drawn = {};
+    Object.keys(ITEM_TABS).forEach(function (key) { $('pub-' + key).replaceChildren(); });
   }
 
   // ---- Opening, closing and feeding the pane -------------------------------------
 
   /** Show a component (a row of the bill of materials, or the design itself). */
   function open(item) {
+    if (!item.pane && selected && selected.pane) hooks.onClose();   // not opened from a line of the viewer: the mark of the last one goes
+    leaveTabs();
     selected = item;
     $('pub-detail').hidden = false;
     $('pub-backdrop').hidden = false;
-    loadThumbnail(item);   // before the first paint, so the skeleton is there from the start
+    selectOverviewTab();
+    loadThumbnail(item);   // before the first paint, so the skeleton is there from the start (a line with no component has none)
     paint();
-    if (item.root) hooks.onRootLoad(); else load(item);   // the design's own properties are read by publish.js, once
+    if (item.root) hooks.onRootLoad(); else if (item.id) load(item);   // the design's own properties are read by publish.js, once
   }
 
   function close() {
@@ -335,6 +523,10 @@
     $('pub-detail').hidden = true;
     $('pub-backdrop').hidden = true;
     pane.textContent = '';
+    leaveTabs();
+    $('pub-tabs').closest('.tabs-scroller').hidden = true;
+    tabItem = '';
+    hooks.onClose();
   }
 
   /** The design's own properties have been read. */
@@ -355,12 +547,12 @@
     rootCompare = null;
     rootError = '';
     force = !!skipCache;
-    [compares, errors, loading, thumbs].forEach(function (map) {
+    [compares, errors, loading, thumbs, itemTabs, itemTabErrors, itemTabLoading, itemViews, itemViewErrors, itemViewLoading, pictures, pictureWaiting].forEach(function (map) {
       Object.keys(map).forEach(function (id) { delete map[id]; });
     });
   }
 
-  const MIN_WIDTH = 260;        // narrowest the pane can be dragged to
+  const MIN_WIDTH = 340;        // narrowest the pane can be dragged to (the CSS minimum of ``.pub-detail``)
   const MIN_BOM_WIDTH = 240;    // room always left for the bill of materials
 
   /** Drag the pane's left edge to change its width; arrow keys nudge it, double-click restores the default. */
@@ -394,7 +586,12 @@
 
   function init(options) {
     hooks = options;
-    pane = $('pub-props');
+    pane = $('pubtab-overview');
+    ns.tabs.setup('#pub-tabs', 'tab', 'pubtab-');
+    $('pub-tabs').closest('.tabs-scroller').hidden = true;   // until an item's tabs are read
+    Object.keys(ITEM_TABS).forEach(function (key) {
+      $('pub-tabs').querySelector('[data-tab="' + key + '"]').addEventListener('click', function () { drawTab(key); });   // after the strip showed its panel
+    });
     $('pub-detail-close').addEventListener('click', close);
     initResize();
     $('pub-backdrop').addEventListener('click', close);   // only drawn in the small layout, where the details are a popup
@@ -403,6 +600,6 @@
 
   ns.pubDetails = {
     init: init, open: open, reset: reset, setRoot: setRoot, setRootError: setRootError,
-    handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail,
+    handleComponent: handleComponent, handleThumbnail: handleThumbnail, setThumbnail: setThumbnail, handleItemTabs: handleItemTabs, handleItemView: handleItemView, handlePicture: handlePicture, close: close,
   };
 })(window.MfgUi);

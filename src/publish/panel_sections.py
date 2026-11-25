@@ -10,6 +10,11 @@ and "mbom_number" whether an item number is taken by an item already (for a new 
 item as one tree (down to ``MBOM_DEPTH`` levels, each line with its item id and line id), for the structure viewer; it needs the target's id. It is the one
 read of Fusion Manage's Bill of Materials.
 
+"item_tabs:<id>" is about one Fusion Manage item (its id is what the panel sends as ``id``): which tabs it has, with counts and the user's permission, and
+its urn, for the Details Panel's tabs. "item_view:<id>" is the same item laid out as the Item panel shows it (``ItemViewService.layout``: its sections of fields and
+matrices, with the link of each picture, and no tabs or permissions: ``item_tabs`` reads those once), for the Details Panel's Item details tab; it is read when that tab is first opened. "item_picture:<link>" is one picture of such an item (its ``id`` is the link an image field gave), asked for by
+the tab after it drew, so each picture shows a skeleton until it arrives.
+
 The panel may name one of those items as the ``target`` of the sections that compare the design with Fusion Manage (its own properties and
 its Bill of Materials): they then use the item number of the target, not the design's own. ``mbom_number`` is asked about the item number
 it is given as its target. The target carries the item's id too (``target_id``) when Fusion Manage holds the item: that item is read, not
@@ -37,7 +42,11 @@ from ..fm.bom import BomService
 from ..fm.client import FmClient
 from ..fm.components import manage_link
 from ..fm.mbom import MbomService
-from ..fm.permissions import denial
+from ..fm.item_view import ItemViewService
+from ..fm.items import ItemService
+from ..fm.permissions import denial, granted
+from ..fm.tableaus import TableauService
+from ..fm.tabs import TabService
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient
 from ..fusion_mfg.model_service import SECTION_NAMES, read_manage_item, read_section
 from ..sync.bom_levels import mark_design_bom, search_design
@@ -50,9 +59,11 @@ log = get_logger("panel_sections")
 SUMMARY, PROPERTIES, COMPONENT, STRUCTURE, MBOM = "summary", "properties", "component", "structure", "mbom"
 MBOM_NUMBER, MBOM_TREE = "mbom_number", "mbom_tree"
 MBOM_DEPTH = 50   # levels of the target's Bill of Materials read, in the one read, for the structure viewer: a line at the last level whose own lines exist is marked ``cut``
-PANEL_SECTIONS = (*SECTION_NAMES, MBOM, MBOM_NUMBER, MBOM_TREE)
+ITEM_TABS, ITEM_VIEW, ITEM_PICTURE = "item_tabs", "item_view", "item_picture"
+PANEL_SECTIONS = (*SECTION_NAMES, MBOM, MBOM_NUMBER, MBOM_TREE, ITEM_TABS, ITEM_VIEW, ITEM_PICTURE)
 TARGETED = (PROPERTIES, STRUCTURE, MBOM_NUMBER, MBOM_TREE)   # sections about one item of Fusion Manage: they read the target's
-PER_COMPONENT = (COMPONENT, "thumbnail")   # sections with a slot for each component
+# Sections with a slot for each ``id`` the panel sends: a component's (component, thumbnail), a Fusion Manage item's (item_tabs, item_view) or a picture's link (item_picture).
+PER_COMPONENT = (COMPONENT, "thumbnail", ITEM_TABS, ITEM_VIEW, ITEM_PICTURE)
 COMPONENT_KEYS = ("id", "item_number", "part_number", "description")
 
 
@@ -244,6 +255,45 @@ class PublishSections:
             raise ValueError(t("data.fm_mbom_not_linked"))
         return MbomService(load.fm).find(load.cfg.workspace_id, summary.get("lineage", ""), link, load.cfg.item_number_field())
 
+    @staticmethod
+    def _workspace_of(load: _Load) -> str:
+        """The Items workspace's id; raises when Settings name none."""
+        if not load.cfg.workspace_id:
+            raise ValueError(t("run.compare_no_workspace"))
+        return str(load.cfg.workspace_id)
+
+    @classmethod
+    def _item_of(cls, load: _Load) -> Tuple[str, str]:
+        """``(workspace id, item id)`` of a section about one Fusion Manage item (the panel sends the item's id as ``id``); raises when either is missing."""
+        workspace_id = cls._workspace_of(load)
+        if not load.component["id"]:
+            raise ValueError(t("app.lookup_no_item"))
+        return workspace_id, load.component["id"]
+
+    @classmethod
+    def _item_tabs(cls, load: _Load) -> Dict[str, Any]:
+        """``item_tabs``: which tabs the item has (with counts and whether the user may open them), and its urn, which the Files tab needs for its links."""
+        workspace_id, item_id = cls._item_of(load)
+        held = granted(load.fm, workspace_id)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            tabs = pool.submit(TabService(load.fm).read, workspace_id, item_id, held)
+            urn = pool.submit(ItemService(load.fm).urn, workspace_id, item_id)
+            return {"workspace_id": workspace_id, "item_id": item_id, "item_urn": urn.result(), "tabs": tabs.result()}
+
+    @classmethod
+    def _item_view(cls, load: _Load) -> Dict[str, Any]:
+        """``item_view``: the item as the Item panel shows it, as ``ItemViewService.layout`` answers (title, header, state, url, ``sections`` of fields and matrices,
+        ``item_id``, ``workspace_id``, ``item_urn``). No tabs or permissions (``item_tabs`` has them) and no pictures (an image field comes with its ``link`` and no value;
+        the page asks for each with ``item_picture``)."""
+        workspace_id, item_id = cls._item_of(load)
+        return ItemViewService(load.fm).layout(workspace_id, item_id, pictures=False)
+
+    @classmethod
+    def _item_picture(cls, load: _Load) -> Dict[str, Any]:
+        """``item_picture``: ``{"image": data uri}`` of the picture at the link the page sends as ``id``, which an image field of the item gave
+        (``TableauService.picture`` refuses a link that is not a picture of this workspace)."""
+        return TableauService(load.fm).picture(cls._workspace_of(load), load.component["id"])
+
     def _structure_rows(self, load: _Load, read: Callable[[], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """The rows of the whole structure of the design: those kept by an earlier read under the same hub and settings, else ``read()``, which is kept once it
         has finished (a load that was replaced meanwhile keeps nothing, so a forced read is never given what it replaced)."""
@@ -260,6 +310,12 @@ class PublishSections:
 
     def _load(self, load: _Load) -> Any:
         """What the section holds: read from the Data Model, and compared with Fusion Manage for the properties, which the Details Panel shows."""
+        if load.name == ITEM_TABS:   # about a Fusion Manage item (or one of its pictures), not the design: nothing here is read from the Data Model
+            return self._item_tabs(load)
+        if load.name == ITEM_VIEW:
+            return self._item_view(load)
+        if load.name == ITEM_PICTURE:
+            return self._item_picture(load)
         summary = self._summary_of(load)
         physical = load.cfg.maps_physical()
         watch = Stopwatch()

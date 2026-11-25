@@ -1,7 +1,9 @@
 """An item laid out for the Item tab: how a field becomes a cell, which fields are shown, and how matrices and sections are built."""
 
 import unittest
+from unittest import mock
 
+from src.fm.client import FmApiError
 from src.fm.item_view import ItemViewService, build_view, cell_of, no_image, no_page, not_shown
 from src.fm.sections import SectionService
 from src.fm.tabs import TabService
@@ -144,6 +146,55 @@ class BuildViewTests(unittest.TestCase):
         for item in (None, "x", [], {"sections": "x"}, {"sections": ["x", {"fields": "x"}]}):
             with self.subTest(item=item):
                 self.assertEqual(view(item)["sections"], [])
+
+
+class ServiceTests(unittest.TestCase):
+    """``ItemViewService.layout`` and ``read`` over a client that answers by address and keeps the addresses it was asked."""
+
+    def setUp(self):
+        ItemViewService.forget()
+        self.addCleanup(ItemViewService.forget)
+        self.asked = []
+        self.item = {"title": "PN-1", "urn": "urn:adsk.plm:tenant.workspace.item:ACME.57.1", "sections": [section("Basic", field("NUMBER", "PN-1"))]}
+        self.client = mock.Mock(tenant="acme", base_url="https://acme.autodeskplm360.net")
+        self.client.get_json.side_effect = self.answer
+
+    def answer(self, path, *_args):
+        self.asked.append(path)
+        return self.item if path.endswith("/items/I1") else {}
+
+    def test_layout_reads_the_item_once_and_no_tabs_or_permissions(self):
+        view = ItemViewService(self.client).layout("57", "I1", pictures=False)
+        self.assertEqual(self.asked.count("/api/v3/workspaces/57/items/I1"), 1)
+        self.assertFalse([path for path in self.asked if path.endswith("/tabs") or "permission" in path])
+        self.assertNotIn("tabs", view)
+        self.assertEqual((view["title"], view["item_id"], view["workspace_id"], view["item_urn"]),
+                         ("PN-1", "I1", "57", "urn:adsk.plm:tenant.workspace.item:ACME.57.1"))
+        self.assertEqual([f["value"] for f in view["sections"][0]["fields"]], ["PN-1"])
+
+    def test_read_is_the_layout_with_the_tabs(self):
+        tabs = {"files": {"label": "Attachments", "count": 2, "allowed": True}}
+        with mock.patch.object(TabService, "read", return_value=tabs) as read:
+            whole = ItemViewService(self.client).read("57", "I1", {"VIEW"}, with_grid=True, pictures=False)
+        read.assert_called_once_with("57", "I1", {"VIEW"}, True)
+        self.assertEqual(whole, {**ItemViewService(self.client).layout("57", "I1", pictures=False), "tabs": tabs})
+
+    def test_an_answer_that_is_not_an_item_is_an_error(self):
+        self.item = []
+        with mock.patch.object(TabService, "read", return_value={}):
+            for read in (lambda: ItemViewService(self.client).layout("57", "I1"), lambda: ItemViewService(self.client).read("57", "I1", set())):
+                with self.assertRaises(FmApiError) as raised:
+                    read()
+                self.assertIn("gave no item I1", str(raised.exception))
+
+    def test_a_failing_item_read_is_an_error(self):
+        def answer(path, *_args):
+            if path.endswith("/items/I1"):
+                raise FmApiError("down")
+            return {}
+        self.client.get_json.side_effect = answer
+        with mock.patch.object(TabService, "read", return_value={}), self.assertRaises(FmApiError):
+            ItemViewService(self.client).read("57", "I1", set())
 
 
 class ForgetTests(unittest.TestCase):

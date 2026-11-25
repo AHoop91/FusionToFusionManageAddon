@@ -47,7 +47,7 @@
 .sv-meter-bad { background: var(--danger); }
 .sv-meter-part:focus-visible { outline: 2px solid #1f2328; outline-offset: -3px; }
 .sv-meter-on .sv-meter-part[aria-pressed="false"] { opacity: .35; }   /* with one chosen, the others fade */
-.sv-tree { flex: 1; min-height: 0; overflow: auto; outline: none; }
+.sv-tree { --sv-act: 24px; --sv-act-pad: 2px; --sv-tail: 102px; flex: 1; min-height: 0; overflow: auto; outline: none; }   /* --sv-tail: how far from the row's right edge the hover icons end. 102 = 8 padding + 64 quantity + 30 button; the EBOM quantity is plain text, so its icons end 32 nearer, at 70, by its digits. --sv-act is one icon, --sv-act-pad the gap after the icons. */
 .sv-footer { flex: none; }
 .sv-removed, .sv-status { margin: 0; font-size: 12px; }
 /* The wait: the toolbar is there but not usable, and the tables hold grey bars (the same rows as the loading of the rest of the panel). */
@@ -109,11 +109,13 @@ button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-sh
 .sv-qty-input { flex: none; box-sizing: border-box; width: 64px; height: 22px; padding: 0 6px; border: 1px solid var(--accent); border-radius: 4px; font: inherit; font-size: 12px; text-align: right; }
 /* The actions of a line: out of the way until the line is pointed at or has the keyboard (they stay focusable, so the keyboard reaches them). */
 /* They lie over the end of the label, just left of the quantity and its info button (8px padding, 64px quantity, 30px button), with a fade so the text under them does not clash; nothing moves when they show. */
-.sv-actions { position: absolute; top: 0; bottom: 0; right: 102px; display: inline-flex; align-items: center; gap: 2px; padding: 0 2px 0 28px; background: linear-gradient(to right, transparent, var(--row-bg) 24px); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.sv-actions { position: absolute; top: 0; bottom: 0; right: var(--sv-tail); display: inline-flex; align-items: center; gap: 2px; padding: 0 var(--sv-act-pad) 0 28px; background: linear-gradient(to right, transparent, var(--row-bg) 24px); opacity: 0; pointer-events: none; transition: opacity .12s; }
 .sv-row:hover .sv-actions, .sv-row:focus-within .sv-actions { opacity: 1; pointer-events: auto; }
-.sv-tree-ebom .sv-matched { position: absolute; top: 50%; right: 72px; width: 24px; margin: 0; transform: translateY(-50%); }   /* the tick or cart stands where the plus button does (the last 24px of the icons' strip), so they line up */
-.sv-tree-ebom .sv-actions { right: 70px; }   /* the EBOM quantity is plain text in a 64px box (8px padding, 30px note slot): the icons end by its digits, not at the empty left of the box. A line with a tick has no icons, so they never meet. */
-.sv-act { width: 24px; height: 24px; }
+.sv-tree-ebom { --sv-tail: 70px; }
+.sv-tree-ebom .sv-matched { position: absolute; top: 50%; right: calc(var(--sv-tail) + var(--sv-act-pad)); width: var(--sv-act); margin: 0; transform: translateY(-50%); }   /* the tick or cart stands where the plus button does (the last 24px of the icons' strip), so they line up */
+.sv-row:hover .sv-matched, .sv-row:focus-within .sv-matched { opacity: 0; }   /* every line has the magnifier now, and it can lie over the tick */
+/* A line with a tick hides it while the icons show, so they never meet. */
+.sv-act { width: var(--sv-act); height: var(--sv-act); }
 .sv-grip { display: inline-flex; align-items: center; width: 16px; color: var(--muted); cursor: grab; }
 .sv-more { display: block; width: 100%; padding: 6px 0; border: 0; border-top: 1px solid rgba(0, 0, 0, .06); background: transparent; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
 

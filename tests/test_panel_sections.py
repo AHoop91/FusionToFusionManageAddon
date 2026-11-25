@@ -194,6 +194,128 @@ class SectionTests(unittest.TestCase):
         self.assertTrue(a["ok"] and b["ok"])
         self.assertEqual(sorted(r[1] for r in self.fx.reads if r[0] == "thumbnail"), ["A", "B"])
 
+    def _item_tabs_patches(self):
+        tabs = {"files": {"label": "Attachments", "count": 2, "allowed": True}}
+        granted = mock.patch.object(panel_sections, "granted", return_value={"VIEW"})
+        service = mock.patch.object(panel_sections, "TabService")
+        items = mock.patch.object(panel_sections, "ItemService")
+        granted.start(), self.addCleanup(granted.stop)
+        tab_service, item_service = service.start(), items.start()
+        self.addCleanup(service.stop), self.addCleanup(items.stop)
+        tab_service.return_value.read.return_value = tabs
+        item_service.return_value.urn.return_value = "urn:adsk.plm:tenant.workspace.item:ACME.57.1"
+        return tabs, tab_service, item_service
+
+    def test_each_item_has_a_tabs_slot_of_its_own(self):
+        tabs, tab_service, _ = self._item_tabs_patches()
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        first, _second = self.fx.ask("item_tabs", id="I1"), self.fx.ask("item_tabs", id="I2")
+        self.assertEqual((first["section"], first["stamp"]), ("item_tabs:I1", capture(self.fx.config).stamp))
+        for item in ("I1", "I2"):
+            done = self.fx.wait(f"item_tabs:{item}")
+            self.assertTrue(done["ok"])
+            self.assertEqual(done["data"], {"workspace_id": "242", "item_id": item, "item_urn": "urn:adsk.plm:tenant.workspace.item:ACME.57.1", "tabs": tabs})
+        self.assertEqual(sorted(c.args[1] for c in tab_service.return_value.read.call_args_list), ["I1", "I2"])
+        self.assertEqual(tab_service.return_value.read.call_args_list[0].args[2], {"VIEW"})
+
+    def test_item_sections_without_an_item_id_say_so_and_are_not_pending(self):
+        self._item_tabs_patches()
+        self._item_view_patches()
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        for name in ("item_tabs", "item_view"):
+            with self.subTest(section=name):
+                self.fx.ask(name)
+                done = self.fx.wait(name)
+                self.assertFalse(done["ok"] or done["pending"])
+                self.assertEqual(done["message"], "Which item to look up was not given.")
+
+    def test_a_failing_tabs_read_is_reported_not_left_pending(self):
+        _, tab_service, _ = self._item_tabs_patches()
+        tab_service.return_value.read.side_effect = RuntimeError("tabs are down")
+        self.fx.ask("item_tabs", id="I1")
+        done = self.fx.wait("item_tabs:I1")
+        self.assertFalse(done["ok"] or done["pending"])
+        self.assertEqual(done["message"], "tabs are down")
+
+    def _assert_slot_dropped_for_another_design(self, section):
+        """``section`` (``name:id``) was loaded; once another design is open, asking about the design drops it."""
+        name, item = section.split(":")
+        self.fx.ask(name, id=item)
+        self.fx.wait(section)
+        self.fx.model = ("m2", "t1")
+        self.fx.ask("summary")
+        self.assertFalse(self.fx.sections.status({"section": section})["ok"])
+
+    def test_an_item_tabs_slot_is_dropped_for_another_design(self):
+        self._item_tabs_patches()
+        self._assert_slot_dropped_for_another_design("item_tabs:I1")
+
+    def _item_view_patches(self):
+        view = {"title": "PN-1", "sections": [{"title": "Basic", "fields": []}],
+                "item_id": "I1", "workspace_id": "242", "item_urn": "urn:adsk.plm:tenant.workspace.item:ACME.57.1"}
+        granted = mock.patch.object(panel_sections, "granted")
+        tabs = mock.patch.object(panel_sections, "TabService")
+        service = mock.patch.object(panel_sections, "ItemViewService")
+        self.view_granted, self.view_tabs, item_view = granted.start(), tabs.start(), service.start()
+        self.addCleanup(granted.stop), self.addCleanup(tabs.stop), self.addCleanup(service.stop)
+        item_view.return_value.layout.return_value = view
+        return view, item_view
+
+    def test_each_item_has_a_view_slot_laid_out_without_pictures_tabs_or_permissions(self):
+        view, item_view = self._item_view_patches()
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        first, _second = self.fx.ask("item_view", id="I1"), self.fx.ask("item_view", id="I2")
+        self.assertEqual((first["section"], first["stamp"]), ("item_view:I1", capture(self.fx.config).stamp))
+        for item in ("I1", "I2"):
+            done = self.fx.wait(f"item_view:{item}")
+            self.assertTrue(done["ok"])
+            self.assertEqual(done["data"], view)
+        calls = item_view.return_value.layout.call_args_list
+        self.assertEqual(sorted(c.args[1] for c in calls), ["I1", "I2"])
+        self.assertEqual((calls[0].args[0], calls[0].kwargs), ("242", {"pictures": False}))
+        item_view.return_value.read.assert_not_called()
+        self.view_tabs.assert_not_called()   # the tabs and the permissions are item_tabs's
+        self.view_granted.assert_not_called()
+
+    def test_a_picture_is_read_by_its_link_in_a_slot_of_its_own(self):
+        link = "/api/v2/workspaces/242/items/9/field-values/IMG/image/1"
+        service = mock.patch.object(panel_sections, "TableauService")
+        tableaus = service.start()
+        self.addCleanup(service.stop)
+        tableaus.return_value.picture.return_value = {"image": "data:image/png;base64,AAAA"}
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        first = self.fx.ask("item_picture", id=link)
+        self.assertEqual(first["section"], "item_picture:" + link)
+        done = self.fx.wait("item_picture:" + link)
+        self.assertEqual((done["ok"], done["data"]), (True, {"image": "data:image/png;base64,AAAA"}))
+        tableaus.return_value.picture.assert_called_once_with("242", link)
+
+    def test_an_item_view_is_read_once_unless_forced(self):
+        _, item_view = self._item_view_patches()
+        self.fx.ask("item_view", id="I1")
+        self.fx.wait("item_view:I1")
+        self.fx.ask("item_view", id="I1")
+        self.assertEqual(item_view.return_value.layout.call_count, 1)
+        self.fx.ask("item_view", id="I1", force=True)
+        self.fx.wait("item_view:I1")
+        self.assertEqual(item_view.return_value.layout.call_count, 2)
+
+    def test_a_failing_item_view_read_is_reported_not_left_pending(self):
+        _, item_view = self._item_view_patches()
+        item_view.return_value.layout.side_effect = RuntimeError("the item is down")
+        self.fx.ask("item_view", id="I1")
+        done = self.fx.wait("item_view:I1")
+        self.assertFalse(done["ok"] or done["pending"])
+        self.assertEqual(done["message"], "the item is down")
+
+    def test_an_item_view_slot_is_dropped_for_another_design(self):
+        self._item_view_patches()
+        self._assert_slot_dropped_for_another_design("item_view:I1")
+
     def test_a_summary_without_an_item_number_is_a_denial_not_an_error(self):
         fx = Fixture(summary={**SUMMARY, "item_number": ""})
         self.addCleanup(fx.stop)

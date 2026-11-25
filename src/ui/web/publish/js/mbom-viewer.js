@@ -12,6 +12,8 @@
  * lines of an open assembly are drawn, and no more than ``LIMIT`` under one at first, so a large tree stays quick. Every edit goes through
  * ``run``, which says the reason an edit was refused in a toast.
  *
+ * The magnifier on every line opens the Details Panel (details.js) for it, and that line stays marked while the panel is open (``detailsAt``); a plain click opens nothing.
+ *
  * ``host``: ``design()`` (the open design's summary), ``rows()`` (the rows of the Bill of Materials that was read),
  * ``askMbom()`` (to ask for the MBOM again after it failed), ``targetId()``, ``target()`` (item number), ``phantom()`` (whether Settings allow phantoms), ``summary()`` (the design, under the
  * target's item number), ``boughtSuffix()``, ``boughtReady()`` and ``planned()`` (called when the structure may have changed: what publishing covers is
@@ -108,6 +110,7 @@
   let skippedFor = null;            // {rows, key, skipped}: what ``plan`` found for the rows read and the design it was found for
   const ebomSelected = new Set();   // EBOM keys
   let anchor = '';                  // where a shift-click range starts, in the pane last clicked
+  let detailsAt = null;             // the line whose Details Panel is open: {pane, id} (an EBOM key or an MBOM uid)
   let visible = { mbom: [], ebom: [] };   // the lines drawn, in order, for ranges
   let index = new Map();            // MBOM uid -> {node, parent, at}, made again after every edit (the structure replaces its nodes on undo)
   let order = [];                   // the MBOM lines, in tree order
@@ -137,6 +140,7 @@
   /** What belongs to one structure: a drag, the search, the selection and the folds (uids start again with each structure). */
   function clearState() {
     if (ns.pubItemPanel) ns.pubItemPanel.close();   // its line may be gone (it stays while a save is under way)
+    detailsAt = null;   // the panel is closed by ``details.reset`` already
     clearMark();
     drag = null;
     searchText = '';
@@ -748,6 +752,7 @@
 
   /** An icon on a line was used. */
   function rowAction(pane, id, act, button) {
+    if (act === 'details') { showDetails(pane, id); return; }
     const targets = targetsOf(pane, id);
     if (pane === 'ebom' && act === 'bought') {
       const node = ebomNode(id);   // the dialog finds the component's item from the Data Model's link, else by number
@@ -769,6 +774,63 @@
 
   /** The component of the EBOM with this key. */
   function ebomNode(key) { return view.ebomAt[key]; }
+
+  /** The row of the Bill of Materials the component ``id`` was read from, in the form the Details Panel opens (``bomModel.lineComponent``). */
+  function componentOf(id) {
+    const row = host.rows().find(function (r) { return r.id === id; });
+    if (!row) throw new Error('No row of the Bill of Materials has the component ' + id);   // never guess which component a line stands for
+    return model.lineComponent(row);
+  }
+
+  /** What the Details Panel opens for a line (``pubDetails.open``): the design itself for either root; a line with a Fusion Component, to compare with Fusion Manage;
+   *  else a line with no component (``noComponent``: one only Fusion Manage has, one added, a bought version, a new one). ``itemId`` is the Fusion Manage item the
+   *  line is, when it is known (an MBOM line read from Fusion Manage), and decides the item tabs. */
+  function detailsLine(pane, id) {
+    const base = { key: id, pane: pane };
+    if (id === (pane === 'ebom' ? '0' : S.ROOT)) return Object.assign(model.rootComponent(host.summary()), base);
+    const node = pane === 'ebom' ? ebomNode(id) : index.get(id).node;
+    let from = null;   // the EBOM line whose component the line is
+    let itemId = '';
+    if (pane === 'ebom') {
+      from = node;
+    } else {
+      itemId = node.itemId || '';
+      const source = node.source ? ebomNode(node.source) : null;
+      if (source && S.numberKey(source.number) === S.numberKey(node.number)) from = source;   // the same item: not a bought version (number and suffix) or an added item
+    }
+    if (from && from.componentId) return Object.assign(componentOf(from.componentId), base, { itemId: itemId });
+    return Object.assign({ id: '', root: false, noComponent: true, item_number: node.number, part_number: '', description: '', name: node.name,
+                           title: [node.number, node.name].filter(Boolean).join(' - '), itemId: itemId }, base);
+  }
+
+  /** The magnifier on a line: the Details Panel opens for it, and the line stays marked until the panel closes. */
+  function showDetails(pane, id) {
+    const line = detailsLine(pane, id);   // first: when it throws, the mark stays where it was
+    detailsAt = { pane: pane, id: id };
+    ns.pubDetails.open(line);
+    markDetails();
+  }
+
+  /** Marks the line whose Details Panel is open, and no other, without drawing the trees again. */
+  function markDetails() {
+    closeDestMenu();
+    [['ebom', dom.ebomTree], ['mbom', dom.mbomTree]].forEach(function (pair) {
+      pair[1].querySelectorAll('.sv-row').forEach(function (row) {
+        const on = !!detailsAt && detailsAt.pane === pair[0] && row.dataset.id === detailsAt.id;
+        row.classList.toggle('sv-details', on);
+        if (on) row.setAttribute('aria-current', 'true'); else row.removeAttribute('aria-current');
+      });
+    });
+  }
+
+  function lineExists(at) { return at.pane === 'ebom' ? !!view.ebomAt[at.id] : index.has(at.id); }
+
+  /** The Details Panel was closed (or opened for something that is not a line): the mark goes. */
+  function detailsClosed() {
+    const had = detailsAt;
+    detailsAt = null;
+    if (had && structure) markDetails();
+  }
 
   /** The state of each toolbar button: enabled, or disabled with the reason as its tooltip. */
   function updateTools() {
@@ -897,10 +959,11 @@
   }
 
   /** One line: indent, open/close, label, quantity and badges. ``spec``: id, depth, number, name, quantity, editable, hasKids, isOpen, selected, badges, classes,
-   *  draggable, actions, seq, notes, noteKey, tone (of the notes), purchased. */
+   *  draggable, actions, seq, notes, noteKey, tone (of the notes), purchased, details (its Details Panel is open). */
   function lineNode(spec) {
-    const row = el('div', 'sv-row' + (spec.selected ? ' selected' : '') + (spec.classes ? ' ' + spec.classes : ''));
+    const row = el('div', 'sv-row' + (spec.selected ? ' selected' : '') + (spec.details ? ' sv-details' : '') + (spec.classes ? ' ' + spec.classes : ''));
     row.dataset.id = spec.id;
+    if (spec.details) row.setAttribute('aria-current', 'true');
     row.setAttribute('role', 'treeitem');
     row.setAttribute('aria-level', String(spec.depth + 1));
     row.setAttribute('aria-selected', spec.selected ? 'true' : 'false');
@@ -970,7 +1033,7 @@
       if (depth) list.push(node.key);
       const count = ebomSelected.has(node.key) ? ebomSelected.size : 1;
       const full = !!(state && (state.exceeded || state.matched || state.blocked));   // all of it is in the MBOM (adding it again would be more than the EBOM has), or a purchased part above it stands for it
-      const actions = [];
+      const actions = [{ act: 'details', icon: 'search', label: t('publish.sv_act_details') }];   // first, on every line
       // A bought version is for a component not built in the MBOM: one already in it has none. Off, with the reason, until Make or buy is set up.
       // A component with no item in Fusion Manage is told by the dialog, which looks for it when asked. Always first, then add with its children, then add.
       if (depth && !(state && !state.missing) && !(state && state.blocked)) {
@@ -981,7 +1044,7 @@
       const notes = depth ? ebomNotes(node, state) : [];
       const tone = toneOf(notes);
       const row = lineNode({ id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: kids.length > 0,
-                             isOpen: isOpen, selected: ebomSelected.has(node.key), badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '', notes: notes, noteKey: 'ebom:' + node.key,
+                             isOpen: isOpen, selected: ebomSelected.has(node.key), details: !!detailsAt && detailsAt.pane === 'ebom' && detailsAt.id === node.key, badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '', notes: notes, noteKey: 'ebom:' + node.key,
                              tone: tone, classes: [state && state.missing && !state.blocked ? 'sv-row-missing' : '', state && (state.matched || state.blocked) ? 'sv-row-matched' : '', ebomHits.has(node.key) ? 'sv-hit' : '',
                                          filter && depth && !filter.keep.has(node.key) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' ') });
       container.appendChild(row);
@@ -1006,7 +1069,7 @@
       const kids = filter ? node.children.filter(function (c) { return hits.has(c.uid) || filter.mbom.has(c.uid); }) : node.children;
       if (depth) list.push(node.uid);
       const count = selected.has(node.uid) ? selected.size : 1;
-      const actions = [];
+      const actions = [{ act: 'details', icon: 'search', label: t('publish.sv_act_details') }];   // first, on every line
       if (depth) {   // the position, add to an assembly, and the bin last
         actions.push({ act: 'position', icon: 'position', label: t('publish.sv_act_position') },
                      { act: 'split', icon: 'split', label: t('publish.sv_act_split'), reason: Number(node.quantity) > 0 && Number(node.quantity) <= 1 ? t('publish.sv_split_one') : '' },
@@ -1016,7 +1079,7 @@
       const notes = depth ? mbomNotes(node, cmp, flags) : [];
       const tone = toneOf(notes);
       container.appendChild(lineNode({ id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
-                                       hasKids: kids.length > 0, isOpen: isOpen, selected: selected.has(node.uid), badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
+                                       hasKids: kids.length > 0, isOpen: isOpen, selected: selected.has(node.uid), details: !!detailsAt && detailsAt.pane === 'mbom' && detailsAt.id === node.uid, badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
                                        classes: [hits.has(node.uid) ? 'sv-hit' : '', filter && depth && !hits.has(node.uid) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source),
                                        mfgOwn: cmp.mbom[node.uid] === 'mfg' && (node.kind === 'component' || node.kind === 'added') }));
       if (notes.length && openNotes.has('mbom:' + node.uid)) container.appendChild(noteRow(notes, depth));
@@ -1052,6 +1115,10 @@
   function render() {
     closeDestMenu();
     if (!dom) return;
+    if (detailsAt && structure && !lineExists(detailsAt)) {   // its line was removed (or an edit was undone): the panel for it goes
+      detailsAt = null;
+      ns.pubDetails.close();
+    }
     const failed = phase === 'error';
     const waiting = !structure && !failed;   // the toolbar and the two tables with no lines yet, and what they wait for
     dom.panes.hidden = failed;
@@ -1512,6 +1579,7 @@
     init: init, reset: reset, answer: answer, say: say,
     structureRead: function () { ready = true; refresh(); },
     show: show, plan: plan,
+    detailsClosed: detailsClosed,
     showTable: function () { show(false); },   // the MBOM has to be chosen, and the choice is drawn in the area beside the structure
   };
 })(window.MfgUi);

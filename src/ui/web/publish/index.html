@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="../shared/css/picker.css">
   <link rel="stylesheet" href="../shared/css/form-controls.css">
   <link rel="stylesheet" href="../shared/css/section.css">
+  <link rel="stylesheet" href="../item/css/item.css">   <!-- the Attachments table of the details panel looks as it does on the Item panel -->
   <!-- Publish panel styles -->
   <link rel="stylesheet" href="css/publish.css">
   <link rel="stylesheet" href="css/bom.css">
@@ -92,7 +93,11 @@
             <span class="pub-pane-title" data-i18n="publish.details_panel">Details Panel</span>
             <button id="pub-detail-close" class="pub-detail-close" type="button" title="Close details" aria-label="Close details" data-i18n-attr="title:publish.details_close;aria-label:publish.details_close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>
-          <div id="pub-props" class="pub-props"></div>
+          <!-- Overview (the comparison with Fusion Manage) first, then the item's own tabs (Item details, Attachments) once an item is known; the strip is wired and shown by details.js. -->
+          <nav id="pub-tabs" class="tabs" data-group="pubdetail"><button class="tab" type="button" data-tab="overview" data-i18n="publish.detail_tab_overview">Overview</button><button class="tab" type="button" data-tab="item" hidden></button><button class="tab" type="button" data-tab="files" hidden></button></nav>
+          <div id="pubtab-overview" class="tab-panel active pub-props" data-group="pubdetail"></div>
+          <div id="pubtab-item" class="tab-panel" data-group="pubdetail"><div id="pub-item"></div></div>
+          <div id="pubtab-files" class="tab-panel pub-tab-body" data-group="pubdetail"><div id="pub-files"></div></div>
         </aside>
       </main>
 
@@ -159,6 +164,7 @@
   <script src="../shared/js/validators.js"></script>
   <script src="../shared/js/form-controls.js"></script>
   <script src="../shared/js/section.js"></script>
+  <script src="../shared/js/tabs.js"></script>
   <!-- Publish panel -->
   <script src="js/ui.js"></script>
   <script src="../shared/js/toast.js"></script>
@@ -167,6 +173,10 @@
   <script src="js/bom-model.js"></script>
   <script src="js/mbom-structure.js"></script>
   <script src="js/mbom-plan.js"></script>
+  <script src="../item/js/tree.js"></script>
+  <script src="../item/js/safe-html.js"></script>
+  <script src="../item/js/item-sections.js"></script>
+  <script src="../item/js/files.js"></script>
   <script src="js/details.js"></script>
   <script src="js/add-items.js"></script>
   <script src="js/item-panel.js"></script>

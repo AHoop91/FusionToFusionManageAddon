@@ -97,5 +97,5 @@
     setupTabs('.tabs[data-group="settings"]', 'tab', 'sub-');
   }
 
-  ns.tabs = { init: init };
+  ns.tabs = { init: init, setup: setupTabs };   // ``setup(navSelector, buttonClass, idPrefix)`` wires a strip a page builds itself (Publish's details panel)
 })(window.MfgUi);

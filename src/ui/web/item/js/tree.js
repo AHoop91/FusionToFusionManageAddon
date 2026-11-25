@@ -274,5 +274,14 @@
     return td;
   }
 
-  ns.itemTree = { ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, leave: leave, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable, sortableTable: sortableTable };
+  /** Name a tab's button as Fusion Manage does (``tab`` is one entry of an item's ``tabs``: ``label``, ``count``, ``allowed``), with how many entries it holds; a tab
+   *  the user may not open is disabled, with the reason as its tooltip. */
+  function labelTab(button, tab) {
+    button.textContent = tab.allowed && tab.count ? tab.label + ' (' + tab.count + ')' : tab.label;
+    button.disabled = !tab.allowed;
+    if (tab.allowed) button.removeAttribute('title');
+    else button.title = t('item.tab_no_permission');
+  }
+
+  ns.itemTree = { labelTab: labelTab, ITEM_COLUMN_PX: ITEM_COLUMN_PX, COLUMN_PX: COLUMN_PX, load: load, leave: leave, formatDate: formatDate, centred: centred, emptyUnder: emptyUnder, loading: loading, itemCell: itemCell, iconXs: iconXs, grip: grip, resizable: resizable, sortableTable: sortableTable };
 })(window.MfgUi);

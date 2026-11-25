@@ -5,7 +5,7 @@
 
 /* ---- The pane --------------------------------------------------------------- */
 /* Runs the full height of the area, flush with its top, right and bottom edges (cancels the 16px padding of main). */
-.pub-detail { display: flex; flex-direction: column; flex: 0 0 50%; min-width: 260px; margin: -16px -16px -16px 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); position: relative; container: details / inline-size; }
+.pub-detail { display: flex; flex-direction: column; flex: 0 0 38%; min-width: 340px; margin: -16px -16px -16px 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); position: relative; container: details / inline-size; }
 /* Its title bar (.pub-pane-header) has the close button at its right; the content below it scrolls. */
 .pub-detail-close {
   display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; padding: 0;
@@ -14,7 +14,16 @@
 .pub-detail-close:hover { background: rgba(0, 0, 0, .06); color: rgba(0, 0, 0, .87); }
 .pub-detail-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .pub-props { min-width: 0; }
-.pub-detail > .pub-props { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; }
+.pub-detail > .tab-panel.active { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; }
+/* The Attachments tab: the table (the Item panel's own, a .view-scroll) fills the pane and scrolls inside it. */
+.pub-detail > .tab-panel.pub-tab-body.active { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.pub-tab-body > #pub-files { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pub-tab-body .view-scroll { padding: 16px; }
+/* The Item details tab: the Item panel's sections (item.css styles them by #item-body), in a narrower pane, so they may be as narrow as it is. */
+#pub-item .section { min-width: 0; }
+#pub-item .section + .section { margin-top: 10px; }
+#pub-item .section-title { background: var(--detail-bg); }
+#pub-item .section-title:hover { background: #e4e4e4; }
 .pub-backdrop { display: none; }
 /* Drag handle on the pane's left edge (wide layout only). */
 .pub-detail-resize { position: absolute; top: 0; bottom: 0; left: 0; z-index: 1; width: 6px; cursor: col-resize; touch-action: none; }
@@ -154,4 +163,5 @@
   .pub-props .pub-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #6b7280); }
   .pub-props .pub-table td[data-label="Property"]::before { content: none; }
   .pub-props .pub-table td.pub-status { position: absolute; top: 12px; right: 12px; width: auto; padding: 0; border: 0; }
+  .pub-props .pub-property-table.pub-table-new tr { grid-template-columns: 1fr; }   /* no Fusion Manage column: the value has the width */
 }

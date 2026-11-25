@@ -9,7 +9,8 @@ the reader does not depend on how a workspace groups its fields into sections.
 
 from typing import Any, Dict, Optional, Tuple
 
-from .client import WORKSPACES, FmClient
+from ..core.i18n import t
+from .client import WORKSPACES, FmApiError, FmClient
 from .pages import DESCRIPTOR_KEYS, FIELD_ID
 
 
@@ -54,8 +55,18 @@ class ItemService:
         """The item's fields as ``{field id: value}``, picklists as Fusion Manage holds them (``display_values`` gives the text)."""
         return self.read_named(workspace_id, item_id)[1]
 
-    def read_named(self, workspace_id: str, item_id: str) -> Tuple[str, Dict[str, Any]]:
-        """``(descriptor, fields)`` of the item, from one read: the descriptor is "" when the answer holds none."""
+    def urn(self, workspace_id: str, item_id: str) -> str:
+        """The item's urn ("" when the answer holds none), from one read of the item (no layouts or pictures)."""
+        return str(self.item(workspace_id, item_id).get("urn") or "")
+
+    def item(self, workspace_id: str, item_id: str) -> Dict[str, Any]:
+        """The item as Fusion Manage answers it; raises ``FmApiError`` when the answer is not an item."""
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")
-        descriptor = str(next((data[key] for key in DESCRIPTOR_KEYS if data.get(key)), "")) if isinstance(data, dict) else ""
-        return descriptor, collect_values(data)
+        if not isinstance(data, dict):
+            raise FmApiError(t("data.fm_no_item", item=item_id, workspace=workspace_id))
+        return data
+
+    def read_named(self, workspace_id: str, item_id: str) -> Tuple[str, Dict[str, Any]]:
+        """``(descriptor, fields)`` of the item, from one read: the descriptor is "" when the answer holds none; raises ``FmApiError`` when the answer is not an item."""
+        data = self.item(workspace_id, item_id)
+        return str(next((data[key] for key in DESCRIPTOR_KEYS if data.get(key)), "")), collect_values(data)
