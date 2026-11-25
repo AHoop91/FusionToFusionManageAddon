@@ -18,7 +18,15 @@ log = get_logger("palette")
 OPENED_ACTION = "palette_opened"   # sent to a page that is open already when it is shown again; its ``bridge.on("palette_opened")`` callback runs
 
 
+EDGE_MARGIN = 80   # px kept between a palette's far edges and the viewport's. A tuned allowance, not a value read from Fusion: with none, a palette was seen still off the screen
+
 _last_area: Optional[Tuple[int, int, int, int]] = None   # (screen x, screen y, width, height) of Fusion's viewport, as last seen
+
+
+def _fit(origin: int, span: int, size: int) -> int:
+    """Where a palette ``size`` long starts to be in the middle of ``span`` (from ``origin``) without its far edge coming within ``EDGE_MARGIN`` of the span's.
+    The viewport reaches the edge of the screen, so a palette wider than it, centred on it, would run off the screen; it overlaps Fusion's browser on the near side instead."""
+    return int(min(origin + (span - size) / 2, origin + span - size - EDGE_MARGIN))
 
 
 def _viewport_area_now() -> Optional[Tuple[int, int, int, int]]:
@@ -132,11 +140,11 @@ class PaletteHost:
             log.info("Not centring '%s': no viewport has been seen yet", self._title)
             return
         x, y, width, height = area
-        left = int(x + (width - (palette.width or self._size[0])) / 2)
-        top = int(y + (height - (palette.height or self._size[1])) / 2)
+        wide, high = palette.width or self._size[0], palette.height or self._size[1]
+        left, top = _fit(x, width, wide), max(y, _fit(y, height, high))   # never above the viewport: the title bar stays reachable
         palette.setPosition(left, top)
-        log.debug("Centred '%s' (%sx%s) at %s,%s in the area %sx%s at screen %s,%s",
-                 self._title, palette.width, palette.height, left, top, width, height, x, y)
+        log.info("Centred '%s' (%sx%s used, margin %s) at %s,%s in the area %sx%s at screen %s,%s",
+                 self._title, wide, high, EDGE_MARGIN, left, top, width, height, x, y)
 
     def hide(self) -> None:
         """Close the palette on screen (its page stays loaded until the palette is shown again, as when the user closes it). Main thread only."""
