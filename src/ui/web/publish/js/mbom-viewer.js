@@ -45,6 +45,7 @@
     grip: ['M9 6h.01', 'M15 6h.01', 'M9 12h.01', 'M15 12h.01', 'M9 18h.01', 'M15 18h.01'],
     addOne: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 8v8', 'M8 12h8'],
     search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M16 16l4.5 4.5'],
+    filter: ['M4 5h16l-6 8v6l-4-2v-4z'],   // a funnel: only the lines the search found (and what is above them)
     undo: ['M9 14L4 9l5-5', 'M4 9h10a6 6 0 0 1 0 12h-3'],
     redo: ['M15 14l5-5-5-5', 'M20 9H10a6 6 0 0 0 0 12h3'],
   };
@@ -92,7 +93,9 @@
   let dropMark = null;       // the row showing where a drop would go
   let searchText = '';
   let hitIndex = -1;
-  const hits = new Set();    // uids of the lines the search found
+  const hits = new Set();    // uids of the MBOM lines the search found
+  const ebomHits = new Set();   // keys of the EBOM lines the search found
+  let filtering = false;     // only the lines the search found are drawn, with the assemblies above them greyed
   const opened = new Set([S.ROOT]);   // uids of the MBOM lines that are open
   const ebomOpened = new Set(['0']);  // keys of the EBOM lines that are open
   const more = {};           // parent id -> how many lines under it are drawn
@@ -138,7 +141,7 @@
     openNotes.clear();
     hitIndex = -1;
     dom.search.value = '';
-    hits.clear(); selected.clear(); ebomSelected.clear();
+    hits.clear(); ebomHits.clear(); selected.clear(); ebomSelected.clear();
     anchor = '';
     resetFolds();
     Object.keys(more).forEach(function (k) { delete more[k]; });
@@ -233,12 +236,21 @@
     if (anchor && !selected.has(anchor) && !ebomSelected.has(anchor)) anchor = '';
   }
 
-  /** The search again, for the lines now in the tree (an edit may have added, removed or renamed some); ``open`` opens what is above each hit. */
+  /** The search again, in both panes, for the lines now in the tree (an edit may have added, removed or renamed some); ``open`` opens what is above each hit. */
   function findHits(open) {
     hits.clear();
+    ebomHits.clear();
     hitIndex = -1;
     if (!searchText) return;
     structure.search(searchText).forEach(function (uid) { hits.add(uid); if (open) reveal(uid); });
+    const needle = searchText.toLowerCase();
+    (function walk(node, path) {
+      if (node.number.toLowerCase().indexOf(needle) >= 0 || node.name.toLowerCase().indexOf(needle) >= 0) {
+        ebomHits.add(node.key);
+        if (open) revealEbom(path);
+      }
+      node.children.forEach(function (c, at) { walk(c, path.concat([{ key: node.key, at: at }])); });
+    })(ebom, []);
   }
 
   /** After the structure changed (an edit, undo or redo): its lines are looked up again, and the selection and the search follow. */
@@ -941,11 +953,13 @@
 
   function drawEbom(container, cmp) {
     const list = [];
+    const filter = filterView();
     (function walk(node, depth) {
       const state = cmp.ebom[node.key];
       const badges = [];
       if (state && state.matched) badges.push(matchedMark(state.bought));
-      const isOpen = ebomOpened.has(node.key);
+      const isOpen = ebomOpened.has(node.key) || (!!filter && filter.ebom.has(node.key));   // with the filter on, what has a match under it is open
+      const kids = filter ? node.children.filter(function (c) { return ebomHits.has(c.key) || filter.ebom.has(c.key); }) : node.children;
       if (depth) list.push(node.key);
       const count = ebomSelected.has(node.key) ? ebomSelected.size : 1;
       const full = !!(state && (state.exceeded || state.matched || state.blocked));   // all of it is in the MBOM (adding it again would be more than the EBOM has), or a purchased part above it stands for it
@@ -959,15 +973,16 @@
       if (depth && !full) actions.push({ act: 'add', icon: 'addOne', label: actionLabel(t('publish.sv_act_add'), count) });
       const notes = depth ? ebomNotes(node, state) : [];
       const tone = toneOf(notes);
-      const row = lineNode({ id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: node.children.length > 0,
+      const row = lineNode({ id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: kids.length > 0,
                              isOpen: isOpen, selected: ebomSelected.has(node.key), badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '', notes: notes, noteKey: 'ebom:' + node.key,
-                             tone: tone, classes: [state && state.missing && !state.blocked ? 'sv-row-missing' : '', state && (state.matched || state.blocked) ? 'sv-row-matched' : '', toneClass(tone)].filter(Boolean).join(' ') });
+                             tone: tone, classes: [state && state.missing && !state.blocked ? 'sv-row-missing' : '', state && (state.matched || state.blocked) ? 'sv-row-matched' : '', ebomHits.has(node.key) ? 'sv-hit' : '',
+                                         filter && depth && !ebomHits.has(node.key) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' ') });
       container.appendChild(row);
       if (notes.length && openNotes.has('ebom:' + node.key)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
       const shown = more[node.key] || LIMIT;
-      node.children.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
-      if (node.children.length > shown) container.appendChild(moreNode(node.key, node.children.length - shown));
+      kids.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
+      if (kids.length > shown) container.appendChild(moreNode(node.key, kids.length - shown));
     })(ebom, 0);
     visible.ebom = list;
   }
@@ -975,10 +990,12 @@
   function drawMbom(container, cmp, chg) {
     const numbers = ns.mbomPlan.lineNumbers(structure, chg);   // the line numbers Fusion Manage has, or will have when published
     const list = [];
+    const filter = filterView();
     (function walk(node, depth) {
       const badges = [];
       const flags = chg.changes[node.uid];
-      const isOpen = opened.has(node.uid);
+      const isOpen = opened.has(node.uid) || (!!filter && filter.mbom.has(node.uid));   // with the filter on, what has a match under it is open
+      const kids = filter ? node.children.filter(function (c) { return hits.has(c.uid) || filter.mbom.has(c.uid); }) : node.children;
       if (depth) list.push(node.uid);
       const count = selected.has(node.uid) ? selected.size : 1;
       const actions = [];
@@ -991,13 +1008,13 @@
       const notes = depth ? mbomNotes(node, cmp, flags) : [];
       const tone = toneOf(notes);
       container.appendChild(lineNode({ id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
-                                       hasKids: node.children.length > 0, isOpen: isOpen, selected: selected.has(node.uid), badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
-                                       classes: [hits.has(node.uid) ? 'sv-hit' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source) }));
+                                       hasKids: kids.length > 0, isOpen: isOpen, selected: selected.has(node.uid), badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
+                                       classes: [hits.has(node.uid) ? 'sv-hit' : '', filter && depth && !hits.has(node.uid) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source) }));
       if (notes.length && openNotes.has('mbom:' + node.uid)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
       const shown = more[node.uid] || LIMIT;
-      node.children.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
-      if (node.children.length > shown) container.appendChild(moreNode(node.uid, node.children.length - shown));
+      kids.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
+      if (kids.length > shown) container.appendChild(moreNode(node.uid, kids.length - shown));
     })(structure.root(), 0);
     visible.mbom = list;
   }
@@ -1050,7 +1067,11 @@
     dom.mbomTree.scrollTop = scroll[1];
     dom.removed.textContent = chg.removed.length
       ? t('publish.sv_removed', { numbers: chg.removed.map(function (r) { return r.cascade ? r.number + ' (+' + r.cascade + ')' : r.number; }).join(', ') }) : '';
-    dom.found.textContent = searchText ? (hits.size ? t('publish.sv_search_count', { count: hits.size }) : t('publish.sv_search_none')) : '';
+    const found = hits.size + ebomHits.size;   // in both panes
+    dom.found.textContent = !searchText ? '' : !found ? t('publish.sv_found_none') : found === 1 ? t('publish.sv_found_one') : t('publish.sv_found_many', { count: found });
+    dom.found.title = searchText && found ? t('publish.sv_found_where', { ebom: ebomHits.size, mbom: hits.size }) : '';
+    dom.found.classList.toggle('none', !!searchText && !found);
+    dom.tools.filter.setAttribute('aria-pressed', String(filtering));
     updateTools();
   }
 
@@ -1074,6 +1095,29 @@
       if (entry.at >= (more[entry.parent.uid] || LIMIT)) more[entry.parent.uid] = entry.at + 1;
       entry = index.get(entry.parent.uid);
     }
+  }
+
+  /** Open the assemblies above an EBOM line (``path``: each assembly above it and the place of the next one under it), and draw it past the first lines. */
+  function revealEbom(path) {
+    path.forEach(function (step) {
+      ebomOpened.add(step.key);
+      if (step.at >= (more[step.key] || LIMIT)) more[step.key] = step.at + 1;
+    });
+  }
+
+  /** With the filter on and a search typed: the assemblies that have a match under them in each pane (``{mbom, ebom}``, uids and keys), else null (every line is drawn). */
+  function filterView() {
+    if (!filtering || !searchText) return null;
+    const up = { mbom: new Set(), ebom: new Set() };
+    hits.forEach(function (uid) {
+      let entry = index.get(uid);
+      while (entry && entry.parent) { up.mbom.add(entry.parent.uid); entry = index.get(entry.parent.uid); }
+    });
+    ebomHits.forEach(function (key) {
+      const parts = key.split('.');
+      for (let n = 1; n < parts.length; n++) up.ebom.add(parts.slice(0, n).join('.'));
+    });
+    return up;
   }
 
   /** Whether the line is drawn: every assembly above it is open. */
@@ -1104,12 +1148,19 @@
     render();
   }
 
+  /** Enter in the search: scroll to the next match, the lines of the Fusion Component pane first, then the Fusion Manage ones. */
   function nextHit() {
-    const list = Array.from(hits);
+    const list = Array.from(ebomHits).map(function (key) { return { tree: dom.ebomTree, id: key }; })
+      .concat(Array.from(hits).map(function (uid) { return { tree: dom.mbomTree, id: uid }; }));
     if (!list.length) return;
     hitIndex = (hitIndex + 1) % list.length;
-    const row = dom.mbomTree.querySelector('[data-id="' + list[hitIndex] + '"]');
+    const row = list[hitIndex].tree.querySelector('[data-id="' + list[hitIndex].id + '"]');
     if (row && row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+  }
+
+  function toggleFilter() {
+    filtering = !filtering;
+    render();
   }
 
   function paneClick(pane, event) {
@@ -1314,7 +1365,7 @@
     search.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && structure) { if (search.value.trim() !== searchText) runSearch(search.value); nextHit(); }
     });
-    const found = el('span', 'sv-found muted');
+    const found = el('span', 'sv-found');   // a small badge: how many lines matched, and where (its tooltip)
     tools.undo = iconButton('undo', t('publish.sv_undo'), undo);
     tools.redo = iconButton('redo', t('publish.sv_redo'), redo);
     tools.fold = ns.pubUi.foldTools(function () { expandAll(false); }, function () { expandAll(true); });
@@ -1326,7 +1377,9 @@
     searchBox.append(ns.svg(ICONS.search, 16), search);
     tools.match = iconButton('match', t('publish.sv_match'), matchEbom);
     tools.renumber = iconButton('renumber', t('publish.sv_renumber'), renumber);
-    tools.bar.append(searchBox, found, tools.fold, history, tools.add, tools.newItem, tools.match, tools.renumber);
+    tools.filter = iconButton('filter', t('publish.sv_filter'), toggleFilter);
+    tools.filter.setAttribute('aria-pressed', 'false');
+    tools.bar.append(searchBox, tools.filter, found, tools.fold, history, tools.add, tools.newItem, tools.match, tools.renumber);
     const state = el('div', 'sv-state');
     const left = pane(t('publish.sv_ebom_title'), t('publish.sv_ebom_tip'));
     left.tree.classList.add('sv-tree-ebom');   // its hover icons sit nearer the quantity: no quantity box to clear

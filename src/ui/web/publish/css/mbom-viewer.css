@@ -30,7 +30,9 @@
 .sv-search-box > svg { position: absolute; left: 9px; pointer-events: none; fill: none; stroke: rgba(0, 0, 0, .5); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .sv-search { width: 240px; height: 30px; padding: 0 10px 0 32px; border-color: rgba(0, 0, 0, .23); background: #fff; }
 .sv-search:hover { border-color: rgba(0, 0, 0, .6); }
-.sv-found { font-size: 12px; min-width: 56px; }
+.sv-found { flex: none; font-size: 12px; font-weight: 500; line-height: 1; padding: 5px 10px; border-radius: 999px; background: #e8f1fb; color: #0b5cad; white-space: nowrap; }
+.sv-found:empty { display: none; }
+.sv-found.none { background: #f1f2f4; color: var(--muted); }
 
 /* ---- Panes ---- */
 .sv-panes { flex: 1; min-height: 0; display: flex; gap: 12px; }
@@ -53,6 +55,8 @@
 .sv-row:hover { --row-bg: #f5f5f5; background: var(--row-bg); }
 .sv-row.selected { --row-bg: #eaf2fb; background: var(--row-bg); }
 .sv-row.sv-hit .sv-pn { background: #fff3a3; }
+.sv-row-context .sv-label, .sv-row-context .sv-qty, .sv-row-context .sv-seq { color: var(--muted); }   /* an assembly shown only because a line under it matches the filter */
+.sv-icon[aria-pressed="true"] { background: rgba(0, 0, 0, .09); color: var(--accent); }
 /* Not in the MBOM (red) or added (green): the bar and the icon change colour, the row stays as it is. */
 .sv-row-missing .pub-tree-icon { border-right-color: var(--danger); }
 .sv-row-missing .pub-tree-icon svg { stroke: var(--danger); }

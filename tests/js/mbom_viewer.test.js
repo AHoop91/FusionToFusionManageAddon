@@ -211,7 +211,32 @@ test('a failed read of the MBOM is shown, and the search finds lines and opens w
   search.dispatchEvent(new v.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'C']);
   assert.ok(v.rowOf(v.mbom(), 'A2').classList.contains('sv-hit'));
-  assert.match(v.w.document.querySelector('.sv-found').textContent, /1 found/);
+  assert.ok(v.rowOf(v.ebom(), 'A2').classList.contains('sv-hit'), 'the Fusion Component pane is searched too, and opened');
+  assert.match(v.w.document.querySelector('.sv-found').textContent, /2 Matches/, 'one in each pane');
+});
+
+test('the filter button shows only the lines the search found in both panes, with the assemblies above them greyed', skip, () => {
+  const v = built();
+  const doc = v.w.document;
+  const filter = doc.querySelector('.sv-bar [aria-pressed]');
+  assert.strictEqual(filter.getAttribute('aria-pressed'), 'false');
+  filter.click();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C'], 'nothing is filtered while nothing is searched');
+  const search = doc.querySelector('.sv-search');
+  search.value = 'a2';
+  search.dispatchEvent(new v.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  assert.strictEqual(filter.getAttribute('aria-pressed'), 'true');
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A2']);
+  assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'A2']);
+  [v.mbom(), v.ebom()].forEach((pane) => {
+    assert.ok(v.rowOf(pane, 'A').classList.contains('sv-row-context'), 'the assembly above it is greyed');
+    assert.ok(!v.rowOf(pane, 'A2').classList.contains('sv-row-context'));
+    assert.ok(v.rowOf(pane, 'A2').classList.contains('sv-hit'));
+  });
+  filter.click();
+  assert.strictEqual(filter.getAttribute('aria-pressed'), 'false');
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'C'], 'off: every line again, the match still marked');
+  assert.ok(!v.rowOf(v.mbom(), 'A').classList.contains('sv-row-context'));
 });
 
 test('add items opens the picker with the target item and puts what it returns into the MBOM', skip, () => {
@@ -336,11 +361,11 @@ test('lines a fold hides leave the selection, so an action on a line does not ta
 test('the search is run again after an edit and an undo', skip, () => {
   const v = built();
   search(v, 'C');
-  assert.match(found(v), /1 found/);
+  assert.match(found(v), /2 Matches/, 'one in each pane');
   v.act(v.mbom(), 'C', 'remove').click();
-  assert.match(found(v), /No match/);
+  assert.match(found(v), /1 Match/, 'the one in the Fusion Component pane is still there');
   v.button('Undo').click();
-  assert.match(found(v), /1 found/);
+  assert.match(found(v), /2 Matches/);
   assert.ok(v.rowOf(v.mbom(), 'C').classList.contains('sv-hit'));
 });
 
