@@ -35,6 +35,7 @@
     assembly: ['M12 3l8 4.5v9L12 21l-8-4.5v-9z', 'M12 9.5v5', 'M9.5 12h5'],
     boxPlus: ['M10 3l7 4v6', 'M17 7l-7 4-7-4', 'M10 11v9', 'M3 7v10l7 4', 'M10 3L3 7', 'M18 14.5v7', 'M14.5 18h7'],   // a box like the BOM's, with a plus at its bottom right (the last two paths)
     bought: ['M3 4h2.5l2 11h10l2-8H7', 'M10 19.5h.01', 'M17 19.5h.01'],   // a trolley
+    spanner: ['M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z'],   // a spanner: a line of manufacturing's own, not in the EBOM
     cart: ['M8 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M19 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M2 3h2l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L22 7H5.1'],   // a shopping cart: a purchased part
     info: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5'],   // a circle with an i: the note of a line
     position: ['M8 4v16', 'M5 7l3-3 3 3', 'M16 20V4', 'M13 17l3 3 3-3'],   // an arrow up beside an arrow down: the line goes up or down the assembly
@@ -95,6 +96,7 @@
   let hitIndex = -1;
   const hits = new Set();    // uids of the MBOM lines the search found
   const ebomHits = new Set();   // keys of the EBOM lines the search found
+  let statusFilter = '';     // the colour bar's choice: only the EBOM lines that are 'missing', 'quantity' (a different quantity) or 'matched' are drawn, '' for all
   let filtering = false;     // only the lines the search found are drawn, with the assemblies above them greyed
   const opened = new Set([S.ROOT]);   // uids of the MBOM lines that are open
   const ebomOpened = new Set(['0']);  // keys of the EBOM lines that are open
@@ -138,6 +140,7 @@
     clearMark();
     drag = null;
     searchText = '';
+    statusFilter = '';
     openNotes.clear();
     hitIndex = -1;
     dom.search.value = '';
@@ -921,6 +924,10 @@
       icon.replaceChildren(ns.svg(ICONS.cart, 16));
       icon.title = t('publish.sv_purchased_part');
     }
+    if (spec.mfgOwn) {   // an item only Fusion Manage has, not a box
+      icon.replaceChildren(ns.svg(ICONS.spanner, 16));
+      icon.title = t('publish.sv_mfg_item');
+    }
     row.appendChild(icon);
     if (spec.seq) row.appendChild(el('span', 'sv-seq', spec.seq));   // the line's number, as the table shows it
     const label = el('span', 'sv-label');
@@ -959,7 +966,7 @@
       const badges = [];
       if (state && state.matched) badges.push(matchedMark(state.bought));
       const isOpen = ebomOpened.has(node.key) || (!!filter && filter.ebom.has(node.key));   // with the filter on, what has a match under it is open
-      const kids = filter ? node.children.filter(function (c) { return ebomHits.has(c.key) || filter.ebom.has(c.key); }) : node.children;
+      const kids = filter ? node.children.filter(function (c) { return filter.keep.has(c.key) || filter.ebom.has(c.key); }) : node.children;
       if (depth) list.push(node.key);
       const count = ebomSelected.has(node.key) ? ebomSelected.size : 1;
       const full = !!(state && (state.exceeded || state.matched || state.blocked));   // all of it is in the MBOM (adding it again would be more than the EBOM has), or a purchased part above it stands for it
@@ -976,7 +983,7 @@
       const row = lineNode({ id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: kids.length > 0,
                              isOpen: isOpen, selected: ebomSelected.has(node.key), badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '', notes: notes, noteKey: 'ebom:' + node.key,
                              tone: tone, classes: [state && state.missing && !state.blocked ? 'sv-row-missing' : '', state && (state.matched || state.blocked) ? 'sv-row-matched' : '', ebomHits.has(node.key) ? 'sv-hit' : '',
-                                         filter && depth && !ebomHits.has(node.key) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' ') });
+                                         filter && depth && !filter.keep.has(node.key) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' ') });
       container.appendChild(row);
       if (notes.length && openNotes.has('ebom:' + node.key)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
@@ -990,7 +997,8 @@
   function drawMbom(container, cmp, chg) {
     const numbers = ns.mbomPlan.lineNumbers(structure, chg);   // the line numbers Fusion Manage has, or will have when published
     const list = [];
-    const filter = filterView();
+    const view = filterView();
+    const filter = view && view.mbomOn ? view : null;   // the colour bar cuts down the EBOM only
     (function walk(node, depth) {
       const badges = [];
       const flags = chg.changes[node.uid];
@@ -1009,7 +1017,8 @@
       const tone = toneOf(notes);
       container.appendChild(lineNode({ id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
                                        hasKids: kids.length > 0, isOpen: isOpen, selected: selected.has(node.uid), badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
-                                       classes: [hits.has(node.uid) ? 'sv-hit' : '', filter && depth && !hits.has(node.uid) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source) }));
+                                       classes: [hits.has(node.uid) ? 'sv-hit' : '', filter && depth && !hits.has(node.uid) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source),
+                                       mfgOwn: cmp.mbom[node.uid] === 'mfg' && (node.kind === 'component' || node.kind === 'added') }));
       if (notes.length && openNotes.has('mbom:' + node.uid)) container.appendChild(noteRow(notes, depth));
       if (!isOpen) return;
       const shown = more[node.uid] || LIMIT;
@@ -1061,6 +1070,12 @@
     const scroll = [dom.ebomTree.scrollTop, dom.mbomTree.scrollTop];
     dom.ebomTree.replaceChildren();
     dom.mbomTree.replaceChildren();
+    drawMeter(cmp);
+    const cut = filterView();
+    if (cut) {   // a line the filters leave undrawn is not selected any more: Add, Remove and drag would act on what cannot be seen
+      Array.from(ebomSelected).forEach(function (key) { if (!cut.keep.has(key) && !cut.ebom.has(key)) ebomSelected.delete(key); });
+      if (cut.mbomOn) Array.from(selected).forEach(function (uid) { if (!hits.has(uid) && !cut.mbom.has(uid)) selected.delete(uid); });
+    }
     drawEbom(dom.ebomTree, cmp);
     drawMbom(dom.mbomTree, cmp, chg);
     dom.ebomTree.scrollTop = scroll[0];
@@ -1105,19 +1120,61 @@
     });
   }
 
-  /** With the filter on and a search typed: the assemblies that have a match under them in each pane (``{mbom, ebom}``, uids and keys), else null (every line is drawn). */
+  /** The status of an EBOM line for the colour bar: 'missing' (no MBOM line is made from it), 'quantity' (the MBOM lines do not add up to its quantity),
+   *  'matched' (all else), or '' for a line a purchased part above it stands for (it is not counted). */
+  function statusOf(state) {
+    if (!state || state.blocked) return '';
+    return state.missing ? 'missing' : state.quantity ? 'quantity' : 'matched';
+  }
+
+  /** What the filters leave drawn (the search with the filter button on, and the colour bar's choice): ``{mbom, ebom, keep, mbomOn}``. ``mbom`` and ``ebom`` hold
+   *  the assemblies above a line kept (uids and keys), ``keep`` the EBOM keys kept, ``mbomOn`` whether the MBOM is cut down too (only the search does that).
+   *  Null when neither is on (every line is drawn). */
   function filterView() {
-    if (!filtering || !searchText) return null;
-    const up = { mbom: new Set(), ebom: new Set() };
-    hits.forEach(function (uid) {
-      let entry = index.get(uid);
-      while (entry && entry.parent) { up.mbom.add(entry.parent.uid); entry = index.get(entry.parent.uid); }
-    });
-    ebomHits.forEach(function (key) {
+    const bySearch = filtering && !!searchText;
+    if (!bySearch && !statusFilter) return null;
+    const up = { mbom: new Set(), ebom: new Set(), keep: new Set(), mbomOn: bySearch };
+    if (bySearch) {
+      hits.forEach(function (uid) {
+        let entry = index.get(uid);
+        while (entry && entry.parent) { up.mbom.add(entry.parent.uid); entry = index.get(entry.parent.uid); }
+      });
+    }
+    const states = compare().cmp.ebom;
+    (bySearch ? Array.from(ebomHits) : Object.keys(states)).forEach(function (key) {
+      if (statusFilter && statusOf(states[key]) !== statusFilter) return;
+      up.keep.add(key);
       const parts = key.split('.');
       for (let n = 1; n < parts.length; n++) up.ebom.add(parts.slice(0, n).join('.'));
     });
     return up;
+  }
+
+  /** The colour bar under the Fusion Component pane: a green, an amber and a red part, as wide as the EBOM lines added, with a different quantity and missing.
+   *  A part is a button that keeps only those lines (and the assemblies above them); pressing it again shows all. */
+  function drawMeter(cmp) {
+    const counts = { matched: 0, quantity: 0, missing: 0 };
+    Object.keys(cmp.ebom).forEach(function (key) { const status = statusOf(cmp.ebom[key]); if (status) counts[status]++; });
+    if (statusFilter && !counts[statusFilter]) statusFilter = '';   // nothing is left of it
+    const total = counts.matched + counts.quantity + counts.missing;
+    dom.meter.hidden = !total;
+    Object.keys(dom.meterParts).forEach(function (status) {
+      const part = dom.meterParts[status];
+      part.hidden = !counts[status];
+      part.style.flexGrow = String(counts[status]);
+      part.textContent = String(counts[status]);
+      const words = { count: counts[status] };
+      const label = status === 'matched' ? t('publish.sv_meter_matched', words) : status === 'quantity' ? t('publish.sv_meter_quantity', words) : t('publish.sv_meter_missing', words);
+      part.title = label;
+      part.setAttribute('aria-label', label);
+      part.setAttribute('aria-pressed', String(statusFilter === status));
+    });
+    dom.meter.classList.toggle('sv-meter-on', !!statusFilter);
+  }
+
+  function pickStatus(status) {
+    statusFilter = statusFilter === status ? '' : status;
+    render();
   }
 
   /** Whether the line is drawn: every assembly above it is open. */
@@ -1151,7 +1208,8 @@
   /** Enter in the search: scroll to the next match, the lines of the Fusion Component pane first, then the Fusion Manage ones. */
   function nextHit() {
     const list = Array.from(ebomHits).map(function (key) { return { tree: dom.ebomTree, id: key }; })
-      .concat(Array.from(hits).map(function (uid) { return { tree: dom.mbomTree, id: uid }; }));
+      .concat(Array.from(hits).map(function (uid) { return { tree: dom.mbomTree, id: uid }; }))
+      .filter(function (hit) { return !!hit.tree.querySelector('[data-id="' + hit.id + '"]'); });   // the colour bar may leave a hit undrawn
     if (!list.length) return;
     hitIndex = (hitIndex + 1) % list.length;
     const row = list[hitIndex].tree.querySelector('[data-id="' + list[hitIndex].id + '"]');
@@ -1382,6 +1440,19 @@
     tools.bar.append(searchBox, tools.filter, found, tools.fold, history, tools.add, tools.newItem, tools.match, tools.renumber);
     const state = el('div', 'sv-state');
     const left = pane(t('publish.sv_ebom_title'), t('publish.sv_ebom_tip'));
+    const meter = el('div', 'sv-meter');   // the colour bar under the Fusion Component lines
+    meter.setAttribute('role', 'group');
+    meter.setAttribute('aria-label', t('publish.sv_meter_label'));
+    const meterParts = {};
+    [['matched', 'sv-meter-ok'], ['quantity', 'sv-meter-warn'], ['missing', 'sv-meter-bad']].forEach(function (pair) {
+      const part = el('button', 'sv-meter-part ' + pair[1]);
+      part.type = 'button';
+      part.addEventListener('click', function () { if (structure) pickStatus(pair[0]); });
+      meterParts[pair[0]] = part;
+      meter.appendChild(part);
+    });
+    meter.hidden = true;
+    left.box.appendChild(meter);
     left.tree.classList.add('sv-tree-ebom');   // its hover icons sit nearer the quantity: no quantity box to clear
     const right = pane(t('publish.sv_mbom_title'), t('publish.sv_mbom_tip'));
     const panes = el('div', 'sv-panes');
@@ -1400,7 +1471,7 @@
       pair[1].addEventListener('click', function (event) { if (justDragged) { event.stopPropagation(); justDragged = false; } }, true);   // the end of a drag selects nothing
     });
     right.tree.addEventListener('keydown', keyMbom);
-    return { tools: tools, search: search, state: state, panes: panes, footer: footer, status: status, removed: removed, found: found,
+    return { tools: tools, search: search, state: state, panes: panes, footer: footer, status: status, removed: removed, found: found, meter: meter, meterParts: meterParts,
              ebomTree: left.tree, mbomTree: right.tree };
   }
 

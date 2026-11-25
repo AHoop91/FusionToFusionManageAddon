@@ -89,6 +89,7 @@
 /* Title bar of a pane (the bill of materials, the details): a lighter grey than the top bar, so the panes stand out from it. */
 .pub-pane-header { flex: none; box-sizing: border-box; height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 8px 16px; background: #e9eaec; border-bottom: 1px solid var(--header-border); }
 .pub-pane-title { font-size: 13px; font-weight: 600; }
+.pub-bom-pane > .pub-pane-header .pub-pane-title { font-weight: 500; letter-spacing: .02em; color: #3c4249; }   /* the same as the titles of the two tables below it (.sv-pane-title) */
 .pub-bom.pub-loading { display: flex; }
 
 /* ---- Footer with the actions ---------------------------------------------- */

@@ -199,6 +199,21 @@ test('the MBOM read from Fusion Manage is mapped by item number, marks what has 
   assert.strictEqual(v.rowOf(v.mbom(), 'A').classList.contains('sv-tone-new'), false);
 });
 
+test('the colour bar counts the EBOM lines added, with a different quantity and missing, and a part keeps only those lines', skip, () => {
+  const v = built();
+  const doc = v.w.document;
+  const part = (cls) => doc.querySelector('.sv-meter-' + cls);
+  assert.strictEqual(doc.querySelector('.sv-meter').hidden, false);
+  assert.strictEqual(part('bad').textContent, '1', 'B is missing');
+  assert.strictEqual(part('warn').hidden, true, 'no quantity differs');
+  assert.ok(Number(part('ok').textContent) >= 1);
+  part('bad').click();
+  assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'B'], 'only the missing line');
+  assert.strictEqual(part('bad').getAttribute('aria-pressed'), 'true');
+  part('bad').click();
+  assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'B', 'C'], 'again shows all');
+});
+
 test('a failed read of the MBOM is shown, and the search finds lines and opens what is above them', skip, () => {
   const bad = open({ targetId: '77' });
   bad.show();
