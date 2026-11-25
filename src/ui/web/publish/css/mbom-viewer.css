@@ -156,6 +156,14 @@ button.sv-qty:focus-visible { outline: none; border-color: var(--accent); box-sh
 .sv-pos-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 .sv-pos-label { font-size: 12px; color: var(--muted); }
 .sv-pos-row { display: flex; gap: 8px; }
+.sv-split { width: min(400px, calc(100vw - 16px)); max-height: calc(100vh - 16px); }   /* never taller than the window */
+.sv-split .sv-pos-body { min-height: 0; overflow: auto; }
+.sv-split-field { display: flex; flex-direction: column; gap: 6px; }
+.sv-split .sv-split-tree { flex: none; height: 240px; max-height: 40vh; border: 1px solid var(--border); border-radius: 6px; }   /* its own height (it beats .sv-dest-tree's flex: 1, which would let it grow with its lines): the list scrolls inside */
+.sv-dest-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sv-dest-lead { flex: none; font-weight: 700; white-space: nowrap; }   /* the line number (3.1) in bold */
+.sv-dest-chosen { background: rgba(0, 120, 212, .12); }   /* the assembly the quantity goes to */
+.sv-dest-pick:disabled { opacity: .5; cursor: not-allowed; }
 .sv-pos-input { flex: 1; min-width: 0; text-align: right; }
 .sv-pos-message { margin: 0; font-size: 12px; }
 .sv-pos-message[hidden] { display: none; }

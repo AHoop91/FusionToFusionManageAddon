@@ -195,7 +195,7 @@
     const instances = {};   // number -> the lines under each place of it
     (function index(node) {
       node.children.forEach(function (c) {
-        if (c.kind !== 'added') {
+        if (c.kind !== 'added' && !(changes[c.uid] && changes[c.uid].new && !c.children.length)) {   // a new line with no lines is another use of an item (a split, a shallow add): its lines are the item's own, not a second BOM
           (instances[key(c.number)] = instances[key(c.number)] || []).push(c.children.map(function (k) { return key(k.number) + '|' + Number(k.quantity); }).join(','));
         }
         index(c);

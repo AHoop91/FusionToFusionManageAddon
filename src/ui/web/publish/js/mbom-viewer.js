@@ -38,6 +38,7 @@
     cart: ['M8 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M19 20a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', 'M2 3h2l2.7 12.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L22 7H5.1'],   // a shopping cart: a purchased part
     info: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5'],   // a circle with an i: the note of a line
     position: ['M8 4v16', 'M5 7l3-3 3 3', 'M16 20V4', 'M13 17l3 3 3-3'],   // an arrow up beside an arrow down: the line goes up or down the assembly
+    split: ['M12 4v5', 'M12 9L6 15', 'M12 9l6 6', 'M6 15v5', 'M18 15v5'],   // one line branching into two: a quantity shared between assemblies
     renumber: ['M4 5h2v6', 'M4 14h4v2.5l-4 2.5h4', 'M11 8h9', 'M11 17h9'],   // 1 and 2 beside two lines: the lines numbered again
     match: ['M3 12h12', 'M11 7l5 5-5 5', 'M20 5v14'],   // an arrow into a bar: the EBOM carried over to the MBOM
     addItems: ['M4 6h11', 'M4 12h7', 'M4 18h7', 'M17 14v6', 'M14 17h6'],   // a list with a plus
@@ -67,6 +68,8 @@
     root_no_quantity: function () { return t('publish.sv_err_root_no_quantity'); },
     bad_number: function () { return t('publish.sv_pos_invalid'); },
     number_taken: function (p) { return t('publish.sv_pos_taken', p); },
+    split_too_much: function (p) { return t('publish.sv_split_too_much', p); },
+    split_same_assembly: function () { return t('publish.sv_err_split_same'); },
   };
 
   /** An error of an edit in words; one that is not the structure's refusal is shown as it is, never hidden. */
@@ -339,14 +342,158 @@
     destMenu = null;
   }
 
-  /** The "Add to assembly" menu, at the left of ``button``: the MBOM as a tree to fold and unfold (without ``targets`` and what is under them), with a
-   *  search on top. Choosing a line moves ``targets`` to the end of it. A search shows the lines that match with the ones above them, all open. Only
-   *  the lines in view are drawn, and no more than ``DEST_LIMIT``, so a large MBOM stays quick. */
-  function openDestMenu(button, targets) {
-    closeDestMenu();
-    const moving = new Set(targets);
+  /** The MBOM as a tree to choose an assembly from, with a search above it: the one of "Add to assembly" and of "Split Quantity". It shows every line but the ones in
+   *  ``spec.moving`` (and what is under them), each with the line number it has in the MBOM pane (3.1 is the first line of line 3). ``spec.onPick(uid)`` is called for a line chosen;
+   *  ``spec.locked(uid)`` (optional) gives the reason a line cannot be chosen (it is greyed out, with the reason as its tooltip) or '', ``spec.chosen()`` (optional) gives the one to mark. A search shows the lines that match with the
+   *  ones above them, all open. Only the lines in view are drawn, and no more than ``DEST_LIMIT``, so a large MBOM stays quick.
+   *  Returns ``{node, draw, toggleSearch, focus, focusFirst}``: the element to place, drawing it again, showing or hiding the search (it starts hidden unless ``spec.searchShown``) and the focus. */
+  function destTree(spec) {
+    const moving = spec.moving;
     const open = new Set([S.ROOT]);
     let query = '';
+    const numbers = ns.mbomPlan.lineNumbers(structure, compare().chg);   // the line numbers the MBOM pane shows
+    const lead = {};   // uid -> "3.1": the numbers of the lines from the top down
+    (function number(node, dotted) {
+      node.children.forEach(function (c) {
+        lead[c.uid] = dotted ? dotted + '.' + numbers[c.uid] : numbers[c.uid];
+        number(c, lead[c.uid]);
+      });
+    })(structure.root(), '');
+    const node = el('div', 'sv-dest-tree');
+    const find = el('input', 'sv-input sv-dest-search');
+    find.type = 'text';
+    find.autocomplete = 'off';
+    find.spellcheck = false;
+    find.placeholder = t('publish.sv_search_placeholder');
+    find.setAttribute('aria-label', t('publish.sv_search_placeholder'));
+    const count = el('div', 'sv-dest-count');
+    const list = el('div', 'sv-dest-list');
+    list.setAttribute('role', 'tree');
+    const bar = el('div', 'sv-dest-bar');   // the search opens under the top bar with the magnifier
+    bar.hidden = !spec.searchShown;
+    bar.append(find, count);
+    node.append(bar, list);
+
+    function matches(line) {
+      return ((lead[line.uid] || '') + ' ' + line.number + ' ' + line.name).toLowerCase().indexOf(query) >= 0;
+    }
+    /** Whether the line, or a line under it, matches the search. */
+    function wanted(line) {
+      if (moving.has(line.uid)) return false;
+      return matches(line) || line.children.some(wanted);
+    }
+
+    /** How many lines match the search, drawn or not. */
+    function countHits(line) {
+      if (moving.has(line.uid)) return 0;
+      return (matches(line) ? 1 : 0) + line.children.reduce(function (sum, child) { return sum + countHits(child); }, 0);
+    }
+
+    function draw() {
+      list.replaceChildren();
+      let drawn = 0;
+      let cut = false;
+      (function walk(line, depth) {
+        if (moving.has(line.uid) || (query && !wanted(line))) return;
+        const hit = !!query && matches(line);
+        if (drawn >= DEST_LIMIT) { cut = true; return; }
+        drawn += 1;
+        const kids = line.children.filter(function (child) { return !moving.has(child.uid); });
+        const isOpen = !!query || open.has(line.uid);
+        const row = el('div', 'sv-dest-row' + (hit ? ' sv-dest-hit' : ''));
+        row.setAttribute('role', 'treeitem');
+        row.setAttribute('aria-level', String(depth + 1));
+        if (spec.chosen) row.setAttribute('aria-selected', String(spec.chosen() === line.uid));
+        if (kids.length) row.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        for (let g = 0; g < depth; g++) row.appendChild(el('span', 'sv-dest-guide'));   // a line down from each line above, so the tree reads as one
+        const toggle = el('button', 'sv-dest-toggle');
+        toggle.type = 'button';
+        toggle.tabIndex = -1;
+        toggle.dataset.id = line.uid;
+        toggle.disabled = !kids.length || !!query || line.uid === S.ROOT;
+        if (kids.length && line.uid !== S.ROOT) {
+          const chevron = ui.chevron();
+          ui.setChevron(chevron, !isOpen);
+          toggle.appendChild(chevron);
+        }
+        toggle.addEventListener('click', function () {
+          if (open.has(line.uid)) open.delete(line.uid); else open.add(line.uid);
+          draw();
+        });
+        const pick = el('button', 'sv-dest-pick' + (spec.chosen && spec.chosen() === line.uid ? ' sv-dest-chosen' : ''));
+        pick.type = 'button';
+        pick.dataset.id = line.uid;
+        const why = spec.locked ? spec.locked(line.uid) : '';
+        if (why) { pick.disabled = true; pick.title = why; }
+        if (lead[line.uid]) pick.appendChild(el('span', 'sv-dest-lead', lead[line.uid]));
+        pick.appendChild(el('span', 'sv-dest-number', line.number));
+        if (line.name) pick.appendChild(el('span', 'sv-dest-name', line.name));
+        pick.addEventListener('mouseover', function (event) {   // the full text for the shared tooltip (it reads the title as the pointer arrives, after this), only when the line cuts it short
+          if (pick.contains(event.relatedTarget)) return;   // moving between the parts of this line, not arriving
+          const label = pick.querySelector('.sv-dest-name');
+          if (label && label.scrollWidth > label.clientWidth) pick.title = line.number + ' ' + line.name; else pick.removeAttribute('title');
+        });
+        pick.addEventListener('click', function () { spec.onPick(line.uid); });
+        row.append(toggle, pick);
+        list.appendChild(row);
+        if (isOpen) kids.forEach(function (child) { walk(child, depth + 1); });
+      })(structure.root(), 0);
+      if (cut) list.appendChild(el('div', 'sv-dest-more', t('publish.sv_dest_more', { count: DEST_LIMIT })));
+      const total = query ? countHits(structure.root()) : 0;
+      count.textContent = query ? (total ? t('publish.sv_search_count', { count: total }) : t('publish.sv_search_none')) : '';
+    }
+
+    function picks() { return Array.from(node.querySelectorAll('.sv-dest-pick:not(:disabled)')); }
+    function step(from, by) {
+      const all = picks();
+      const at = all.indexOf(from);
+      const next = all[Math.max(0, Math.min(all.length - 1, (at < 0 ? (by > 0 ? -1 : all.length) : at) + by))];
+      if (next) next.focus();
+    }
+
+    find.addEventListener('input', function () { query = find.value.trim().toLowerCase(); draw(); });
+    node.addEventListener('keydown', function (event) {
+      const on = document.activeElement;
+      if (event.key === 'ArrowDown') { event.preventDefault(); step(on, 1); }
+      else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (on === find) return;   // the search is the top of the menu
+        if (picks()[0] === on) { if (!bar.hidden) find.focus(); } else step(on, -1);
+      } else if (!query && on && on.classList.contains('sv-dest-pick') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+        const row = on.parentNode;
+        if (row.hasAttribute('aria-expanded') && on.dataset.id !== S.ROOT && (row.getAttribute('aria-expanded') === 'true') === (event.key === 'ArrowLeft')) {
+          event.preventDefault();
+          row.querySelector('.sv-dest-toggle').click();
+          const again = node.querySelector('.sv-dest-pick[data-id="' + on.dataset.id + '"]');
+          if (again) again.focus();
+        }
+      }
+    });
+
+    draw();
+    return {
+      node: node,
+      draw: draw,
+      toggleSearch: function () {   // shows or hides the search; returns whether it is shown
+        bar.hidden = !bar.hidden;
+        if (bar.hidden) { find.value = ''; query = ''; draw(); } else find.focus();
+        return !bar.hidden;
+      },
+      focus: function (uid) {   // the focus back on a line after the tree was drawn again
+        const pick = node.querySelector('.sv-dest-pick[data-id="' + uid + '"]');
+        if (pick) pick.focus();
+      },
+      focusFirst: function () {
+        const first = node.querySelector('.sv-dest-pick:not(:disabled)');
+        if (first) first.focus();
+      },
+    };
+  }
+
+  /** The "Add to assembly" menu, at the left of ``button``: the MBOM as a tree to fold and unfold (without ``targets`` and what is under them), with a search
+   *  behind the magnifier. Choosing a line moves ``targets`` to the end of it. */
+  function openDestMenu(button, targets) {
+    closeDestMenu();
     const box = el('div', 'sv-dest');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-label', t('publish.sv_dest_title'));
@@ -366,123 +513,20 @@
     const tools = el('span', 'sv-dest-tools');
     tools.append(lens, cross);
     head.append(el('span', 'sv-dest-title', t('publish.sv_dest_title')), tools);
-    box.appendChild(head);
-    const find = el('input', 'sv-input sv-dest-search');
-    find.type = 'text';
-    find.autocomplete = 'off';
-    find.spellcheck = false;
-    find.placeholder = t('publish.sv_search_placeholder');
-    find.setAttribute('aria-label', t('publish.sv_search_placeholder'));
-    const count = el('div', 'sv-dest-count');
-    const list = el('div', 'sv-dest-list');
-    list.setAttribute('role', 'tree');
-    const bar = el('div', 'sv-dest-bar');   // the search opens under the top bar with the magnifier
-    bar.hidden = true;
-    bar.append(find, count);
-    box.append(bar, list);
+    const tree = destTree({
+      moving: new Set(targets),
+      onPick: function (uid) {
+        closeDestMenu();
+        openPlace({ parentId: uid });
+        run(function () { structure.move(targets, uid, ''); });
+      },
+    });
+    box.append(head, tree.node);
     lens.addEventListener('click', function () {
-      bar.hidden = !bar.hidden;
-      lens.setAttribute('aria-expanded', bar.hidden ? 'false' : 'true');
-      if (bar.hidden) { find.value = ''; query = ''; draw(); lens.focus(); } else find.focus();
+      lens.setAttribute('aria-expanded', tree.toggleSearch() ? 'true' : 'false');
+      if (lens.getAttribute('aria-expanded') === 'false') lens.focus();
     });
 
-    function matches(node) {
-      return (node.number + ' ' + node.name).toLowerCase().indexOf(query) >= 0;
-    }
-    /** Whether the line, or a line under it, matches the search. */
-    function wanted(node) {
-      if (moving.has(node.uid)) return false;
-      return matches(node) || node.children.some(wanted);
-    }
-
-    /** How many lines match the search, drawn or not. */
-    function countHits(node) {
-      if (moving.has(node.uid)) return 0;
-      return (matches(node) ? 1 : 0) + node.children.reduce(function (sum, c) { return sum + countHits(c); }, 0);
-    }
-
-    function draw() {
-      list.replaceChildren();
-      let drawn = 0;
-      let cut = false;
-      (function walk(node, depth) {
-        if (moving.has(node.uid) || (query && !wanted(node))) return;
-        const hit = !!query && matches(node);
-        if (drawn >= DEST_LIMIT) { cut = true; return; }
-        drawn += 1;
-        const kids = node.children.filter(function (c) { return !moving.has(c.uid); });
-        const isOpen = !!query || open.has(node.uid);
-        const row = el('div', 'sv-dest-row' + (hit ? ' sv-dest-hit' : ''));
-        row.setAttribute('role', 'treeitem');
-        row.setAttribute('aria-level', String(depth + 1));
-        if (kids.length) row.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        for (let g = 0; g < depth; g++) row.appendChild(el('span', 'sv-dest-guide'));   // a line down from each line above, so the tree reads as one
-        const toggle = el('button', 'sv-dest-toggle');
-        toggle.type = 'button';
-        toggle.tabIndex = -1;
-        toggle.dataset.id = node.uid;
-        toggle.disabled = !kids.length || !!query || node.uid === S.ROOT;
-        if (kids.length && node.uid !== S.ROOT) {
-          const chevron = ui.chevron();
-          ui.setChevron(chevron, !isOpen);
-          toggle.appendChild(chevron);
-        }
-        toggle.addEventListener('click', function () {
-          if (open.has(node.uid)) open.delete(node.uid); else open.add(node.uid);
-          draw();
-        });
-        const pick = el('button', 'sv-dest-pick');
-        pick.type = 'button';
-        pick.dataset.id = node.uid;
-        pick.appendChild(el('span', 'sv-dest-number', node.number));
-        if (node.name) pick.appendChild(el('span', 'sv-dest-name', node.name));
-        pick.addEventListener('mouseover', function (event) {   // the full text for the shared tooltip (it reads the title as the pointer arrives, after this), only when the line cuts it short
-          if (pick.contains(event.relatedTarget)) return;   // moving between the parts of this line, not arriving
-          const label = pick.querySelector('.sv-dest-name');
-          if (label && label.scrollWidth > label.clientWidth) pick.title = node.number + ' ' + node.name; else pick.removeAttribute('title');
-        });
-        pick.addEventListener('click', function () {
-          closeDestMenu();
-          openPlace({ parentId: node.uid });
-          run(function () { structure.move(targets, node.uid, ''); });
-        });
-        row.append(toggle, pick);
-        list.appendChild(row);
-        if (isOpen) kids.forEach(function (c) { walk(c, depth + 1); });
-      })(structure.root(), 0);
-      if (cut) list.appendChild(el('div', 'sv-dest-more', t('publish.sv_dest_more', { count: DEST_LIMIT })));
-      const total = query ? countHits(structure.root()) : 0;
-      count.textContent = query ? (total ? t('publish.sv_search_count', { count: total }) : t('publish.sv_search_none')) : '';
-    }
-
-    function picks() { return Array.from(box.querySelectorAll('.sv-dest-pick')); }
-    function step(from, by) {
-      const all = picks();
-      const at = all.indexOf(from);
-      const next = all[Math.max(0, Math.min(all.length - 1, (at < 0 ? (by > 0 ? -1 : all.length) : at) + by))];
-      if (next) next.focus();
-    }
-
-    find.addEventListener('input', function () { query = find.value.trim().toLowerCase(); draw(); });
-    box.addEventListener('keydown', function (event) {
-      const on = document.activeElement;
-      if (event.key === 'ArrowDown') { event.preventDefault(); step(on, 1); }
-      else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        if (on === find) return;   // the search is the top of the menu
-        if (picks()[0] === on) { if (!bar.hidden) find.focus(); } else step(on, -1);
-      } else if (!query && on && on.classList.contains('sv-dest-pick') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
-        const row = on.parentNode;
-        if (row.hasAttribute('aria-expanded') && on.dataset.id !== S.ROOT && (row.getAttribute('aria-expanded') === 'true') === (event.key === 'ArrowLeft')) {
-          event.preventDefault();
-          row.querySelector('.sv-dest-toggle').click();
-          const again = box.querySelector('.sv-dest-pick[data-id="' + on.dataset.id + '"]');
-          if (again) again.focus();
-        }
-      }
-    });
-
-    draw();
     document.body.appendChild(box);
     const spot = button.getBoundingClientRect();
     const height = Math.min(360, window.innerHeight - 16);   // room for the menu at its tallest (opening a branch grows it), so it never runs off the window and its list scrolls
@@ -498,22 +542,16 @@
       document.removeEventListener('keydown', key, true);
       box.remove();
     } };
-    const first = box.querySelector('.sv-dest-pick');
-    if (first) first.focus();
+    tree.focusFirst();
   }
 
-  /** "Set Position", at the left of ``button``: a small box with one number, the BOM line number the line is to have (any whole number from 1; the line goes to
-   *  the place its number gives it among the lines of its assembly, the others keep their numbers). A value that is not a number, or one another line has, is
-   *  said in the box, which stays open. */
-  function openPositionBox(button, id) {
+  /** A small box with one value, at the left of ``button`` (the one of "Set Position" and "Split Quantity"): ``title`` and ``label``, ``value`` to start from, and ``action``
+   *  as the button; ``inputMode`` the keypad of the value; ``extra`` (an element with its own label, such as the tree of assemblies) goes under the value, before the button. ``check(text)`` gives the words a value is refused with (or ''); a value that passes goes to ``accept(text)`` and the box closes. A refusal stays in the box. */
+  function openValueBox(button, spec) {
     closeDestMenu();
-    const entry = index.get(id);
-    const shown = ns.mbomPlan.lineNumbers(structure, compare().chg);   // the numbers the lines of the assembly show now
-    const current = {};
-    entry.parent.children.forEach(function (c) { current[c.uid] = shown[c.uid]; });
     const box = el('div', 'sv-dest sv-pos');
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', t('publish.sv_pos_title'));
+    box.setAttribute('aria-label', spec.title);
     const head = el('div', 'sv-dest-head');
     const cross = el('button', 'sv-dest-btn sv-dest-close');
     cross.type = 'button';
@@ -521,36 +559,38 @@
     cross.title = t('publish.sv_dest_close');
     cross.appendChild(ns.svg(['M6 6l12 12', 'M18 6L6 18'], 14));
     cross.addEventListener('click', function () { closeDestMenu(); button.focus(); });
-    head.append(el('span', 'sv-dest-title', t('publish.sv_pos_title') + ' ' + entry.node.number), cross);
+    head.append(el('span', 'sv-dest-title', spec.title + ' ' + spec.number), cross);
     const body = el('div', 'sv-pos-body');
     const input = el('input', 'sv-input sv-pos-input');
     input.type = 'text';
-    input.inputMode = 'numeric';
+    input.inputMode = spec.inputMode;
     input.autocomplete = 'off';
-    input.value = current[id] || '';
-    input.setAttribute('aria-label', t('publish.sv_pos_label'));
-    const set = el('button', 'btn sv-pos-set', t('publish.sv_pos_set'));
+    input.value = spec.value || '';
+    input.setAttribute('aria-label', spec.label);
+    const set = el('button', 'btn sv-pos-set', spec.action);
     set.type = 'button';
     const row = el('div', 'sv-pos-row');
-    row.append(input, set);
+    row.appendChild(input);
+    if (!spec.extra) row.appendChild(set);
     const message = el('p', 'error sv-pos-message');
     message.setAttribute('role', 'alert');
     message.hidden = true;
-    body.append(el('label', 'sv-pos-label', t('publish.sv_pos_label')), row, message);
+    body.append(el('label', 'sv-pos-label', spec.label), row);
+    if (spec.extra) body.append(spec.extra, set);
+    body.appendChild(message);
     box.append(head, body);
-    function refuse(text) {
-      message.textContent = text;
-      message.hidden = false;
-      input.focus();
-    }
+    if (spec.className) box.classList.add(spec.className);
     function submit() {
       const text = input.value.trim();
-      if (!/^\d{1,9}$/.test(text) || Number(text) < 1) { refuse(t('publish.sv_pos_invalid')); return; }
-      if (Number(text) === Number(current[id])) { closeDestMenu(); return; }
-      const clash = entry.parent.children.some(function (c) { return c.uid !== id && Number(current[c.uid]) === Number(text); });
-      if (clash) { refuse(t('publish.sv_pos_taken', { number: String(Number(text)) })); return; }
+      const refusal = spec.check(text);
+      if (refusal) {
+        message.textContent = refusal;
+        message.hidden = false;
+        input.focus();
+        return;
+      }
       closeDestMenu();
-      run(function () { structure.setNumber(id, text, current); });
+      spec.accept(text);
     }
     set.addEventListener('click', submit);
     input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { event.preventDefault(); submit(); } });
@@ -569,6 +609,55 @@
     } };
     input.focus();
     input.select();
+  }
+
+  /** "Set Position": the BOM line number the line is to have (any whole number from 1; the line goes to the place its number gives it among the lines of its
+   *  assembly, the others keep their numbers). A value that is not a number, or one another line has, is said in the box, which stays open. */
+  function openPositionBox(button, id) {
+    const entry = index.get(id);
+    const shown = ns.mbomPlan.lineNumbers(structure, compare().chg);   // the numbers the lines of the assembly show now
+    const current = {};
+    entry.parent.children.forEach(function (c) { current[c.uid] = shown[c.uid]; });
+    openValueBox(button, {
+      title: t('publish.sv_pos_title'), number: entry.node.number, label: t('publish.sv_pos_label'), inputMode: 'numeric', value: current[id] || '', action: t('publish.sv_pos_set'),
+      check: function (text) {
+        if (!/^\d{1,9}$/.test(text) || Number(text) < 1) return t('publish.sv_pos_invalid');
+        if (Number(text) === Number(current[id])) return '';
+        const clash = entry.parent.children.some(function (c) { return c.uid !== id && Number(current[c.uid]) === Number(text); });
+        return clash ? t('publish.sv_pos_taken', { number: String(Number(text)) }) : '';
+      },
+      accept: function (text) { if (Number(text) !== Number(current[id])) run(function () { structure.setNumber(id, text, current); }); },
+    });
+  }
+
+  /** "Split Quantity": one box with how much of the line's quantity goes to another assembly (less than it has) and the assembly to give it to, chosen in the tree of the MBOM
+   *  (the line, what is under it and the assembly it is in cannot be chosen). The line keeps the rest; the assembly gets a line of its own for the amount, or the line it has
+   *  already of the same item takes it. */
+  function openSplitBox(button, id) {
+    const entry = index.get(id);
+    const have = Number(entry.node.quantity);
+    let chosen = '';
+    const tree = destTree({
+      moving: new Set([id]), searchShown: true, chosen: function () { return chosen; },
+      locked: function (uid) { return uid === entry.parent.uid ? t('publish.sv_err_split_same') : ''; },
+      onPick: function (uid) { chosen = uid; tree.draw(); tree.focus(uid); },
+    });
+    tree.node.classList.add('sv-split-tree');
+    const extra = el('div', 'sv-split-field');
+    extra.append(el('label', 'sv-pos-label', t('publish.sv_split_assembly')), tree.node);
+    openValueBox(button, {
+      title: t('publish.sv_split_title'), number: entry.node.number, label: t('publish.sv_split_label', { quantity: entry.node.quantity }), inputMode: 'decimal', value: '', action: t('publish.sv_split_do'),
+      extra: extra, className: 'sv-split',
+      check: function (text) {
+        if (!/^\d{1,12}(\.\d{1,6})?$/.test(text) || !(Number(text) > 0)) return t('publish.sv_err_bad_quantity');
+        if (!(Number(text) < have)) return t('publish.sv_split_too_much', { quantity: entry.node.quantity });
+        return chosen ? '' : t('publish.sv_split_pick');
+      },
+      accept: function (text) {
+        openPlace({ parentId: chosen });
+        run(function () { structure.split(id, chosen, text); });
+      },
+    });
   }
 
   /** Quick add: the MBOM becomes a copy of the EBOM, item numbers and all. When Fusion Manage has lines already, the user is asked first, as this replaces them
@@ -654,6 +743,8 @@
       run(function () { structure.addFromEbom(targets, place.parentId, place.before, true); });   // an assembly comes with the lines under it, as a drag does
     } else if (act === 'position') {
       openPositionBox(button, id);
+    } else if (act === 'split') {
+      openSplitBox(button, id);
     } else if (act === 'remove') {
       run(function () { structure.remove(targets); });
     } else if (act === 'addTo') {
@@ -893,6 +984,7 @@
       const actions = [];
       if (depth) {   // the position, add to an assembly, and the bin last
         actions.push({ act: 'position', icon: 'position', label: t('publish.sv_act_position') },
+                     { act: 'split', icon: 'split', label: t('publish.sv_act_split'), reason: Number(node.quantity) > 0 && Number(node.quantity) <= 1 ? t('publish.sv_split_one') : '' },
                      { act: 'addTo', icon: 'assembly', label: actionLabel(t('publish.sv_act_add_to'), count) },
                      { act: 'remove', icon: 'remove', label: actionLabel(t('publish.sv_act_remove'), count) });
       }

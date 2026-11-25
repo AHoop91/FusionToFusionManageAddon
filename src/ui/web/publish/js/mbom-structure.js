@@ -356,6 +356,35 @@
         });
       },
 
+      /** Split the quantity of a line between assemblies: ``amount`` of it goes to the assembly ``parentId`` and the line keeps the rest (``amount`` must be
+       *  less than its quantity, and the assembly another one than its own, and not inside it). The assembly takes the amount as a line of its own made like this
+       *  one (not what is under it: the lines of an item are the same wherever it is used), unless it has the same item number already: then that line has the amount added. Returns the uid of the line that took it. */
+      split: function (id, parentId, amount) {
+        return edit(function () {
+          if (id === ROOT) throw fail('root_immutable');
+          const node = need(id);
+          const moved = positive(amount);
+          const left = Math.round((Number(node.quantity) - Number(moved)) * 1e6) / 1e6;
+          if (!(left > 0)) throw fail('split_too_much', { quantity: node.quantity });
+          if (id === parentId || contains(node, parentId)) throw fail('inside_itself');
+          const dest = target(parentId);
+          if (dest === parentOf(id)) throw fail('split_same_assembly');
+          node.quantity = String(left);
+          const key = numberKey(node.number);   // an item is once in an assembly: a line of the same item number there takes the amount (whatever made it), else the same item
+          const same = dest.children.find(function (c) { return key ? numberKey(c.number) === key : !!node.itemId && c.itemId === node.itemId; });
+          if (same) {
+            same.quantity = String(Math.round((Number(same.quantity) + Number(moved)) * 1e6) / 1e6);
+            return same.uid;
+          }
+          const made = Object.assign({}, node, { uid: uid(), edgeId: '', isNew: true, cut: false, quantity: moved, children: [] });   // what is under the line stays where it is: an item's own lines are the same wherever it is used
+          delete made.sequence;
+          delete made.pin;
+          delete made.renumber;
+          dest.children.push(made);
+          return made.uid;
+        });
+      },
+
       /** Add the EBOM nodes (``keys``) as components: just them, or with everything under them when ``deep``. A line the MBOM holds some of already takes
        *  what is left of its quantity (4 in the EBOM and 1 in the MBOM adds 3): added to the line under ``parentId`` that is made from it, when there is one, else as a
        *  line of its own; one that has none left is refused. */

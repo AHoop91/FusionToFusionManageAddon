@@ -268,3 +268,15 @@ test('a line removed and added again keeps the number and the line id it had, so
   assert.ok(!moved.some((o) => o.op === 'add' && o.parent === 'B'), 'B keeps its own lines: B1 is not added to it again: ' + JSON.stringify(moved));
   assert.ok(moved.filter((o) => o.op === 'renumber').every((o) => o.edge && o.from_sequence !== ''), 'every renumber names the line it changes');
 });
+
+test('after a quantity of an assembly is split, its own lines can still be edited and published', () => {
+  const s = read();   // A (x2) [A1, A2]
+  const a = s.root().children.find((c) => c.number === 'A');
+  const b = s.root().children.find((c) => c.number === 'B');
+  s.split(a.uid, b.uid, '1');
+  s.remove([a.children[0].uid]);
+  const p = plan(s);
+  assert.deepStrictEqual(p.problems, [], 'the copy has no lines of its own and is not a second bill of materials');
+  assert.ok(p.operations.some((o) => o.op === 'remove' && o.number === 'A1'));
+  assert.ok(p.operations.some((o) => o.op === 'add' && o.parent === 'B' && o.number === 'A'));
+});

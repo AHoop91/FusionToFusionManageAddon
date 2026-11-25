@@ -366,8 +366,8 @@ test('the icons on a line: add to assembly, the bin last, and a handle to drag i
   v.openAll();
   assert.ok(v.rowOf(v.mbom(), 'B').querySelector('.sv-grip'));
   const order = (id) => [...v.rowOf(v.mbom(), id).querySelectorAll('.sv-act')].map((b) => b.dataset.act);
-  assert.deepStrictEqual(order('A'), ['position', 'addTo', 'remove'], 'the position first, the bin always last');
-  assert.deepStrictEqual(order('C'), ['position', 'addTo', 'remove']);
+  assert.deepStrictEqual(order('A'), ['position', 'split', 'addTo', 'remove'], 'the position first, the bin always last');
+  assert.deepStrictEqual(order('C'), ['position', 'split', 'addTo', 'remove']);
   assert.strictEqual(v.rowOf(v.mbom(), 'TOP').querySelector('.sv-act'), null, 'the MBOM itself has none');
   v.click(v.rowOf(v.mbom(), 'B'));
   v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
@@ -797,4 +797,90 @@ test('the Set Position hover action opens a small box with the number the line s
   assert.strictEqual(doc.querySelector('.sv-pos'), null, 'Escape closes it');
   v.click(v.button('Undo'));
   assert.deepStrictEqual(numbers(), ['1', '2', '1500'], 'each is one step');
+});
+
+test('the Split Quantity hover action is one box: the quantity and the assembly to give it to', skip, () => {
+  const v = open({ targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('A', '4', { sequence: '1' }), treeLine('B', '1', { sequence: '2' })]) });
+  const doc = v.w.document;
+  assert.ok(v.act(v.mbom(), 'B', 'split').disabled, 'a quantity of 1 cannot be split');
+  const action = v.act(v.mbom(), 'A', 'split');
+  assert.strictEqual(action.getAttribute('aria-label'), 'Split Quantity');
+  v.click(action);
+  const box = doc.querySelector('.sv-split');
+  assert.ok(box, 'the box is open');
+  assert.match(box.textContent, /Quantity to move \(of 4\)/);
+  assert.ok(box.querySelector('.sv-pos-input') && box.querySelector('.sv-dest-tree'), 'the quantity and the tree of assemblies are in the one box');
+  const split = () => box.querySelector('.sv-pos-set');
+  const message = () => box.querySelector('.sv-pos-message').textContent;
+  const quantity = (value) => { box.querySelector('.sv-pos-input').value = value; };
+  ['', 'x', '0'].forEach((bad) => {
+    quantity(bad);
+    split().click();
+    assert.ok(doc.querySelector('.sv-split'), 'refused, the box stays: ' + bad);
+    assert.match(message(), /plain number above 0/);
+  });
+  quantity('4');
+  split().click();
+  assert.match(message(), /less than the 4/);
+  quantity('3');
+  split().click();
+  assert.match(message(), /Choose the assembly/, 'no assembly chosen yet');
+  const picks = () => [...box.querySelectorAll('.sv-dest-pick')];
+  const named = (n) => picks().find((p) => p.querySelector('.sv-dest-number').textContent === n);
+  assert.ok(box.querySelector('.sv-dest-search'), 'the search is in the box');
+  assert.strictEqual(named('A'), undefined, 'the line itself is not offered');
+  assert.ok(named('TOP-M').disabled, 'the assembly the line is in cannot be chosen');
+  assert.strictEqual(named('B').querySelector('.sv-dest-lead').textContent, '2', 'each line shows its line number');
+  named('B').click();
+  assert.ok(named('B').classList.contains('sv-dest-chosen'), 'the one chosen is marked');
+  split().click();
+  assert.strictEqual(doc.querySelector('.sv-split'), null, 'the box closes');
+  v.openAll();
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'B', 'A'], 'B has a line of A now');
+  const rowsOf = (n) => [...v.mbom().querySelectorAll('.sv-row')].filter((r) => r.querySelector('.sv-num, .sv-number') ? true : true).filter((r) => r.textContent.includes(n));
+  assert.strictEqual(rowsOf('A').length, 2, 'the line and the one the amount went to');
+  assert.match(rowsOf('A')[0].textContent, /1\.0/, 'the line keeps 1 of its 4');
+  assert.match(rowsOf('A')[1].textContent, /3\.0/, 'the other assembly has the 3');
+});
+
+test('the tree of assemblies numbers lines from the top down, locks the assembly the line is in, and Add to assembly shows the numbers too', skip, () => {
+  const v = open({ targetId: '77' });
+  v.show();
+  v.ns.mbomViewer.structureRead();
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([
+    treeLine('A', '4', { sequence: '1' }),
+    treeLine('B', '1', { sequence: '2', children: [treeLine('B1', '2', { sequence: '1', children: [treeLine('B1X', '1', { sequence: '1' })] }), treeLine('B2', '1', { sequence: '2' })] }),
+  ]) });
+  const doc = v.w.document;
+  v.openAll();
+  v.click(v.act(v.mbom(), 'A', 'addTo'));
+  const named = (n) => [...doc.querySelectorAll('.sv-dest-pick')].find((p) => p.querySelector('.sv-dest-number').textContent === n);
+  const toggle = (n) => named(n).parentNode.querySelector('.sv-dest-toggle').click();
+  toggle('B');
+  assert.strictEqual(named('B1').querySelector('.sv-dest-lead').textContent, '2.1', 'the first line of line 2');
+  toggle('B1');
+  assert.strictEqual(named('B1X').querySelector('.sv-dest-lead').textContent, '2.1.1');
+  assert.strictEqual(named('B2').querySelector('.sv-dest-lead').textContent, '2.2');
+  const search = doc.querySelector('.sv-dest-search');
+  v.click(doc.querySelector('.sv-dest-find'));
+  search.value = '2.2';
+  search.dispatchEvent(new v.w.Event('input', { bubbles: true }));
+  assert.ok(named('B2'), 'a search finds a line by its number');
+  assert.strictEqual(named('A'), undefined);
+  v.click(v.act(v.mbom(), 'B2', 'split'));
+  const box = doc.querySelector('.sv-split');
+  assert.strictEqual(box, null, 'a quantity of 1 cannot be split');
+  v.click(v.act(v.mbom(), 'B1', 'split'));
+  const tree = doc.querySelector('.sv-split');
+  const pick = (n) => [...tree.querySelectorAll('.sv-dest-pick')].find((p) => p.querySelector('.sv-dest-number').textContent === n);
+  [...tree.querySelectorAll('.sv-dest-toggle')].forEach((t) => t.click());
+  assert.ok(pick('B').disabled, 'the assembly the line is in cannot be chosen');
+  assert.ok(!pick('A').disabled && !pick('TOP-M').disabled, 'the others can');
+  assert.strictEqual(pick('B1'), undefined, 'the line itself is not offered');
+  pick('A').click();
+  assert.strictEqual(pick('A').parentNode.getAttribute('aria-selected'), 'true', 'the one chosen is said');
+  assert.strictEqual(v.w.document.activeElement, pick('A'), 'the focus stays on it after the tree is drawn again');
 });

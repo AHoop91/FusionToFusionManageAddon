@@ -556,3 +556,66 @@ test('a line is given a number of its own: any whole number, the lines in the or
   s.renumber();
   assert.strictEqual(s.root().children[2].pin, undefined, 'Automatic Renumber lets go of the numbers given');
 });
+
+test('a quantity is split between assemblies: the line keeps the rest, the other assembly gets its own line (without what is under it), or adds to the one it has', () => {
+  const { s, at, outline } = fresh();
+  s.split(at('A'), at('B'), '1');
+  assert.strictEqual(outline(), 'A[A1,A2],B[B1,A],C');
+  assert.strictEqual(s.find(at('A')).quantity, '1', 'the line keeps what is left');
+  const made = s.find(at('B', 'A'));
+  assert.strictEqual(made.quantity, '1');
+  assert.strictEqual(made.isNew, true);
+  assert.strictEqual(made.edgeId, '');
+  assert.notStrictEqual(made.uid, at('A'));
+  s.undo();
+  assert.strictEqual(s.find(at('A')).quantity, '2', 'one step of the history');
+  const again = fresh();
+  again.s.setQuantity(again.at('A'), '5');
+  again.s.split(again.at('A'), again.at('B'), '2');
+  again.s.split(again.at('A'), again.at('B'), '1.5');
+  assert.strictEqual(again.s.find(again.at('A')).quantity, '1.5');
+  assert.strictEqual(again.s.find(again.at('B', 'A')).quantity, '3.5', 'the same item in that assembly takes the amount: no second line');
+  assert.strictEqual(again.outline(), 'A[A1,A2],B[B1,A],C');
+});
+
+test('a split is refused when it takes it all, when the assembly is its own or inside it, or when the quantity is not a number', () => {
+  const { s, at, outline } = fresh();
+  assert.throws(() => s.split(at('A'), at('B'), '2'), failsWith('split_too_much'));
+  assert.throws(() => s.split(at('A'), at('B'), '3'), failsWith('split_too_much'));
+  assert.throws(() => s.split(at('A'), at('B'), '0'), failsWith('bad_quantity'));
+  assert.throws(() => s.split(at('A'), at('B'), 'x'), failsWith('bad_quantity'));
+  assert.throws(() => s.split(at('A'), S.ROOT, '1'), failsWith('split_same_assembly'));
+  assert.throws(() => s.split(at('A'), at('A', 'A1'), '1'), failsWith('inside_itself'));
+  assert.throws(() => s.split(S.ROOT, at('B'), '1'), failsWith('root_immutable'));
+  assert.strictEqual(outline(), 'A[A1,A2],B[B1],C');
+  assert.strictEqual(s.canUndo(), false, 'a refused split is no step');
+});
+
+test('an EBOM line held in several assemblies counts all of them: a split keeps it matched, and what is left is added where it is wanted', () => {
+  const { s, at } = fresh();
+  const state = () => s.compare().ebom['0.0'];   // A (x2) in the EBOM
+  assert.strictEqual(state().matched, true);
+  s.split(at('A'), at('B'), '1');   // one in A, one in B
+  assert.strictEqual(state().quantity, false, 'two in all: the EBOM quantity is met across the assemblies');
+  assert.strictEqual(state().matched, true);
+  assert.strictEqual(state().moved, false, 'one of them is still under the assembly the EBOM has it in');
+  s.setQuantity(at('B', 'A'), '2');
+  assert.strictEqual(state().exceeded, true, 'three in all is more than the EBOM has');
+  s.setQuantity(at('B', 'A'), '1');
+  s.remove([at('B', 'A')]);
+  assert.strictEqual(state().quantity, true, 'one left of two');
+  assert.strictEqual(state().exceeded, false);
+  s.addFromEbom(['0.0'], at('C'), '', false);   // the EBOM line is added again to another assembly: it takes what is left, not the whole of it
+  assert.strictEqual(s.find(at('C', 'A')).quantity, '1');
+  assert.strictEqual(state().matched, true);
+  assert.throws(() => s.addFromEbom(['0.0'], at('B'), '', false), failsWith('would_exceed'), 'nothing is left to add');
+});
+
+test('a split into an assembly that holds the same item merges into it, whatever made that line', () => {
+  const { s, at } = fresh();
+  s.setQuantity(at('A'), '1');
+  s.addFromEbom(['0.0'], at('B'), '', false);   // B gets a line of A made from the EBOM, with no item of Fusion Manage's behind it
+  s.setQuantity(at('A'), '3');
+  s.split(at('A'), at('B'), '1');
+  assert.strictEqual(s.root().children.find((c) => c.number === 'B').children.filter((c) => c.number === 'A').length, 1, 'one line of A under B, not two');
+});
