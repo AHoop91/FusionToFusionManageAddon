@@ -264,3 +264,45 @@ class SendRunCutOffTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BomOrderTests(unittest.TestCase):
+    """The plan orders a parent's changes so no line number is held twice: they must reach Fusion Manage one at a time, in that order."""
+
+    def test_updates_go_together_between_the_removals_and_the_additions(self):
+        import threading
+        import time
+
+        class Slow(FakeFm):
+            def __init__(self):
+                super().__init__()
+                self.now = self.most = 0
+                self._guard = threading.Lock()
+
+            def send_json(self, method, path, body=None):
+                with self._guard:
+                    self.now += 1
+                    self.most = max(self.most, self.now)
+                time.sleep(0.02)
+                try:
+                    return super().send_json(method, path, body)
+                finally:
+                    with self._guard:
+                        self.now -= 1
+
+        patches = [{"method": "PATCH", "url": f"{BOM}/{n}", "body": {"itemNumber": n}} for n in range(1, 9)]
+        fm = Slow()
+        with tempfile.TemporaryDirectory() as path:
+            Dispatcher(path, fm, "57").send_bom("A", patches)
+        self.assertGreater(fm.most, 1)
+        self.assertLessEqual(fm.most, 5)
+
+    def test_removals_come_first_then_every_update_then_the_additions(self):
+        calls = [{"method": "POST", "url": BOM, "body": {}},
+                 {"method": "PATCH", "url": f"{BOM}/1", "body": {"itemNumber": 2}},
+                 {"method": "PATCH", "url": f"{BOM}/2", "body": {"quantity": "3"}},
+                 {"method": "DELETE", "url": f"{BOM}/3", "body": None}]
+        fm = FakeFm()
+        with tempfile.TemporaryDirectory() as path:
+            Dispatcher(path, fm, "57").send_bom("A", calls)
+        self.assertEqual([(m, p) for m, p, b in fm.sent], [("DELETE", f"{BOM}/3"), ("PATCH", f"{BOM}/1"), ("PATCH", f"{BOM}/2"), ("POST", BOM)])

@@ -209,11 +209,11 @@ class Dispatcher:
 
     def send_bom(self, parent: str, requests: List[Dict[str, Any]], cancelled: Callable[[], bool] = lambda: False,
                  progress: Callable[[], None] = lambda: None) -> str:
-        """Send the lines of one parent's Bill of Materials: removals and updates first, then additions.
+        """Send the lines of one parent's Bill of Materials: removals, then changes to lines, then additions.
 
-        The requests of one step do not depend on each other, so several go out at once (at most ``BOM_REQUESTS`` across all parents);
-        the next step starts when the one before has finished, so a position is freed before another line takes it. A failure ends the
-        step it is in, and nothing after it is sent. ``progress`` is called after each request, sent or found already sent.
+        Removals go out together, then the updates (quantities and renumbers, all ``PATCH``) together, then the additions together. Each step
+        starts when the one before has finished, so a number is freed before another line takes it. A failure ends the step it is in, and nothing after it is sent. ``progress`` is called
+        after each request, sent or found already sent.
 
         Raises ``FmApiError``, ``AuthError`` or ``Unresolved`` naming the first request (in order) that failed, and ``Cancelled`` when the
         send is cancelled (the requests cut off are then logged as in doubt).
@@ -222,22 +222,23 @@ class Dispatcher:
             if parent.casefold() in self._failed:
                 raise FmApiError(t("run.send_parent_not_created", item=parent))
         indexed = list(enumerate(requests))
-        changes = [(i, r) for i, r in indexed if r["method"] != "POST"]   # removals and updates
-        additions = [(i, r) for i, r in indexed if r["method"] == "POST"]
+        steps = [([(i, r) for i, r in indexed if r["method"] == "DELETE"], BOM_REQUESTS),
+                 ([(i, r) for i, r in indexed if r["method"] == "PATCH"], BOM_REQUESTS),
+                 ([(i, r) for i, r in indexed if r["method"] not in ("DELETE", "PATCH")], BOM_REQUESTS)]
         sent = 0
-        for batch in (changes, additions):   # the additions wait until every change is done: a line is freed before another takes its position
+        for batch, workers in steps:
             if batch:
-                sent += self._send_batch(parent, batch, len(requests), cancelled, progress)
+                sent += self._send_batch(parent, batch, len(requests), cancelled, progress, workers)
                 if cancelled():
                     return t("run.send_bom_cancelled", sent=sent)
         return t("run.send_bom_sent", count=len(requests))
 
     def _send_batch(self, parent: str, batch: List[Tuple[int, Dict[str, Any]]], count: int, cancelled: Callable[[], bool],
-                    progress: Callable[[], None]) -> int:
-        """Send the requests of a batch, ``BOM_REQUESTS`` at a time, and return how many were sent. The first to fail is raised once the
+                    progress: Callable[[], None], workers: int) -> int:
+        """Send the requests of a batch, ``workers`` at a time, and return how many were sent. The first to fail is raised once the
         others in flight have finished; those not started by then are left unsent."""
         failed = threading.Event()
-        with ThreadPoolExecutor(max_workers=BOM_REQUESTS) as pool:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             sent = pool.map(lambda item: self._send_bom_request(parent, item[0], item[1], count, cancelled, failed, progress), batch)
             return list(sent).count(True)
 
