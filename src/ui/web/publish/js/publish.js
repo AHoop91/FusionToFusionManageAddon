@@ -1,6 +1,6 @@
 /**
- * Publish Item panel: summary of the open model and the loading of what it shows. It asks Python for the sections of the model, one
- * after the other, and hands each answer on: the Bill of Materials to publish-bom.js (which gives the structure to mbom-viewer.js, what Publish
+ * Publish Item panel: summary of the open model and the loading of what it shows. It asks Python for the sections of the model (the Bill of
+ * Materials and the MBOM tree together, once the MBOM is chosen), and hands each answer on: the Bill of Materials to publish-bom.js (which gives the structure to mbom-viewer.js, what Publish
  * sends), the design's own details to details.js.
  */
 (function (ns) {
@@ -94,15 +94,16 @@
     bridge.send('load_publish_section', Object.assign({ target: target, target_id: mbom.idOf(target) }, payload));   // the id: the item is read, not searched for by its number
   }
 
-  /** Ask for a slot of the Bill of Materials (the lines under an assembly, the whole tree), remembering which reload it was asked in. */
-  function ask(slot, payload) {
-    askedIn[slot] = generation;
-    inflight[slot] = true;
-    request(slot, payload);
+  /** The MBOM of the target, for the structure viewer: asked for at the same time as the Bill of Materials, and never a copy kept from before (its line ids
+   *  are what edits are sent against, and Fusion Manage changes under the panel). */
+  function askMbomTree() {
+    askedIn.mbom_tree = generation;
+    request('mbom_tree', { section: 'mbom_tree', force: true });
   }
 
   function loadSection(name) {
     inflight[name] = true;
+    if (BOM_SECTIONS.indexOf(name) >= 0) askedIn[name] = generation;   // an answer for the Bill of Materials of an earlier reload (or MBOM) is ignored
     const force = !!forceNext[name];
     forceNext[name] = false;
     request(name, { section: name, force: force });
@@ -155,16 +156,24 @@
       return;
     }
     bom.showStructure(entry.data);
-    viewer.structureRead();   // the structure viewer can go on to the MBOM now
+    viewer.structureRead();   // the viewer builds the structure once the MBOM is in too (it was asked for at the same time)
     if (!loaded.properties && !inflight.properties) loadSection('properties');   // quietly, after the BOM
   }
 
-  /** Another MBOM was chosen: its item number is what the Bill of Materials is read and compared for. */
+  /** Read what the structure is built from, all at once: the design's Bill of Materials and, when Fusion Manage holds the MBOM item, its tree. The viewer
+   *  keeps its skeleton until both are in. */
+  function loadStructure() {
+    viewer.show(true);   // the skeleton of the two tables, until the structure is built
+    ensureSections(AFTER_MBOM);
+    if (mbom.idOf(target)) askMbomTree();
+  }
+
+  /** Another MBOM was chosen: its item number is what the Bill of Materials is compared for. Python keeps what it read of the design from the Data Model, so
+   *  only what depends on the target is read again. */
   function chooseTarget(number) {
     target = number;
     restartBom(false);
-    viewer.show(true);   // the skeleton of the two tables, until the structure is built
-    ensureSections(AFTER_MBOM);
+    loadStructure();
   }
 
   /** The manufacturing bills of materials of the design. Fusion Manage is not searched for anything else until this has answered; when it
@@ -179,8 +188,7 @@
         return;
       }
       target = chosen;
-      viewer.show(true);   // the skeleton of the two tables, until the structure is built
-      ensureSections(AFTER_MBOM);
+      loadStructure();
       return;
     }
     const failure = entry.message || t('publish.unknown_error');
@@ -195,6 +203,7 @@
     if (askedIn[name] !== undefined && askedIn[name] !== generation) return;   // asked before the last reload: it is not wanted
     clearTimeout(timers[name]);
     if (entry.pending) { waitFor(name, entry); return; }
+    if ((name === 'structure' || name === 'mbom_tree') && entry.target_id !== mbom.idOf(target)) return;   // read for an MBOM that is no longer the one chosen
     inflight[name] = false;
     if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
     if (name === 'summary') { answerSummary(entry); return; }
@@ -222,7 +231,7 @@
     BOM_SECTIONS.forEach(function (name) {
       loaded[name] = false;
       inflight[name] = false;
-      forceNext[name] = !!force;
+      forceNext[name] = forceNext[name] || !!force;   // a forced refresh whose read waits for the user to choose an MBOM keeps its force
     });
     bom.clear();
     viewer.reset();
@@ -263,7 +272,7 @@
       summary: summary,   // with the target's, for what publishing sends
       planned: bom.refreshScope,
       rows: bom.rows,
-      askMbom: function () { ask('mbom_tree', { section: 'mbom_tree', force: true }); },   // never a copy kept from before: its line ids are what edits are sent against, and Fusion Manage changes under the panel
+      askMbom: askMbomTree,
       targetId: function () { return mbom.idOf(target); },   // empty for a design with no MBOM item: the viewer starts from the EBOM
       target: function () { return target; },
       boughtSuffix: function () { return (currentSummary || {}).bought_suffix || ''; },   // the suffix of bought versions: a line with an EBOM line's number and it is that line's bought version

@@ -13,7 +13,7 @@
  * ``run``, which says the reason an edit was refused in a toast.
  *
  * ``host``: ``design()`` (the open design's summary), ``rows()`` (the rows of the Bill of Materials that was read),
- * ``askMbom()``, ``targetId()``, ``target()`` (item number), ``phantom()`` (whether Settings allow phantoms), ``summary()`` (the design, under the
+ * ``askMbom()`` (to ask for the MBOM again after it failed), ``targetId()``, ``target()`` (item number), ``phantom()`` (whether Settings allow phantoms), ``summary()`` (the design, under the
  * target's item number), ``boughtSuffix()``, ``boughtReady()`` and ``planned()`` (called when the structure may have changed: what publishing covers is
  * worked out again).
  */
@@ -78,8 +78,9 @@
   let host = null;
   let dom = null;            // the elements of the viewer, made when it is first shown
   let active = false;        // the Structure view is the one on screen
-  let ready = false;         // the Bill of Materials (every level) has been read: the MBOM can be asked for
-  let phase = 'idle';        // idle, structure / mbom (what is being waited for: each asked once) or error
+  let ready = false;         // the Bill of Materials (every level) has been read
+  let mbomTree = null;       // the ``mbom_tree`` answer, held until the Bill of Materials is read too (the two are read at the same time)
+  let phase = 'idle';        // idle, or error (the MBOM could not be read)
   let note = '';             // what the viewer is waiting for, or the error
   let skeleton = false;      // the tables hold the grey bars of the wait
   let structure = null;
@@ -164,15 +165,15 @@
     })(structure.root(), null, 0);
   }
 
-  /** Go as far as the data allows: wait for the EBOM, read the MBOM, then build and draw. Each read is asked once:
-   *  while one is on its way the viewer only waits, and a structure that exists (with edits) is never replaced. */
+  /** Go as far as the data allows: wait for the EBOM and, when the design has an MBOM item, for its tree (the panel asks for both at once), then build and
+   *  draw. A structure that exists (with edits) is never replaced. */
   function refresh() {
     if (!active) return;
     if (structure) { update(); return; }
-    if (phase === 'mbom') return;
-    if (!ready) { wait('structure', t('publish.reading_bom')); return; }
-    if (host.targetId()) { wait('mbom', t('publish.sv_reading_mbom')); host.askMbom(); return; }
-    build(null);
+    if (phase === 'error') return;
+    if (!ready) { wait(t('publish.reading_bom')); return; }
+    if (host.targetId() && !mbomTree) { wait(t('publish.sv_reading_mbom')); return; }
+    build(mbomTree);
     update();
   }
 
@@ -183,8 +184,7 @@
     ui.warnWhenSlow(dom.status, text);
   }
 
-  function wait(next, text) {
-    phase = next;
+  function wait(text) {
     say(text);
     update();
   }
@@ -196,18 +196,22 @@
     update();
   }
 
-  /** The answer of the ``mbom_tree`` section. One that nobody waits for (a second answer, or one after the Bill of Materials was read again) is ignored,
-   *  so edits are never replaced. */
+  /** The answer of the ``mbom_tree`` section, which may come before or after the Bill of Materials is read. One that nobody waits for (the structure is
+   *  built, or the design has no MBOM item) is ignored, so edits are never replaced; a failed one is told, with a way to ask for it again. */
   function answer(entry) {
-    if (structure || phase !== 'mbom') return;
-    if (!entry.ok) { fail(entry.message || t('publish.unknown_error'), function () { phase = 'idle'; refresh(); }); return; }
-    build(entry.data);
-    update();
+    if (structure || !host.targetId()) return;
+    if (!entry.ok) {
+      fail(entry.message || t('publish.unknown_error'), function () { phase = 'idle'; mbomTree = null; host.askMbom(); refresh(); });
+      return;
+    }
+    mbomTree = entry.data;
+    if (ready) refresh();
   }
 
   /** The Bill of Materials is read again: what was built from the old one is dropped. */
   function reset() {
     ready = false;
+    mbomTree = null;
     structure = null;
     ebom = null;
     phase = 'idle';

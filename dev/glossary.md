@@ -34,6 +34,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Read the derived fields a linking field takes from the item it links to (sent with the link on publish) | `PivotService.derived` | `fm/pivots.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Read an item's BOM, its BOM tab, or where it is used | `fm/bom.py`, `fm/bom_view.py`, `fm/where_used.py` | `fm/` | |
 | Read an item's whole BOM as one tree, each line with its item id and line id (the `mbom_tree` section) | `BomService.tree`, `build_tree` | `fm/bom.py`, `publish/panel_sections.py` | [publish-item-flow.md](publish-item-flow.md) |
+| Read the design's whole Bill of Materials from the Data Model once for the open design, whichever MBOM is chosen (the `structure` section) | `PublishSections._structure_rows` (kept until a forced refresh, another design or other settings) | `publish/panel_sections.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Show an item as the Item tab does (header, sections, matrices) | `fm/item_view.py` | `fm/` | [workspace-forms.md](workspace-forms.md) |
 | Read an item's tabs and counts, and which the user may open | `TabService` | `fm/tabs.py` | [permissions.md](permissions.md) |
 | Read an item's files, change log or associated workflows | `fm/attachments.py`, `fm/change_log.py`, `fm/associated_workflows.py` | `fm/` | |

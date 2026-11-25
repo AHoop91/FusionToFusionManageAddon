@@ -7,7 +7,7 @@ from unittest import mock
 
 from src.config.models import ConnectionSettings
 from src.config.workspace_models import ITEM_NUMBER_SOURCE, FieldMapping, WorkspaceConfig
-from src.core.cancel import Cancelled
+from src.core.cancel import CancelToken, Cancelled
 from src.publish import panel_sections
 from src.publish.panel_sections import PublishSections
 from tests.hub_fixtures import auth_of, capture
@@ -29,7 +29,7 @@ class Fixture:
         config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="242", mappings=[FieldMapping(ITEM_NUMBER_SOURCE, "NUMBER")])
         self.patches = [
             mock.patch.object(panel_sections, "FusionGraphQlClient"), mock.patch.object(panel_sections, "FmClient"),
-            mock.patch.object(panel_sections, "ADDIN"),
+            mock.patch.object(panel_sections, "ADDIN", mock.Mock(child=lambda *_: CancelToken())),   # real tokens: a replaced load is cancelled
             mock.patch.object(panel_sections, "MbomService"),
             mock.patch.object(panel_sections, "read_manage_item",
                               return_value={"urn": "urn:adsk.plm:tenant.workspace.item:ACME.57.16997", "url": ""}),
@@ -45,6 +45,8 @@ class Fixture:
 
     def read(self, _client, section, _model_id, _time, summary, component_id="", _physical=False, _progress=None):
         self.reads.append((section, component_id, dict(summary or {})))
+        if section == "structure" and _progress:
+            _progress(2)   # a page of the structure was read
         if self.gate:
             self.gate.wait(5)
         if section == "summary":
@@ -267,21 +269,110 @@ class SectionTests(unittest.TestCase):
         self.fx.wait("structure")
         panel_sections.search_design.assert_called_once()
 
-    def test_the_same_number_with_another_item_id_is_read_afresh(self):
-        self.fx.ask("summary")
-        self.fx.wait("summary")
-        for item_id in ("55", "55", "56"):
-            self.fx.ask("structure", target="MBOM-2", target_id=item_id)
-            self.fx.wait("structure")
-        self.assertEqual([r for r in self.fx.reads if r[0] == "structure"].__len__(), 2)
+    def structure_reads(self):
+        return [r for r in self.fx.reads if r[0] == "structure"]
 
-    def test_another_target_is_read_afresh_and_the_same_one_is_kept(self):
+    def test_another_target_is_marked_afresh_and_the_same_one_is_kept(self):
         self.fx.ask("summary")
         self.fx.wait("summary")
         for target in ("A", "A", "B"):
             self.fx.ask("structure", target=target)
             self.fx.wait("structure")
-        self.assertEqual([r for r in self.fx.reads if r[0] == "structure"].__len__(), 2)
+        self.assertEqual(panel_sections.mark_design_bom.call_count, 2)
+
+    def test_the_same_number_with_another_item_id_is_marked_afresh(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        for item_id in ("55", "55", "56"):
+            self.fx.ask("structure", target="MBOM-2", target_id=item_id)
+            self.fx.wait("structure")
+        self.assertEqual(panel_sections.mark_design_bom.call_count, 2)
+
+    def test_another_target_does_not_read_the_data_model_again(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        for target, target_id in (("", ""), ("A", "1"), ("B", "2"), ("A", "1")):
+            self.fx.ask("structure", target=target, target_id=target_id)
+            done = self.fx.wait("structure")
+            self.assertEqual([r["id"] for r in done["data"]["rows"]], ["c1", "c2"])
+        self.assertEqual(len(self.structure_reads()), 1)
+        self.assertEqual(panel_sections.mark_design_bom.call_count, 4, "what depends on the target is worked out each time")
+
+    def test_a_forced_structure_is_read_again_and_then_kept(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure")
+        self.fx.wait("structure")
+        self.fx.ask("structure", force=True)
+        self.fx.wait("structure")
+        self.assertEqual(len(self.structure_reads()), 2)
+        self.fx.ask("structure", target="B")
+        self.fx.wait("structure")
+        self.assertEqual(len(self.structure_reads()), 2)
+
+    def test_another_design_reads_the_structure_again_and_the_first_is_not_kept(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure")
+        self.fx.wait("structure")
+        self.fx.model = ("m2", "t1")
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure")
+        self.fx.wait("structure")
+        self.fx.model = ("m1", "t1")
+        self.fx.ask("structure", target="B")
+        self.fx.wait("structure")
+        self.assertEqual(len(self.structure_reads()), 3)
+
+    def test_the_rows_of_a_design_are_dropped_as_soon_as_another_is_open(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure")
+        self.fx.wait("structure")
+        self.fx.model = ("m2", "t1")
+        self.fx.ask("summary")
+        self.assertIsNone(self.fx.sections._rows, "a large structure is not held for a design that is no longer open")
+        self.fx.wait("summary")
+
+    def test_the_structure_is_read_again_under_other_settings(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.ask("structure")
+        self.fx.wait("structure")
+        self.fx.config.config.workspaces.get.return_value = WorkspaceConfig(workspace_id="999")   # same hub and design, other workspace
+        self.fx.ask("structure", target="B")
+        self.fx.wait("structure")
+        self.assertEqual(len(self.structure_reads()), 2)
+
+    def test_a_load_that_was_replaced_keeps_nothing(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.gate = threading.Event()
+        self.fx.ask("structure", target="A")
+        end = time.time() + 5
+        while not self.structure_reads() and time.time() < end:
+            time.sleep(0.01)
+        self.fx.sections._tokens["structure"].cancel()   # what a newer load of the slot does to the one before it
+        self.fx.gate.set()
+        self.fx.wait("structure")
+        self.fx.ask("structure", target="B")
+        self.fx.wait("structure")
+        self.assertEqual(len(self.structure_reads()), 2, "the read that was cancelled was not kept for the next")
+
+    def test_the_progress_of_the_first_read_is_told_while_it_runs(self):
+        self.fx.ask("summary")
+        self.fx.wait("summary")
+        self.fx.gate = threading.Event()
+        self.fx.ask("structure")
+        end = time.time() + 5
+        while time.time() < end and self.fx.sections.status({"section": "structure"})["progress"] != 2:
+            time.sleep(0.01)
+        snapshot = self.fx.sections.status({"section": "structure"})
+        self.assertTrue(snapshot["pending"])
+        self.assertEqual(snapshot["progress"], 2)
+        self.fx.gate.set()
+        self.fx.wait("structure")
 
     def test_the_other_slots_of_the_design_are_left_alone_by_another_target(self):
         self.fx.ask("summary")

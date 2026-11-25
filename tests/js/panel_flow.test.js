@@ -17,6 +17,9 @@ const row = (id, number, extra) => Object.assign({
 const SUMMARY = { component_id: 'R', composition: 'RELEASED', item_number: 'TOP', part_number: 'TOP', name: 'Top', description: '' };
 const plain = (x) => JSON.parse(JSON.stringify(x));   // the page runs in a window of its own: arrays are compared as data
 
+/** What Python gives back of the item an answer was read for: the id the request named. */
+const echoed = (sent, slot) => (sent.filter(([action, p]) => action === 'load_publish_section' && p.section === slot).pop() || [0, {}])[1].target_id || '';
+
 /** The panel loaded into a window, with the shell, bridge, account, auth, jobs and details replaced by stand-ins that record what they are told. */
 function openPanel() {
   const html = fs.readFileSync(PUBLISH_HTML, 'utf8');
@@ -60,7 +63,7 @@ test('the structure, from the MBOM lookup to publishing', { skip: JSDOM ? false 
   const { w, sent, handlers, started } = panel;
   const $ = (id) => w.document.getElementById(id);
   const reply = (slot, entry, via) => handlers[via || 'load_publish_section']({ ok: true, result: Object.assign({
-    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0 }, entry) });
+    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, target_id: echoed(sent, slot) }, entry) });
   const sentOf = (section) => sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section);
   const lastSent = (section) => sentOf(section).pop();
   const click = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
@@ -104,6 +107,7 @@ test('the structure, from the MBOM lookup to publishing', { skip: JSDOM ? false 
   assert.ok(lastSent('properties'), 'the design own properties are read quietly after the Bill of Materials');
   assert.strictEqual(sentOf('structure').length, 1, 'the structure is read once');
   assert.strictEqual(sentOf('tree').length, 0, 'there is no second read of its levels');
+  assert.strictEqual(sentOf('mbom_tree').length, 0, 'a design with no MBOM item has no MBOM to read');
   assert.ok(lines(0).includes('PN-A') && lines(0).includes('PN-P'), 'the EBOM is drawn');
   assert.ok(lines(1).includes('PN-A'), 'and the MBOM starts as a copy of it');
   assert.strictEqual($('pub-structure').querySelectorAll('.pub-skel-row').length, 0, 'the skeleton is gone');
@@ -140,7 +144,7 @@ test('choosing another MBOM reads the Bill of Materials again, compared with tha
   panel.w.document.getElementById('view-app').hidden = false;
   panel.authChanged(true);
   const reply = (slot, entry) => panel.handlers.load_publish_section({ ok: true, result: Object.assign({
-    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0 }, entry) });
+    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, target_id: echoed(panel.sent, slot) }, entry) });
   const targets = (section) => panel.sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section).map(([, p]) => p.target);
   reply('summary', { data: SUMMARY });
   assert.deepStrictEqual(plain(targets('summary')), [''], 'the summary is the design\'s own');
@@ -167,7 +171,7 @@ test('a structure that could not be read is read again by the retry button', { s
   doc.getElementById('view-app').hidden = false;
   panel.authChanged(true);
   const reply = (slot, entry) => panel.handlers.load_publish_section({ ok: true, result: Object.assign({
-    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0 }, entry) });
+    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, target_id: echoed(panel.sent, slot) }, entry) });
   reply('summary', { data: SUMMARY });
   reply('mbom', { data: [] });
   reply('structure', { ok: false, message: 'down' });
@@ -182,7 +186,7 @@ test('when a publish ends the whole panel is read again, the MBOM included, and 
   const { w, sent, handlers } = panel;
   const $ = (id) => w.document.getElementById(id);
   const reply = (slot, entry) => handlers.load_publish_section({ ok: true, result: Object.assign({
-    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0 }, entry) });
+    section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, target_id: echoed(sent, slot) }, entry) });
   const asks = (section) => sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section);
   const rows = [row('P', 'PN-P', { status: 'new' })];
   const read = () => {
@@ -202,4 +206,110 @@ test('when a publish ends the whole panel is read again, the MBOM included, and 
   assert.strictEqual(asks('mbom_tree')[1][1].force, true);
   assert.strictEqual(asks('structure')[1][1].force, true);
   assert.strictEqual(asks('mbom')[1][1].force, true, 'the lookup of the MBOM item too');
+});
+
+/** A panel with the MBOM ``M-1`` (item 1) chosen: ``reply`` answers a section, ``mbomTree`` is what Fusion Manage holds of it. */
+function openWithMbom() {
+  const panel = openPanel();
+  const { w, sent, handlers } = panel;
+  const $ = (id) => w.document.getElementById(id);
+  $('view-app').hidden = false;
+  panel.authChanged(true);
+  const api = {
+    panel: panel, $: $,
+    reply: (slot, entry) => handlers.load_publish_section({ ok: true, result: Object.assign({
+      section: slot, pending: false, ok: true, data: null, message: '', denied: '', key: 'k', progress: 0, target_id: echoed(sent, slot) }, entry) }),
+    sentOf: (section) => sent.filter(([action, p]) => action === 'load_publish_section' && p.section === section),
+    skeleton: () => $('pub-structure').querySelectorAll('.pub-skel-row').length > 0,
+    lines: (pane) => [...$('pub-structure').querySelectorAll('.sv-pane')[pane].querySelectorAll('.sv-row .sv-pn')].map((n) => n.textContent),
+    mbomTree: (line) => ({ data: { number: 'M-1', name: 'M one', item_id: '1', children: [{ number: line || 'PN-P', name: 'P', quantity: '1', edge_id: 'e1', item_id: 'iP', sequence: '1', children: [] }] } }),
+    whole: () => ({ data: { rows: [row('P', 'PN-P')], shared: false } }),
+  };
+  api.reply('summary', { data: SUMMARY });
+  api.reply('mbom', { data: [{ id: '1', number: 'M-1' }] });
+  return api;
+}
+
+test('the structure and the MBOM are asked for together, and the viewer keeps its skeleton until both are in', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  [['structure', 'mbom_tree'], ['mbom_tree', 'structure']].forEach(([first, second]) => {
+    const p = openWithMbom();
+    assert.strictEqual(p.sentOf('structure').length, 1, 'the structure is asked for as soon as the MBOM is known');
+    assert.strictEqual(p.sentOf('mbom_tree').length, 1, 'and so is the MBOM tree, without waiting for the structure');
+    assert.strictEqual(p.sentOf('mbom_tree')[0][1].force, true, 'a copy kept before is never used');
+    assert.strictEqual(p.sentOf('mbom_tree')[0][1].target_id, '1', 'it is read by the id of its item');
+    const answers = { structure: p.whole(), mbom_tree: p.mbomTree() };
+    p.reply(first, answers[first]);
+    assert.ok(p.skeleton(), 'with only the ' + first + ' in, nothing is drawn');
+    assert.ok(p.$('pub-publish').disabled);
+    p.reply(second, answers[second]);
+    assert.ok(!p.skeleton(), 'both are in: the tables are drawn');
+    assert.deepStrictEqual(plain(p.lines(1)), ['M-1', 'PN-P']);
+    assert.ok(!p.$('pub-publish').disabled);
+  });
+});
+
+test('a failed read of the MBOM is said in the viewer and is read again alone', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  const p = openWithMbom();
+  p.reply('mbom_tree', { ok: false, message: 'Fusion Manage said no' });
+  p.reply('structure', p.whole());
+  assert.match(p.$('pub-structure').textContent, /Fusion Manage said no/);
+  assert.ok(p.$('pub-publish').disabled);
+  p.$('pub-structure').querySelector('.pub-retry').dispatchEvent(new p.panel.w.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(p.sentOf('mbom_tree').length, 2, 'the MBOM is asked for again');
+  assert.strictEqual(p.sentOf('structure').length, 1, 'the structure, which was read, is not');
+  p.reply('mbom_tree', p.mbomTree());
+  assert.deepStrictEqual(plain(p.lines(1)), ['M-1', 'PN-P']);
+});
+
+test('another MBOM asks only for what depends on it, and a refresh asks for everything', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  const p = openWithMbom();
+  p.reply('structure', p.whole());
+  p.reply('mbom_tree', p.mbomTree());
+  p.panel.mbomHost.choose('M-1');   // the same list: another choice of the one item
+  const again = p.sentOf('structure').pop();
+  assert.strictEqual(again[1].force, false, 'another MBOM does not force the read: Python keeps what it read of the design');
+  assert.strictEqual(p.sentOf('mbom_tree').length, 2, 'the MBOM tree is read for the one chosen');
+  p.panel.w.document.getElementById('pub-refresh').click();   // the refresh button
+  p.reply('summary', { data: SUMMARY });
+  p.reply('mbom', { data: [{ id: '1', number: 'M-1' }] });
+  assert.strictEqual(p.sentOf('structure').pop()[1].force, true, 'a refresh reads the design again');
+});
+
+test('answers for the Bill of Materials or the MBOM of an earlier reload are ignored', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  [['structure', 'mbom_tree'], ['mbom_tree', 'structure']].forEach(([first, second]) => {
+    const p = openWithMbom();
+    p.panel.w.document.getElementById('pub-refresh').click();   // read again: the summary is on its way
+    p.reply('mbom_tree', p.mbomTree('OLD'));
+    p.reply('structure', p.whole());
+    assert.ok(p.$('pub-publish').disabled, 'nothing is built from what was asked for before the refresh');
+    p.reply('summary', { data: SUMMARY });
+    p.reply('mbom', { data: [{ id: '1', number: 'M-1' }] });
+    assert.ok(p.skeleton(), 'the old answers do not count as the new ones');
+    const answers = { structure: p.whole(), mbom_tree: p.mbomTree() };
+    p.reply(first, answers[first]);
+    assert.ok(p.skeleton(), 'with only the new ' + first + ' in, the other is still awaited');
+    p.reply(second, answers[second]);
+    assert.deepStrictEqual(plain(p.lines(1)), ['M-1', 'PN-P'], 'only the answers to the new reads are used');
+  });
+});
+
+test('an answer read for an MBOM that is no longer the one chosen is ignored', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  const p = openWithMbom();
+  p.reply('mbom_tree', Object.assign(p.mbomTree('OLD'), { target_id: '2' }));
+  p.reply('structure', Object.assign(p.whole(), { target_id: '2' }));
+  assert.ok(p.skeleton(), 'what was read for another item is not built');
+  assert.ok(p.$('pub-publish').disabled);
+  p.reply('mbom_tree', p.mbomTree());
+  p.reply('structure', p.whole());
+  assert.deepStrictEqual(plain(p.lines(1)), ['M-1', 'PN-P'], 'the answers for the chosen one are');
+});
+
+test('a forced refresh keeps its force when the MBOM has to be chosen again', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+  const p = openWithMbom();
+  p.panel.w.document.getElementById('pub-refresh').click();   // read it all again, past the copies kept
+  p.reply('summary', { data: SUMMARY });
+  p.reply('mbom', { data: [{ id: '2', number: 'M-2' }, { id: '3', number: 'M-3' }] });   // M-1 is gone: the user chooses
+  p.panel.mbomHost.choose('M-2');
+  const asked = p.sentOf('structure').pop();
+  assert.strictEqual(asked[1].force, true, 'the Data Model is read again, as the refresh said');
 });

@@ -15,12 +15,16 @@ its Bill of Materials): they then use the item number of the target, not the des
 it is given as its target. The target carries the item's id too (``target_id``) when Fusion Manage holds the item: that item is read, not
 searched for by its number, which may have been changed. A target is part of what a slot was read for, so another target is read afresh and
 a design's other slots are left alone.
+
+The read of the whole structure from the Data Model is the long one, and it does not depend on the target: it is kept for the design (and the hub and
+settings it was read under), so choosing another MBOM asks only what depends on the target. It is read again for a forced request (the panel's refresh)
+and for another design.
 """
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
@@ -109,6 +113,7 @@ class PublishSections:
         self._slots: Dict[str, Dict[str, Any]] = {name: entry(name) for name in SECTION_NAMES}   # a component's sections get a slot each ("component:<id>"), for the open design
         self._lock = threading.Lock()
         self._tokens: Dict[str, CancelToken] = {}   # slot -> the token of the load that fills it, ended when a newer load replaces it
+        self._rows: Optional[Tuple[Tuple[str, str], List[Dict[str, Any]]]] = None   # ((design key, stamp), the rows of its whole structure), once one read has finished
 
     # ---- Asked by the panel -------------------------------------------------------
 
@@ -134,6 +139,8 @@ class PublishSections:
             return entry(slot, message=reason)
         with self._lock:
             self._forget_other_designs(key)
+            if name == STRUCTURE and payload.get("force"):
+                self._rows = None   # a forced read is a fresh one: the kept rows are not served to it
             current = self._slots.get(slot) or entry(slot)
             # The MBOM tree is never served from a copy kept here: its line ids are what a publish changes, and Fusion Manage changes under the panel.
             if not (payload.get("force") or name == MBOM_TREE) and self._holds(current, key, context.stamp, target, target_id) and (current["pending"] or current["ok"]):
@@ -162,12 +169,14 @@ class PublishSections:
 
     def _forget_other_designs(self, key: str) -> None:
         """Drop the slots of components made for another design, and end what they were still reading (called with the lock held): they are
-        never asked for again, and would pile up as designs are opened."""
+        never asked for again, and would pile up as designs are opened. The kept rows of another design go too."""
         for slot in [s for s, state in self._slots.items() if s not in SECTION_NAMES and state["key"] != key]:
             del self._slots[slot]
             token = self._tokens.pop(slot, None)
             if token:
                 token.cancel()
+        if self._rows and self._rows[0][0] != key:
+            self._rows = None
 
     # ---- Worker thread ------------------------------------------------------------
 
@@ -195,10 +204,10 @@ class PublishSections:
             return
         except PublishDenied as exc:   # not an error: the panel says so, in place of the item
             log.info("No permission to publish: %s", exc)
-            outcome = entry(load.slot, message=str(exc), denied=str(exc), key=load.key)
+            outcome = entry(load.slot, message=str(exc), denied=str(exc), key=load.key, target=load.target, target_id=load.target_id)
         except Exception as exc:  # never leave the panel waiting
             log.exception("Loading %s failed", load.slot)
-            outcome = entry(load.slot, message=str(exc) or type(exc).__name__, key=load.key)
+            outcome = entry(load.slot, message=str(exc) or type(exc).__name__, key=load.key, target=load.target, target_id=load.target_id)
         with self._lock:
             if self._waits_for(load):   # ignore a result for a design that is no longer open
                 self._slots[load.slot] = outcome
@@ -235,6 +244,20 @@ class PublishSections:
             raise ValueError(t("data.fm_mbom_not_linked"))
         return MbomService(load.fm).find(load.cfg.workspace_id, summary.get("lineage", ""), link, load.cfg.item_number_field())
 
+    def _structure_rows(self, load: _Load, read: Callable[[], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """The rows of the whole structure of the design: those kept by an earlier read under the same hub and settings, else ``read()``, which is kept once it
+        has finished (a load that was replaced meanwhile keeps nothing, so a forced read is never given what it replaced)."""
+        wanted = (load.key, load.stamp)
+        with self._lock:
+            if self._rows and self._rows[0] == wanted:
+                log.debug("%s: the structure was read already, not read again", load.slot)
+                return self._rows[1]
+        rows = read()
+        with self._lock:
+            if not load.token.cancelled:
+                self._rows = (wanted, rows)
+        return rows
+
     def _load(self, load: _Load) -> Any:
         """What the section holds: read from the Data Model, and compared with Fusion Manage for the properties, which the Details Panel shows."""
         summary = self._summary_of(load)
@@ -263,7 +286,7 @@ class PublishSections:
             known = [{"id": load.target_id}] if load.target_id else None   # found by lineage and asset: the number may have been changed since
             with ThreadPoolExecutor(max_workers=1) as pool:
                 searching = None if known else pool.submit(search_design, load.fm, load.cfg, summary)   # else the number is searched while it is read
-                rows = read()
+                rows = self._structure_rows(load, read)
                 hits = known or searching.result()
             return mark_design_bom(rows, summary, hits)
         data = read()

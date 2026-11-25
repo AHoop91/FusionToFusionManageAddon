@@ -185,7 +185,7 @@ test('the MBOM read from Fusion Manage is mapped by item number, marks what has 
   const v = open({ targetId: '77', phantom: false });
   v.show();
   v.ns.mbomViewer.structureRead();
-  assert.strictEqual(v.calls.askMbom, 1);
+  assert.strictEqual(v.calls.askMbom, 0, 'the panel asks for the MBOM with the structure: the viewer only waits for it');
   const line = (number, quantity, children) => ({ number: number, name: number + ' name', quantity: quantity, sequence: '1', edge_id: 'e' + number, item_id: 'i' + number, children: children || [] });
   v.ns.mbomViewer.answer({ ok: true, data: { number: 'TOP-M', name: 'Top M', item_id: '77', children: [line('A', '2', [line('A1', '1'), line('A2', '1')]), line('OIL', '1'), line('C', '1')] } });
   v.openAll();
@@ -238,15 +238,52 @@ const search = (v, text) => {
 };
 const found = (v) => v.w.document.querySelector('.sv-found').textContent;
 
-test('a second answer, or one after the Bill of Materials was read again, never replaces what is built', skip, () => {
+test('the structure and the MBOM are read at the same time: the skeleton stays until both are in, whichever comes first', skip, () => {
+  const skeleton = (v) => v.w.document.querySelectorAll('.pub-skel-row').length > 0;
+  const mbomFirst = open({ targetId: '77' });
+  mbomFirst.show();
+  mbomFirst.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
+  assert.ok(skeleton(mbomFirst), 'the MBOM alone draws nothing');
+  assert.match(mbomFirst.w.document.querySelector('.sv-status').textContent, /Reading the Fusion Component structure/);
+  mbomFirst.ns.mbomViewer.structureRead();
+  assert.ok(!skeleton(mbomFirst));
+  assert.deepStrictEqual(mbomFirst.lines(mbomFirst.mbom()), ['TOP-M', 'C']);
+  assert.strictEqual(mbomFirst.calls.askMbom, 0, 'nothing was asked for again');
+  const ebomFirst = open({ targetId: '77' });
+  ebomFirst.show();
+  ebomFirst.ns.mbomViewer.structureRead();
+  assert.ok(skeleton(ebomFirst), 'the structure alone draws nothing');
+  assert.match(ebomFirst.w.document.querySelector('.sv-status').textContent, /Reading the Fusion Manage Bill of Materials/);
+  ebomFirst.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
+  assert.ok(!skeleton(ebomFirst));
+  assert.deepStrictEqual(ebomFirst.lines(ebomFirst.mbom()), ['TOP-M', 'C']);
+});
+
+test('a failed read of the MBOM is told, whichever comes first, and the retry asks for the MBOM alone', skip, () => {
   const v = open({ targetId: '77' });
   v.show();
-  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });   // nobody is waiting for it yet: ignored
-  assert.strictEqual(v.w.document.querySelector('.sv-row'), null);
+  v.ns.mbomViewer.answer({ ok: false, message: 'Fusion Manage said no' });
+  assert.match(v.w.document.getElementById('pub-structure').textContent, /Fusion Manage said no/);
   v.ns.mbomViewer.structureRead();
-  assert.strictEqual(v.calls.askMbom, 1);
+  assert.match(v.w.document.getElementById('pub-structure').textContent, /Fusion Manage said no/, 'the structure arriving does not hide it');
+  v.click(v.w.document.querySelector('.pub-retry'));
+  assert.strictEqual(v.calls.askMbom, 1, 'only the MBOM is asked for again');
+  assert.ok(v.w.document.querySelector('.pub-skel-row'), 'and the viewer waits for it');
+  v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
+  assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'C']);
+});
+
+test('an answer nobody waits for never replaces what is built', skip, () => {
+  const none = open();   // a design with no MBOM item has no MBOM to wait for
+  none.show();
+  none.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
+  none.ns.mbomViewer.structureRead();
+  assert.deepStrictEqual(none.lines(none.mbom()), ['TOP', 'A', 'B', 'C'], 'it starts as a copy of the EBOM');
+  const v = open({ targetId: '77' });
+  v.show();
   v.ns.mbomViewer.structureRead();
-  assert.strictEqual(v.calls.askMbom, 1, 'asked once while the answer is on its way');
+  v.ns.mbomViewer.structureRead();
+  assert.strictEqual(v.calls.askMbom, 0);
   v.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
   v.click(v.rowOf(v.mbom(), 'C').querySelector('button.sv-qty'));
   enter(v, '6');
