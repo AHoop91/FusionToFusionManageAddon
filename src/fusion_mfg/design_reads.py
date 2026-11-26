@@ -5,6 +5,8 @@ true the next time it is asked. Only the most recent version asked about is held
 
 Callers must not modify what they are given. Reads of one version are serialised, so a burst of callers (the item number of a selection,
 the up-to-date check of a tab) triggers each read once.
+
+Layer: integration (a cache in front of ``model_service``); the callers in the application layer decide when to ask.
 """
 
 import threading
@@ -40,6 +42,7 @@ class DesignReads:
         """The bill of materials of the version, flat in tree order (``read_section`` "structure")."""
         return self._get(model_id, saved_at, "structure", lambda: read_section(client, "structure", model_id, saved_at, summary))
 
+    # Five parameters, kept: the up-to-date check is the one caller and passes them as they are.
     def properties(self, client: FusionGraphQlClient, model_id: str, saved_at: str, summary: Dict[str, Any], physical: bool) -> Any:
         """The properties of the design's own component, with its physical properties when ``physical`` (cached separately from without)."""
         return self._get(model_id, saved_at, f"properties:{physical}",

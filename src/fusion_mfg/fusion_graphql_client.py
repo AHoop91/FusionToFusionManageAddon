@@ -4,6 +4,8 @@ Fusion sends the request as the user it is signed in as, so no Client ID, sign-i
 object of the answer and raises ``MfgApiError`` for a failure.
 
 The call waits on the network, so use it from a worker thread, never from Fusion's own (a warning is logged when it is).
+
+Layer: integration.
 """
 
 import json
@@ -59,6 +61,7 @@ def _reason_in(detail: str) -> str:
 class MfgApiError(Exception):
     """Raised when a Manufacturing Data Model request fails or returns errors."""
 
+    # Five parameters, kept: all but the message are optional keywords that describe what the service said.
     def __init__(self, message: str, transient: bool = False, code: str = "", status: int = 0, from_server: bool = False) -> None:
         super().__init__(message)
         self.status = status   # the HTTP status, when the service answered with one
