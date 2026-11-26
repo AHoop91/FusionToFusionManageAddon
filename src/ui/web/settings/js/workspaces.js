@@ -923,7 +923,7 @@
   /** The Enabled switch of a workspace's feature, for the right of its header: an info icon saying what off does, then the switch. */
   function buildEnabledSwitch(kind, enabled) {
     const group = el('div', 'ws-enabled-group');
-    const info = infoTip(t(kind.assign ? 'settings.ws_enable_tip' : 'settings.ws_enable_tip_items'));
+    const info = infoTip(kind.assign ? t('settings.ws_enable_tip') : t('settings.ws_enable_tip_items'));
     info.querySelector('.tip').classList.add('tip-end');   // opens leftwards: the icon is at the right edge of the card
     group.appendChild(info);
     const toggle = el('label', 'pf-switch');

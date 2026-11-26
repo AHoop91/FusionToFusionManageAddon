@@ -204,15 +204,16 @@ test('the MBOM read from Fusion Manage is mapped by item number, marks what has 
 });
 
 test('the colour bar counts the EBOM lines added, with a different quantity and missing, and a part keeps only those lines', skip, () => {
-  const v = built();
+  const v = built();   // the MBOM starts as a copy of the EBOM, so a line has to be removed to be missing
   const doc = v.w.document;
   const part = (cls) => doc.querySelector('.sv-meter-' + cls);
+  v.act(v.mbom(), 'C', 'remove').click();
   assert.strictEqual(doc.querySelector('.sv-meter').hidden, false);
-  assert.strictEqual(part('bad').textContent, '1', 'B is missing');
+  assert.strictEqual(part('bad').textContent, '1', 'C is missing');
   assert.strictEqual(part('warn').hidden, true, 'no quantity differs');
   assert.ok(Number(part('ok').textContent) >= 1);
   part('bad').click();
-  assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'B'], 'only the missing line');
+  assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'C'], 'only the missing line');
   assert.strictEqual(part('bad').getAttribute('aria-pressed'), 'true');
   part('bad').click();
   assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'B', 'C'], 'again shows all');
@@ -637,7 +638,7 @@ test('an EBOM line a purchased part stands for says which one, and a quantity th
   assert.ok(button, 'the icon button is there');
   assert.ok(button.previousElementSibling.classList.contains('sv-qty'), 'right of the quantity');
   assert.ok(v.rowOf(v.ebom(), 'C').querySelector('.sv-qty').nextElementSibling.classList.contains('sv-note-slot'), 'a line with none keeps its room, so the quantities line up');
-  assert.ok(v.rowOf(v.ebom(), 'B').querySelector('.sv-qty').previousElementSibling.classList.contains('sv-matched'), 'the tick is just left of the quantity');
+  assert.ok(v.rowOf(v.ebom(), 'B').querySelector('.sv-matched'), 'the line carries the tick (the stylesheet places it, and the icons, over the end of the label)');
   assert.strictEqual(button.title, 'Linked to purchased part B-B');
   assert.strictEqual(v.rowOf(v.ebom(), 'B').nextElementSibling.classList.contains('sv-note-row'), false, 'closed until it is clicked');
   v.click(button);
