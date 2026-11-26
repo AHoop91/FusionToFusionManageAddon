@@ -14,7 +14,7 @@ import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import adsk.core
 import adsk.fusion
@@ -59,6 +59,28 @@ log = get_logger("item_panel")
 LINE_ID = "MfgToFm_MenuLine"   # the line above the add-in's entries in the right-click menu
 SAVED_STATE_SECONDS = 30   # how long when a document was last saved is kept for the Files tab (see ``_saved_source``)
 LOOKUPS_KEPT = 200   # answers held for the page to read before the oldest finished ones are dropped
+
+
+class _Lookup(NamedTuple):
+    """A look-up of the page, as its worker thread runs it: ``work`` under ``token`` and ``context``, its answer pushed as ``result_action``."""
+
+    request: str
+    work: Callable[[FmClient], Any]
+    token: CancelToken
+    result_action: str
+    context: HubContext
+
+
+class _FindOptions(NamedTuple):
+    """How ``ItemPanel._find`` behaves: ``quiet`` leaves a failure at the log; ``fail`` is given the reason instead of a message box showing
+    it; ``cancel`` ends the find; ``ref`` is where the Data Model finds the part (else worked out); ``fresh`` reads the workspace's layout
+    again instead of using what was kept (the panel is being opened, not following a selection)."""
+
+    quiet: bool = False
+    fail: Optional[Callable[[str], None]] = None
+    cancel: Optional[CancelToken] = None
+    ref: Optional[DesignRef] = None
+    fresh: bool = False
 
 
 class ItemNotFound(Exception):
@@ -195,6 +217,8 @@ class _SelectionHandler(adsk.core.ActiveSelectionEventHandler):
 class ItemPanel:
     """Finds an item by number and shows it in the item palette."""
 
+    # Eight parameters, over the guardrail of four: each is a different collaborator the add-in's one wiring place hands over, and a bundle
+    # object would only be a second spelling of the same list. It is left as it is, and its one caller (and the tests) stay as they are.
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, bridge: MessageBridge,
                  config: ConfigService, auth: AuthService, progress: PaletteHost, show_publish: Callable[[], None]) -> None:
         self._ui = ui
@@ -377,7 +401,7 @@ class ItemPanel:
                     del self._lookups[key]
             self._lookups[request] = {"pending": True, "ok": False, "message": "", "result": None}
             token = self._tokens[request] = self._session.token.child(f"look-up {request}")
-        threading.Thread(target=self._run_lookup, args=(request, work, token, result_action, context), daemon=True).start()
+        threading.Thread(target=self._run_lookup, args=(_Lookup(request, work, token, result_action, context),), daemon=True).start()
         return {"started": True}
 
     def _lookup_result(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -387,12 +411,13 @@ class ItemPanel:
             state = self._lookups.get(request) or {"pending": False, "ok": False, "message": t("app.lookup_unknown"), "result": None}
             return {**state, "request": request}
 
-    def _run_lookup(self, request: str, work: Callable[[FmClient], Any], token: CancelToken, result_action: str, context: HubContext) -> None:
-        """A look-up, on its own thread: run ``work``, keep the outcome under ``request`` and push it to the page."""
+    def _run_lookup(self, lookup: _Lookup) -> None:
+        """A look-up, on its own thread: run its ``work``, keep the outcome under its request id and push it to the page."""
+        request = lookup.request
         try:
-            client = FmClient(context.settings, self._auth, token)
-            state = {"pending": False, "ok": True, "message": "", "result": work(client)}
-            token.check()   # cancelled just as it finished: the page has moved on
+            client = FmClient(lookup.context.settings, self._auth, lookup.token)
+            state = {"pending": False, "ok": True, "message": "", "result": lookup.work(client)}
+            lookup.token.check()   # cancelled just as it finished: the page has moved on
         except Cancelled:   # not a failure: the tab or the item was left, and the page no longer waits for this
             log.info("Look-up %s was cancelled", request)
             state = {"pending": False, "ok": False, "cancelled": True, "message": "", "result": None}
@@ -402,7 +427,7 @@ class ItemPanel:
         with self._lock:
             self._lookups[request] = state
             self._tokens.pop(request, None)
-        self._tell_page(result_action, {**state, "request": request})
+        self._tell_page(lookup.result_action, {**state, "request": request})
 
     def _tell_page(self, action: str, result: Dict[str, Any]) -> None:
         """Push ``result`` to the Item page as ``action``, in the envelope of a reply, from any thread (the send is done on Fusion's thread).
@@ -417,7 +442,7 @@ class ItemPanel:
 
     def open_selected(self) -> None:
         """Show the item of the selected component, or of the open design when nothing is selected. UI thread."""
-        self._find(_selected_part_number(), self._open, fresh=True)
+        self._find(_selected_part_number(), self._open, _FindOptions(fresh=True))
 
     def _follow_selection(self) -> None:
         """While the panel is open, show the item of a component just selected. A selection with no component leaves the panel as it is."""
@@ -425,7 +450,7 @@ class ItemPanel:
             return
         number = _selected_component_number(_active_selection())
         if number and number != self._part:
-            self._find(number, lambda subject: self._open(subject, show=False), quiet=True, cancel=self._follow.replace())   # it is open already; a find for the last selection still going is not wanted
+            self._find(number, lambda subject: self._open(subject, show=False), _FindOptions(quiet=True, cancel=self._follow.replace()))   # it is open already; a find for the last selection still going is not wanted
 
     def _export_ref(self, number: str) -> DesignRef:
         """Where the Data Model finds the part ``number`` the Export window shows (see ``_part_ref``), read once per window: the selection may
@@ -434,38 +459,42 @@ class ItemPanel:
             self._export_refs[number] = _part_ref(number)
         return self._export_refs[number]
 
-    def _find(self, part_number: str, then: Callable[[Subject], None], quiet: bool = False, fail: Optional[Callable[[str], None]] = None,
-              cancel: Optional[CancelToken] = None, ref: Optional[DesignRef] = None, fresh: bool = False) -> None:
+    def _find(self, part_number: str, then: Callable[[Subject], None], options: _FindOptions = _FindOptions()) -> None:
         """Read the item number of the component with ``part_number`` from the Data Model (a worker thread), then call ``then`` with it on the
-        UI thread. A component with no item number is not published: the user is told (``quiet`` leaves it at the log; ``fail`` is
-        given the reason instead of a message box showing it). ``fresh`` reads the workspace's layout again instead of using what was kept: the
-        panel is being opened, not following a selection. UI thread."""
-        if not self._has_number(part_number, quiet):
+        UI thread. A component with no item number is not published: the user is told (see ``_FindOptions`` for how). UI thread."""
+        if not self._has_number(part_number, options.quiet):
             return
-        ref = ref or _part_ref(part_number)
+        ref = options.ref or _part_ref(part_number)
         context, _reason = self._contexts.attempt()   # only an optimisation: what is asked for reports the settings it cannot read
 
-        if fresh:
+        if options.fresh:
             ItemViewService.forget()
 
         def work() -> None:
             self._warm(context)   # the workspace's layouts are read while the Data Model answers
             try:
-                subject = self._numbers.resolve(ref, part_number, cancel)
+                subject = self._numbers.resolve(ref, part_number, options.cancel)
             except Cancelled:   # a newer selection replaced this one
                 return
             except Exception as exc:  # shown to the user, never raised into a thread nobody watches
-                if isinstance(exc, NoItemNumber):
-                    log.info("No item number for %s: %s", part_number, exc)
-                else:
-                    log.exception("Could not read the item number of %s", part_number)
-                if not quiet:
-                    message = str(exc) or type(exc).__name__
-                    self._tasks.post(lambda: fail(message) if fail else self._ui.messageBox(message, item_command_name()))
+                self._report_find_failure(part_number, exc, options)
                 return
             self._tasks.post(lambda: then(subject))
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _report_find_failure(self, part_number: str, exc: Exception, options: _FindOptions) -> None:
+        """Log why the item number of ``part_number`` could not be read and, unless ``options.quiet``, tell the user (``options.fail``, else a
+        message box) on the UI thread. Any thread."""
+        if isinstance(exc, NoItemNumber):
+            log.info("No item number for %s: %s", part_number, exc)
+        else:
+            log.exception("Could not read the item number of %s", part_number)
+        if options.quiet:
+            return
+        message = str(exc) or type(exc).__name__
+        fail = options.fail
+        self._tasks.post(lambda: fail(message) if fail else self._ui.messageBox(message, item_command_name()))
 
     def dispose(self) -> None:
         """End everything still being read, and stop following the selection. UI thread."""
@@ -478,7 +507,7 @@ class ItemPanel:
 
     def open_from_menu(self) -> None:
         """Show the item of the component the right-click menu was opened on. UI thread."""
-        self._find(_selected_part_number(from_menu=True), self._open, fresh=True)
+        self._find(_selected_part_number(from_menu=True), self._open, _FindOptions(fresh=True))
 
     def _open(self, subject: Subject, show: bool = True) -> None:
         """Show the item of ``subject``; ``show`` opens the palette too (not when it follows a selection while open already). UI thread."""
@@ -559,11 +588,8 @@ class ItemPanel:
         """Which attached files are older than the latest save of the open document (the Files tab's Out of Date): the STEP file of a design, the
         PDF, DWG and DXF of a drawing, by the names an export gives them. Of the ``files`` the page sends (each a ``name`` and when it was
         ``updated``) it answers ``stale``: name -> why. The same comparison as the Export window's (``export_freshness.compare``). UI thread."""
-        if drawing_source.active_drawing() is not None:
-            extensions = (".pdf", ".dwg", ".dxf")
-        elif _open_design() is not None:
-            extensions = (".step",)
-        else:
+        extensions = self._exported_extensions()
+        if not extensions:
             return {"stale": {}}
         base = safe_name(self._number)
         expected = {base + extension for extension in extensions}
@@ -577,6 +603,14 @@ class ItemPanel:
             if found["state"] in (STALE, UNSAVED):   # saved since it was uploaded, or changed since the last save: the file does not show the open document
                 stale[name] = found["message"]
         return {"stale": stale}
+
+    @staticmethod
+    def _exported_extensions() -> Tuple[str, ...]:
+        """The extensions of the files an export of the open document attaches: the PDF, DWG and DXF of a drawing, the STEP file of a design,
+        none for neither. UI thread."""
+        if drawing_source.active_drawing() is not None:
+            return (".pdf", ".dwg", ".dxf")
+        return (".step",) if _open_design() is not None else ()
 
     def _upload_for_item(self, job: UploadJob, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start ``job`` for the item the page shows. Raises ``ValueError`` when no item is shown or the context has changed. UI thread."""
@@ -627,13 +661,7 @@ class ItemPanel:
         """``(name, description)`` Fusion holds for what Export exports: the selected component of the open design (else the design's top), or
         the design a drawing shows; "" for what it has none of or cannot be read. UI thread."""
         try:
-            if drawing_source.active_drawing() is not None:
-                design = drawing_source.referenced_design()
-                component = design.rootComponent if design is not None else None
-            else:
-                component = next((c for c in map(_component_of, _active_selection()) if c is not None), None)
-                design = _open_design()
-                component = component or (design.rootComponent if design is not None else None)
+            component, design = _export_component()
             if component is None:
                 return "", ""
             name = str(component.name or "").strip()
@@ -747,8 +775,8 @@ class ItemPanel:
             raise ValueError(t("app.upload_busy"))
         pick(_active_selection())
         ref = self._export_ref(number)
-        self._find(number, lambda subject: self._uploads.continue_in_window(job, context, subject, destination, ref), fail=self._uploads.fail_in_window,
-                   ref=ref)
+        self._find(number, lambda subject: self._uploads.continue_in_window(job, context, subject, destination, ref),
+                   _FindOptions(fail=self._uploads.fail_in_window, ref=ref))
 
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""
@@ -801,6 +829,25 @@ class ItemPanel:
             answer = dict(self._state)
         self._tell_page("get_item_view", answer)
 
+    @staticmethod
+    def _search_if_allowed(client: FmClient, workspace_id: str, number: str) -> Tuple[Any, List[Dict[str, Any]]]:
+        """``(permissions held, items numbered number)`` of the Items workspace. Raises ``NoAccess`` when the user may not view it, and
+        ``ValueError`` for what stops the check or the search."""
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            searching = pool.submit(ItemFinder(client).search, workspace_id, number)   # asked while the permissions are checked
+            try:
+                held = granted_permissions(client, workspace_id)
+            except FmApiError as exc:
+                if exc.status in (401, 403):
+                    raise NoAccess() from exc
+                raise ValueError(t("app.permissions_check_failed", reason=exc)) from exc
+            if VIEW_ITEMS not in held:   # nothing else is looked at: no access overrides everything
+                raise NoAccess()
+            try:
+                return held, searching.result()
+            except (FmApiError, AuthError) as exc:
+                raise ValueError(t("app.search_failed", reason=exc)) from exc
+
     def _read(self, number: str, cancel: CancelToken, context: HubContext) -> Dict[str, Any]:
         """The view of the item numbered ``number``. Raises ``NoAccess``, ``ItemNotFound`` or ``SeveralItems`` for what the panel shows in
         place of an item, and ``ValueError`` for what stops the read."""
@@ -809,20 +856,7 @@ class ItemPanel:
             raise ValueError(t("app.complete_in_preferences", problem=problem))
         cfg = context.cfg
         client = FmClient(context.settings, self._auth, cancel)
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            searching = pool.submit(ItemFinder(client).search, cfg.workspace_id, number)   # asked while the permissions are checked
-            try:
-                held = granted_permissions(client, cfg.workspace_id)
-            except FmApiError as exc:
-                if exc.status in (401, 403):
-                    raise NoAccess() from exc
-                raise ValueError(t("app.permissions_check_failed", reason=exc)) from exc
-            if VIEW_ITEMS not in held:   # nothing else is looked at: no access overrides everything
-                raise NoAccess()
-            try:
-                hits = searching.result()
-            except (FmApiError, AuthError) as exc:
-                raise ValueError(t("app.search_failed", reason=exc)) from exc
+        held, hits = self._search_if_allowed(client, cfg.workspace_id, number)
         if not hits:
             raise ItemNotFound(number)
         picked, competing = self._choices.resolve(cfg.workspace_id, number, hits)
@@ -833,6 +867,22 @@ class ItemPanel:
         view = ItemViewService(client).read(cfg.workspace_id, picked["id"], held)
         view["others"] = competing if len(competing) > 1 else []   # the page offers to choose again
         return view
+
+
+def _root_of(design: Optional[adsk.fusion.Design]) -> Optional[adsk.fusion.Component]:
+    """The top component of ``design``, or None when there is no design."""
+    return design.rootComponent if design is not None else None
+
+
+def _export_component() -> Tuple[Optional[adsk.fusion.Component], Optional[adsk.fusion.Design]]:
+    """``(component, design)`` Export exports: the selected component of the open design (else its top), or the top of the design a drawing
+    shows. Either is None when there is none. UI thread."""
+    if drawing_source.active_drawing() is not None:
+        design = drawing_source.referenced_design()
+        return _root_of(design), design
+    selected = next((c for c in map(_component_of, _active_selection()) if c is not None), None)
+    design = _open_design()
+    return selected or _root_of(design), design
 
 
 def _selects_root(entities: Any) -> bool:
@@ -848,6 +898,48 @@ def _selects_root(entities: Any) -> bool:
     return False
 
 
+def _menu_context(entities: Sequence[Any]) -> Optional[str]:
+    """The kind of document the right-click menu is offered in for the selected ``entities`` ("drawing" for any selection, "design" for a
+    selected component), or None when it is not offered."""
+    if drawing_source.active_drawing() is not None:
+        return "drawing" if entities else None
+    return "design" if any(_component_of(e) is not None for e in entities) else None
+
+
+def _is_offered(command: RibbonCommand, context: str, is_root: bool) -> bool:
+    """Whether ``command`` is offered in a ``context`` document, given whether the top of the tree is selected."""
+    in_context = not command.context or command.context == context
+    return in_context and (is_root or not command.root_only)
+
+
+def _update_menu_entry(controls: Any, definitions: Any, command: RibbonCommand, offered: bool) -> None:
+    """Add ``command`` to the menu ``controls`` when ``offered`` (once), else remove it if an earlier opening of the menu left it there."""
+    shown = controls.itemById(command.command_id)
+    if not offered:
+        if shown is not None:
+            shown.deleteMe()
+        return
+    definition = definitions.itemById(command.command_id)
+    if definition and shown is None:
+        controls.addCommand(definition)
+
+
+def _fill_menu(event: adsk.core.MarkingMenuEventArgs, commands: Sequence[RibbonCommand]) -> None:
+    """Add ``commands`` to the right-click menu of ``event`` under one line, those that suit what is selected. UI thread."""
+    entities = list(event.selectedEntities)
+    _menu_selection[:] = entities
+    context = _menu_context(entities)
+    if context is None:
+        return
+    definitions = adsk.core.Application.get().userInterface.commandDefinitions
+    controls = event.linearMarkingMenu.controls
+    is_root = drawing_source.selects_top_level(entities) if context == "drawing" else _selects_root(entities)
+    if controls.itemById(LINE_ID) is None and controls.itemById(commands[0].command_id) is None:
+        controls.addSeparator(LINE_ID)   # one line above the group, none between its entries
+    for command in commands:
+        _update_menu_entry(controls, definitions, command, _is_offered(command, context, is_root))
+
+
 class _MenuHandler(adsk.core.MarkingMenuEventHandler):
     """Adds the commands to the right-click menu when something is selected, under one line.
 
@@ -861,29 +953,7 @@ class _MenuHandler(adsk.core.MarkingMenuEventHandler):
 
     def notify(self, args) -> None:
         try:
-            event = adsk.core.MarkingMenuEventArgs.cast(args)
-            entities = list(event.selectedEntities)
-            _menu_selection[:] = entities
-            context = "drawing" if drawing_source.active_drawing() is not None else "design"
-            if context == "drawing":
-                if not entities:
-                    return
-            elif not any(_component_of(e) is not None for e in entities):
-                return
-            definitions = adsk.core.Application.get().userInterface.commandDefinitions
-            controls = event.linearMarkingMenu.controls
-            is_root = drawing_source.selects_top_level(entities) if context == "drawing" else _selects_root(entities)
-            if controls.itemById(LINE_ID) is None and controls.itemById(self._commands[0].command_id) is None:
-                controls.addSeparator(LINE_ID)   # one line above the group, none between its entries
-            for command in self._commands:
-                shown = controls.itemById(command.command_id)
-                if (command.context and command.context != context) or (command.root_only and not is_root):
-                    if shown is not None:   # left over from the last time the menu opened
-                        shown.deleteMe()
-                    continue
-                definition = definitions.itemById(command.command_id)
-                if definition and shown is None:
-                    controls.addCommand(definition)
+            _fill_menu(adsk.core.MarkingMenuEventArgs.cast(args), self._commands)
         except Exception:  # noqa: BLE001 - boundary to Fusion, must not raise
             log.exception("Could not add the Fusion Manage menu entries")
 
