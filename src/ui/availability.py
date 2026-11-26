@@ -1,4 +1,4 @@
-"""Switches commands off while what they need is not ready.
+"""Switches commands off while what they need is not ready (UI layer: it greys out ribbon commands and listens to Fusion's events).
 
 A ``RibbonCommand`` with ``needs_setup`` is enabled only when the settings are complete; one with ``needs_drawing`` only when, as well,
 the open drawing has loaded enough to say which item it is of; one with ``needs_destination`` only when some destination of an export
@@ -9,7 +9,7 @@ so one cannot undo the other.
 
 import threading
 import time
-from typing import Callable, Dict, Sequence
+from typing import Callable, Dict, NamedTuple, Sequence
 
 import adsk.core
 
@@ -21,9 +21,24 @@ from .ui_thread import UiThread
 log = get_logger("availability")
 
 
+class _Problems(NamedTuple):
+    """What is not ready, each as the words for it ("" when it is ready)."""
+
+    setup: str
+    drawing: str
+    portfolio: str
+    destination: str
+
+    def reason_for(self, command: RibbonCommand) -> str:
+        """Why ``command`` is off: the first of the problems it needs ready that is not, in the order setup, portfolio, destination, drawing."""
+        return ((self.setup if command.needs_setup else "") or (self.portfolio if command.needs_portfolio else "")
+                or (self.destination if command.needs_destination else "") or (self.drawing if command.needs_drawing else ""))
+
+
 class SetupGate:
     """Enables or disables the commands that need the settings to be complete, and a loaded drawing."""
 
+    # One reader of the state per thing a command can wait for, all given by the one caller in the add-in's entry file; more than four parameters.
     def __init__(self, ui: adsk.core.UserInterface, commands: Sequence[RibbonCommand], problem: Callable[[], str],
                  drawing_problem: Callable[[], str] = lambda: "", portfolio_problem: Callable[[], str] = lambda: "",
                  destination_problem: Callable[[], str] = lambda: "") -> None:
@@ -38,25 +53,24 @@ class SetupGate:
     def refresh(self) -> None:
         """Apply the present state of the settings and of the open drawing. Call it after either may have changed. Main thread."""
         try:
-            setup = self._problem()
-            drawing = self._drawing_problem()
-            portfolio = self._portfolio_problem()
-            destination = self._destination_problem()
+            problems = _Problems(self._problem(), self._drawing_problem(), self._portfolio_problem(), self._destination_problem())
         except Exception:  # noqa: BLE001 - unknown state: leave the commands as they are
             log.exception("Could not check what the commands need")
             return
         for command in self._commands:
-            reason = ((setup if command.needs_setup else "") or (portfolio if command.needs_portfolio else "")
-                      or (destination if command.needs_destination else "") or (drawing if command.needs_drawing else ""))
-            if self._shown.get(command.command_id) == reason:
-                continue
-            definition = self._ui.commandDefinitions.itemById(command.command_id)
-            if definition is None:
-                continue
-            definition.controlDefinition.isEnabled = not reason
-            definition.tooltip = command.tooltip if not reason else t("app.not_available", tooltip=command.tooltip, reason=reason)
-            self._shown[command.command_id] = reason
-            log.info("%s is %s%s", command.name, "disabled: " if reason else "enabled", reason)
+            self._apply(command, problems.reason_for(command))
+
+    def _apply(self, command: RibbonCommand, reason: str) -> None:
+        """Enable ``command`` ("" for ``reason``) or disable it with ``reason`` in its tooltip, when that is not what was last written."""
+        if self._shown.get(command.command_id) == reason:
+            return
+        definition = self._ui.commandDefinitions.itemById(command.command_id)
+        if definition is None:
+            return
+        definition.controlDefinition.isEnabled = not reason
+        definition.tooltip = command.tooltip if not reason else t("app.not_available", tooltip=command.tooltip, reason=reason)
+        self._shown[command.command_id] = reason
+        log.info("%s is %s%s", command.name, "disabled: " if reason else "enabled", reason)
 
 
 class _DocumentHandler(adsk.core.DocumentEventHandler):
@@ -91,6 +105,7 @@ class GateWatcher:
     data model properties ready (``mfgdmDataReady``): Fusion's events, on the main thread. Should a drawing still not be ready after
     them, it is looked at again every ``seconds``, for at most ``give_up`` seconds; nothing runs when no drawing is loading."""
 
+    # Three of the seven are timings with defaults; the one caller in the add-in's entry file gives only the first four.
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, gate: SetupGate, loading: Callable[[], bool],
                  seconds: float = 2.0, give_up: float = 60.0, grace: float = 15.0) -> None:
         self._app = adsk.core.Application.get()

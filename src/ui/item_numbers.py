@@ -1,4 +1,4 @@
-"""The Item Number of a component, from the Manufacturing Data Model.
+"""The Item Number of a component, from the Manufacturing Data Model (integration layer: it reads the Data Model and a file of kept answers).
 
 Fusion's API gives a component only its part number, and a part number need not match its item number. The item number is
 what Fusion Manage knows an item by, so it is read from the Data Model: the design's own from its summary, a component below it
@@ -9,6 +9,7 @@ been published, so it is refused with ``NoItemNumber``.
 import json
 import os
 import threading
+from functools import cache
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import adsk.core
@@ -249,21 +250,22 @@ class ItemNumbers:
     def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""
         self._require_saved(ref)
-        client = None   # made when the Data Model is first asked, so an item number kept from before needs no settings
-
-        def data_model() -> FusionGraphQlClient:
-            nonlocal client
-            client = client or FusionGraphQlClient(cancel)
-            return client
+        data_model = cache(lambda: FusionGraphQlClient(cancel))   # made when the Data Model is first asked, so an item number kept from before needs no settings
         if not ref.model_id:   # a design a drawing references: Fusion has not loaded it, so it is found by its file
             ref = self._model_of_file(data_model(), ref)
-        requested = part_number
-        known = self._remembered.get(ref, requested)
+        known = self._remembered.get(ref, part_number)
         if known:
             log.info("Part number %s is item number %s (kept from an earlier read)", known.part_number or "(the design)", known.item_number)
             return known
-        summary = self.reads.summary(data_model(), ref.model_id, ref.time)
-        is_design, matches = self._matching(data_model(), ref, summary, part_number)
+        subject = self._read_subject(data_model(), ref, part_number)
+        self._remembered.add(ref, part_number, subject)
+        return subject
+
+    def _read_subject(self, client: FusionGraphQlClient, ref: DesignRef, part_number: str) -> Subject:
+        """The ``Subject`` of the component with ``part_number`` in the design ``ref``, read from the Data Model. Raises ``NoItemNumber`` when
+        the design has no such component, the component has several item numbers, or it has none (it is not published). Worker thread."""
+        summary = self.reads.summary(client, ref.model_id, ref.time)
+        is_design, matches = self._matching(client, ref, summary, part_number)
         found = {str(m["item_number"] or "") for m in matches}
         if is_design:
             part_number = matches[0]["part_number"]
@@ -276,6 +278,4 @@ class ItemNumbers:
         if not number:
             raise NoItemNumber(t("app.number_not_published", label=label))
         log.info("Part number %s is item number %s", part_number or "(the design)", number)
-        subject = Subject(number, part_number)
-        self._remembered.add(ref, requested, subject)
-        return subject
+        return Subject(number, part_number)

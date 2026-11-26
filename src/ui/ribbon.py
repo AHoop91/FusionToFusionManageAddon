@@ -1,4 +1,4 @@
-"""Native Fusion ribbon: an add-in tab with panels of command buttons.
+"""Native Fusion ribbon (UI layer): an add-in tab with panels of command buttons.
 
 The panels go into Fusion's own tab called ``host_tab_name`` ("Manage"); where that tab cannot be found the add-in gets a tab of its
 own. A panel is made of groups of buttons, told apart by a separator. Buttons are declared as
@@ -271,25 +271,38 @@ class Ribbon:
         """Remove panels, the add-in's own tabs and command definitions. Safe to call repeatedly."""
         for workspace_id, panels in self._panels_by_workspace.items():
             workspace = self._ui.workspaces.itemById(workspace_id)
-            if workspace is None:
-                continue
-            own = workspace.toolbarTabs.itemById(self._tab_id(workspace_id))
-            for tab in [self._host_tab(workspace), own]:
-                for ribbon_panel in panels if tab is not None else []:
-                    panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id))
-                    if panel:
-                        panel.deleteMe()
-            if own is not None:
-                own.deleteMe()
-        if self._toolbar_menu is not None:
-            dropdown = self._toolbar().controls.itemById(self._toolbar_menu.menu_id)
-            if dropdown:
-                dropdown.deleteMe()
+            if workspace is not None:
+                self._remove_from_workspace(workspace, workspace_id, panels)
+        self._remove_toolbar_menu()
         for command in self.commands():
             definition = self._ui.commandDefinitions.itemById(command.command_id)
             if definition:
                 definition.deleteMe()
         self._handlers.clear()
+
+    def _remove_from_workspace(self, workspace: Any, workspace_id: str, panels: Sequence[RibbonPanel]) -> None:
+        """Delete the add-in's panels from Fusion's tab and from its own tab in ``workspace``, then its own tab (Fusion's stays)."""
+        own = workspace.toolbarTabs.itemById(self._tab_id(workspace_id))
+        for tab in (self._host_tab(workspace), own):
+            if tab is not None:
+                self._remove_panels(tab, workspace_id, panels)
+        if own is not None:
+            own.deleteMe()
+
+    def _remove_panels(self, tab: Any, workspace_id: str, panels: Sequence[RibbonPanel]) -> None:
+        """Delete from ``tab`` each of ``panels`` it holds."""
+        for ribbon_panel in panels:
+            panel = tab.toolbarPanels.itemById(self._panel_id(ribbon_panel, workspace_id))
+            if panel:
+                panel.deleteMe()
+
+    def _remove_toolbar_menu(self) -> None:
+        """Delete the add-in's drop-down from the quick access toolbar, when there is one."""
+        if self._toolbar_menu is None:
+            return
+        dropdown = self._toolbar().controls.itemById(self._toolbar_menu.menu_id)
+        if dropdown:
+            dropdown.deleteMe()
 
     def _define(self, command: RibbonCommand) -> adsk.core.CommandDefinition:
         """Create (or reuse) the command definition and hook its click."""

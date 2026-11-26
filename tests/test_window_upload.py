@@ -32,11 +32,11 @@ class _Stub(types.ModuleType):
 
 _NAMES = ("adsk", "adsk.core", "adsk.fusion", "adsk.drawing")
 _saved = {}
-AttachmentUpload = UploadJob = None
+AttachmentUpload = UploadJob = Goal = Located = None
 
 
 def setUpModule():
-    global AttachmentUpload, UploadJob
+    global AttachmentUpload, UploadJob, Goal, Located
     for name in _NAMES:
         _saved[name] = sys.modules.get(name)
         sys.modules[name] = _Stub(name)
@@ -46,6 +46,7 @@ def setUpModule():
         del sys.modules[name]   # imported again below, against the stand-ins
     from src.ui import attachment_upload
     AttachmentUpload, UploadJob = attachment_upload.AttachmentUpload, attachment_upload.UploadJob
+    Goal, Located = attachment_upload._Goal, attachment_upload._Located
 
 
 def tearDownModule():
@@ -187,10 +188,10 @@ class MakeTests(unittest.TestCase):
 
         self.upload._begin(_job(), 1)
         with mock.patch("threading.Thread") as thread:
-            self.upload._make(_job(make), CONTEXT, "7", "9", self.subject)
+            self.upload._make(_job(make), CONTEXT, Located("7", "9"), self.subject)
         self.assertEqual(seen, ["PN_1.step"])   # the number is made safe to be a file name
         sent = thread.call_args.kwargs["args"]
-        self.assertEqual((sent[1], sent[2:4], sent[4], sent[5]), (CONTEXT, ("7", "9"), "PN_1.step", b"step data"))
+        self.assertEqual((sent[1], sent[2], sent[3]), (CONTEXT, ("7", "9", "item"), ("PN_1.step", b"step data")))
         self.assertEqual(os.listdir(self.root.name), [])
         self.assertEqual((self.upload.status()["step"], self.upload.status()["percent"]), (2, 0))
 
@@ -199,7 +200,7 @@ class MakeTests(unittest.TestCase):
             raise RuntimeError("no geometry")
 
         self.upload._begin(_job(), 1)
-        self.upload._make(_job(make), CONTEXT, "7", "9", self.subject)
+        self.upload._make(_job(make), CONTEXT, Located("7", "9"), self.subject)
         self.assertEqual(self.upload.status(), {"active": False})
         self.assertEqual(self.ui.messages, ["Could not create PN_1.step:\nno geometry"])
         self.assertEqual(os.listdir(self.root.name), [])
@@ -210,7 +211,7 @@ class MakeTests(unittest.TestCase):
 
         self.upload._begin(_job(), 1)
         with mock.patch("threading.Thread") as thread:
-            self.upload._make(_job(make), CONTEXT, "7", "9", self.subject)
+            self.upload._make(_job(make), CONTEXT, Located("7", "9"), self.subject)
         thread.assert_not_called()
         self.assertEqual(self.upload.status(), {"active": False})
         self.assertEqual(self.ui.messages, ["Could not create PN_1.step:\nThe STEP file came out empty."])
@@ -218,7 +219,7 @@ class MakeTests(unittest.TestCase):
     def test_a_folder_that_cannot_be_made_ends_the_upload_too(self):
         self.upload._begin(_job(), 1)
         with mock.patch("os.makedirs", side_effect=PermissionError("denied")):
-            self.upload._make(_job(), CONTEXT, "7", "9", self.subject)
+            self.upload._make(_job(), CONTEXT, Located("7", "9"), self.subject)
         self.assertEqual(self.upload.status(), {"active": False})   # not left under way, which would refuse every later upload
         self.assertEqual(len(self.ui.messages), 1)
         self.assertIn("denied", self.ui.messages[0])
@@ -440,20 +441,20 @@ class FindThenMakeTests(unittest.TestCase):
 
     def test_the_item_found_is_made_into_a_file_on_the_ui_thread(self):
         with mock.patch.object(self.upload, "_find_item", return_value=("242", "9")), mock.patch.object(self.upload, "_make") as make:
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item", None)
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, Goal("item"))
             make.assert_not_called()   # posted, not run on the worker
             self.tasks.run()
-        make.assert_called_once_with(self.job, CONTEXT, "242", "9", self.subject, "item")
+        make.assert_called_once_with(self.job, CONTEXT, ("242", "9", "item"), self.subject)
 
     def test_a_component_is_looked_for_through_the_design_it_is_a_part_of(self):
         with mock.patch.object(self.upload, "_find_item") as item, mock.patch.object(self.upload, "_find_component", return_value=("176", "5")) as component:
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "component", REF)
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, Goal("component", REF))
         component.assert_called_once_with(self.subject, REF, CONTEXT, None)
         item.assert_not_called()
 
     def test_an_item_that_is_not_found_ends_the_upload_with_the_reason(self):
         with mock.patch.object(self.upload, "_find_item", side_effect=LookupError("No item exists for PN-1.")):
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item", None)
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, Goal("item"))
         self.assertEqual(self.upload.status(), {"active": False})
         self.tasks.run()
         self.assertEqual(self.ui.messages, ["Could not attach a STEP file:\nNo item exists for PN-1."])
@@ -461,7 +462,7 @@ class FindThenMakeTests(unittest.TestCase):
     def test_the_add_in_stopping_ends_it_without_a_message(self):
         from src.core.cancel import Cancelled
         with mock.patch.object(self.upload, "_find_item", side_effect=Cancelled()):
-            self.upload._find_then_make(self.job, CONTEXT, self.subject, "item", None)
+            self.upload._find_then_make(self.job, CONTEXT, self.subject, Goal("item"))
         self.assertEqual(self.upload.status(), {"active": False})
         self.tasks.run()
         self.assertEqual(self.ui.messages, [])
@@ -485,7 +486,7 @@ class SendAndDoneTests(unittest.TestCase):
     def _upload(self, **service):
         with mock.patch.object(self.module, "AttachmentService") as attachments:
             attachments.return_value.upload.configure_mock(**service)
-            self.upload._upload(self.job, CONTEXT, "242", "9", "PN-1.step", b"data", "item")
+            self.upload._upload(self.job, CONTEXT, Located("242", "9"), ("PN-1.step", b"data"))
             return attachments.return_value.upload
 
     def test_the_progress_of_the_send_is_reported_as_a_percent(self):
