@@ -56,6 +56,20 @@ def _classify(key: str, text: Any, english: Dict[str, str]) -> str:
     return "ok" if placeholders(text) == placeholders(english[key]) else "placeholders"
 
 
+def _tally(report: Dict[str, Any], key: str, text: Any, english: Dict[str, str], groups: Dict[str, list]) -> None:
+    """Count one text of a language file in ``report``, or file its key under its group in ``groups``.
+    Five parameters because it updates both the report and the groups."""
+    group = _classify(key, text, english)
+    if group == "ok":
+        report["translated"] += 1
+        if text == english[key]:
+            report["same_as_english"] += 1
+    elif group == "placeholders":
+        groups[group].append({"key": key, "expected": sorted(placeholders(english[key])), "found": sorted(placeholders(text))})
+    else:
+        groups[group].append(key)
+
+
 def check_file(path: str, english: Dict[str, str]) -> Dict[str, Any]:
     """The report on the file at ``path``: ``errors`` (why it cannot be used), ``warnings``, the counts, and the names that need a look.
     ``english`` is the reference (the shipped English's texts)."""
@@ -65,18 +79,10 @@ def check_file(path: str, english: Dict[str, str]) -> Dict[str, Any]:
                               "not_text_count": 0, "not_text": [], "unknown_count": 0, "unknown": []}
     if strings is None:
         return report
-    mismatched, not_text, unknown = [], [], []
+    groups: Dict[str, list] = {"not_text": [], "unknown": [], "placeholders": []}
     for key, text in strings.items():
-        group = _classify(key, text, english)
-        if group == "ok":
-            report["translated"] += 1
-            report["same_as_english"] += text == english[key]
-        elif group == "not_text":
-            not_text.append(key)
-        elif group == "unknown":
-            unknown.append(key)
-        else:
-            mismatched.append({"key": key, "expected": sorted(placeholders(english[key])), "found": sorted(placeholders(text))})
+        _tally(report, key, text, english, groups)
+    mismatched, not_text, unknown = groups["placeholders"], groups["not_text"], groups["unknown"]
     missing = [key for key in english if key not in strings]
     if not report["translated"]:
         report["errors"].append(t("language.reason_no_texts"))

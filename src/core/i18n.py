@@ -194,6 +194,7 @@ def _clean_new_language(code: str, name: str) -> tuple:
 
 def create(code: str, name: str, shipped: Optional[str] = None, user: Optional[str] = None, hub: Optional[str] = None) -> str:
     """Make a new language file in the user's folder, holding English's text for the user to translate. Answers its path.
+    Five parameters: the code and name, and the three folders a language can be found in.
 
     Raises ``ValueError`` for a code that is not a language code, or one that is taken (a language is never replaced), and ``OSError``
     when the file cannot be written (the user's folder is not known, or not writable).

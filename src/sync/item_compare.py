@@ -48,6 +48,7 @@ def _unreadable(info: ItemInfo, exc: Exception) -> ItemLookup:
 def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, found: Optional[List[Dict[str, Any]]] = None,
                 revision: int = WORKING) -> ItemLookup:
     """Find the component's item in Fusion Manage. Runs on a worker thread.
+    Five parameters: the design, the workspace setup and the client are needed, and ``found`` and ``revision`` are optional.
 
     ``found`` is what an earlier search already found for the number (hits, each with the item's ``values`` when the search gave them):
     it saves the search, and the read of an item whose values came with it. ``revision`` is the version of the item searched for (see
@@ -97,7 +98,8 @@ def known_lookup(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, it
 
 def read_and_compare(read: Callable[[], List[Dict[str, str]]], subject: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient,
                      known_id: str = "") -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
-    """``(properties, comparison)``: read the properties with ``read`` while Fusion Manage is asked for the item of ``subject``, then compare
+    """Five parameters: the reader, the design, the setup and the client are needed, and ``known_id`` is optional.
+    ``(properties, comparison)``: read the properties with ``read`` while Fusion Manage is asked for the item of ``subject``, then compare
     them (``compare_with_item``, with the digits and units of the mapped fields). ``known_id`` is the id of the item when the caller has it,
     which saves the search for it. Runs on a worker thread; the publish panel and the item panel's up-to-date check both use it."""
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -113,7 +115,8 @@ def read_and_compare(read: Callable[[], List[Dict[str, str]]], subject: Dict[str
 def compare_with_item(properties: List[Dict[str, str]], summary: Dict[str, Any], cfg: WorkspaceConfig, lookup: ItemLookup,
                       fit_number: Optional[FitNumber] = None, with_values: bool = False,
                       convert_unit: Optional[ConvertUnit] = None) -> Dict[str, Any]:
-    """Compare the properties with the item ``lookup`` found. ``fit_number`` rounds a number to the digits its
+    """Compare the properties with the item ``lookup`` found. Seven parameters because it passes on everything ``compare_properties``
+    needs, plus the lookup and ``with_values``. ``fit_number`` rounds a number to the digits its
     Fusion Manage field takes and ``convert_unit`` puts it in the field's unit (see ``compare_properties``).
     ``with_values`` adds the item's raw field values to the answer (``values``), so a caller needs no second read."""
     mappings = [m for m in cfg.mappings if m.source and m.fm_field_id]

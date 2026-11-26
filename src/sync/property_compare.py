@@ -85,6 +85,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
                        fm_state: str, fit_number: Optional[FitNumber] = None,
                        convert_unit: Optional[ConvertUnit] = None) -> List[Dict[str, Any]]:
     """One row per property, plus rows for mapped sources that are not listed.
+    Seven parameters: the design, its mappings and the item's state and fields are all inputs, and two optional helpers adjust numbers.
 
     ``convert_unit(field id, number, unit)`` gives a physical value as ``(number, unit)`` in the unit the Fusion Manage
     field is set to, or None to leave it as it is.
