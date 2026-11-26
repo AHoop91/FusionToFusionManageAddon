@@ -8,7 +8,7 @@ columns come from ``.../viewdef/22/fields``.
 
 import re
 from datetime import date
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, NamedTuple, Optional, Set
 
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
@@ -80,32 +80,44 @@ def _first_item_link(value: Any) -> str:
     return ""
 
 
-def _icon_cell(kind: str, field: Dict[str, Any], base_url: str, item: Dict[str, Any], files_page: str) -> Dict[str, Any]:
+def _icon_cell(kind: str, field: Dict[str, Any], item: Dict[str, Any], base_url: str) -> Dict[str, Any]:
     """The cell of an icon column: ``attachments`` (a count, linking to the item's attachments), ``change`` (linking to the
     change) or ``pin``. ``value`` is empty when there is nothing to draw."""
     raw = field.get("value")
     log.debug("BOM %s field of %s: value=%r content=%r", kind, item.get("title"), raw, field.get("content"))
     if kind == ATTACHMENTS:
         count = int(raw) if str(raw).strip().isdigit() else 0
-        return {"kind": "attachments", "value": str(count) if count else "", "url": files_page if count else ""}
+        files_page = item_page(base_url, item, "attachments", "attachments") if count else ""
+        return {"kind": "attachments", "value": str(count) if count else "", "url": files_page}
     if kind == PIN:
         return {"kind": "pin", "value": "pinned" if _truthy(raw) else "", "url": ""}
     url = link_page(base_url, tenant_of(item), _first_item_link(raw))
     return {"kind": "change", "value": "pending" if _truthy(raw) else "", "url": url}
 
 
-def _line(edge: Dict[str, Any], node: Dict[str, Any], base_url: str, hidden: Set[str], kinds: Dict[str, str]) -> Dict[str, Any]:
+class _Look(NamedTuple):
+    """What one BOM is read and drawn with: the address to link with, the hidden field ids, the kind of each icon field, the nodes by urn
+    and the edges below each node urn."""
+    base_url: str
+    hidden: Set[str]
+    kinds: Dict[str, str]
+    nodes: Dict[str, Dict[str, Any]]
+    below: Dict[str, List[Dict[str, Any]]]
+
+
+def _line(edge: Dict[str, Any], node: Dict[str, Any], look: _Look) -> Dict[str, Any]:
+    """One BOM line (without its children) from its edge and its node; a field of the edge wins over the item's."""
+    base_url, hidden, kinds = look.base_url, look.hidden, look.kinds
     item = as_dict(node.get("item"))
     title = str(item.get("title") or "")
     number, name = split_title(title)
     page = item_page(base_url, item)
-    files_page = item_page(base_url, item, "attachments", "attachments")
     cells = {}
     for fid, field in {**_fields_of(node), **_fields_of(edge)}.items():   # a field of the line wins over the item's
         if fid in hidden:
             continue
         if kinds.get(fid) in ICON_FIELDS:
-            cells[fid] = _icon_cell(kinds[fid], field, base_url, item, files_page)
+            cells[fid] = _icon_cell(kinds[fid], field, item, base_url)
         else:
             cell = cell_of(field, no_image, no_page)
             cells[fid] = {"kind": cell["kind"], "value": cell["value"]}
@@ -128,6 +140,23 @@ def _columns(rows: List[Dict[str, Any]], titles: Dict[str, str], kinds: Dict[str
     return [{"id": fid, "title": title, "icon": kinds[fid] if kinds.get(fid) in ICON_FIELDS else ""} for fid, title in titles.items() if fid in used]
 
 
+def _lines_under(parent: str, seen: Set[str], look: _Look) -> List[Dict[str, Any]]:
+    """The lines held by the node ``parent`` in BOM order, each with its own lines below it (``seen`` guards against a loop in the data)."""
+    out = []
+    for edge in sorted(look.below.get(parent, []), key=lambda e: whole(e.get("itemNumber"))):
+        child = str(edge.get("child") or "")
+        node = look.nodes.get(child)
+        if node is None:
+            continue
+        line = _line(edge, node, look)
+        if child not in seen:
+            line["children"] = _lines_under(child, seen | {child}, look)
+        out.append(line)
+    return out
+
+
+# 5 parameters: the answer and the three things read beside it (titles, the address, the root) are what the Bill of Materials tab asks of one
+# BOM, and ``kinds`` is the optional fifth.
 def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, kinds: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """``{"rows": [line], "columns": [{"id", "title"}]}``: one line, the item itself (``root``), with the BOM lines as its ``children`` in BOM order."""
     if not (isinstance(dig(data, "nodes"), list) and isinstance(dig(data, "edges"), list)):
@@ -140,23 +169,10 @@ def parse_bom(data: Any, titles: Dict[str, str], base_url: str, root_urn: str, k
     below: Dict[str, List[Dict[str, Any]]] = {}
     for edge in dict_rows(data["edges"]):
         below.setdefault(str(edge.get("parent") or ""), []).append(edge)
-
-    def lines(parent: str, seen: Set[str]) -> List[Dict[str, Any]]:
-        out = []
-        for edge in sorted(below.get(parent, []), key=lambda e: whole(e.get("itemNumber"))):
-            child = str(edge.get("child") or "")
-            node = nodes.get(child)
-            if node is None:
-                continue
-            line = _line(edge, node, base_url, hidden, kinds)
-            if child not in seen:   # a loop in the data would never end
-                line["children"] = lines(child, seen | {child})
-            out.append(line)
-        return out
-
-    top = _line({}, root, base_url, hidden, kinds) if root else None   # the item itself heads the tree, as in the Publish panel
-    rows = lines(root_urn, {root_urn})
-    if top is not None:
+    look = _Look(base_url, hidden, kinds, nodes, below)
+    rows = _lines_under(root_urn, {root_urn}, look)
+    if root:   # the item itself heads the tree, as in the Publish panel
+        top = _line({}, root, look)
         top.update(root=True, children=rows)
         rows = [top]
     return {"rows": rows, "columns": _columns(rows, titles, kinds)}

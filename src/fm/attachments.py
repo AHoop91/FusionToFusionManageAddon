@@ -69,6 +69,7 @@ class AttachmentService:
                 return str(row["id"]), ({"id": folder_id} if folder_id else None)
         return "", None
 
+    # 6 parameters (self and 5): the item, the file (name, bytes, description) and the progress callback are all the caller's to give.
     def upload(self, workspace_id: str, item_id: str, name: str, content: bytes, description: str = "",
                progress: Optional[Callable[[float], None]] = None) -> str:
         """Attach a file to the item, or a new version of the file already attached under ``name``; returns ``NEW_VERSION`` or ``NEW_FILE``.
