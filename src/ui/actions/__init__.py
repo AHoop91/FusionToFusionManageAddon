@@ -42,6 +42,7 @@ from .tenant_actions import register_tenant_actions
 from .workspace_actions import register_workspace_actions
 
 
+# Eight parameters: everything the add-in entry point owns and the actions share; the one call site passes them once, by name.
 def register_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
                      dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts, post: Callable[[Callable[[], None]], None],
                      languages: Optional[HubLanguages] = None) -> HubRoles:

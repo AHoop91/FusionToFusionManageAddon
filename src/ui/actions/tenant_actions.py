@@ -1,4 +1,4 @@
-"""Palette actions that find the Fusion Manage tenant from the open design's linked item."""
+"""Palette actions that find the Fusion Manage tenant from the open design's linked item. Application layer."""
 
 from typing import Any, Callable, Dict, Tuple
 

@@ -1,4 +1,4 @@
-"""Palette actions for Fusion Manage workspaces."""
+"""Palette actions for Fusion Manage workspaces. Application layer."""
 
 import threading
 from typing import Any, Callable, Dict

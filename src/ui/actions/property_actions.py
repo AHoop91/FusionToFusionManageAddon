@@ -1,4 +1,4 @@
-"""Palette actions that list the hub's custom properties for field mapping."""
+"""Palette actions that list the hub's custom properties for field mapping. Application layer."""
 
 from typing import Any, Callable, Dict
 

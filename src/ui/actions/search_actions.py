@@ -3,6 +3,8 @@
 Each read (a page of search matches, the items the BOM holds, the filterable fields, a field's picklist options) runs on a worker thread and
 the panel polls for its answer, so Fusion's palette handler never waits on the network. Only one Fusion Manage
 request of the picker runs at a time. The workspace searched is always the configured Items workspace.
+
+Application layer: it sequences the use case and leaves the page to the UI layer.
 """
 
 import threading

@@ -3,6 +3,8 @@
 Both reads go to the hub over the network, so each runs on a worker thread: the action starts it and answers at once that it is pending, and
 the worker pushes the outcome to the panel when it is done. One request of each kind is followed at a time; a newer one replaces an older
 one, whose answer is dropped. The ``*_status`` actions give the outcome as it stands, for a panel that missed the push.
+
+Application layer: it sequences the use case and leaves the page to the UI layer.
 """
 
 import threading
@@ -107,6 +109,7 @@ class HubConfigFile:
             found = hub.contents(folder_id)
         return {"folders": found.folders, "files": found.files}
 
+    # Five parameters: the hub (id, name) and the file (project, item, name) are what ``partial`` fixes when the work is planned.
     def apply(self, hub_id: str, hub_name: str, project_id: str, item_id: str, name: str) -> Dict[str, Any]:
         """Read the file and make it this hub's settings; the outcome has the settings as the panel shows them."""
         raw = self._files().read_file(item_id, MAX_CONFIG_BYTES)
@@ -176,15 +179,23 @@ class HubConfigFile:
         """Take the latest version of the Configuration File once, when the add-in starts (Fusion starting, or the add-in being reloaded).
         The hub may not be open yet, so it waits for it a while (``wait`` raises ``Cancelled`` when the add-in stops)."""
         try:
-            for _ in range(START_WAIT_TRIES):
-                if self._config.config.hub_file and self._config.hub_id:
-                    outcome = self.check()
-                    if outcome["state"] in (UPDATED, UNKNOWN):
-                        bridge.push(CHECKED_ACTION, outcome)   # the panel shows it when it is open
-                    return
-                wait(START_WAIT_SECONDS)
+            if self._wait_for_hub(wait):
+                self._check_and_push(bridge)
         except Cancelled:
             return   # the add-in stopped
+
+    def _wait_for_hub(self, wait: Callable[[float], Any]) -> bool:
+        """Wait until the settings came from a file and a hub is open; False when that did not happen in ``START_WAIT_TRIES`` tries."""
+        for _ in range(START_WAIT_TRIES):
+            if self._config.config.hub_file and self._config.hub_id:
+                return True
+            wait(START_WAIT_SECONDS)
+        return False
+
+    def _check_and_push(self, bridge: MessageBridge) -> None:
+        outcome = self.check()
+        if outcome["state"] in (UPDATED, UNKNOWN):
+            bridge.push(CHECKED_ACTION, outcome)   # the panel shows it when it is open
 
 
 def register_hub_file_actions(bridge: MessageBridge, config: ConfigService, post: Callable[[Callable[[], None]], None],
