@@ -42,18 +42,25 @@ def clean(languages: Any) -> Dict[str, Dict[str, Any]]:
         if len(kept) >= MAX_SHARED:
             log.warning("A Configuration File shares more than %d languages; the rest are left out", MAX_SHARED)
             break
-        if not isinstance(code, str) or not shareable(code) or code.lower() in seen or not isinstance(data, dict):
+        if not isinstance(code, str) or not shareable(code) or code.lower() in seen:
             continue
-        strings = data.get("strings")
-        if not isinstance(strings, dict):
-            continue
-        text = {str(key): value for key, value in strings.items() if isinstance(value, str)}
-        if not text:
-            continue
-        name = data.get("language")
-        kept[code] = {"language": name.strip() if isinstance(name, str) and name.strip() else code, "strings": text}
-        seen.add(code.lower())
+        language = _clean_language(code, data)
+        if language is not None:
+            kept[code] = language
+            seen.add(code.lower())
     return kept
+
+
+def _clean_language(code: str, data: Any) -> Optional[Dict[str, Any]]:
+    """One language of a file's ``languages`` section as ``{"language": name, "strings": {key: text}}``, or None when it has no usable text."""
+    strings = data.get("strings") if isinstance(data, dict) else None
+    if not isinstance(strings, dict):
+        return None
+    text = {str(key): value for key, value in strings.items() if isinstance(value, str)}
+    if not text:
+        return None
+    name = data.get("language")
+    return {"language": name.strip() if isinstance(name, str) and name.strip() else code, "strings": text}
 
 
 class HubLanguages:
@@ -107,18 +114,24 @@ class HubLanguages:
                 os.makedirs(folder, exist_ok=True)
                 for code, data in kept.items():
                     write_atomically(os.path.join(folder, code + FILE_EXTENSION), json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
-            if os.path.isdir(folder):
-                for name in os.listdir(folder):
-                    code, extension = os.path.splitext(name)
-                    if extension.lower() == FILE_EXTENSION and code not in kept:
-                        os.remove(os.path.join(folder, name))
-                if not kept:
-                    shutil.rmtree(folder, ignore_errors=True)
+            self._remove_stale(folder, kept)
         except OSError:
             log.exception("The languages of the hub could not be kept")
             return []
         self.use(hub_id)
         return list(kept)
+
+    @staticmethod
+    def _remove_stale(folder: str, kept: Dict[str, Any]) -> None:
+        """Delete the language files in ``folder`` that are not in ``kept``, and the folder itself when nothing is kept."""
+        if not os.path.isdir(folder):
+            return
+        for name in os.listdir(folder):
+            code, extension = os.path.splitext(name)
+            if extension.lower() == FILE_EXTENSION and code not in kept:
+                os.remove(os.path.join(folder, name))
+        if not kept:
+            shutil.rmtree(folder, ignore_errors=True)
 
     def use(self, hub_id: str) -> None:
         """This hub is the active one: find its languages from now on, and use the user's language again (it may be one of them)."""

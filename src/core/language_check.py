@@ -46,6 +46,16 @@ def _read_shape(path: str):
     return strings, [], warnings
 
 
+def _classify(key: str, text: Any, english: Dict[str, str]) -> str:
+    """Which group a text of a language file belongs to: ``not_text``, ``unknown`` (English has no such key), ``placeholders`` (not
+    the same {placeholders} as English's) or ``ok``."""
+    if not isinstance(text, str):
+        return "not_text"
+    if key not in english:
+        return "unknown"
+    return "ok" if placeholders(text) == placeholders(english[key]) else "placeholders"
+
+
 def check_file(path: str, english: Dict[str, str]) -> Dict[str, Any]:
     """The report on the file at ``path``: ``errors`` (why it cannot be used), ``warnings``, the counts, and the names that need a look.
     ``english`` is the reference (the shipped English's texts)."""
@@ -57,16 +67,16 @@ def check_file(path: str, english: Dict[str, str]) -> Dict[str, Any]:
         return report
     mismatched, not_text, unknown = [], [], []
     for key, text in strings.items():
-        if not isinstance(text, str):
-            not_text.append(key)
-        elif key not in english:
-            unknown.append(key)
-        elif placeholders(text) != placeholders(english[key]):
-            mismatched.append({"key": key, "expected": sorted(placeholders(english[key])), "found": sorted(placeholders(text))})
-        else:
+        group = _classify(key, text, english)
+        if group == "ok":
             report["translated"] += 1
-            if text == english[key]:
-                report["same_as_english"] += 1
+            report["same_as_english"] += text == english[key]
+        elif group == "not_text":
+            not_text.append(key)
+        elif group == "unknown":
+            unknown.append(key)
+        else:
+            mismatched.append({"key": key, "expected": sorted(placeholders(english[key])), "found": sorted(placeholders(text))})
     missing = [key for key in english if key not in strings]
     if not report["translated"]:
         report["errors"].append(t("language.reason_no_texts"))
@@ -91,17 +101,19 @@ def invalid_files(user: Optional[str] = None, hub: Optional[str] = None) -> List
     hub = hub if hub is not None else i18n.hub_dir()
     found: List[Dict[str, str]] = []
     for folder, source in ((hub, SOURCE_HUB), (user, SOURCE_USER)):
-        if not folder or not os.path.isdir(folder):
-            continue
-        for name in sorted(os.listdir(folder)):
-            code, extension = os.path.splitext(name)
-            path = os.path.join(folder, name)
-            if extension.lower() != FILE_EXTENSION or not os.path.isfile(path):
-                continue
-            if not CODE_PATTERN.match(code):
-                found.append({"file": name, "source": source, "reason": t("language.reason_file_name")})
-                continue
-            errors = _read_shape(path)[1]   # the shape only: whether it can be read as a language at all
-            if errors:
-                found.append({"file": name, "source": source, "reason": errors[0]})
+        names = sorted(os.listdir(folder)) if folder and os.path.isdir(folder) else []
+        reasons = [(name, _invalid_reason(folder, name)) for name in names]
+        found += [{"file": name, "source": source, "reason": reason} for name, reason in reasons if reason]
     return found
+
+
+def _invalid_reason(folder: str, name: str) -> str:
+    """Why the file ``name`` in ``folder`` is not a usable language file, or "" when it is one (or is not a language file at all)."""
+    code, extension = os.path.splitext(name)
+    path = os.path.join(folder, name)
+    if extension.lower() != FILE_EXTENSION or not os.path.isfile(path):
+        return ""
+    if not CODE_PATTERN.match(code):
+        return t("language.reason_file_name")
+    errors = _read_shape(path)[1]   # the shape only: whether it can be read as a language at all
+    return errors[0] if errors else ""

@@ -65,22 +65,25 @@ def lookup_item(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, fou
     if not number:
         info["message"] = t("run.compare_no_number")
         return ItemLookup(info, None)
-    values = None
     try:
         hits = found if found is not None else ItemFinder(fm, revision).search(cfg.workspace_id, number)
         picked = hits[0] if len(hits) == 1 else None
-        if picked:
-            values = picked.get("values") or ItemService(fm).read(cfg.workspace_id, picked["id"])
+        values = (picked.get("values") or ItemService(fm).read(cfg.workspace_id, picked["id"])) if picked else None
     except (FmApiError, AuthError) as exc:
         return _unreadable(info, exc)
+    _set_state(info, hits, picked)
+    return ItemLookup(info, values)
+
+
+def _set_state(info: ItemInfo, hits: List[Dict[str, Any]], picked: Optional[Dict[str, Any]]) -> None:
+    """Set the state of ``info`` from what the search found: no item (``new``), one (``found``) or several (``multiple``, with the candidates)."""
     if not hits:
         info["state"] = NEW
     elif picked:
         info.update(state=FOUND, item_id=picked["id"])
     else:
-        info.update(state=MULTIPLE, message=t("run.compare_multiple", count=len(hits), number=number),
+        info.update(state=MULTIPLE, message=t("run.compare_multiple", count=len(hits), number=info["item_number"]),
                     candidates=[{k: v for k, v in hit.items() if k != "values"} for hit in hits])   # the list, not the values
-    return ItemLookup(info, values)
 
 
 def known_lookup(summary: Dict[str, Any], cfg: WorkspaceConfig, fm: FmClient, item_id: str) -> ItemLookup:

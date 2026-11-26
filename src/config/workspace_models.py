@@ -249,9 +249,14 @@ class MakeBuyConfig:
             problems.append(Problem(t("data.ws_make_buy_incomplete"), area="make_buy", part=unset))
         if self.suffix and (len(self.suffix) > SUFFIX_MAX or not _SUFFIX.fullmatch(self.suffix)):
             problems.append(Problem(t("data.ws_make_buy_suffix", max=SUFFIX_MAX), area="make_buy", part="suffix"))
-        for part, value in (("make_value", self.make_value), ("buy_value", self.buy_value)):
-            if value and not value.startswith(OPTION_PREFIX):   # a value is an option of the field's picklist, held as its link
-                problems.append(Problem(t("data.ws_make_buy_value_not_option"), area="make_buy", part=part))
+        problems += self._value_problems()
+        return problems
+
+    def _value_problems(self) -> List[Problem]:
+        """What is wrong with the make and buy values: one that is not an option of the field, or both the same."""
+        problems = [Problem(t("data.ws_make_buy_value_not_option"), area="make_buy", part=part)
+                    for part, value in (("make_value", self.make_value), ("buy_value", self.buy_value))
+                    if value and not value.startswith(OPTION_PREFIX)]   # a value is an option of the field's picklist, held as its link
         if self.make_value and self.make_value == self.buy_value:
             problems.append(Problem(t("data.ws_make_buy_same_value"), area="make_buy", part="buy_value"))
         return problems

@@ -104,6 +104,24 @@ def _folders(shipped: Optional[str], user: Optional[str], hub: Optional[str]) ->
     return [(shipped, SOURCE_SHIPPED), (hub if hub is not None else _hub_dir, SOURCE_HUB), (user, SOURCE_USER)]
 
 
+def _languages_in(folder: Optional[str], source: str) -> List[Language]:
+    """The languages whose readable files are in ``folder``, by file name."""
+    if not folder or not os.path.isdir(folder):
+        return []
+    languages = []
+    for name in sorted(os.listdir(folder)):
+        code, extension = os.path.splitext(name)
+        path = os.path.join(folder, name)
+        if extension.lower() != FILE_EXTENSION or not CODE_PATTERN.match(code) or not os.path.isfile(path):
+            continue
+        data = _read(path)
+        if data is None:
+            continue
+        title = data.get("language")
+        languages.append(Language(code, title.strip() if isinstance(title, str) and title.strip() else code, source, path))
+    return languages
+
+
 def available(shipped: Optional[str] = None, user: Optional[str] = None, hub: Optional[str] = None) -> List[Language]:
     """Every language found, English first and then by name. The folders are the add-in's own unless given (tests give theirs; ``hub`` ""
     is no hub's folder)."""
@@ -111,18 +129,8 @@ def available(shipped: Optional[str] = None, user: Optional[str] = None, hub: Op
     user = user if user is not None else user_dir()
     found: Dict[str, Language] = {}
     for folder, source in _folders(shipped, user, hub):   # later folders come last, so their file replaces one of the same code before
-        if not folder or not os.path.isdir(folder):
-            continue
-        for name in sorted(os.listdir(folder)):
-            code, extension = os.path.splitext(name)
-            path = os.path.join(folder, name)
-            if extension.lower() != FILE_EXTENSION or not CODE_PATTERN.match(code) or not os.path.isfile(path):
-                continue
-            data = _read(path)
-            if data is None:
-                continue
-            title = data.get("language")
-            found[code.lower()] = Language(code, title.strip() if isinstance(title, str) and title.strip() else code, source, path)
+        for language in _languages_in(folder, source):
+            found[language.code.lower()] = language
     return sorted(found.values(), key=lambda language: (language.code.lower() != DEFAULT_LANGUAGE, language.name.lower()))
 
 
@@ -143,21 +151,23 @@ def load(code: str, shipped: Optional[str] = None, user: Optional[str] = None, h
         data = _read(english.path)
         strings.update(_strings(data, english.path) if data is not None else {})
     wanted = find(code, shipped, user, hub)
-    if wanted is None:
-        if str(code or "").strip().lower() != DEFAULT_LANGUAGE:
-            log.warning("The language '%s' is not available; English is used", code)
-        return strings
-    if wanted.code.lower() == DEFAULT_LANGUAGE:
-        return strings
-    data = _read(wanted.path)
+    if wanted is None and str(code or "").strip().lower() != DEFAULT_LANGUAGE:
+        log.warning("The language '%s' is not available; English is used", code)
+    if wanted is not None and wanted.code.lower() != DEFAULT_LANGUAGE:
+        _overlay(strings, wanted)
+    return strings
+
+
+def _overlay(strings: Dict[str, str], language: Language) -> None:
+    """Put the texts of ``language``'s file over ``strings`` (English's), except a text whose {placeholders} differ from English's."""
+    data = _read(language.path)
     if data is None:
-        return strings
-    for key, text in _strings(data, wanted.path).items():
+        return
+    for key, text in _strings(data, language.path).items():
         if key in strings and placeholders(text) != placeholders(strings[key]):
-            log.warning("The language file %s: '%s' does not have the same {placeholders} as English; English is used", wanted.path, key)
+            log.warning("The language file %s: '%s' does not have the same {placeholders} as English; English is used", language.path, key)
             continue
         strings[key] = text
-    return strings
 
 
 def placeholders(text: str) -> frozenset:
@@ -170,19 +180,25 @@ def fill(text: str, params: Dict[str, object]) -> str:
     return PLACEHOLDER.sub(lambda match: str(params[match.group(1)]) if match.group(1) in params else match.group(0), text)
 
 
+def _clean_new_language(code: str, name: str) -> tuple:
+    """``(code, name)`` of a new language, tidied: the code in capitals (DE.json, PT-BR.json), each word of the name starting with a capital.
+    Raises ``ValueError`` for a code that is not a language code, or an empty name."""
+    code = str(code or "").strip().upper()
+    name = re.sub(r"(?<!\S)\S", lambda letter: letter.group().upper(), str(name or "").strip())   # German Test
+    if not CODE_PATTERN.match(code):
+        raise ValueError("Language code: enter a code such as DE, FR or PT-BR.")
+    if not name:
+        raise ValueError("Language name: enter the name of the language, in that language, such as Deutsch.")
+    return code, name
+
+
 def create(code: str, name: str, shipped: Optional[str] = None, user: Optional[str] = None, hub: Optional[str] = None) -> str:
     """Make a new language file in the user's folder, holding English's text for the user to translate. Answers its path.
 
     Raises ``ValueError`` for a code that is not a language code, or one that is taken (a language is never replaced), and ``OSError``
     when the file cannot be written (the user's folder is not known, or not writable).
     """
-    code = str(code or "").strip().upper()   # a code is always kept in capitals: DE.json, PT-BR.json
-    name = str(name or "").strip()
-    name = re.sub(r"(?<!\S)\S", lambda letter: letter.group().upper(), name)   # each word starts with a capital: German Test
-    if not CODE_PATTERN.match(code):
-        raise ValueError("Language code: enter a code such as DE, FR or PT-BR.")
-    if not name:
-        raise ValueError("Language name: enter the name of the language, in that language, such as Deutsch.")
+    code, name = _clean_new_language(code, name)
     shipped = shipped if shipped is not None else shipped_dir()
     folder = user if user is not None else user_dir()
     if not folder:

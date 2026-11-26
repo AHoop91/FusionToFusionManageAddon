@@ -37,13 +37,19 @@ def _power(unit: Unit, power: int) -> Unit:
     return (length * power, mass * power), size ** power
 
 
+def _quotient(a: Optional[Unit], b: Optional[Unit]) -> Optional[Unit]:
+    """``a`` per ``b``, or None when either is not a known unit."""
+    if a is None or b is None:
+        return None
+    return (a[0][0] - b[0][0], a[0][1] - b[0][1]), a[1] / b[1]
+
+
 def _parse(text: str) -> Optional[Unit]:
     text = " ".join(text.strip().lower().replace("^2", "²").replace("^3", "³").split())
     for divider in (" per ", "/"):
         top, found, bottom = text.partition(divider)
         if found:
-            a, b = _parse(top), _parse(bottom)
-            return None if a is None or b is None else ((a[0][0] - b[0][0], a[0][1] - b[0][1]), a[1] / b[1])
+            return _quotient(_parse(top), _parse(bottom))
     word, _, rest = text.partition(" ")
     if word in _POWERS and rest:
         base = _parse(rest)
