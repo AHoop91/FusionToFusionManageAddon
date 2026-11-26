@@ -8,7 +8,7 @@ The exact keys of every answer mentioned here are in "What Fusion Manage answers
 
 1. The page calls `ask('products_form', {})`. `ProductReads.form` in `src/ui/actions/product_actions.py` runs `WorkspaceFormService(client).form(workspace, automatic)` on a worker thread, and the page polls `products_status` for the answer.
 2. `WorkspaceFormService.form` (`src/fm/workspace_form.py`) reads two things at once: `GET /api/v3/workspaces/{id}/fields` and the sections (`SectionService.layouts(workspace_id, True)`, read fresh). It then reads the options of every fixed picklist the fields use (`_options`, four at a time) and calls `parse_form`.
-3. `parse_form` walks the sections in order. For each one it builds the field specs (`_spec`) and the matrices (`_matrix`). A section with nothing to fill in is left out, and a field that two sections name stays in the first.
+3. `parse_form` walks the sections in order. For each one it builds the field specs (`_FieldSpecs.spec`) and the matrices (`_matrix`). A section with nothing to fill in is left out, and a field that two sections name stays in the first.
 4. The page draws the answer with `paintForm`: a card per section, a line per field, a table per matrix.
 
 An edit of an existing product also calls `products_item` (`ProductService.read`, a `{field id: value}` map) and fills each control with `setFieldValue`.
@@ -20,9 +20,9 @@ An edit of an existing product also calls `products_item` (`ProductService.read`
 | `SectionService.layouts(workspace_id, fresh=False)` | `{section id: section}` as the workspace lays it out: its `fields`, its `matrices`, its title and `collapsed`. Reads `/sections` once, asking for the bulk list (`BULK`), which holds every section with its fields and matrices. Kept for a few minutes (`TtlCache`) unless `fresh`. |
 | `SectionService.field_sections(workspace_id)` | `{field id: section link}`, for the write side (`item_request` groups values by section). Fields inside matrices count. The first section to name a field wins. Raises `FmApiError` when no section holds any field. |
 
-## Field specs (`_spec`, `_kind`)
+## Field specs (`_FieldSpecs.spec`, `_kind`)
 
-`_spec` returns `None` (the field is not on the form) when the field is missing from the fields answer, was already placed, is hidden (`not_shown` in `src/fm/item_view.py`), or is computed (`is_computed` in `src/fm/workspace.py`: `formulaField` or `derived` is true). A field with `editability` of `NEVER` becomes an `info` field if it has a `description` (Fusion Manage shows the item number this way), else it is left out. A field with no control (`_kind` gives `None`) is left out, added to `left_out` and written to the log.
+`_FieldSpecs.spec` (through `_describe`, `_info_spec` and `_control_spec`) returns `None` (the field is not on the form) when the field is missing from the fields answer, was already placed, is hidden (`not_shown` in `src/fm/item_view.py`), or is computed (`is_computed` in `src/fm/workspace.py`: `formulaField` or `derived` is true). A field with `editability` of `NEVER` becomes an `info` field if it has a `description` (Fusion Manage shows the item number this way), else it is left out. A field with no control (`_kind` gives `None`) is left out, added to `left_out` and written to the log.
 
 `_kind` chooses the control in this order:
 
@@ -51,13 +51,13 @@ A section is `{title, fields: [spec], matrices: [matrix], collapsed}`; `title` i
 
 ## Automatic fields
 
-`form(workspace_id, automatic)` takes a set of field ids the add-in fills in itself. `_automatic` turns the spec of each into `kind: "auto"` with nothing required, no options and no validators. The page shows a disabled box with the description and never sends a value. The Assign Product panel passes the Primary Component field (`ProductReads._automatic`, from `cfg.component_field`). A field is only turned automatic if it first survives `_spec`, so a hidden or computed id in the set has no effect.
+`form(workspace_id, automatic)` takes a set of field ids the add-in fills in itself. `_automatic` is applied inside `_FieldSpecs.spec` and turns the spec of each into `kind: "auto"` with nothing required, no options and no validators. The page shows a disabled box with the description and never sends a value. The Assign Product panel passes the Primary Component field (`ProductReads._automatic`, from `cfg.component_field`). A field is only turned automatic if it first survives `_describe`, so a hidden or computed id in the set has no effect.
 
 ## The Grid tab (`grid_form`)
 
 `WorkspaceFormService.grid_form(workspace_id, link_column)` builds `{fields: [spec]}` from `GET /api/v3/workspaces/{id}/views/13/fields` (`GRID_VIEW` in `workspace.py`). Differences from `form`:
 
-- A grid column's `validators` is a link and its `fieldValidators` is null, so `_with_validators` reads each link (four at a time) and puts the answer into `fieldValidators` before `_spec` runs.
+- A grid column's `validators` is a link and its `fieldValidators` is null, so `_with_validators` reads each link (four at a time) and puts the answer into `fieldValidators` before `_FieldSpecs.spec` runs.
 - `link_column` (the column that links the row to its component) is left out, and `info` fields are dropped from the result.
 - There are no sections and no `automatic`.
 

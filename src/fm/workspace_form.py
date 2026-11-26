@@ -115,6 +115,7 @@ class _FieldSpecs:
         return _automatic(found) if found and field_id in self._automatic else found
 
     def _describe(self, field_id: str) -> Optional[Dict[str, Any]]:
+        """The field's spec before ``_automatic`` is applied, or None when it is not on the form."""
         row = self.by_id.get(field_id)
         if row is None or field_id in self._placed or not_shown(row, set()) or is_computed(row):
             return None
