@@ -126,7 +126,7 @@ class FormValueTests(unittest.TestCase):
 
 class PlanCopyTests(unittest.TestCase):
     def plan(self, **source):
-        return plan_copy(FORM, {**SOURCE, **source}, config().make_buy, "NUMBER", "COMPONENT")
+        return plan_copy(FORM, {**SOURCE, **source}, config())
 
     def test_what_the_form_takes_is_copied_in_the_shape_the_form_sends(self):
         values, _ = self.plan()
@@ -145,7 +145,7 @@ class PlanCopyTests(unittest.TestCase):
     def test_a_field_that_settings_leaves_out_is_not_copied(self):
         cfg = config()
         cfg.make_buy.skip_fields = ["NOTES", "COUNT", "UNKNOWN"]
-        values, _ = plan_copy(FORM, SOURCE, cfg.make_buy, "NUMBER", "COMPONENT")
+        values, _ = plan_copy(FORM, SOURCE, cfg)
         self.assertNotIn("NOTES", values)
         self.assertNotIn("COUNT", values)
         self.assertIn("TITLE", values)
@@ -153,7 +153,7 @@ class PlanCopyTests(unittest.TestCase):
     def test_leaving_out_every_field_copies_nothing(self):
         cfg = config()
         cfg.make_buy.skip_fields = list(specs_of(FORM))
-        self.assertEqual(plan_copy(FORM, SOURCE, cfg.make_buy, "NUMBER", "COMPONENT")[0], {})
+        self.assertEqual(plan_copy(FORM, SOURCE, cfg)[0], {})
 
     def test_the_fields_left_out_survive_a_save_and_drop_blanks_and_repeats(self):
         cfg = config()

@@ -12,7 +12,7 @@ when none do. A value left blank is never sent, so clearing a field is not somet
 """
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from ..core.i18n import t
 from ..core.shapes import as_dict, dict_rows, rows_in
@@ -93,6 +93,41 @@ def _picture_link(values: Dict[str, Any]) -> str:
     return next((link for link in map(link_of, values.values()) if PICTURE_LINK.fullmatch(link)), "")
 
 
+class GridTarget(NamedTuple):
+    """Where a row of a product's Grid tab goes: the workspace, the product's item id, and the column that links to the components."""
+    workspace_id: str
+    item_id: str
+    link_column: str
+
+
+def _assign_blocked(current: Any, chosen_link: str, mode: str) -> str:
+    """Why an assign changes nothing: ``same`` when the product holds the component already, ``exists`` when it holds another and the person has
+    not chosen what to do with it; "" when the assign goes ahead."""
+    if not _has_value(current):
+        return ""
+    if holds(current, {"link": chosen_link}):
+        return SAME
+    return "" if mode in (REPLACE, VARIANT, REPLACE_MOVE) else EXISTS
+
+
+def _read_grid_row(row: Dict[str, Any], link_column: str, titles: Dict[str, str], columns: List[Dict[str, str]]) -> Tuple[Dict[str, str], str, str]:
+    """``(cells, link, title)`` of a row of the Grid tab: the text of each cell by its column id, and the link and title in ``link_column``.
+    A column not in ``columns`` yet is added to it (the titles come from ``titles``, else the cell's own)."""
+    cells: Dict[str, str] = {}
+    link = title = ""
+    for cell in dict_rows(row.get("rowData")):
+        if "/fields/" not in str(cell.get("__self__")):   # a cell that is not a column of the grid: the row's own id ("Row Id")
+            continue
+        column = last_segment(cell.get("__self__"))
+        value = cell.get("value")
+        cells[column] = display_text(value).strip()
+        if column == link_column and isinstance(value, dict):
+            link, title = str(value.get("link") or ""), display_text(value).strip()
+        if column not in (c["id"] for c in columns):
+            columns.append({"id": column, "title": titles.get(column) or str(cell.get("title") or column)})
+    return cells, link, title
+
+
 class NotAllowed(Exception):
     """Fusion Manage does not let the user in: their app's Client ID has no user mapped to it, or they may not read the workspace."""
 
@@ -153,6 +188,7 @@ class ProductService:
         hits = ComponentService(self._client).matching(lookup, number)
         return hits, _latest_revision(hits)
 
+    # ``assign``, ``inspect`` and ``update_variant`` keep the one signature the product actions call with (more than four parameters, as the page sends them).
     def assign(self, workspace_id: str, item_id: str, number: str, field_id: str, link_column: str, mode: str = "",
                row_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make the component with ``number`` the product's Primary Component (``field_id``), a PATCH of that field when it is empty.
@@ -173,19 +209,18 @@ class ProductService:
         current = values.get(field_id)
         named = display_text(current).strip() if _has_value(current) else ""
         answer = {"number": number, "current": named, "component": chosen.link, "product": product}
-        held = _has_value(current)
-        if held and holds(current, {"link": chosen.link}):
-            return {**answer, "status": SAME}
-        if held and mode not in (REPLACE, VARIANT, REPLACE_MOVE):
-            return {**answer, "status": EXISTS}
+        blocked = _assign_blocked(current, chosen.link, mode)
+        if blocked:
+            return {**answer, "status": blocked}
+        target = GridTarget(workspace_id, item_id, link_column)
         if mode == VARIANT:
-            self._add_variant(workspace_id, item_id, number, link_column, chosen, row_values or {})
+            self._add_variant(target, number, chosen, row_values or {})
             return {**answer, "status": ADDED}
-        if mode == REPLACE_MOVE and held:   # the one that is replaced is kept, as a variant (first: a refusal leaves the product as it was)
+        if mode == REPLACE_MOVE and _has_value(current):   # the one that is replaced is kept, as a variant (first: a refusal leaves the product as it was)
             old = link_of(current)
             if not old:
                 raise FmApiError(t("app.product_move_no_link", current=named))
-            self._post_variant(workspace_id, item_id, link_column, old, row_values or {})
+            self._post_variant(target, old, row_values or {})
         self.update(workspace_id, item_id, {field_id: {"link": chosen.link}})
         return {**answer, "status": ASSIGNED}
 
@@ -241,18 +276,7 @@ class ProductService:
         columns: List[Dict[str, str]] = [{"id": f["id"], "title": f["title"]} for f in laid_out if f["shown"]]
         rows: List[Dict[str, Any]] = []
         for row in rows_in(data, "rows"):
-            cells: Dict[str, str] = {}
-            link = title = ""
-            for cell in dict_rows(row.get("rowData")):
-                if "/fields/" not in str(cell.get("__self__")):   # a cell that is not a column of the grid: the row's own id ("Row Id")
-                    continue
-                column = last_segment(cell.get("__self__"))
-                value = cell.get("value")
-                cells[column] = display_text(value).strip()
-                if column == link_column and isinstance(value, dict):
-                    link, title = str(value.get("link") or ""), display_text(value).strip()
-                if column not in (c["id"] for c in columns):
-                    columns.append({"id": column, "title": titles.get(column) or str(cell.get("title") or column)})
+            cells, link, title = _read_grid_row(row, link_column, titles, columns)
             rows.append({"id": last_segment(row.get("__self__")), "cells": cells, **stand(link, title)})
         return columns, rows
 
@@ -266,18 +290,7 @@ class ProductService:
         the link of the item that is its Primary Component ("" when it has none; the design it came from is what Fusion opens) and ``rows``
         how many rows of the grid hold the component. It reads the two fields of every product with the v1 search, which can read the Grid where the v3 search cannot, and
         compares them here by item number (``number_matches``). Raises ``FmApiError`` with the reason: a failed check is not "not used"."""
-        fields = [Field(field_id)] + ([Field(link_column, GRIDVIEW)] if link_column else [])
-        primary: Dict[str, None] = {}   # the ids of the products, in the order found
-        variants: Dict[str, int] = {}   # the id of each product -> how many rows of its Variants grid hold the component
-        primary_key, column_key = field_id.upper(), link_column.upper()
-        for row in self._v1_rows(workspace_id, fields, [Sort(field_id)]):   # sorted on an Item Details field: the service needs a sort
-            for key, text in row.entries:
-                if not text or not number_matches(text, number):
-                    continue
-                if key.upper() == primary_key:
-                    primary[row.dms_id] = None
-                elif key.upper() == column_key:
-                    variants[row.dms_id] = variants.get(row.dms_id, 0) + 1
+        primary, variants = self._find_uses(workspace_id, number, field_id, link_column)
         service = ItemService(self._client)
         cards = {}
         for item in dict.fromkeys([*primary, *variants]):
@@ -288,6 +301,22 @@ class ProductService:
         log.info("Component %s is the Primary Component of %d product(s) and a variant of %d", number, len(primary), len(variants))
         return {"number": number, "variants_checked": bool(link_column), "primary": [cards[item] for item in primary],
                 "variants": [{**cards[item], "rows": rows} for item, rows in variants.items()]}
+
+    def _find_uses(self, workspace_id: str, number: str, field_id: str, link_column: str) -> Tuple[Dict[str, None], Dict[str, int]]:
+        """``(primary, variants)`` of ``usage``: the ids of the products whose Primary Component is the component with ``number``, in the order found,
+        and for each product with it in a row of the Variants grid, how many rows."""
+        fields = [Field(field_id)] + ([Field(link_column, GRIDVIEW)] if link_column else [])
+        primary: Dict[str, None] = {}
+        variants: Dict[str, int] = {}
+        primary_key, column_key = field_id.upper(), link_column.upper()
+        for row in self._v1_rows(workspace_id, fields, [Sort(field_id)]):   # sorted on an Item Details field: the service needs a sort
+            keys = [key.upper() for key, text in row.entries if text and number_matches(text, number)]
+            if primary_key in keys:
+                primary[row.dms_id] = None
+            rows_held = keys.count(column_key) if column_key != primary_key else 0
+            if rows_held:
+                variants[row.dms_id] = variants.get(row.dms_id, 0) + rows_held
+        return primary, variants
 
     def _v1_rows(self, workspace_id: str, fields: List[Field], sort: List[Sort]) -> List[V1Row]:
         """The rows of a v1 search. Raises ``NotAllowed`` when Fusion Manage does not accept the user's app, else ``FmApiError`` with the reason.
@@ -317,22 +346,22 @@ class ProductService:
         self._send_row("PUT", f"{WORKSPACES}/{workspace_id}/items/{item_id}/views/{GRID_VIEW}/rows/{row_id}", row)
         return {"status": UPDATED, "number": number, "component": chosen.link}
 
-    def _add_variant(self, workspace_id: str, item_id: str, number: str, link_column: str, chosen: Candidate, row_values: Dict[str, Any]) -> None:
+    def _add_variant(self, target: GridTarget, number: str, chosen: Candidate, row_values: Dict[str, Any]) -> None:
         """Add the component (the revision ``chosen``) as a row of the product's Grid tab, in the column that links to the components."""
-        hits, _ = self._options_of(workspace_id, link_column, number, grid=True)
+        hits, _ = self._options_of(target.workspace_id, target.link_column, number, grid=True)
         same = [c for c in hits if (c.title, c.version) == (chosen.title, chosen.version)]   # the same revision, in the column's own picklist
         if len(same) != 1:
-            raise FmApiError(t("app.product_variant_revision", title=f"{chosen.title} {chosen.version}".strip(), column=link_column))
-        self._post_variant(workspace_id, item_id, link_column, same[0].link, row_values)
+            raise FmApiError(t("app.product_variant_revision", title=f"{chosen.title} {chosen.version}".strip(), column=target.link_column))
+        self._post_variant(target, same[0].link, row_values)
 
-    def _post_variant(self, workspace_id: str, item_id: str, link_column: str, link: str, row_values: Dict[str, Any]) -> None:
-        """Add a row to the product's Grid tab whose ``link_column`` links to the component at ``link`` and whose other columns hold ``row_values``
+    def _post_variant(self, target: GridTarget, link: str, row_values: Dict[str, Any]) -> None:
+        """Add a row to the product's Grid tab whose link column links to the component at ``link`` and whose other columns hold ``row_values``
         (a blank is left out; a picklist option is sent as a link to it)."""
-        scope = f"{WORKSPACES}/{workspace_id}/views/{GRID_VIEW}/fields"
-        cells = [{"__self__": f"{scope}/{link_column}", "value": {"link": link}}]
+        scope = f"{WORKSPACES}/{target.workspace_id}/views/{GRID_VIEW}/fields"
+        cells = [{"__self__": f"{scope}/{target.link_column}", "value": {"link": link}}]
         cells += [{"__self__": f"{scope}/{column}", "value": field_value(value)}
-                  for column, value in row_values.items() if column != link_column and value not in (None, "", [], {})]
-        self._send_row("POST", f"{WORKSPACES}/{workspace_id}/items/{item_id}/views/{GRID_VIEW}/rows", {"rowData": cells})
+                  for column, value in row_values.items() if column != target.link_column and value not in (None, "", [], {})]
+        self._send_row("POST", f"{WORKSPACES}/{target.workspace_id}/items/{target.item_id}/views/{GRID_VIEW}/rows", {"rowData": cells})
 
     def _send_row(self, method: str, url: str, row: Dict[str, Any]) -> None:
         """Send a row of the Grid tab. Raises ``FmApiError`` with what Fusion Manage said."""
