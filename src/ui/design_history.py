@@ -1,4 +1,4 @@
-"""When what the Export window exports was last saved, from the version history of its document in Fusion (the Data panel).
+"""When what the Export window exports was last saved (application layer: reads Fusion's document history), from the version history of its document in Fusion (the Data panel).
 
 Each save of a document is a version, and the latest one's creation date is when it was last saved. The timeline of a design has no
 dates, so it is not used. Whatever cannot be dated is answered as such (``saved`` None, with the ``reason``), never guessed from another
@@ -28,6 +28,7 @@ def _doc(kind: str, name: str, inline: bool = False) -> str:
     return t("app.doc_design_inline" if inline else "app.doc_design", name=name)
 
 
+# The five fields of the answer, each optional and given by keyword: bundling them would only move the same names into another object.
 def _answer(saved: Optional[float] = None, saved_in: str = "", unsaved_in: str = "", reason: str = "", saved_in_inline: str = "") -> Dict[str, Any]:
     """What ``compare`` of ``export_freshness`` takes: ``saved`` as a Unix time, or None with the ``reason``; ``saved_in`` names the document
     that was saved last, and ``unsaved_in`` one that has changes not saved ("" when none has)."""
@@ -115,23 +116,31 @@ def saved_state(number: str, entities: Iterable[Any]) -> Dict[str, Any]:
         if document is None:
             return _answer(reason=t("app.history_no_document"))
         design = adsk.fusion.Design.cast(app.activeProduct)
-        drawing = drawing_source.active_drawing() is not None
-        occurrence = None if drawing else _occurrence_of(entities, number)
-        if drawing:   # a save of the drawing or of the design it shows makes the file out of date
-            answer = _of_documents([("drawing", document)] + [("design", r.referencedDocument) for r in document.documentReferences
-                                                                  if r.referencedDocument is not None])
-        elif occurrence is not None:
-            saved, reason = _component_saved(occurrence)
-            answer = _answer(saved, _doc("component", occurrence.component.name) if saved is not None else "", reason=reason,
-                             saved_in_inline=_doc("component", occurrence.component.name, True) if saved is not None else "")
-        elif design is not None:   # no selected component carries the number, so it is the design's (as ``export_target`` took it): its part number is not read again, which is slow
-            answer = _of_documents([("design", document)])
-        else:
-            answer = _answer(reason=t("app.history_holder_not_found", number=number))
-        return _logged(number, answer, document, design)
+        return _logged(number, _answer_for(number, entities, document, design), document, design)
     except Exception as exc:  # noqa: BLE001 - only a hint for the Export window: it says it could not tell
         log.exception("Could not read when %s was last saved", number)
         return _answer(reason=t("app.history_last_saved_unreadable", reason=exc))
+
+
+def _answer_for(number: str, entities: Iterable[Any], document: Any, design: Any) -> Dict[str, Any]:
+    """The answer for the open ``document`` (and ``design``, None in a drawing): see ``saved_state``."""
+    if drawing_source.active_drawing() is not None:   # a save of the drawing or of the design it shows makes the file out of date
+        shown = [("design", r.referencedDocument) for r in document.documentReferences if r.referencedDocument is not None]
+        return _of_documents([("drawing", document)] + shown)
+    occurrence = _occurrence_of(entities, number)
+    if occurrence is not None:
+        return _of_component(occurrence)
+    if design is not None:   # no selected component carries the number, so it is the design's (as ``export_target`` took it): its part number is not read again, which is slow
+        return _of_documents([("design", document)])
+    return _answer(reason=t("app.history_holder_not_found", number=number))
+
+
+def _of_component(occurrence: Any) -> Dict[str, Any]:
+    """The answer for a selected component: the save of its own document."""
+    saved, reason = _component_saved(occurrence)
+    name = occurrence.component.name
+    return _answer(saved, _doc("component", name) if saved is not None else "", reason=reason,
+                   saved_in_inline=_doc("component", name, True) if saved is not None else "")
 
 
 def _logged(number: str, answer: Dict[str, Any], document: Any, design: Any) -> Dict[str, Any]:

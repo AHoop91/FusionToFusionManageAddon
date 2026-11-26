@@ -1,4 +1,4 @@
-"""The Export window: the file to make from the open design or drawing, and where in Fusion Manage to attach it.
+"""The Export window (UI layer): the file to make from the open design or drawing, and where in Fusion Manage to attach it.
 
 The page (``web/export``) asks what is on offer (``export_context``), then says what was chosen (``export_run``). What is offered is worked
 out again at each call, since the open document can change while the window is open.
@@ -13,7 +13,7 @@ all (its Client ID is not added there), the page is told so in ``denied``, and s
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import adsk.core
 import adsk.fusion
@@ -39,6 +39,7 @@ from .ui_thread import UiThread
 
 log = get_logger("export_dialog")
 
+
 def _label(destination: str) -> str:
     """What the window calls a destination."""
     return t("app.destination_component") if destination == COMPONENT else t("app.destination_item")
@@ -54,6 +55,7 @@ def _document() -> str:
 class ExportDialog:
     """Shows the Export window and carries out what is chosen in it."""
 
+    # Six collaborators, each a different one (the caller in ``main`` owns them all): over the guardrail of four, and not ones to bundle.
     def __init__(self, host: PaletteHost, bridge: MessageBridge, tasks: UiThread, config: ConfigService, auth: AuthService,
                  panel: ItemPanel) -> None:
         self._host = host
@@ -131,17 +133,7 @@ class ExportDialog:
         reasons = dict(setup)
         denied = ""   # said when Fusion Manage does not accept the app
         try:
-            client = FmClient(context.settings, self._auth, self._panel.export_token)
-            checks = {key: check for key, check in ((ITEM, lambda c: self._item_denial(c, context)), (COMPONENT, self._component_denial))
-                      if not setup[key]}
-            with ThreadPoolExecutor(max_workers=2) as pool:   # one workspace does not wait for the other
-                asked = {key: pool.submit(self._asked, check, client) for key, check in checks.items()}
-                for key, future in asked.items():
-                    reasons[key] = future.result()
-            if any(reasons[key] for key in checks) and self._app_refused(client):   # asked only when something was refused: a 403 is not this
-                denied = t("app.export_no_permission")
-                for key in checks:
-                    reasons[key] = denied
+            denied = self._read_reasons(setup, context, reasons)
         except Cancelled:   # the window was closed: nobody waits for the answer
             log.info("The check of the permissions to attach files was cancelled")
             return
@@ -151,6 +143,23 @@ class ExportDialog:
                 reasons[key] = reasons[key] or t("app.export_permissions_failed", reason=exc)
         log.info("Export permissions: %s", reasons)
         self._tasks.post(lambda: self._checked(reasons, context.stamp, denied))
+
+    def _read_reasons(self, setup: Dict[str, str], context: HubContext, reasons: Dict[str, str]) -> str:
+        """Ask Fusion Manage about each destination that is set up and write why it is refused (or "") into ``reasons``. Returns the words
+        for an app Fusion Manage does not accept at all, or "" when it does. A worker thread."""
+        client = FmClient(context.settings, self._auth, self._panel.export_token)
+        checks = {key: check for key, check in ((ITEM, lambda c: self._item_denial(c, context)), (COMPONENT, self._component_denial))
+                  if not setup[key]}
+        with ThreadPoolExecutor(max_workers=2) as pool:   # one workspace does not wait for the other
+            asked = {key: pool.submit(self._asked, check, client) for key, check in checks.items()}
+            for key, future in asked.items():
+                reasons[key] = future.result()
+        if not any(reasons[key] for key in checks) or not self._app_refused(client):   # asked only when something was refused: a 403 is not this
+            return ""
+        denied = t("app.export_no_permission")
+        for key in checks:
+            reasons[key] = denied
+        return denied
 
     @staticmethod
     def _app_refused(client: FmClient) -> bool:
@@ -177,20 +186,8 @@ class ExportDialog:
         document = _document()
         number, problem = self._panel.export_target() if document else ("", t("app.open_to_export"))
         setup, context = self._setup()
-        if context and self._access and self._access_stamp != context.stamp:   # read under other settings than those now active: not to be shown
-            self._access = {}
-        if context and not self._access and not self._checking:
-            self._checking = True
-            threading.Thread(target=self._check_access, args=(setup, context), daemon=True).start()
-            if document and not problem:
-                self._panel.warm_export_target(self._item_found, self._thumbnail_found)   # while the user chooses, so Find item has nothing left to read
-        offered = self._offered(context)
-        destinations = []
-        for key in (ITEM, COMPONENT):
-            reason = setup[key] or self._access.get(key, "")
-            destinations.append({"key": key, "label": _label(key), "reason": reason,
-                                 "checking": not reason and key not in self._access,
-                                 "hidden": key not in offered})
+        self._start_access_check(setup, context, warm=bool(document) and not problem)
+        destinations = self._destinations(setup, context)
         usable = [d["key"] for d in destinations if not d["reason"] and not d["checking"]]
         exports = self._config.config.exports
         name, description = self._panel.export_names() if number else ("", "")
@@ -199,16 +196,44 @@ class ExportDialog:
                 "destinations": destinations, "destination": usable[0] if usable else "",
                 "defaults": {key: exports.destination_of(key) for key in formats_for(document)}}   # set in Preferences ▸ Export
 
+    def _start_access_check(self, setup: Dict[str, str], context: Optional[HubContext], warm: bool) -> None:
+        """Drop permissions read under other settings than those now active, and start reading them when none are kept or being read. With
+        ``warm``, also read what is exported ahead, while the user chooses, so Find item has nothing left to read. UI thread."""
+        if not context:
+            return
+        if self._access and self._access_stamp != context.stamp:   # read under other settings than those now active: not to be shown
+            self._access = {}
+        if self._access or self._checking:
+            return
+        self._checking = True
+        threading.Thread(target=self._check_access, args=(setup, context), daemon=True).start()
+        if warm:
+            self._panel.warm_export_target(self._item_found, self._thumbnail_found)
+
+    def _destinations(self, setup: Dict[str, str], context: Optional[HubContext]) -> List[Dict[str, Any]]:
+        """The destinations as the page shows them: why one is off, whether it is still being checked, and whether it is hidden."""
+        offered = self._offered(context)
+        destinations = []
+        for key in (ITEM, COMPONENT):
+            reason = setup[key] or self._access.get(key, "")
+            destinations.append({"key": key, "label": _label(key), "reason": reason,
+                                 "checking": not reason and key not in self._access,
+                                 "hidden": key not in offered})
+        return destinations
+
+    def _push(self, event: str, result: Dict[str, Any]) -> None:
+        """Send the page ``result`` as ``event``, from a worker thread (the send is made on the UI thread)."""
+        message = json.dumps({"ok": True, "result": result, "error": None})
+        self._tasks.post(lambda: self._host.send(event, message))
+
     def _item_found(self, part_number: str, item_number: str) -> None:
         """Tell the page the item number of what is exported, for its title (the window shows a grey bar until this, the item number taking longer
         than the part number to read). A worker thread."""
-        message = json.dumps({"ok": True, "result": {"target": part_number, "item_number": item_number}, "error": None})
-        self._tasks.post(lambda: self._host.send("export_item", message))
+        self._push("export_item", {"target": part_number, "item_number": item_number})
 
     def _thumbnail_found(self, part_number: str, url: str) -> None:
         """Tell the page the thumbnail of what is exported (a signed https address, shown beside the title). A worker thread."""
-        message = json.dumps({"ok": True, "result": {"target": part_number, "url": url}, "error": None})
-        self._tasks.post(lambda: self._host.send("export_thumbnail", message))
+        self._push("export_thumbnail", {"target": part_number, "url": url})
 
     def _files(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Start reading the files attached where the export would go, to tell the page whether it adds a file or makes a new version of one
@@ -218,8 +243,7 @@ class ExportDialog:
             raise ValueError(t("app.export_choose_format_destination"))
 
         def found(result: Dict[str, Any]) -> None:
-            message = json.dumps({"ok": True, "result": dict(result, format=key, destination=destination), "error": None})
-            self._tasks.post(lambda: self._host.send("export_files_found", message))
+            self._push("export_files_found", dict(result, format=key, destination=destination))
 
         self._panel.export_files(key, destination, str(payload.get("target") or ""), found)
         return {"started": True}
@@ -231,14 +255,7 @@ class ExportDialog:
             raise ValueError(t("app.export_format_unavailable"))
         if destination not in (ITEM, COMPONENT):
             raise ValueError(t("app.export_choose_destination"))
-        setup, context = self._setup()
-        if context and self._access and self._access_stamp != context.stamp:
-            raise ValueError(t("app.export_settings_changed"))
-        reason = setup[destination] or self._access.get(destination)
-        if reason is None:
-            raise ValueError(t("app.export_permissions_checking"))
-        if reason:
-            raise ValueError(reason)
+        self._require_usable(destination)
         number = str(payload.get("target") or "")   # what the window shows is what is exported, whatever is selected in Fusion now
         if not number:
             number, problem = self._panel.export_target()
@@ -247,6 +264,17 @@ class ExportDialog:
         log.info("Export %s of %s to the %s", key, number, destination)
         self._panel.export(key, destination, number)   # the window stays open and follows it (``upload_status``)
         return {"started": True}
+
+    def _require_usable(self, destination: str) -> None:
+        """Raise (shown in the window) unless ``destination`` is set up and the permissions read for it allow attaching files. UI thread."""
+        setup, context = self._setup()
+        if context and self._access and self._access_stamp != context.stamp:
+            raise ValueError(t("app.export_settings_changed"))
+        reason = setup[destination] or self._access.get(destination)
+        if reason is None:
+            raise ValueError(t("app.export_permissions_checking"))
+        if reason:
+            raise ValueError(reason)
 
     def _close(self, _payload: Dict[str, Any]) -> Dict[str, Any]:
         self._panel.cancel_export()   # the window is going: what it was still reading is not wanted

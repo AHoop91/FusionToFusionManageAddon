@@ -1,4 +1,4 @@
-"""Make a file from the open document and attach it to a Fusion Manage item (a new version when the file is there already).
+"""(UI layer, with the use case it starts.) Make a file from the open document and attach it to a Fusion Manage item (a new version when the file is there already).
 
 What file is made is an ``UploadJob``: a STEP file of a design, or a PDF, DWG or DXF of a drawing. It starts from the Actions menu of the
 Item panel (the item shown), from the right-click menu (the item of a number) or from the Export window (the item or the component of
@@ -14,7 +14,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
 
 import adsk.core
 
@@ -62,9 +62,27 @@ class UploadJob:
         return (t("app.stage_find"), t("app.stage_create", label=self.label), t("app.stage_upload", label=self.label))[step]
 
 
+class _Goal(NamedTuple):
+    """What the file is attached to: the item of a number (``ITEM``), or the Components record of a part of the design ``ref`` (``COMPONENT``,
+    which needs ``ref``)."""
+
+    destination: str
+    ref: Optional[DesignRef] = None
+
+
+class _Located(NamedTuple):
+    """The item the file goes to, once found in Fusion Manage."""
+
+    workspace_id: str
+    item_id: str
+    destination: str = ITEM
+
+
 class AttachmentUpload:
     """One upload at a time, from the Item panel, the right-click menu or the ribbon."""
 
+    # Ten parameters: the add-in's services, each given once by ``ItemPanel``, the only caller. They are the whole of what an upload needs to
+    # reach Fusion and Fusion Manage; a bundle would only be another name for the list.
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, host: PaletteHost, window: PaletteHost,
                  config: ConfigService, auth: AuthService, reload: Callable[[], None],
                  announce: Optional[Callable[[Dict[str, Any]], None]] = None, choices: Optional[ItemChoices] = None, *,
@@ -87,13 +105,14 @@ class AttachmentUpload:
 
     # ---- Starting -------------------------------------------------------------------
 
+    # Five parameters, called by ``ItemPanel`` (another module's code, which owns the values): kept so no caller changes.
     def from_panel(self, job: UploadJob, context: HubContext, workspace_id: str, item_id: str, subject: Subject) -> Dict[str, Any]:
         """Upload for the item shown, which was read under ``context``. UI thread. ``started`` is False when declined or one is under way."""
         if not job.confirm(self._ui, subject):
             return {"started": False}
         if not self._begin(job, MAKE):
             return {"started": False, "busy": True}
-        self._tasks.post(lambda: self._make(job, context, workspace_id, item_id, subject))   # after this call returns, so the page is not left waiting
+        self._tasks.post(lambda: self._make(job, context, _Located(workspace_id, item_id), subject))   # after this call returns, so the page is not left waiting
         return {"started": True}
 
     def from_number(self, job: UploadJob, subject: Subject) -> None:
@@ -112,7 +131,7 @@ class AttachmentUpload:
             log.exception("Could not show the upload window")
             self._fail(t("app.upload_could_not_attach", label=job.label, reason=exc))
             return
-        threading.Thread(target=self._find_then_make, args=(job, context, subject, ITEM, None), daemon=True).start()
+        threading.Thread(target=self._find_then_make, args=(job, context, subject, _Goal(ITEM)), daemon=True).start()
 
     def begin_in_window(self, job: UploadJob) -> Optional[HubContext]:
         """Start the status of an upload that the Export window follows (it shows the progress, and the end, itself): the context it is made
@@ -123,34 +142,33 @@ class AttachmentUpload:
         self._in_window = True
         return context
 
+    # Five parameters, called by ``ItemPanel``: kept so no caller changes.
     def continue_in_window(self, job: UploadJob, context: HubContext, subject: Subject, destination: str, ref: DesignRef) -> None:
         """Go on with the upload ``begin_in_window`` started, once the item of ``subject`` (a part of the design ``ref``) is known. UI thread."""
-        threading.Thread(target=self._find_then_make, args=(job, context, subject, destination, ref), daemon=True).start()
+        threading.Thread(target=self._find_then_make, args=(job, context, subject, _Goal(destination, ref)), daemon=True).start()
 
     def fail_in_window(self, message: str) -> None:
         """End the upload ``begin_in_window`` started, for ``message``. UI thread."""
         self._finish({"ok": False, "message": message})
 
-    def _find_then_make(self, job: UploadJob, context: HubContext, subject: Subject, destination: str, ref: Optional[DesignRef]) -> None:
-        """Find the item (or the component) of ``subject`` in Fusion Manage (a worker thread), then make the file on the UI thread. ``ref`` is the
-        design the subject is a part of; the component is asked of it, so it is needed for the COMPONENT destination only."""
+    def _find_then_make(self, job: UploadJob, context: HubContext, subject: Subject, goal: _Goal) -> None:
+        """Find the item (or the component) of ``subject`` in Fusion Manage (a worker thread), then make the file on the UI thread."""
         number = subject.item_number
         try:
-            workspace_id, item_id = self._find(destination, subject, ref, context)
+            located = _Located(*self._find(goal, subject, context), goal.destination)
         except Cancelled:   # the add-in is stopping
             self._end()
             return
         except Exception as exc:  # shown to the user, never raised into a thread nobody watches
-            log.exception("Could not find the %s of %s to attach a %s to", destination, number, job.label)
+            log.exception("Could not find the %s of %s to attach a %s to", goal.destination, number, job.label)
             self._fail(t("app.upload_could_not_attach", label=job.label, reason=exc))
             return
-        self._tasks.post(lambda: self._make(job, context, workspace_id, item_id, subject, destination))
+        self._tasks.post(lambda: self._make(job, context, located, subject))
 
-    def _find(self, destination: str, subject: Subject, ref: Optional[DesignRef], context: HubContext,
-              cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
-        """``(workspace id, item id)`` of the item of ``subject``, or of its Components record for the COMPONENT destination (which needs ``ref``)."""
-        if destination == COMPONENT:
-            return self._find_component(subject, ref, context, cancel)
+    def _find(self, goal: _Goal, subject: Subject, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
+        """``(workspace id, item id)`` of the item of ``subject``, or of its Components record for the COMPONENT destination (which needs the ``ref`` of ``goal``)."""
+        if goal.destination == COMPONENT:
+            return self._find_component(subject, goal.ref, context, cancel)
         return self._find_item(subject.item_number, context, cancel)
 
     def _find_item(self, number: str, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
@@ -192,6 +210,7 @@ class AttachmentUpload:
         except Exception as exc:  # noqa: BLE001 - only an optimisation
             log.info("Component %s not found ahead: %s", subject.item_number, exc)
 
+    # Seven parameters, called by ``ItemPanel`` from its worker thread: kept so no caller changes.
     def preview(self, destination: str, subject: Subject, ref: DesignRef, name: str, source: Dict[str, Any], context: HubContext,
                 cancel: Optional[CancelToken] = None) -> Dict[str, Any]:
         """What attaching the file called ``name`` to the item (or component) of ``subject``, a part of the design ``ref``, would do. ``state``
@@ -199,7 +218,7 @@ class AttachmentUpload:
         recent as the ``source`` it is made from (``export_freshness.compare``); or "unavailable", with a ``message``. A worker thread; nothing
         is changed."""
         try:
-            workspace_id, item_id = self._find(destination, subject, ref, context, cancel)
+            workspace_id, item_id = self._find(_Goal(destination, ref), subject, context, cancel)
             files = AttachmentService(FmClient(context.settings, self._auth, cancel)).files(workspace_id, item_id)
         except Cancelled:   # the window moved on to another look: nothing to say
             raise
@@ -215,7 +234,7 @@ class AttachmentUpload:
 
     # ---- Doing ----------------------------------------------------------------------
 
-    def _make(self, job: UploadJob, context: HubContext, workspace_id: str, item_id: str, subject: Subject, destination: str = ITEM) -> None:
+    def _make(self, job: UploadJob, context: HubContext, located: _Located, subject: Subject) -> None:
         """Write the file and send it off to be attached. UI thread."""
         name = f"{safe_name(subject.item_number)}{job.extension}"
         folder = os.path.join(temp_root(), uuid.uuid4().hex)   # while the file waits to be read
@@ -236,7 +255,7 @@ class AttachmentUpload:
         finally:
             remove_run(temp_root(), folder)
         self._stage(job, SEND, 0)
-        threading.Thread(target=self._upload, args=(job, context, workspace_id, item_id, name, content, destination), daemon=True).start()
+        threading.Thread(target=self._upload, args=(job, context, located, (name, content)), daemon=True).start()
 
     @staticmethod
     def _let_page_draw() -> None:
@@ -247,11 +266,12 @@ class AttachmentUpload:
             catch_up()
             time.sleep(0.05)
 
-    def _upload(self, job: UploadJob, context: HubContext, workspace_id: str, item_id: str, name: str, content: bytes, destination: str) -> None:
-        """Send the file to Fusion Manage, on a worker thread, and say how it went."""
+    def _upload(self, job: UploadJob, context: HubContext, located: _Located, file: Tuple[str, bytes]) -> None:
+        """Send ``file`` (its name and content) to Fusion Manage, on a worker thread, and say how it went."""
+        name, content = file
         try:
             client = FmClient(context.settings, self._auth)
-            kind = AttachmentService(client).upload(workspace_id, item_id, name, content,
+            kind = AttachmentService(client).upload(located.workspace_id, located.item_id, name, content,
                                                     progress=lambda fraction: self._stage(job, SEND, int(fraction * 100)))
         except Cancelled:   # the add-in is stopping
             self._end()
@@ -260,7 +280,7 @@ class AttachmentUpload:
             log.exception("Could not attach %s", name)
             self._fail(t("app.upload_could_not_attach_file", name=name, reason=exc))
             return
-        self._tasks.post(lambda: self._done(name, kind, destination))
+        self._tasks.post(lambda: self._done(name, kind, located.destination))
 
     def _done(self, name: str, kind: str, destination: str) -> None:
         """Say the file is attached (to the Export window if it follows it, else a green tick in the panel when it is open, else a message

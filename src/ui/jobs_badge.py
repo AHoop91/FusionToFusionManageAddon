@@ -1,4 +1,4 @@
-"""The Job Queue button on the ribbon shows what the queue is doing.
+"""The Job Queue button on the ribbon shows what the queue is doing (UI layer).
 
 Fusion has no badge for a ribbon button, so the button's icon is swapped for a copy with a coloured
 dot: green while publishes are waiting or running (``resources/images/jobs_running``), red while one has
@@ -35,6 +35,7 @@ def tooltip_note(state: str) -> str:
 class JobsBadge:
     """Switches the icon and tooltip of one ribbon command between the looks of the queue's states."""
 
+    # Five plain values of the one button, given once by the add-in's entry file: one over the guardrail, and not worth a bundle.
     def __init__(self, ui: adsk.core.UserInterface, tasks: UiThread, command_id: str, tooltip: str,
                  resources_dir: str) -> None:
         self._ui = ui

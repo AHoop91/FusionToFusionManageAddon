@@ -1,4 +1,4 @@
-"""Owns a Fusion palette that hosts one HTML panel from ``web/<page>/``."""
+"""Owns a Fusion palette that hosts one HTML panel from ``web/<page>/`` (UI layer: it places, shows and closes the palette)."""
 
 import json
 import os
@@ -71,6 +71,8 @@ class PaletteHost:
     scripts) that reuses ``web/shared``. Create one host per panel.
     """
 
+    # Eight parameters, the last three with defaults: every panel is made with the same few keywords, so the call reads as a description of
+    # the palette. Bundling them would change each caller for no gain.
     def __init__(self, ui: adsk.core.UserInterface, bridge: MessageBridge,
                  palette_id: str, title: str, page: str, docked: bool = True,
                  width: int = PALETTE_WIDTH, height: int = PALETTE_HEIGHT) -> None:

@@ -1,4 +1,4 @@
-"""The kinds of file the add-in attaches to a Fusion Manage item: a STEP file of a design, and a PDF, DWG or DXF of a drawing."""
+"""The kinds of file the add-in attaches to a Fusion Manage item: a STEP file of a design, and a PDF, DWG or DXF of a drawing (UI layer: it reads Fusion's open document and asks the user to confirm)."""
 
 from typing import Any, Callable, Iterable, List, Optional
 
