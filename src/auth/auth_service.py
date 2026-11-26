@@ -200,22 +200,26 @@ class AuthService:
                 raise AuthError(t("data.auth_not_signed_in"))
             if self._fresh(tokens):
                 return tokens["access_token"]
-            refresh = tokens.get("refresh_token")
-            if not refresh:
-                raise AuthError(t("data.auth_session_expired"))
-            try:
-                fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
-            except AuthError as exc:
-                if exc.rejected:   # the refresh token is dead; a network or server failure keeps the session for the next try
-                    self.sign_out(settings, generation)
-                raise
-            # Refresh tokens rotate; keep the old one if none is returned.
-            fresh.setdefault("refresh_token", refresh)
-            with self._lock:   # the check and the save are one step: a sign-out during the refresh must not be undone by it
-                if self._generations.get(settings.client_id, 0) != generation:
-                    raise AuthError(t("data.auth_not_signed_in"))
-                self._store.save(settings.client_id, fresh)
-            return fresh["access_token"]
+            return self._refresh(settings, tokens, generation)
+
+    def _refresh(self, settings: ConnectionSettings, tokens: Dict[str, Any], generation: int) -> str:
+        """Trade the refresh token in ``tokens`` for new tokens, keep them, and return the new access token. Holds ``_refresh_lock``."""
+        refresh = tokens.get("refresh_token")
+        if not refresh:
+            raise AuthError(t("data.auth_session_expired"))
+        try:
+            fresh = refresh_tokens(settings.client_id, refresh, settings.scopes)
+        except AuthError as exc:
+            if exc.rejected:   # the refresh token is dead; a network or server failure keeps the session for the next try
+                self.sign_out(settings, generation)
+            raise
+        # Refresh tokens rotate; keep the old one if none is returned.
+        fresh.setdefault("refresh_token", refresh)
+        with self._lock:   # the check and the save are one step: a sign-out during the refresh must not be undone by it
+            if self._generations.get(settings.client_id, 0) != generation:
+                raise AuthError(t("data.auth_not_signed_in"))
+            self._store.save(settings.client_id, fresh)
+        return fresh["access_token"]
 
     @staticmethod
     def _fresh(tokens: Dict[str, Any]) -> bool:

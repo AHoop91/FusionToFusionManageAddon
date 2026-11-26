@@ -21,6 +21,7 @@ class _SafeRedirects(urllib.request.HTTPRedirectHandler):
     """Follows a redirect to https only, and drops the access token when it leaves the host."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Six parameters because ``urllib`` fixes this signature."""
         target = urllib.parse.urlparse(newurl)
         if target.scheme.lower() != "https":
             raise urllib.error.HTTPError(req.full_url, code, t("data.http_redirect_refused", address=newurl), headers, fp)
@@ -52,7 +53,7 @@ class _CancellableHTTPSConnection(http.client.HTTPSConnection):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        plain = self._create_connection
+        plain = self._create_connection   # used by create below; measure_code.py reports it unused (false positive)
 
         def create(address, *rest, **more):
             connection = plain(address, *rest, **more)

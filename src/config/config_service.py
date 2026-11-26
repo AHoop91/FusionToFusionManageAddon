@@ -187,6 +187,7 @@ class ConfigService:
     def update(self, mode: str, local: ConnectionSettings,
                workspaces: WorkspaceSettings, company_source: str, exports: Optional[ExportSettings] = None) -> List[str]:
         """Validate and save the active hub's settings. Returns problems; nothing is saved if any exist.
+        Five parameters: one for each group of settings on the settings page.
 
         Local settings are only validated when local mode is active so users can switch modes without being blocked by
         unfinished fields. In Shared Configuration mode only the mode and the path are saved, and the path must lead to a

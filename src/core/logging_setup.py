@@ -95,8 +95,13 @@ def _collect(node: Any, prefix: str, found: List[str], depth: int) -> None:
         if isinstance(child, dict):
             _collect(child, f"{prefix}{key}.", found, depth + 1)
         elif isinstance(child, list):
-            for index, item in enumerate(child[:MAX_NESTED]):
-                _collect(item, f"{prefix}{key}[{index}].", found, depth + 1)
+            _collect_list(child, f"{prefix}{key}", found, depth)
+
+
+def _collect_list(items: List[Any], name: str, found: List[str], depth: int) -> None:
+    """Add the allowed fields of the first ``MAX_NESTED`` objects in the list ``items`` (the key ``name``) to ``found``."""
+    for index, item in enumerate(items[:MAX_NESTED]):
+        _collect(item, f"{name}[{index}].", found, depth + 1)
 
 
 def allowed_fields(raw: Union[bytes, str, None]) -> str:

@@ -38,7 +38,7 @@ def generate_pkce() -> Dict[str, str]:
 
 def build_authorize_url(client_id: str, redirect_uri: str, scopes: List[str],
                         challenge: str, state: str) -> str:
-    """URL the user's browser opens to sign in and grant access."""
+    """URL the user's browser opens to sign in and grant access. Five parameters, one for each value the sign-in address carries."""
     query = urllib.parse.urlencode({
         "response_type": "code",
         "client_id": client_id,

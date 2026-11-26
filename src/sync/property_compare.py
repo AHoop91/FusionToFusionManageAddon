@@ -85,6 +85,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
                        fm_state: str, fit_number: Optional[FitNumber] = None,
                        convert_unit: Optional[ConvertUnit] = None) -> List[Dict[str, Any]]:
     """One row per property, plus rows for mapped sources that are not listed.
+    Seven parameters: the design, its mappings and the item's state and fields are all inputs, and two optional helpers adjust numbers.
 
     ``convert_unit(field id, number, unit)`` gives a physical value as ``(number, unit)`` in the unit the Fusion Manage
     field is set to, or None to leave it as it is.
@@ -95,7 +96,7 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
     Raises ``ValueError`` for an ``fm_state`` that is not one of the states above, rather than reporting it as a new item.
     """
     values = {_key(p["name"]): p["value"] for p in properties}
-    extras = {_key(p["name"]): {k: p[k] for k in ("unit", "original") if p.get(k)} for p in properties}   # a physical property's unit and original value
+    extras = {_key(p["name"]): _unit_and_original(p) for p in properties}
     by_name = {_key(data_model_name(m.source)): m for m in mappings if m.source and m.fm_field_id}
     fm_fields = fm_fields or {}
 
@@ -108,13 +109,29 @@ def compare_properties(properties: List[Dict[str, str]], summary: Dict[str, Any]
         field = mapping.fm_field_id
         # A mapped built-in (part number, description) may be fresher than the property list.
         value = _source_value(mapping.source, summary, values) or value
-        extra = dict(extras.get(_key(name), {}))
-        if convert_unit and extra.get("unit") and value:   # a physical value in the unit the field is set to: Fusion's centimetres into millimetres
-            converted = convert_unit(field, value, extra["unit"])
-            if converted:
-                value, extra["unit"] = converted
+        value, extra = _in_field_unit(field, value, extras.get(_key(name), {}), convert_unit)
         fit = partial(fit_number, field) if fit_number else None
         fm_value = fm_fields.get(field, "")
-        rows.append({"name": name, "value": value, "shown": fit(value) if fit and value else value, "fm_field": field,
+        rows.append({"name": name, "value": value, "shown": _fitted(value, fit), "fm_field": field,
                      "fm_value": fm_value, "status": _status(fm_state, value, fm_value, fit), **extra})
     return sorted(rows, key=lambda r: (_ORDER[r["status"]], r["name"].lower()))
+
+
+def _unit_and_original(prop: Dict[str, str]) -> Dict[str, str]:
+    """A physical property's unit and original value, when it has them."""
+    return {k: prop[k] for k in ("unit", "original") if prop.get(k)}
+
+
+def _fitted(value: str, fit: Optional[Callable[[str], str]]) -> str:
+    """``value`` cut to the digits the Fusion Manage field holds (as it is when there is no ``fit`` or no value)."""
+    return fit(value) if fit and value else value
+
+
+def _in_field_unit(field: str, value: str, extra: Dict[str, str], convert_unit: Optional[ConvertUnit]) -> Tuple[str, Dict[str, str]]:
+    """``(value, extra)`` of a physical value in the unit the field is set to (Fusion's centimetres into millimetres); as they are when it is not one."""
+    extra = dict(extra)
+    if convert_unit and extra.get("unit") and value:
+        converted = convert_unit(field, value, extra["unit"])
+        if converted:
+            value, extra["unit"] = converted
+    return value, extra

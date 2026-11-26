@@ -181,7 +181,7 @@ def compare_bom(rows: List[Dict[str, Any]], root_number: str, fm_bom: Dict[str, 
 
 def read_and_compare_bom(rows: List[Dict[str, Any]], root_number: str, fm: FmClient, workspace_id: str, item_id: str,
                          bias: str = WORKING_BIAS) -> List[Dict[str, Any]]:
-    """``compare_bom`` of the design's ``rows`` with the Fusion Manage BOM of the item ``item_id``, read deep enough for the whole tree in one
+    """Six parameters: the design, the item and the connection are all needed. ``compare_bom`` of the design's ``rows`` with the Fusion Manage BOM of the item ``item_id``, read deep enough for the whole tree in one
     call, with the revision of each line ``bias`` names (see ``BomService``). Runs on a worker thread; the publish panel and the item panel's
     up-to-date check both use it."""
     depth = max([int(r["level"]) for r in rows] + [0]) + 1
