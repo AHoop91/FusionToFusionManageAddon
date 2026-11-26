@@ -25,6 +25,7 @@ Before you write a new form, field control, list, view table, error display or d
 | [manufacturing-data-model.md](manufacturing-data-model.md) | Anything that reads a design from the Manufacturing Data Model: components, properties, the BOM, thumbnails, hubs |
 | [publish-item-flow.md](publish-item-flow.md) | Anything in the Publish Item panel or a publish run: the order sections load in, what Publish sends, and where the order is uneven |
 | [finding-items.md](finding-items.md) | Any search for an item or component in Fusion Manage, or any code that needs an item number |
+| [product-portfolio.md](product-portfolio.md) | Anything in the product portfolio window: the settings, the Assign Product panel, creating, editing or assigning a product |
 | [testing-publishing.md](testing-publishing.md) | A test of publishing, sending or the Bill of Materials: which test answers what, and how to use the fake Fusion Manage |
 
 ## Keeping the notes true

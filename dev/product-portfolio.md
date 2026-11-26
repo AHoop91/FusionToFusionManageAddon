@@ -1,6 +1,6 @@
 # Product Portfolio Management: how it works
 
-This document describes everything the Product Portfolio Management feature does on the branch `feature/product-portfolio-management`, as the code stands now. Nothing here is committed yet. Where something is untested or undecided, it says so in the last section.
+This note describes what the Product Portfolio Management feature does, as the code stands now. Where something is untested or undecided, it says so in the last section. Sections 1 to 5 were written before the first screen (`usage.js`, where the open design is used) existed, so check them against the code before you rely on them.
 
 ## 1. What the feature is for
 
@@ -185,7 +185,7 @@ Palette JS  ->  bridge message "products_*"  ->  Python action (registered in pr
 | Form model | `src/fm/workspace_form.py`, `sections.py`, `refusal.py`, `workspace_schema.py` |
 | Views, rows and pictures | `src/fm/tableaus.py` |
 | Permissions | `src/fm/permissions.py` |
-| Panel UI | `src/ui/web/products/index.html`, `css/products-page.css`, `js/products-page.js`, `filters.js`, `sortable.js` (and shared `validators.js`, `form-controls.js`) |
+| Panel UI | `src/ui/web/products/index.html`, `css/products-page.css`, `js/products-page.js`, `usage.js`, `filters.js`, `sortable.js` (and shared `validators.js`, `form-controls.js`) |
 | Strings | `resources/languages/en.json` (`products.*`, `app.product_*`, `data.portfolio_*`) |
 | Tests | `tests/test_products.py`, `test_workspace_form.py`, `test_tableaus.py`, `test_refusal.py`, `test_workspace_schema.py`, `test_portfolio_workspace.py`, `test_tableau_picture.py` |
 
@@ -208,13 +208,5 @@ Palette JS  ->  bridge message "products_*"  ->  Python action (registered in pr
 **Not filled in**
 - The Portfolio kind has no schema, so there is no workspace layout check.
 
-**Designed but not built: "Where used"**
-You asked for a check, on opening the panel, of whether the open design is already on a product, including in any Variants grid. The decisions so far:
-- Show it as a **Where used** tab in the Assign Product panel.
-- Match by **component number**, so any revision counts.
-- Search **every product in the workspace chosen in settings**, checking both the Primary Component field and the Variants grid rows.
-
-Fusion Manage has no reverse lookup from a component to its products, so this means scanning products and reading each one's Primary Component and grid rows. It could be slow on a large portfolio. Still open: the tab layout and which tab is the default, what each row shows (product, role, revision, state), what it shows when nothing is found, and whether the scan runs when the panel opens or when the tab is opened.
-
-**Not committed**
-All of this work is uncommitted on the branch. Commit only when you ask, with no AI attribution lines.
+**Where used**
+The first screen of the panel (`usage.js`, `products_usage`) now shows where the open design is used. This note's earlier plan for it (a tab in the Assign Product panel) was replaced by that screen and has not been rewritten here.
