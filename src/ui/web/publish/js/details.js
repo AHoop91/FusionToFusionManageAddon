@@ -214,15 +214,15 @@
   function drawItemView(target, itemId) {
     target.replaceChildren();
     const view = itemViews[itemId];
+    $('pubtab-item').classList.remove('pub-wait-fill');
     if (view) {
       view.sections.forEach(function (section) { target.appendChild(ns.itemSections.section(section, function () {}, loadPicture)); });
       if (!view.sections.length) target.appendChild(el('p', 'muted', t('item.no_fields')));
     } else if (itemViewErrors[itemId]) {
       target.appendChild(ui.errorState(itemViewErrors[itemId], function () { loadItemView(itemId, true); drawItemView(target, itemId); }));
     } else {
-      const wait = el('div', 'card pub-props-wait');
-      wait.appendChild(ui.loaderNode());
-      target.appendChild(wait);
+      $('pubtab-item').classList.add('pub-wait-fill');   // the tab gives the loader all its room, so the balls sit in the middle of it, with no box
+      target.appendChild(ui.loaderNode());
       loadItemView(itemId);
     }
   }
@@ -367,10 +367,24 @@
     return card;
   }
 
-  /** A plain note on a line that has no Fusion Component to compare with. */
-  function noteCard(text) {
-    const card = el('div', 'card pub-pick-card');
+  /** A line that has no Fusion Component to compare with: an icon, a title and what it means, centred like the other empty states. */
+  function noteCard(title, text) {
+    const card = el('div', 'card pub-empty pub-note-card');
+    card.appendChild(ui.svg(['M3 5h10v10H3z', 'M11 9h10v10H11z', 'M4 20L20 4'], 48));   // two squares with nothing between them
+    card.appendChild(el('h4', 'pub-pick-title', title));
     card.appendChild(el('p', 'muted', text));
+    return card;
+  }
+
+  /** The shape of ``noteCard`` while it waits: a round icon, a title and two lines of text, as bars with the sweep of the other skeletons. */
+  function noteSkeleton() {
+    const card = el('div', 'card pub-empty pub-note-card');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', t('publish.loading_aria'));
+    card.appendChild(el('span', 'pub-skel pub-note-skel-icon'));
+    card.appendChild(el('span', 'pub-skel pub-note-skel-title'));
+    card.appendChild(el('span', 'pub-skel pub-note-skel-line'));
+    card.appendChild(el('span', 'pub-skel pub-note-skel-line pub-note-skel-short'));
     return card;
   }
 
@@ -460,7 +474,10 @@
   function paintDetails(compare) {
     const known = !!selected.itemId;
     if (selected.noComponent) {
-      pane.appendChild(noteCard(known ? t('publish.detail_no_component') : t('publish.detail_no_component_new')));
+      // A line with an item shows its card with the tabs, so it waits for them: a skeleton until they are read (or failed, which is said under the card).
+      if (known && !itemTabs[selected.itemId] && !itemTabErrors[selected.itemId]) { pane.appendChild(noteSkeleton()); return; }
+      pane.appendChild(known ? noteCard(t('publish.detail_no_component_title'), t('publish.detail_no_component'))
+                             : noteCard(t('publish.detail_no_component_new_title'), t('publish.detail_no_component_new')));
       return;
     }
     if (!compare) {
@@ -498,6 +515,7 @@
     if (itemId) loadItemTabs(itemId);
     if (itemId && itemTabErrors[itemId]) pane.appendChild(ui.errorState(t('publish.detail_tabs_error', { error: itemTabErrors[itemId] }), retry));
     $('pub-tabs').closest('.tabs-scroller').hidden = !data;
+    $('pub-tabs-skel').hidden = !(itemId && !data && !itemTabErrors[itemId]);   // bars where the strip will be, until the tabs are read (or failed)
     tabItem = data ? itemId : '';
     if (data) labelTabs(data);
     else selectOverviewTab();   // nothing else to be on
@@ -525,6 +543,7 @@
     ns.itemTree.leave('files');
     drawn = {};
     Object.keys(ITEM_TABS).forEach(function (key) { $('pub-' + key).replaceChildren(); });
+    $('pubtab-item').classList.remove('pub-wait-fill');
   }
 
   // ---- Opening, closing and feeding the pane -------------------------------------
@@ -549,6 +568,7 @@
     pane.textContent = '';
     leaveTabs();
     $('pub-tabs').closest('.tabs-scroller').hidden = true;
+    $('pub-tabs-skel').hidden = true;
     tabItem = '';
     hooks.onClose();
   }

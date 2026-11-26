@@ -95,6 +95,7 @@
           </div>
           <!-- Overview (the comparison with Fusion Manage) first, then the item's own tabs (Item details, Attachments) once an item is known; the strip is wired and shown by details.js. -->
           <nav id="pub-tabs" class="tabs" data-group="pubdetail"><button class="tab" type="button" data-tab="overview" data-i18n="publish.detail_tab_overview">Overview</button><button class="tab" type="button" data-tab="item" hidden></button><button class="tab" type="button" data-tab="files" hidden></button></nav>
+          <div id="pub-tabs-skel" class="pub-tabs-skel" hidden aria-hidden="true"><span class="pub-skel"></span><span class="pub-skel"></span><span class="pub-skel"></span></div>   <!-- stands for the strip while an item's tabs are read -->
           <div id="pubtab-overview" class="tab-panel active pub-props" data-group="pubdetail"></div>
           <div id="pubtab-item" class="tab-panel" data-group="pubdetail"><div id="pub-item"></div></div>
           <div id="pubtab-files" class="tab-panel pub-tab-body" data-group="pubdetail"><div id="pub-files"></div></div>

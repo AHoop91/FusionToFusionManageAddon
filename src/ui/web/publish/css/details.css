@@ -82,6 +82,24 @@
 .pub-pick-card { display: flex; flex-direction: column; gap: 8px; padding: 24px; margin-top: 12px; }
 .pub-pick-card p { margin: 0 0 6px; }
 .pub-pick-title { margin: 0; font-size: 15px; font-weight: 600; }
+/* While the Item tab reads its item, the loader has the whole tab and sits in the middle of it, across and down, with no box. */
+.pub-detail > .tab-panel.pub-wait-fill.active { display: flex; flex-direction: column; }
+.pub-wait-fill > #pub-item { flex: 1; display: flex; flex-direction: column; }
+.pub-wait-fill > #pub-item > .loader { flex: 1; }
+.pub-note-card { min-height: 240px; margin-top: 12px; padding: 24px; gap: 12px; border: 0; background: transparent; box-shadow: none; }   /* the empty state of a line with no Fusion Component: icon, title, text */
+/* The Files tab uses the Item panel's table and its empty state; its icon, title and text are set here to the same values as the Overview card, so the two tabs match. */
+#pub-detail .item-files-empty.item-centred { gap: 12px; }
+.pub-note-card svg, #pub-detail .item-files-empty .item-empty-icon-large svg { width: 48px; height: 48px; fill: none; stroke: #8a95a3; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+#pub-detail .item-files-empty .item-empty-icon-large { width: 48px; height: 48px; }
+.pub-note-card .pub-pick-title, #pub-detail .item-files-empty .item-empty-text { margin: 0; font: 600 15px/1.4 "Segoe UI", -apple-system, sans-serif; letter-spacing: 0; color: var(--text); }
+.pub-tabs-skel { display: flex; align-items: center; justify-content: space-around; gap: 24px; box-sizing: border-box; height: 41px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); }   /* the strip of tabs while it is read: three bars, as tall as the strip */
+.pub-tabs-skel[hidden] { display: none; }
+.pub-tabs-skel .pub-skel { width: 64px; height: 14px; }
+.pub-note-skel-icon { width: 48px; height: 48px; border-radius: 50%; }   /* the skeleton of the card: same room as the icon, title and text */
+.pub-note-skel-title { width: 200px; max-width: 80%; height: 16px; }
+.pub-note-skel-line { width: 320px; max-width: 90%; }
+.pub-note-skel-short { width: 220px; }
+.pub-note-card p, #pub-detail .item-files-empty .item-empty-hint { max-width: 360px; margin: 0; font: 400 13px/1.5 "Segoe UI", -apple-system, sans-serif; letter-spacing: 0; color: var(--muted); }
 .pub-fm-choice { text-align: left; padding: 7px 10px; border: 1px solid var(--border, #d0d0d0); border-radius: 4px; background: #fff; color: inherit; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Sections: a sub header with a chevron, then its content ----------------------- */
