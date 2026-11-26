@@ -2,9 +2,11 @@
 Fusion Manage item it is linked to and what a publish needs of several components at once.
 
 Sections are read separately and on demand, so the panel can show the summary first and fetch the rest only when it is needed.
+
+Layer: integration. It builds the queries and turns the answers into plain data; the application layer decides when to read and what to show.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
@@ -149,6 +151,15 @@ PUBLISH_BATCH = 4
 PUBLISH_BATCH_PHYSICAL = 2
 
 
+class _Version(NamedTuple):
+    """Where a read goes: the client, the design's summary (for its ids) and the saved version asked for (empty: the latest)."""
+
+    client: FusionGraphQlClient
+    summary: Dict[str, Any]
+    saved_at: str
+
+
+# More than 4 parameters, kept: every caller outside this module passes them (a named object would change all of them).
 def read_section(client: FusionGraphQlClient, section: str, model_id: str, saved_at: str = "",
                  summary: Optional[Dict[str, Any]] = None, component_id: str = "", physical: bool = False,
                  progress: Optional[Progress] = None) -> Any:
@@ -163,16 +174,17 @@ def read_section(client: FusionGraphQlClient, section: str, model_id: str, saved
     Raises when the query fails; the caller decides how to show that.
     """
     summary = summary or {}
+    version = _Version(client, summary, saved_at)
     if section == STRUCTURE:
-        return _read_structure(client, summary, saved_at, progress)
+        return _read_structure(version, "", STRUCTURE_DEPTH, progress)
     if section == LEVEL:
-        return _read_structure(client, summary, saved_at, progress, root_id=component_id, depth=1)
+        return _read_structure(version, component_id, 1, progress)
     if section == COMPONENT:
-        return _read_component(client, summary, component_id, saved_at, physical)
+        return _read_component(version, component_id, physical)
     if section == THUMBNAIL:
         return {"url": read_thumbnail_url(client, summary, component_id or summary.get("component_id", ""), saved_at)}
     if physical and section == PROPERTIES and summary.get("component_id"):   # the design's own component, with its physical properties
-        return _read_component(client, summary, summary["component_id"], saved_at, physical)["properties"]
+        return _read_component(version, summary["component_id"], physical)["properties"]
     query, parse = SECTIONS[section]
     return parse(client.query(query, {"input": [{"modelId": model_id, **_at(saved_at)}]}, label=section))
 
@@ -228,6 +240,7 @@ def publish_batch_size(physical: bool) -> int:
     return PUBLISH_BATCH_PHYSICAL if physical else PUBLISH_BATCH
 
 
+# More than 4 parameters, kept: the publish read-ahead and its tests call it with these five.
 def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any], component_ids: List[str], saved_at: str = "",
                             physical: bool = False) -> Dict[str, Union[Dict[str, Any], Exception]]:
     """What a publish reads of each component, in one request: by component id, ``properties`` (with the physical ones when ``physical``),
@@ -241,8 +254,7 @@ def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any]
         raise ValueError(t("data.mfg_no_component_id"))
     variables: Dict[str, Any] = {"composition": composition, **{f"id{n}": cid for n, cid in enumerate(component_ids)}, **_at(saved_at)}
     try:
-        data = client.query(_publish_query(len(component_ids), PHYSICAL_FIELDS if physical else ""), variables,
-                            label=f"publish x{len(component_ids)}" + (" + physical" if physical else ""))
+        data = _query_publish(client, component_ids, variables, physical)
     except MfgApiError as exc:
         if exc.transient:
             return {cid: exc for cid in component_ids}
@@ -253,6 +265,12 @@ def read_publish_components(client: FusionGraphQlClient, summary: Dict[str, Any]
         return {**read_publish_components(client, summary, component_ids[:half], saved_at, physical),
                 **read_publish_components(client, summary, component_ids[half:], saved_at, physical)}
     return {cid: _publish_read(as_dict(data.get(f"c{n}")), physical) for n, cid in enumerate(component_ids)}
+
+
+def _query_publish(client: FusionGraphQlClient, component_ids: List[str], variables: Dict[str, Any], physical: bool) -> Dict[str, Any]:
+    """The answer to one publish request for all of ``component_ids`` (each under its alias ``c0``, ``c1`` ...)."""
+    return client.query(_publish_query(len(component_ids), PHYSICAL_FIELDS if physical else ""), variables,
+                        label=f"publish x{len(component_ids)}" + (" + physical" if physical else ""))
 
 
 def _properties_of(data: Dict[str, Any], physical: bool) -> List[Dict[str, str]]:
@@ -266,23 +284,22 @@ def _publish_read(node: Dict[str, Any], physical: bool) -> Dict[str, Any]:
     return {"properties": _properties_of({"component": node}, physical), "thumbnail_url": _thumbnail_url(node), "link": _manage_item(node)}
 
 
-def _read_component(client: FusionGraphQlClient, summary: Dict[str, Any], component_id: str, saved_at: str, physical: bool = False) -> Any:
+def _read_component(version: _Version, component_id: str, physical: bool = False) -> Any:
     """``{"properties": [...]}`` of one component, with its physical properties when ``physical``."""
     query, label = (COMPONENT_WITH_PHYSICAL_QUERY, "properties + physical") if physical else (COMPONENT_PROPERTIES_QUERY, "properties")
-    data = client.query(query, _component_variables(summary, component_id, saved_at), label=label)
+    data = version.client.query(query, _component_variables(version.summary, component_id, version.saved_at), label=label)
     return {"properties": _properties_of(data, physical)}
 
 
-def _read_structure(client: FusionGraphQlClient, summary: Dict[str, Any], saved_at: str, progress: Optional[Progress] = None,
-                    root_id: str = "", depth: int = STRUCTURE_DEPTH) -> Any:
+def _read_structure(version: _Version, root_id: str, depth: int, progress: Optional[Progress] = None) -> Any:
     """The lines below ``root_id`` (the design when empty) down to ``depth`` levels, as ``parse_structure`` rows. ``depth`` 1 is one
     level: only the lines directly under it, whatever the answer holds below them."""
-    root_id = root_id or summary.get("component_id", "")
-    variables = _component_variables(summary, root_id, saved_at)
+    root_id = root_id or version.summary.get("component_id", "")
+    variables = _component_variables(version.summary, root_id, version.saved_at)
     variables.update(depth=depth, limit=STRUCTURE_PAGE_SIZE, cursor=None)
     relations: List[Any] = []
     for page in range(1, MAX_PAGES + 1):
-        data = client.query(STRUCTURE_QUERY, variables, label=f"structure page {page}")
+        data = version.client.query(STRUCTURE_QUERY, variables, label=f"structure page {page}")
         node = as_dict(_component_in(data).get("bomRelations"))
         relations.extend(node.get("results") or [])
         variables["cursor"] = as_dict(node.get("pagination")).get("cursor")

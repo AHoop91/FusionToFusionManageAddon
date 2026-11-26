@@ -2,6 +2,8 @@
 
 The user is already signed in to Fusion, so no Client ID or access token is needed: Fusion reads the hub as the user, and shows only what
 they can reach. Fusion's API belongs to its main thread, so each read is posted there and waited for; call this from a worker thread.
+
+Layer: integration.
 """
 
 import os
@@ -21,6 +23,22 @@ DOWNLOAD_PREFIX = "fusion_manage_config_"
 DOWNLOAD_NAME = "config.json"
 
 Entry = Dict[str, str]   # a project, folder or file of the hub: {"id": ..., "name": ...}
+
+
+def _file_details(data_file: Any) -> Dict[str, str]:
+    """The details of a Fusion data file that the panel shows, as text; a detail Fusion does not give is left out."""
+    info: Dict[str, str] = {}
+    for key, read in (("project_name", lambda: data_file.parentProject.name),
+                      ("modified", lambda: _iso(data_file.dateModified)),
+                      ("modified_by", lambda: data_file.lastUpdatedBy.displayName),
+                      ("version", lambda: data_file.latestVersionNumber)):
+        try:
+            value = read()
+        except Exception:  # noqa: BLE001 - a detail Fusion does not give is only missing from the panel
+            continue
+        if value not in (None, ""):
+            info[key] = str(value)
+    return info
 
 
 class HubFilesError(Exception):
@@ -164,18 +182,7 @@ class FusionHubFiles:
                 data_file = _find_file(item_id)
             except HubFilesError:
                 return {}
-            info: Dict[str, str] = {}
-            for key, read in (("project_name", lambda: data_file.parentProject.name),
-                              ("modified", lambda: _iso(data_file.dateModified)),
-                              ("modified_by", lambda: data_file.lastUpdatedBy.displayName),
-                              ("version", lambda: data_file.latestVersionNumber)):
-                try:
-                    value = read()
-                except Exception:  # noqa: BLE001 - a detail Fusion does not give is only missing from the panel
-                    continue
-                if value not in (None, ""):
-                    info[key] = str(value)
-            return info
+            return _file_details(data_file)
         return self._main(work)
 
     def read_file(self, item_id: str, max_bytes: int) -> bytes:
