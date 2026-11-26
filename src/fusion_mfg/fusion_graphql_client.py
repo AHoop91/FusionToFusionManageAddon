@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
+from ..core import backoff
 from ..core.cancel import ADDIN, CancelToken
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
@@ -24,7 +25,6 @@ FUSION_GRAPHQL_URL = "mfgdm://v3"
 REQUEST_TIMEOUT_SECONDS = 45
 POLL_SECONDS = 0.25   # how often a wait for an answer looks at the cancel token
 ATTEMPTS = 3
-RETRY_SECONDS = 2   # wait before the second try, twice that before the third
 RETRY_HTTP = (429, 502, 503, 504)
 TRANSIENT_CODES = ("DATA_NOT_READY", "SUBREQUEST_HTTP_ERROR")   # a service behind the gateway was not ready or not answering
 
@@ -106,7 +106,7 @@ class FusionGraphQlClient:
                 if attempt == ATTEMPTS or not exc.transient:
                     raise
                 log.warning("Manufacturing Data Model query failed (%s), attempt %d of %d", exc, attempt, ATTEMPTS)
-                self.cancel.wait(RETRY_SECONDS * attempt)
+                self.cancel.wait(backoff.delay(attempt))   # Fusion's response gives no headers, so there is no Retry-After to read
         raise AssertionError("unreachable: the last attempt returns or raises")
 
     def _query_once(self, text: str, variables: Optional[Dict[str, Any]], label: str) -> Dict[str, Any]:

@@ -10,7 +10,7 @@ All code is in `src/fusion_mfg/`.
 - `query(text, variables, label)` returns the `data` object or raises `MfgApiError`. `label` names the query in the log.
 - It waits on the network, so call it from a worker thread. A warning is logged when it is called on Fusion's own thread, which it blocks.
 - A cancel token is checked on every request and ends the wait (`with_cancel`). The call itself cannot be ended once made; the wait is what ends, and the answer is dropped.
-- A query only reads, so it is tried up to 3 times (`ATTEMPTS`), waiting 2 s and then 4 s, when the failure is transient: HTTP 429, 502, 503 or 504, or the codes `DATA_NOT_READY` and `SUBREQUEST_HTTP_ERROR`. The timeout is 45 s.
+- A query only reads, so it is tried up to 3 times (`ATTEMPTS`), waiting as `core/backoff.py` says (exponential with jitter: about 1 s, then about 2 s; Fusion's response gives no headers, so there is no `Retry-After` to read), when the failure is transient: HTTP 429, 502, 503 or 504, or the codes `DATA_NOT_READY` and `SUBREQUEST_HTTP_ERROR`. The timeout is 45 s.
 - `MfgApiError.code` carries the service's own code, such as `FHQ-403` (not allowed). `MfgApiError.transient` says a retry was worth making.
 - A query costs points: at most 1000 a query, and a page of 250 BOM relations costs 467 (comment in `model_service.py`). The cost comes back in `extensions` and is logged at debug level.
 

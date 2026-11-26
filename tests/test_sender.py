@@ -6,6 +6,7 @@ import unittest
 from src.fm.client import FmApiError, SendResult
 from src.publish.states import DONE
 from src.publish.send_log import SEND_LOG
+from src.core.i18n import t
 from src.publish.sender import SendRun, created_id, load_plan
 
 
@@ -128,6 +129,19 @@ class SendRunTests(unittest.TestCase):
         self.assertEqual([row["status"] for row in run.rows], ["done", "error", "error"])   # A created, B refused, A's BOM names B
         self.assertIn("B", run.rows[-1]["detail"])
         self.assertEqual(sum(1 for m, p, b in fm.sent if p.endswith("/bom-items")), 0)
+
+    def test_a_write_with_an_unknown_outcome_says_so_and_a_refusal_does_not(self):
+        class Failing(FakeFm):
+            def __init__(self, error):
+                super().__init__()
+                self.error = error
+
+            def send_json(self, method, path, body=None):
+                raise self.error
+        for error, unknown in ((FmApiError("timed out"), True), (FmApiError("bad gateway", 502), True), (FmApiError("refused", 400), False)):
+            with self.subTest(status=error.status):
+                run, _logged = self.run_send(Failing(error), {"A": create("A")}, {})
+                self.assertEqual(t("run.send_outcome_unknown") in run.rows[0]["detail"], unknown)
 
     def test_sending_again_skips_what_was_accepted(self):
         with tempfile.TemporaryDirectory() as root:

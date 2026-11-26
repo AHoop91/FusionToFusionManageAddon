@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 from ..auth.auth_service import AuthService
 from ..config.hub import tenant_code
 from ..config.models import ConnectionSettings
+from ..core import backoff
 from ..core.cancel import ADDIN, CancelToken
 from ..core.http import open_url
 from ..core.i18n import t
@@ -36,10 +37,11 @@ WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer th
 UPLOAD_TIMEOUT_SECONDS = 300   # a STEP of an assembly can be large
 UPLOAD_CHUNK_BYTES = 64 * 1024   # a file goes out in pieces this big, so progress can be shown
 READ_ATTEMPTS = 3
+WRITE_ATTEMPTS = 3   # tries of a write, which is only tried again when it was refused for being too busy (429): see ``send_json``
+BUSY = 429   # the status of an answer that refused a request before doing anything, because there were too many
 NO_RESPONSE = 0   # the ``status`` of an error that had no HTTP response
 NO_CONTENT = 204   # the status of an answer with nothing in it, e.g. a search with no hits
 RETRY_STATUSES = (429, 502, 503, 504, NO_RESPONSE)   # worth another try: a busy or failing gateway, a timeout or a lost connection
-RETRY_SECONDS = 2   # wait before the second try, twice that before the third
 _ENCODED_SEPARATORS = ("%2e", "%2f", "%5c")   # an encoded dot, slash or backslash
 _DATA_URI = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]+")   # a file embedded in a request body (an image field)
 
@@ -52,8 +54,9 @@ VIEW = "views/1"   # the view whose fields and sections an item is written throu
 class FmApiError(Exception):
     """Raised when a Fusion Manage request fails or returns bad data."""
 
-    def __init__(self, message: str, status: int = NO_RESPONSE, body: str = "") -> None:
+    def __init__(self, message: str, status: int = NO_RESPONSE, body: str = "", retry_after: Optional[float] = None) -> None:
         super().__init__(message)
+        self.retry_after = retry_after   # seconds the answer's ``Retry-After`` header asked to wait, when it had one
         self.status = status   # HTTP status, or ``NO_RESPONSE`` when there was none
         self.body = body   # what Fusion Manage said in a refusal, as it said it (the start of it): for a caller that reads it
 
@@ -83,7 +86,7 @@ def _read_failure(exc: OSError, path: str) -> FmApiError:
     """The error for a read of ``path`` that failed: a refusal (``HTTPError``, logged with what Fusion Manage said) or no answer at all."""
     if isinstance(exc, urllib.error.HTTPError):
         log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path, _said(exc))
-        return FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code)
+        return FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code, retry_after=backoff.retry_after(exc.headers))
     return FmApiError(t("data.fm_request_failed", path=path, reason=exc))
 
 
@@ -189,8 +192,11 @@ class FmClient:
             except FmApiError as exc:
                 if attempt == READ_ATTEMPTS or exc.status not in RETRY_STATUSES:
                     raise
-                log.warning("Fusion Manage read of %s failed (%s), attempt %d of %d", path, exc, attempt, READ_ATTEMPTS)
-                self.cancel.wait(RETRY_SECONDS * attempt)
+                wait = backoff.delay(attempt, exc.retry_after)
+                if wait is None:   # the server asked for longer than is worth waiting
+                    raise
+                log.warning("Fusion Manage read of %s failed (%s), attempt %d of %d, again in %.1fs", path, exc, attempt, READ_ATTEMPTS, wait)
+                self.cancel.wait(wait)
 
     def _url(self, path: str) -> str:
         """The address of ``path`` in the tenant; ``FmApiError`` when ``path`` is refused or no usable hub is active."""
@@ -278,7 +284,25 @@ class FmClient:
         A write can have no answer (201 with only a ``Location`` header, 204), so ``data`` may be None.
         A refusal raises ``FmApiError`` whose message carries what Fusion Manage said, since that is
         the reason the user needs.
+
+        A write is not tried again blindly: one that failed without an answer, or with a server error, may have been done (see
+        ``FmApiError.outcome_unknown``), and the caller finds that out. The one answer that is safe to try again is 429, which refuses the
+        request before doing anything: it is sent again after the wait ``Retry-After`` asks for (else a growing, jittered one), up to
+        ``WRITE_ATTEMPTS`` times.
         """
+        for attempt in range(1, WRITE_ATTEMPTS + 1):
+            try:
+                return self._send_once(method, path, body, content_type)
+            except FmApiError as exc:
+                wait = backoff.delay(attempt, exc.retry_after) if exc.status == BUSY else None
+                if attempt == WRITE_ATTEMPTS or wait is None:
+                    raise
+                log.warning("Fusion Manage %s %s was refused as too busy, attempt %d of %d, again in %.1fs", method, path, attempt, WRITE_ATTEMPTS, wait)
+                self.cancel.wait(wait)
+        raise AssertionError("unreachable: the last attempt returns or raises")
+
+    def _send_once(self, method: str, path: str, body: Any, content_type: str) -> SendResult:
+        """One try of ``send_json``."""
         self.cancel.check()
         payload = None if body is None else json.dumps(body).encode("utf-8")
         request = self._request(self._url(path), "application/json", method, payload, content_type if payload is not None else "")
@@ -301,6 +325,7 @@ class FmClient:
         except urllib.error.HTTPError as exc:
             said = _said(exc)
             log.error("Fusion Manage HTTP %s for %s %s: %s; it sent: %s", exc.code, method, path, said, _readable(payload))
-            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code, said) from exc
+            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code, said,
+                             backoff.retry_after(exc.headers)) from exc
         except OSError as exc:
             raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc)) from exc

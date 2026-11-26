@@ -6,6 +6,8 @@ import urllib.error
 from unittest import mock
 
 from src.config.models import ConnectionSettings
+from src.core.cancel import CancelToken
+from src.core import backoff
 from src.fm import client as client_module
 from src.fm.client import ERROR_MESSAGE_CHARS, FmApiError, FmClient
 
@@ -26,8 +28,8 @@ class Answer:
         return False
 
 
-def refusal(code, body=b""):
-    return urllib.error.HTTPError("https://x", code, "no", {}, io.BytesIO(body))
+def refusal(code, body=b"", headers=None):
+    return urllib.error.HTTPError("https://x", code, "no", headers or {}, io.BytesIO(body))
 
 
 def make_client(tenant="acme"):
@@ -38,8 +40,8 @@ def make_client(tenant="acme"):
 
 class GetJsonTests(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch.object(client_module, "RETRY_SECONDS", 0)
-        patcher.start()
+        patcher = mock.patch.object(CancelToken, "wait")   # the pause before another try
+        self.waits = patcher.start()
         self.addCleanup(patcher.stop)
 
     def test_the_answer_is_parsed_and_the_user_is_signed_in(self):
@@ -81,6 +83,31 @@ class GetJsonTests(unittest.TestCase):
             client.get_json("/api/v3/x")
         self.assertEqual(opened.call_count, 2)
 
+    def test_the_wait_the_server_asks_for_is_the_wait(self):
+        client, _auth = make_client()
+        with mock.patch.object(client_module, "open_url", side_effect=[refusal(429, headers={"Retry-After": "7"}), Answer()]):
+            client.get_json("/api/v3/x")
+        waited = self.waits.call_args.args[0]
+        self.assertTrue(7 <= waited <= 7 + backoff.AFTER_JITTER_SECONDS, waited)
+
+    def test_a_server_that_asks_for_too_long_a_wait_is_not_waited_for(self):
+        client, _auth = make_client()
+        asked = str(int(backoff.MAX_RETRY_AFTER_SECONDS) + 1)
+        with mock.patch.object(client_module, "open_url", side_effect=refusal(429, headers={"Retry-After": asked})) as opened:
+            with self.assertRaises(FmApiError) as raised:
+                client.get_json("/api/v3/x")
+        self.assertEqual((opened.call_count, raised.exception.status), (1, 429))
+        self.waits.assert_not_called()
+
+    def test_with_no_retry_after_the_wait_grows(self):
+        client, _auth = make_client()
+        with mock.patch.object(client_module, "open_url", side_effect=refusal(503)):
+            with self.assertRaises(FmApiError):
+                client.get_json("/api/v3/x")
+        first, second = (call.args[0] for call in self.waits.call_args_list)
+        self.assertTrue(backoff.BASE_SECONDS / 2 <= first <= backoff.BASE_SECONDS, first)
+        self.assertTrue(backoff.BASE_SECONDS <= second <= backoff.BASE_SECONDS * 2, second)
+
     def test_an_address_that_is_refused_goes_nowhere_and_is_not_tried_again(self):
         client, auth = make_client()
         with mock.patch.object(client_module, "open_url") as opened:
@@ -99,6 +126,35 @@ class GetJsonTests(unittest.TestCase):
 
 
 class SendJsonTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(CancelToken, "wait")   # the pause before another try
+        self.waits = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_write_refused_as_too_busy_is_sent_again_after_the_wait_asked_for(self):
+        client, _auth = make_client()
+        with mock.patch.object(client_module, "open_url", side_effect=[refusal(429, headers={"Retry-After": "3"}), Answer(status=201)]) as opened:
+            self.assertEqual(client.send_json("POST", "/api/v3/x", {"a": 1}).status, 201)
+        self.assertEqual(opened.call_count, 2)
+        self.assertTrue(3 <= self.waits.call_args.args[0] <= 3 + backoff.AFTER_JITTER_SECONDS)
+
+    def test_a_write_that_kept_being_refused_as_too_busy_gives_up(self):
+        client, _auth = make_client()
+        with mock.patch.object(client_module, "open_url", side_effect=refusal(429)) as opened:
+            with self.assertRaises(FmApiError):
+                client.send_json("POST", "/api/v3/x", {})
+        self.assertEqual(opened.call_count, client_module.WRITE_ATTEMPTS)
+
+    def test_a_write_with_an_unknown_outcome_is_never_sent_again(self):
+        client, _auth = make_client()
+        for failure in (refusal(502), refusal(500), refusal(504), TimeoutError("slow")):
+            with mock.patch.object(client_module, "open_url", side_effect=failure) as opened:
+                with self.assertRaises(FmApiError) as raised:
+                    client.send_json("POST", "/api/v3/x", {})
+            self.assertEqual(opened.call_count, 1, failure)
+            self.assertTrue(raised.exception.outcome_unknown)
+        self.waits.assert_not_called()
+
     def test_the_body_goes_out_as_json(self):
         client, _auth = make_client()
         with mock.patch.object(client_module, "open_url", return_value=Answer(b'{"id": 5}', status=201, headers={"Location": "/x/5"})) as opened:

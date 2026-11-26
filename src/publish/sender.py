@@ -383,7 +383,8 @@ class SendRun(JobState):
             row["status"], row["detail"] = CANCELLED, cut_off_text()
             raise
         except (FmApiError, AuthError, Unresolved) as exc:
-            row["status"], row["detail"] = ERROR, str(exc)
+            unknown = isinstance(exc, FmApiError) and exc.outcome_unknown   # no answer, or a server error: it may have been done
+            row["status"], row["detail"] = ERROR, f"{exc} {t('run.send_outcome_unknown')}" if unknown else str(exc)
         with self._lock:
             self.done += 1
 

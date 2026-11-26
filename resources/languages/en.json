@@ -1476,6 +1476,7 @@
     "run.artifact_component_link": "component link",
     "run.artifact_bom_requests": "bom requests",
     "run.artifact_picklist": "picklist {field}",
+    "run.send_outcome_unknown": "Fusion Manage gave no clear answer, so it may have done this. Retry checks first, and does not send it twice.",
     "run.send_cut_off": "Cancelled while it was being sent: Fusion Manage may have done it. Sending again checks first.",
     "run.send_file_unreadable": "Could not read {name}: {error}",
     "run.send_file_outside": "The manifest names a file outside the folder: {name}",
