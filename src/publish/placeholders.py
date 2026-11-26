@@ -53,9 +53,12 @@ def _texts(node: Any) -> Iterator[str]:
     if isinstance(node, str):
         yield node
         return
-    children = node.values() if isinstance(node, dict) else node if isinstance(node, list) else ()
-    for child in children:
-        yield from _texts(child)
+    if isinstance(node, dict):
+        for child in node.values():
+            yield from _texts(child)
+    elif isinstance(node, list):
+        for child in node:
+            yield from _texts(child)
 
 
 def _mapped(node: Any, change: Callable[[str], str]) -> Any:

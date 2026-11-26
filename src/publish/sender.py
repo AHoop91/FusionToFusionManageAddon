@@ -339,7 +339,7 @@ class Dispatcher:
         self._read_facts([self._item_id(argument) for kind, argument in found if kind == VERSION])
         for kind, argument in found:
             value = self._marker_value(kind, argument)
-            if value:
+            if kind == ITEM or value:   # an item's id is kept even when empty; only a version the item lacks is left out
                 values[(kind, argument)] = value
         if key_of(TENANT) in found:
             tenant = self._tenant_of(found)
