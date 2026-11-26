@@ -66,7 +66,7 @@ All of it is in `src/ui/web/products/js/`.
 
 | Piece | File and functions |
 | --- | --- |
-| Views | `products-page.js`: `loadViews` reads the list and chooses the view (the last one used, kept in `localStorage`, else the first). `makeViewPicker` is the shared picker with rename and delete buttons on each view and a footer to create one. `askRenameView`, `askDeleteView` and `openNewView` open the dialogs. |
+| Views | `products-page.js`: `loadViews` reads the list and chooses the view (the last one used, kept in `localStorage`, else the first). `makeViewPicker` is the shared picker with rename and delete buttons on each view and a footer to create one. `product-views.js` (`ns.productViews.init(host)`) draws the rename, delete and create dialogs and gives back `askRename`, `askDelete`, `openNew` and `closeFront`; the page lends it `ask`, `failure`, `setAlert`, `isBusy`, `columns`, `reload`, `deleted` and `created`. |
 | Rows | `loadRows(page)` asks `products_rows` (50 a page, `PAGE_SIZE`) and, for page 1, `readColumns` asks `products_columns` so the header shows while rows are still on the way. `rowsToken` and `columnsToken` drop an answer that arrives after a newer request. `drawRows` paints the body, and `more` is true when `total` says there is another page (or, with no total, the page was full). |
 | Table | `paintHeader` (a title per column, plus a funnel button when the column has filters), `cellOf` (markup through `ns.safeHtml.render`, a picture, or text), a radio column that picks one row. The first column is styled as the product itself (`products-primary`). |
 | Column widths | `applyWidths` and `startResize`: the first drag fixes every column at the width it has, then only the dragged column moves (minimum 60 px). |

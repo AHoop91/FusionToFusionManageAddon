@@ -41,7 +41,7 @@ A row can carry small buttons of its own: give an item `actions`, a list of `{la
 | `products/js/filters.js` (`dropdown`) | Short required or clearable list |
 | `shared/js/form-controls.js` (`linkPicker`) | `source` with batches, single or `multi` |
 | `shared/js/form-controls.js` (`selectPicker`) | Fixed choices of a form field, clear entry, search from 8 items |
-| `products/js/products-page.js` (`makeViewPicker`) | The view of the list: required, `actions` on each view (rename, delete), a `footer` to create one |
+| `products/js/products-page.js` (`makeViewPicker`) | The view of the list: required, `actions` on each view (rename, delete), a `footer` to create one (the dialogs are `product-views.js`) |
 | `item/js/bom.js` | The BOM view of the item: required, no search |
 | `publish/js/add-items.js` (`versionPicker`, `combo`) | Required static list, and `source` with a round clear button |
 

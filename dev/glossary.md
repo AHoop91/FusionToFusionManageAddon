@@ -172,7 +172,7 @@ The pieces below are built but not yet shared, so a second page cannot call them
 | Piece | Where it is | Note |
 | --- | --- | --- |
 | Sections, the form layout, matrices, the filters above the form, the checklist | `products/js/products-page.js` | [workspace-forms.md](workspace-forms.md) |
-| The table of rows, column widths, pictures, view selector | `products/js/products-page.js` | [tableaus.md](tableaus.md) |
+| The table of rows, column widths, pictures, view selector | `products/js/products-page.js`, `products/js/product-views.js` | [tableaus.md](tableaus.md) |
 | Filters and columns panel | `products/js/filters.js` | [tableaus.md](tableaus.md) |
 | Drag to reorder a list | `products/js/sortable.js` | [tableaus.md](tableaus.md) |
 | Show Fusion Manage's own markup safely | `item/js/safe-html.js` (`ns.safeHtml.render`, also used by the Products page) | |
