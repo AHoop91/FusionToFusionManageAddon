@@ -37,7 +37,7 @@ A row can carry small buttons of its own: give an item `actions`, a list of `{la
 
 | Caller | Kind |
 | --- | --- |
-| `settings/js/workspaces.js`, `settings/js/language.js` | Grouped static lists, taken items, clear entry |
+| `settings/js/workspaces.js`, `settings/js/make-or-buy.js`, `settings/js/language.js` | Grouped static lists, taken items, clear entry |
 | `products/js/filters.js` (`dropdown`) | Short required or clearable list |
 | `shared/js/form-controls.js` (`linkPicker`) | `source` with batches, single or `multi` |
 | `shared/js/form-controls.js` (`selectPicker`) | Fixed choices of a form field, clear entry, search from 8 items |

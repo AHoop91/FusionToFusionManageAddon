@@ -1,4 +1,4 @@
-// The Make or buy section of the Items card in Settings (settings/js/workspaces.js and validation.js), run in jsdom.
+// The Make or buy section of the Items card in Settings (settings/js/make-or-buy.js, workspaces.js and validation.js), run in jsdom.
 // Needs jsdom (``npm install jsdom``); without it these tests are skipped.
 'use strict';
 
@@ -36,7 +36,7 @@ function setup(makeBuy) {
   ['dom.js', 'picker.js', 'section.js'].forEach((src) => run(w, '../shared/js/' + src));
   w.MfgUi.bridge = { on: (name, fn) => { handlers[name] = fn; }, send: (name, data) => sent.push([name, data]), expect: () => () => {} };
   w.MfgUi.settings = { roleState: () => 'admin' };
-  ['info.js', 'validation.js', 'workspaces.js'].forEach((src) => run(w, '../settings/js/' + src));
+  ['info.js', 'validation.js', 'make-or-buy.js', 'workspaces.js'].forEach((src) => run(w, '../settings/js/' + src));
   w.MfgUi.workspaces.init();
   const kind = { id: 'items', title: 'Items', description: 'Items.', component_lookup: 'CLOOKUP', mapped: true, default_mappings: [] };
   w.MfgUi.workspaces.render({
