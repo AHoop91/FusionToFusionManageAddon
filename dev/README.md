@@ -16,6 +16,7 @@ Before you write a new form, field control, list, view table, error display or d
 
 | Note | Read it before you build |
 | --- | --- |
+| [architecture.md](architecture.md) | Any new module, or any change that moves code between the UI, application, domain and integration layers; also the function-size guardrails |
 | [pickers.md](pickers.md) | A drop-down, combo box, searchable list or chip box |
 | [workspace-forms.md](workspace-forms.md) | A form for the items of a Fusion Manage workspace, or any field control |
 | [tableaus.md](tableaus.md) | A table of a workspace's rows, a filters or columns panel, or anything that reads a view |
