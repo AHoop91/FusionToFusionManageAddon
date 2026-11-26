@@ -73,6 +73,14 @@ def _edge_id(edge: Dict[str, Any]) -> str:
     return match.group(1) if match else ""
 
 
+def _line_of(edge: Dict[str, Any], child: str, child_urn: str, titles: Dict[str, str]) -> Dict[str, str]:
+    """The line an edge makes: the child's ``number`` and name, and the edge's quantity, sequence and ids."""
+    sequence = edge.get("itemNumber")   # 0 is a position
+    return {"number": child, "name": name_of(titles[child_urn]), "quantity": _quantity(edge.get("fields")),
+            "sequence": "" if sequence is None else str(sequence), "edge_id": _edge_id(edge),
+            "item_id": link_ids(manage_link(child_urn, ""))[1]}
+
+
 def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
     """``{parent item number: [{"number", "name", "quantity", "sequence", "edge_id", "item_id"}]}`` from a bulk BOM answer.
 
@@ -82,18 +90,20 @@ def parse_bom(data: Any) -> Dict[str, List[Dict[str, str]]]:
     an item number is left out.
     """
     data = as_dict(data)
-    titles = {str(dig(n, "item", "urn") or ""): str(dig(n, "item", "title") or "") for n in dict_rows(data.get("nodes"))}
+    titles = _node_titles(data)
     numbers = {urn: number_of(title) for urn, title in titles.items()}
     children: Dict[str, List[Dict[str, str]]] = {number: [] for number in numbers.values() if number}
     for edge in dict_rows(data.get("edges")):
-        parent_urn, child_urn = str(edge.get("parent") or ""), str(edge.get("child") or "")
-        parent, child = numbers.get(parent_urn), numbers.get(child_urn)
-        sequence = edge.get("itemNumber")   # 0 is a position
-        if not parent or not child:
-            continue
-        children[parent].append({"number": child, "name": name_of(titles[child_urn]), "quantity": _quantity(edge.get("fields")),
-                                 "sequence": "" if sequence is None else str(sequence), "edge_id": _edge_id(edge), "item_id": link_ids(manage_link(child_urn, ""))[1]})
+        child_urn = str(edge.get("child") or "")
+        parent, child = numbers.get(str(edge.get("parent") or "")), numbers.get(child_urn)
+        if parent and child:
+            children[parent].append(_line_of(edge, child, child_urn, titles))
     return children
+
+
+def _node_titles(data: Dict[str, Any]) -> Dict[str, str]:
+    """The title of each node of a bulk BOM answer, by the urn of its item."""
+    return {str(dig(n, "item", "urn") or ""): str(dig(n, "item", "title") or "") for n in dict_rows(data.get("nodes"))}
 
 
 def _line_order(line: Dict[str, str]) -> int:
@@ -105,40 +115,55 @@ def _line_order(line: Dict[str, str]) -> int:
 TREE_NODE_CAP = 20000   # lines of one tree: an item used in many places has its lines in each, so a tree can be far larger than the answer
 
 
+def _check_edges(data: Dict[str, Any], numbers: Dict[str, str]) -> None:
+    """Raises ``FmApiError`` for an edge whose parent or child has no item number (``parse_bom`` leaves such a line out: a tree would have a hole)."""
+    for edge in dict_rows(data.get("edges")):
+        if not numbers.get(str(edge.get("parent") or "")) or not numbers.get(str(edge.get("child") or "")):
+            raise FmApiError(t("data.fm_bom_edge_no_number"))
+
+
+class _TreeBuilder:
+    """Makes the lines under an item from ``parse_bom``'s lines, counting them against ``cap``."""
+
+    def __init__(self, lines: Dict[str, List[Dict[str, str]]], depth: int, cap: int) -> None:
+        self._lines, self._depth, self._cap, self._count = lines, depth, cap, 0
+
+    def _check(self, line: Dict[str, str], path: frozenset) -> None:
+        if not line["item_id"]:
+            raise FmApiError(t("data.fm_bom_line_no_item", number=line["number"]))
+        if line["item_id"] in path:
+            raise FmApiError(t("data.fm_bom_loop", number=line["number"]))
+        self._count += 1
+        if self._count > self._cap:
+            raise FmApiError(t("data.fm_bom_too_big", count=self._cap))
+
+    def under(self, number: str, level: int, path: frozenset) -> List[Dict[str, Any]]:
+        out = []
+        for line in sorted(self._lines.get(number, []), key=_line_order):   # the BOM lists lines by their item number, not in the order the answer holds the edges
+            self._check(line, path)
+            last = level + 1 >= self._depth
+            node: Dict[str, Any] = {**line, "children": [] if last else self.under(line["number"], level + 1, path | {line["item_id"]})}
+            if last and self._lines.get(line["number"]):
+                node["cut"] = True
+            out.append(node)
+        return out
+
+
+# 5 parameters: the lines and the answer they came from are two views of one answer, and the callers (BomService, tests) pass all five.
 def build_tree(lines: Dict[str, List[Dict[str, str]]], data: Any, root_id: str, depth: int, cap: int = TREE_NODE_CAP) -> Dict[str, Any]:
     """The tree of the item ``root_id`` from ``parse_bom``'s lines and the answer they came from. The lines of an item are those of its number, so an
     item in several places has them in each (a tree of more than ``cap`` lines raises). Only ``depth`` levels are made; a line at the last one whose
     own lines the answer shows elsewhere is marked ``cut`` (its lines were not read), not left to look empty. Raises ``FmApiError`` for an answer with
     no node for the item, a line (edge) whose parent or child has no item number, a line with no item id, or an item inside itself."""
-    nodes = dict_rows(as_dict(data).get("nodes"))
+    data = as_dict(data)
+    nodes = dict_rows(data.get("nodes"))
     root = next((n for n in nodes if link_ids(manage_link(str(dig(n, "item", "urn") or ""), ""))[1] == root_id), None)
     if root is None:
         raise FmApiError(t("data.fm_bom_no_root"))
-    numbers = {str(dig(n, "item", "urn") or ""): number_of(str(dig(n, "item", "title") or "")) for n in nodes}
-    for edge in dict_rows(as_dict(data).get("edges")):   # parse_bom leaves such a line out: here that would be a tree with a hole in it
-        if not numbers.get(str(edge.get("parent") or "")) or not numbers.get(str(edge.get("child") or "")):
-            raise FmApiError(t("data.fm_bom_edge_no_number"))
+    _check_edges(data, {urn: number_of(title) for urn, title in _node_titles(data).items()})
     title = str(dig(root, "item", "title") or "")
-    count = [0]
-
-    def under(number: str, level: int, path: frozenset) -> List[Dict[str, Any]]:
-        out = []
-        for line in sorted(lines.get(number, []), key=_line_order):   # the BOM lists lines by their item number, not in the order the answer holds the edges
-            if not line["item_id"]:
-                raise FmApiError(t("data.fm_bom_line_no_item", number=line["number"]))
-            if line["item_id"] in path:
-                raise FmApiError(t("data.fm_bom_loop", number=line["number"]))
-            count[0] += 1
-            if count[0] > cap:
-                raise FmApiError(t("data.fm_bom_too_big", count=cap))
-            last = level + 1 >= depth
-            node: Dict[str, Any] = {**line, "children": [] if last else under(line["number"], level + 1, path | {line["item_id"]})}
-            if last and lines.get(line["number"]):
-                node["cut"] = True
-            out.append(node)
-        return out
-
-    return {"number": number_of(title), "name": name_of(title), "item_id": root_id, "children": under(number_of(title), 0, frozenset([root_id]))}
+    children = _TreeBuilder(lines, depth, cap).under(number_of(title), 0, frozenset([root_id]))
+    return {"number": number_of(title), "name": name_of(title), "item_id": root_id, "children": children}
 
 
 class BomService:

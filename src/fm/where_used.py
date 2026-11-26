@@ -6,7 +6,7 @@ from that parent; adding ``depth=1`` to it reads just that level.
 """
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from ..core.logging_setup import get_logger
 from ..core.i18n import t
@@ -46,17 +46,23 @@ def _row(item: Dict[str, Any], fields: Dict[str, str], up: str, base_url: str) -
             "url": item_page(base_url, item), "up": _one_level(up)}
 
 
+def _nodes_by_urn(nodes: Any) -> Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]:
+    """``{item urn: (node, item)}`` for the nodes whose item has a urn."""
+    found = {}
+    for node in dict_rows(nodes):
+        item = as_dict(node.get("item"))
+        if item.get("urn"):
+            found[str(item["urn"])] = (node, item)
+    return found
+
+
 def parse_where_used(data: Any, base_url: str) -> Dict[str, Any]:
     """Rows (one per parent that holds the item) and the field titles that make the columns, in the order first seen."""
     if data is None:   # 204: nothing holds the item
         return {"rows": [], "columns": []}
     if not (isinstance(data, dict) and isinstance(data.get("nodes"), list) and isinstance(data.get("edges"), list)):
         raise FmApiError(t("data.fm_no_where_used"))
-    nodes = {}
-    for node in dict_rows(data["nodes"]):
-        item = as_dict(node.get("item"))
-        if item.get("urn"):
-            nodes[str(item["urn"])] = (node, item)
+    nodes = _nodes_by_urn(data["nodes"])
     rows: List[Dict[str, Any]] = []
     columns: Dict[str, None] = {}   # the titles in the order first seen
     for edge in dict_rows(data["edges"]):

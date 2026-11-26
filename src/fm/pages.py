@@ -29,6 +29,7 @@ def tenant_of(item: Any) -> str:
     return found.group(1) if found else ""
 
 
+# 6 parameters: where, which item, and which of its pages; every caller names the page by its two short words, so they stay separate.
 def page_url(base_url: str, tenant: str, workspace_id: str, item_id: str, page: str = "itemDetails", tab: str = "details") -> str:
     """The page of an item in Fusion Manage's own web UI: the Item tab, or (``page="attachments"``, ``tab="attachments"``) its files."""
     urn = f"urn`adsk,plm`tenant,workspace,item`{tenant},{workspace_id},{item_id}"   # Fusion Manage's own page url escapes its backticks and commas
@@ -36,6 +37,7 @@ def page_url(base_url: str, tenant: str, workspace_id: str, item_id: str, page: 
             + urn.replace("`", "%60").replace(",", "%2C"))
 
 
+# 5 parameters: the same as ``page_url``, with the API link standing for the workspace and item.
 def link_page(base_url: str, tenant: str, link: str, page: str = "itemDetails", tab: str = "details") -> str:
     """The page of the item an API link points at ("" when it is not an item's link or there is no tenant or base address)."""
     found = ITEM_LINK.search(link)

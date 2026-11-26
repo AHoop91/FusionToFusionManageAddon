@@ -62,6 +62,7 @@ def missing(required: Iterable[str], held: Set[str]) -> List[str]:
     return [p for p in required if p not in held]
 
 
+# 5 parameters: the client and workspace to read, what is required, and the two words (title, action) that make the sentence shown.
 def denial(client: FmClient, workspace_id: str, required: Iterable[str], workspace_title: str, action: str = "publish to") -> str:
     """Why the user may not ``action`` the workspace ("" when their permissions include every one in ``required``).
     Raises ``FmApiError`` when the permissions cannot be read for any reason but being refused."""

@@ -50,16 +50,18 @@ def _entries(node: Any, depth: int = 0) -> Iterator[Dict[str, Any]]:
     """Every entry of the refusal that has a message, however deep (down to ``MAX_DEPTH``)."""
     if depth > MAX_DEPTH:
         return
-    if isinstance(node, list):
-        for item in node:
-            yield from _entries(item, depth + 1)
-    elif isinstance(node, dict):
+    if isinstance(node, dict):
         message = node.get("message")
         if isinstance(message, str) and message.strip():
             yield node
-        for value in node.values():
-            if isinstance(value, (list, dict)):
-                yield from _entries(value, depth + 1)
+    for child in _children_of(node):
+        yield from _entries(child, depth + 1)
+
+
+def _children_of(node: Any) -> List[Any]:
+    """The lists and dicts directly inside a list or dict (nothing for any other value)."""
+    values = node if isinstance(node, list) else list(node.values()) if isinstance(node, dict) else []
+    return [v for v in values if isinstance(v, (list, dict))]
 
 
 def _messages_of(exc: FmApiError) -> List[Dict[str, Any]]:

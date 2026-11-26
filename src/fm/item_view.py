@@ -131,6 +131,42 @@ def layout_names(layout: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
     return []
 
 
+def _hidden_grid(grid: List[List[Any]], cells: Dict[str, Dict[str, str]], hidden: Set[str]) -> List[List[bool]]:
+    """For each field reference of the layout's grid (rows padded to the widest): whether it is not shown or has no value in the item."""
+    width = max(len(r) for r in grid)
+    return [[not_shown(ref, hidden) or bool(field_id(ref) and field_id(ref) not in cells) for ref in row] + [False] * (width - len(row))
+            for row in grid]
+
+
+def _kept_columns_and_rows(gone: List[List[bool]], width: int) -> Tuple[List[int], List[int]]:
+    """The indexes of the columns, then the rows, that have any field shown (no rows when no column is kept)."""
+    keep_cols = [c for c in range(width) if not all(g[c] for g in gone)]
+    if not keep_cols:
+        return keep_cols, []
+    return keep_cols, [r for r, g in enumerate(gone) if not all(g[c] for c in keep_cols)]
+
+
+def _row_labels(layout: Dict[str, Any], height: int, keep_rows: List[int]) -> List[str]:
+    """The titles of the kept rows: the layout's own when it names every row, else blank."""
+    all_labels = layout_names(layout, ROW_KEYS)
+    return [all_labels[r] for r in keep_rows] if len(all_labels) == height else [""] * len(keep_rows)
+
+
+def _matrix_cell(row: List[Any], column: int, is_gone: bool, cells: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
+    """The cell at ``column`` of a layout row: blank when it is hidden, past the row's end or has no value in the item."""
+    if column < len(row) and not is_gone:
+        return cells.get(field_id(row[column]), {"kind": "text", "value": ""})
+    return {"kind": "text", "value": ""}
+
+
+def _column_names(layout: Dict[str, Any], rows: List[List[Dict[str, Any]]], width: int, keep_cols: List[int]) -> List[str]:
+    """The titles of the kept columns: the layout's own when it names every column, else the first row's field titles."""
+    all_columns = layout_names(layout, COLUMN_KEYS)
+    if len(all_columns) == width:
+        return [all_columns[c] for c in keep_cols]
+    return [rows[0][i].get("title", "") for i in range(len(keep_cols))]
+
+
 def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Set[str]) -> Dict[str, Any]:
     """A matrix of the workspace layout filled from the item: ``{"columns", "labels", "rows": [[cell]]}``.
 
@@ -140,23 +176,13 @@ def _matrix(layout: Dict[str, Any], cells: Dict[str, Dict[str, str]], hidden: Se
     if not grid:
         return {}
     width = max(len(r) for r in grid)
-    gone = [[not_shown(ref, hidden) or bool(field_id(ref) and field_id(ref) not in cells) for ref in row] + [False] * (width - len(row))
-            for row in grid]
-    keep_cols = [c for c in range(width) if not all(g[c] for g in gone)]
-    keep_rows = [r for r, g in enumerate(gone) if not all(g[c] for c in keep_cols)] if keep_cols else []
+    gone = _hidden_grid(grid, cells, hidden)
+    keep_cols, keep_rows = _kept_columns_and_rows(gone, width)
     if not keep_rows:
         return {}
-    empty = {"kind": "text", "value": ""}
-    rows = [[cells.get(field_id(grid[r][c]), empty) if c < len(grid[r]) and not gone[r][c] else empty for c in keep_cols]
-            for r in keep_rows]
-    all_columns = layout_names(layout, COLUMN_KEYS)
-    if len(all_columns) == width:
-        columns = [all_columns[c] for c in keep_cols]
-    else:   # not named by the layout: the first row's field titles
-        columns = [rows[0][i].get("title", "") for i in range(len(keep_cols))]
-    all_labels = layout_names(layout, ROW_KEYS)
-    labels = [all_labels[r] for r in keep_rows] if len(all_labels) == len(grid) else [""] * len(rows)
-    return {"columns": columns, "labels": labels, "rows": [[{key: c[key] for key in ("kind", "value", "link") if key in c} for c in r] for r in rows]}   # a picture's link goes too
+    rows = [[_matrix_cell(grid[r], c, gone[r][c], cells) for c in keep_cols] for r in keep_rows]
+    shown = [[{key: c[key] for key in ("kind", "value", "link") if key in c} for c in r] for r in rows]   # a picture's link goes too
+    return {"columns": _column_names(layout, rows, width, keep_cols), "labels": _row_labels(layout, len(grid), keep_rows), "rows": shown}
 
 
 def revision_and_state(item: Dict[str, Any]) -> Tuple[str, str]:
@@ -189,6 +215,8 @@ def _section(node: Dict[str, Any], cells: Dict[str, Dict[str, Any]], layout: Dic
     return {"title": str(node.get("title") or ""), "collapsed": layout.get("collapsed") is True, "fields": fields, "matrices": matrices}
 
 
+# 5 parameters: the answer, the layouts, how to load pictures, the address to link with, and the hidden fields are five separate things the
+# callers (ItemViewService and the tests) already hold; a bundle would only be built to be taken apart.
 def build_view(item: Any, layouts: Dict[str, Dict[str, Any]], images: ImageLoader, base_url: str = "",
                hidden: Optional[Set[str]] = None) -> Dict[str, Any]:
     """The header and sections of an item answer; ``layouts`` maps a section id to the workspace's layout of it.
@@ -260,6 +288,7 @@ class ItemViewService:
         view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
         return view
 
+    # 5 parameters: the item, the user's permissions, and two flags that pass straight on to ``layout`` and ``TabService.read``.
     def read(self, workspace_id: str, item_id: str, held: Set[str], with_grid: bool = False, pictures: bool = True) -> Dict[str, Any]:
         """``layout`` with the item's ``tabs`` (see ``TabService.read``); ``held`` is the user's permissions in the workspace (they decide which tabs can
         be opened) and ``with_grid`` adds the Grid tab."""
