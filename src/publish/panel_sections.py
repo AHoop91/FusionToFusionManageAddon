@@ -29,7 +29,7 @@ and for another design.
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from ..auth.auth_service import AuthService
 from ..config.config_service import ConfigService
@@ -90,6 +90,28 @@ def entry(section: str = "", **changes: Any) -> Dict[str, Any]:
     return state
 
 
+class _Basis(NamedTuple):
+    """What a slot was read for: the design (``key``), the hub, connection and workspace settings (``stamp``) and the target."""
+    key: str
+    stamp: str
+    target: str = ""
+    target_id: str = ""
+
+
+class _Unavailable(Exception):
+    """A section cannot be started (no design, no hub, or the design could not be named): the message is the slot's."""
+
+
+class _Ask(NamedTuple):
+    """A request for a section, resolved on Fusion's thread: the slot, the design it is for and the ``basis`` the slot is read for."""
+    slot: str
+    name: str
+    model_id: str
+    timestamp: str
+    basis: _Basis
+    context: HubContext
+
+
 @dataclass
 class _Load:
     """One load of one slot: what it reads, for which design, under which token, and under which hub, connection and workspace (``context``,
@@ -110,6 +132,10 @@ class _Load:
     @property
     def stamp(self) -> str:
         return self.context.stamp
+
+    @property
+    def basis(self) -> _Basis:
+        return _Basis(self.key, self.stamp, self.target, self.target_id)
 
     @property
     def cfg(self) -> WorkspaceConfig:
@@ -136,35 +162,51 @@ class PublishSections:
         component = {k: str(payload.get(k) or "") for k in COMPONENT_KEYS}
         slot = f"{name}:{component['id']}" if name in PER_COMPONENT and component["id"] else name
         try:
+            ask = self._ask_of(slot, name, payload)
+        except _Unavailable as exc:
+            return entry(slot, message=str(exc))
+        with self._lock:
+            snapshot, token = self._claim(ask, bool(payload.get("force")))
+        if token is None:
+            return snapshot
+        basis = ask.basis
+        load = _Load(slot, name, basis.key, token, ask.model_id, ask.timestamp, component, ask.context, basis.target, basis.target_id)
+        threading.Thread(target=self._run, args=(load,), daemon=True).start()
+        return snapshot
+
+    def _ask_of(self, slot: str, name: str, payload: Dict[str, Any]) -> _Ask:
+        """Resolve a request on Fusion's thread: the open design, the hub context and the target. Raises ``_Unavailable`` with the reason there is none."""
+        try:
             model_id, timestamp = self._model_ref()
         except Exception as exc:
             log.exception("Could not start loading %s", slot)
-            return entry(slot, message=str(exc))
+            raise _Unavailable(str(exc)) from exc
         if not model_id:
-            return entry(slot, message=t("run.section_no_model"))
-        key = f"{model_id}|{timestamp}"
+            raise _Unavailable(t("run.section_no_model"))
         target = str(payload.get("target") or "") if name in TARGETED else ""
         target_id = str(payload.get("target_id") or "") if target else ""
         context, reason = self._contexts.attempt()   # taken now, on Fusion's thread: a hub opened or a user signed in meanwhile is not mixed in
         if context is None:
-            return entry(slot, message=reason)
-        with self._lock:
-            self._forget_other_designs(key)
-            if name == STRUCTURE and payload.get("force"):
-                self._rows = None   # a forced read is a fresh one: the kept rows are not served to it
-            current = self._slots.get(slot) or entry(slot)
-            # The MBOM tree is never served from a copy kept here: its line ids are what a publish changes, and Fusion Manage changes under the panel.
-            if not (payload.get("force") or name == MBOM_TREE) and self._holds(current, key, context.stamp, target, target_id) and (current["pending"] or current["ok"]):
-                log.debug("%s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
-                return dict(current)
-            log.debug("%s requested: starting", slot)
-            if slot in self._tokens:
-                self._tokens[slot].cancel()   # what the slot was still reading for an earlier design (or the last try) is not wanted
-            token = self._tokens[slot] = ADDIN.child(f"loading {slot} for the Publish panel")
-            self._slots[slot] = entry(slot, pending=True, key=key, stamp=context.stamp, target=target, target_id=target_id)
-            snapshot = dict(self._slots[slot])
-        threading.Thread(target=self._run, args=(_Load(slot, name, key, token, model_id, timestamp, component, context, target, target_id),), daemon=True).start()
-        return snapshot
+            raise _Unavailable(reason)
+        return _Ask(slot, name, model_id, timestamp, _Basis(f"{model_id}|{timestamp}", context.stamp, target, target_id), context)
+
+    def _claim(self, ask: _Ask, force: bool) -> Tuple[Dict[str, Any], Optional[CancelToken]]:
+        """``(snapshot, token)``: the slot as it stands when it is loading or loaded for this basis (token None, nothing to start), else the slot
+        made pending, with the token of the load that is to fill it. Called with the lock held."""
+        slot, basis = ask.slot, ask.basis
+        self._forget_other_designs(basis.key)
+        if ask.name == STRUCTURE and force:
+            self._rows = None   # a forced read is a fresh one: the kept rows are not served to it
+        current = self._slots.get(slot) or entry(slot)
+        if self._serves(current, ask, force):
+            log.debug("%s requested: already %s, nothing started", slot, "loading" if current["pending"] else "loaded")
+            return dict(current), None
+        log.debug("%s requested: starting", slot)
+        if slot in self._tokens:
+            self._tokens[slot].cancel()   # what the slot was still reading for an earlier design (or the last try) is not wanted
+        token = self._tokens[slot] = ADDIN.child(f"loading {slot} for the Publish panel")
+        self._slots[slot] = entry(slot, pending=True, key=basis.key, stamp=basis.stamp, target=basis.target, target_id=basis.target_id)
+        return dict(self._slots[slot]), token
 
     def status(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """The snapshot of a slot, which the panel polls until it is no longer pending."""
@@ -173,10 +215,17 @@ class PublishSections:
             return dict(self._slots.get(slot) or entry(slot, message=t("run.section_unknown", name=slot)))
 
     @staticmethod
-    def _holds(state: Dict[str, Any], key: str, stamp: str, target: str = "", target_id: str = "") -> bool:
+    def _holds(state: Dict[str, Any], basis: _Basis) -> bool:
         """Whether a slot was filled, or is being filled, for this design and target under these settings (a changed hub, tenant or workspace
         setting makes what was read, and compared with Fusion Manage, no longer right)."""
-        return state["key"] == key and state["stamp"] == stamp and state["target"] == target and state["target_id"] == target_id
+        return (state["key"], state["stamp"], state["target"], state["target_id"]) == basis
+
+    def _serves(self, current: Dict[str, Any], ask: _Ask, force: bool) -> bool:
+        """Whether the slot is answered as it is: it is loading or loaded for this basis, and the request is not forced. The MBOM tree is never
+        served from a copy kept here: its line ids are what a publish changes, and Fusion Manage changes under the panel."""
+        if force or ask.name == MBOM_TREE:
+            return False
+        return self._holds(current, ask.basis) and (current["pending"] or current["ok"])
 
     def _forget_other_designs(self, key: str) -> None:
         """Drop the slots of components made for another design, and end what they were still reading (called with the lock held): they are
@@ -226,7 +275,7 @@ class PublishSections:
     def _waits_for(self, load: _Load) -> bool:
         """Whether the slot of ``load`` is still waiting for it, not for a newer load or another design (called with the lock held)."""
         slot = self._slots.get(load.slot)
-        return slot is not None and self._holds(slot, load.key, load.stamp, load.target, load.target_id) and slot["pending"]
+        return slot is not None and self._holds(slot, load.basis) and slot["pending"]
 
     def _note(self, load: _Load, **changes: Any) -> None:
         """Say how far a load is (while it is still the one the slot waits for)."""
@@ -239,7 +288,7 @@ class PublishSections:
         when the load is for one)."""
         with self._lock:
             summary = self._slots[SUMMARY]
-            data = dict(summary["data"] or {}) if self._holds(summary, load.key, load.stamp) else {}
+            data = dict(summary["data"] or {}) if self._holds(summary, _Basis(load.key, load.stamp)) else {}
         return {**data, "item_number": load.target} if load.target else data
 
     @staticmethod
@@ -317,6 +366,19 @@ class PublishSections:
         if load.name == ITEM_PICTURE:
             return self._item_picture(load)
         summary = self._summary_of(load)
+        read = self._reader(load, summary)
+        if load.name in (PROPERTIES, COMPONENT):
+            return self._compared(load, summary, read)
+        if load.name in (MBOM, MBOM_NUMBER):
+            return self._mbom(load, summary)
+        if load.name == MBOM_TREE:
+            return self._mbom_tree(load)
+        if load.name == STRUCTURE:
+            return self._structure(load, summary, read)
+        return self._summary_data(load, read())
+
+    def _reader(self, load: _Load, summary: Dict[str, Any]) -> Callable[[], Any]:
+        """The read of the section from the Data Model, which reports its progress to the slot."""
         physical = load.cfg.maps_physical()
         watch = Stopwatch()
 
@@ -326,29 +388,39 @@ class PublishSections:
             log.debug("TIMING %s: %.2fs of it reading the Data Model (physical=%s)", load.slot, watch.lap(), physical)
             return result["properties"] if load.name == COMPONENT else result
 
-        if load.name in (PROPERTIES, COMPONENT):
-            properties, compared = read_and_compare(read, load.component if load.name == COMPONENT else summary, load.cfg, load.fm,
-                                                    load.target_id if load.name == PROPERTIES else "")
-            return {"compare": compared, **({"count": len(properties)} if load.name == PROPERTIES else {})}
-        if load.name in (MBOM, MBOM_NUMBER):
-            return self._mbom(load, summary)
-        if load.name == MBOM_TREE:   # the item is read by its id: a design with no MBOM item has no tree, and the viewer starts from the EBOM
-            if not load.cfg.workspace_id:
-                raise ValueError(t("run.compare_no_workspace"))
-            if not load.target_id:
-                raise ValueError(t("run.section_no_mbom_item"))
-            return BomService(load.fm).tree(load.cfg.workspace_id, load.target_id, MBOM_DEPTH)
-        if load.name == STRUCTURE:
-            known = [{"id": load.target_id}] if load.target_id else None   # found by lineage and asset: the number may have been changed since
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                searching = None if known else pool.submit(search_design, load.fm, load.cfg, summary)   # else the number is searched while it is read
-                rows = self._structure_rows(load, read)
-                hits = known or searching.result()
-            return mark_design_bom(rows, summary, hits)
-        data = read()
-        if load.name == SUMMARY and not item_number_of(data):   # no item number: never published, so nothing here applies
+        return read
+
+    @staticmethod
+    def _compared(load: _Load, summary: Dict[str, Any], read: Callable[[], Any]) -> Dict[str, Any]:
+        """``properties`` and ``component``: what ``read`` gives, compared with the item in Fusion Manage."""
+        properties, compared = read_and_compare(read, load.component if load.name == COMPONENT else summary, load.cfg, load.fm,
+                                                load.target_id if load.name == PROPERTIES else "")
+        return {"compare": compared, **({"count": len(properties)} if load.name == PROPERTIES else {})}
+
+    @staticmethod
+    def _mbom_tree(load: _Load) -> Any:
+        """``mbom_tree``: the item is read by its id: a design with no MBOM item has no tree, and the viewer starts from the EBOM."""
+        if not load.cfg.workspace_id:
+            raise ValueError(t("run.compare_no_workspace"))
+        if not load.target_id:
+            raise ValueError(t("run.section_no_mbom_item"))
+        return BomService(load.fm).tree(load.cfg.workspace_id, load.target_id, MBOM_DEPTH)
+
+    def _structure(self, load: _Load, summary: Dict[str, Any], read: Callable[[], Any]) -> Any:
+        """``structure``: the design's whole Bill of Materials with the lines that cannot be published marked."""
+        known = [{"id": load.target_id}] if load.target_id else None   # found by lineage and asset: the number may have been changed since
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            searching = None if known else pool.submit(search_design, load.fm, load.cfg, summary)   # else the number is searched while it is read
+            rows = self._structure_rows(load, read)
+            hits = known or searching.result()
+        return mark_design_bom(rows, summary, hits)
+
+    @staticmethod
+    def _summary_data(load: _Load, data: Any) -> Any:
+        """A section read as it is, except the summary: it needs an item number, and carries what the viewer needs to know of the settings."""
+        if load.name != SUMMARY:
+            return data
+        if not item_number_of(data):   # no item number: never published, so nothing here applies
             raise PublishDenied(t("run.section_no_number"))
-        if load.name == SUMMARY:   # what the viewer needs to know of the settings: whether a bought version can be made
-            make_buy = load.cfg.make_buy
-            return {**data, "make_buy": make_buy.is_set(), "bought_suffix": make_buy.suffix if make_buy.is_set() else ""}
-        return data
+        make_buy = load.cfg.make_buy   # whether a bought version can be made
+        return {**data, "make_buy": make_buy.is_set(), "bought_suffix": make_buy.suffix if make_buy.is_set() else ""}

@@ -6,6 +6,7 @@ component's own document.
 
 import time
 from contextlib import contextmanager
+from functools import partial
 from typing import Any, Callable, Iterator, List, Optional
 
 from ..core.i18n import t
@@ -47,7 +48,7 @@ def _export_with(manager: Any, path: str, geometry: Optional[Any] = None) -> Non
     """Write a STEP file of ``geometry`` (a component or an occurrence; the whole design of ``manager`` when not given) to ``path``.
     Raises ``RuntimeError`` when Fusion says it could not."""
     options = manager.createSTEPExportOptions(path) if geometry is None else manager.createSTEPExportOptions(path, geometry)
-    if not _timed("STEP export", lambda: manager.execute(options)):
+    if not _timed("STEP export", partial(manager.execute, options)):
         raise RuntimeError(t("run.export_step_failed"))
 
 

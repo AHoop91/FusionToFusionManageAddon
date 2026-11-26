@@ -8,7 +8,7 @@ come (a search that found nothing) falls back to asking for itself. A search tha
 
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
@@ -40,6 +40,15 @@ def _chunks(values: List[str], size: int) -> List[List[str]]:
     return [values[start:start + size] for start in range(0, len(values), size)]
 
 
+class _Batches(NamedTuple):
+    """How a kind of read is started: ``size`` keys to a request, ``workers`` requests in flight, what each request does (``read``) and how the
+    answer is keyed (``key_of``)."""
+    size: int
+    workers: int
+    read: Callable[[List[str]], Any]
+    key_of: Callable[[str], str] = str
+
+
 class ReadAhead:
     """Starts the shared reads of a run on entering, and waits for them to finish on leaving.
 
@@ -47,6 +56,7 @@ class ReadAhead:
     written. ``hits`` is by the number as the items give it.
     """
 
+    # The constructor keeps the arguments ``runner`` passes it (eight, each a different part of the run's context); a bundle would only move them.
     def __init__(self, items: List[Dict[str, Any]], summary: Dict[str, Any], client: FusionGraphQlClient, fm: FmClient, workspace_id: str,
                  model_time: str, physical: bool, cancelled: Callable[[], bool]) -> None:
         self._items, self._summary, self._client, self._fm = items, summary, client, fm
@@ -63,11 +73,11 @@ class ReadAhead:
         numbered = [item for item in self._items if item_number_of(item)]
         ids = [cid for cid in (component_id_of(item, self._summary) for item in numbered) if cid]
         try:
-            self._start(self._reads, ids, publish_batch_size(self._physical), DATA_MODEL_REQUESTS, self._read_chunk)
+            self._start(self._reads, ids, _Batches(publish_batch_size(self._physical), DATA_MODEL_REQUESTS, self._read_chunk))
             if self._workspace_id:
                 numbers = sorted({_number_key(item_number_of(item)): item_number_of(item) for item in numbered}.values())   # one search per number, however written
                 self.to_search = len(numbers)
-                self._start(self._searches, numbers, SEARCH_NUMBERS, SEARCHES, self._search_chunk, _number_key)
+                self._start(self._searches, numbers, _Batches(SEARCH_NUMBERS, SEARCHES, self._search_chunk, _number_key))
         except BaseException:   # ``__exit__`` is not called when entering fails: what was started is stopped here
             self.__exit__(True)
             raise
@@ -78,14 +88,14 @@ class ReadAhead:
         for pool in self._pools:
             pool.shutdown(wait=not failed, cancel_futures=bool(failed))
 
-    def _start(self, futures: Dict[str, Future], keys: List[str], size: int, workers: int, read: Callable[[List[str]], Any],
-               key_of: Callable[[str], str] = str) -> None:
-        """Submit ``read`` for ``keys`` in runs of ``size``, on ``workers`` threads; each key's future goes in ``futures`` under ``key_of(key)``."""
-        pool = ThreadPoolExecutor(max_workers=workers)
+    def _start(self, futures: Dict[str, Future], keys: List[str], batches: _Batches) -> None:
+        """Submit ``batches.read`` for ``keys`` in runs of ``batches.size``, on ``batches.workers`` threads; each key's future goes in ``futures``
+        under ``batches.key_of(key)``."""
+        pool = ThreadPoolExecutor(max_workers=batches.workers)
         self._pools.append(pool)
-        for chunk in _chunks(keys, size):
-            future = pool.submit(read, chunk)
-            futures.update({key_of(key): future for key in chunk})
+        for chunk in _chunks(keys, batches.size):
+            future = pool.submit(batches.read, chunk)
+            futures.update({batches.key_of(key): future for key in chunk})
 
     def _read_chunk(self, ids: List[str]) -> Dict[str, Any]:
         """The Data Model's answer for each of ``ids``; nothing once the run is cancelled."""

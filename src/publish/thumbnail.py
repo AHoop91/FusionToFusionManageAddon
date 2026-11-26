@@ -54,8 +54,36 @@ def clear_white_background(data: bytes) -> bytes:
 def read_png(data: bytes) -> Optional[Image]:
     """``(width, height, pixels)`` of an 8-bit, non-interlaced RGBA PNG, or None for anything else (damaged data, or an image of more than
     ``MAX_PIXELS``)."""
+    found = _read_header(data)
+    if found is None:
+        return None
+    width, height, compressed = found
+    expected = height * (width * RGBA + 1)   # every row has its filter byte
+    try:
+        raw = zlib.decompressobj().decompress(compressed, expected + 1)   # one byte more than it should hold shows it holds more
+    except zlib.error:
+        return None
+    pixels = _unfilter(raw, width, height) if len(raw) == expected else None
+    return (width, height, pixels) if pixels is not None else None
+
+
+def _read_header(data: bytes) -> Optional[Tuple[int, int, bytes]]:
+    """``(width, height, the joined image data)`` of a PNG that is of the kind this module reads (8-bit RGBA, not interlaced, no more than
+    ``MAX_PIXELS``), else None."""
     if not data.startswith(PNG_SIGNATURE):
         return None
+    found = _header_and_image_data(data)
+    if found is None:
+        return None
+    header, compressed = found
+    width, height, depth, colour, _, _, interlace = header
+    if (depth, colour, interlace) != (8, COLOUR_TYPE_RGBA, 0) or not width or not height or width * height > MAX_PIXELS:
+        return None
+    return width, height, b"".join(compressed)
+
+
+def _header_and_image_data(data: bytes) -> Optional[Tuple[Tuple[int, ...], List[bytes]]]:
+    """The unpacked IHDR of a PNG and the bodies of its IDAT chunks, or None when it has no header (or one of the wrong size) or no image data."""
     header, compressed = None, []
     for kind, body in _chunks(data):
         if kind == b"IHDR":
@@ -64,18 +92,7 @@ def read_png(data: bytes) -> Optional[Image]:
             header = struct.unpack(">IIBBBBB", body)
         elif kind == b"IDAT":
             compressed.append(body)
-    if header is None or not compressed:
-        return None
-    width, height, depth, colour, _, _, interlace = header
-    if (depth, colour, interlace) != (8, COLOUR_TYPE_RGBA, 0) or not width or not height or width * height > MAX_PIXELS:
-        return None
-    expected = height * (width * RGBA + 1)   # every row has its filter byte
-    try:
-        raw = zlib.decompressobj().decompress(b"".join(compressed), expected + 1)   # one byte more than it should hold shows it holds more
-    except zlib.error:
-        return None
-    pixels = _unfilter(raw, width, height) if len(raw) == expected else None
-    return (width, height, pixels) if pixels is not None else None
+    return (header, compressed) if header is not None and compressed else None
 
 
 def write_png(width: int, height: int, pixels: Pixels) -> bytes:
@@ -182,8 +199,7 @@ def _clear_edge_white(width: int, height: int, pixels: Pixels) -> int:
     runs = _white_runs(width, height, pixels)
     starts = [[start for start, _ in row] for row in runs]
     reached = [[False] * len(row) for row in runs]
-    stack = [(y, i) for y, row in enumerate(runs) for i, (start, end) in enumerate(row)
-             if y in (0, height - 1) or start == 0 or end == width]   # the runs that touch the edge
+    stack = _edge_runs(runs, width, height)
     cleared = 0
     while stack:
         y, i = stack.pop()
@@ -196,10 +212,14 @@ def _clear_edge_white(width: int, height: int, pixels: Pixels) -> int:
         pixels[first:(y * width + end) * RGBA:RGBA] = bytes([CLEAR]) * (end - start)   # their alpha bytes, at once
         for beside in (y - 1, y + 1):
             if 0 <= beside < height:
-                for j in _overlapping(runs[beside], starts[beside], start, end):
-                    if not reached[beside][j]:
-                        stack.append((beside, j))
+                stack.extend((beside, j) for j in _overlapping(runs[beside], starts[beside], start, end) if not reached[beside][j])
     return cleared
+
+
+def _edge_runs(runs: Runs, width: int, height: int) -> List[Tuple[int, int]]:
+    """The places ``(row, run)`` of the runs that touch the edge of the picture."""
+    return [(y, i) for y, row in enumerate(runs) for i, (start, end) in enumerate(row)
+            if y in (0, height - 1) or start == 0 or end == width]
 
 
 def _overlapping(row: List[Tuple[int, int]], starts: List[int], start: int, end: int) -> Iterator[int]:

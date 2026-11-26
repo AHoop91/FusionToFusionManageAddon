@@ -66,72 +66,104 @@ def specs_of(form: Dict[str, Any]) -> Dict[str, Spec]:
     return found
 
 
+def _without_matrix(matrix: Dict[str, Any], ids: Any) -> Dict[str, Any]:
+    """The matrix with the cells of the fields ``ids`` made empty."""
+    return {**matrix, "rows": [[None if spec and spec["id"] in ids else spec for spec in row] for row in matrix["rows"]]}
+
+
 def without(form: Dict[str, Any], ids: Any) -> Dict[str, Any]:
     """The form with the fields ``ids`` taken out (a matrix cell becomes empty), and a section that has nothing left to fill in left out."""
     sections = []
     for section in form["sections"]:
         fields = [spec for spec in section["fields"] if spec["id"] not in ids]
-        matrices = [{**m, "rows": [[None if spec and spec["id"] in ids else spec for spec in row] for row in m["rows"]]} for m in section["matrices"]]
+        matrices = [_without_matrix(m, ids) for m in section["matrices"]]
         if fields or any(spec for m in matrices for row in m["rows"] for spec in row):
             sections.append({**section, "fields": fields, "matrices": matrices})
     return {**form, "sections": sections}
+
+
+_WRONG = object()   # what a shape reader answers for a value that is not shaped as its kind of field is held
+
+
+def _text_value(value: Any) -> Any:
+    return value if isinstance(value, str) else _WRONG
+
+
+def _date_value(value: Any) -> Any:
+    return value if isinstance(value, str) and _DATE.fullmatch(value) else _WRONG
+
+
+def _number_value(value: Any) -> Any:
+    return str(value) if isinstance(value, (str, int, float)) and not isinstance(value, bool) else _WRONG
+
+
+def _checkbox_value(value: Any) -> Any:
+    """Ticked is ``true``; Fusion Manage gives it as a boolean or as the text "true" / "false" (the Products form reads both)."""
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        value = value.strip().lower() == "true"
+    return (True if value else None) if isinstance(value, bool) else _WRONG
+
+
+def _link_text(value: Any) -> Any:
+    """The link of a ``{"link"}`` value, else ``_WRONG``."""
+    link = value.get("link") if isinstance(value, dict) else None
+    return link if isinstance(link, str) and link else _WRONG
+
+
+def _linked_item_value(value: Any) -> Any:
+    link = _link_text(value)
+    return link if link is _WRONG else {"link": link}
+
+
+def _linked_items_value(value: Any) -> Any:
+    links = [item.get("link") for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+    return [{"link": link} for link in links] if links and all(isinstance(link, str) and link for link in links) else _WRONG
+
+
+_SHAPE_READERS = {TEXT: _text_value, TEXTAREA: _text_value, DATE: _date_value, INTEGER: _number_value, NUMBER: _number_value,
+                  CHECKBOX: _checkbox_value, SELECT: _link_text, RADIO: _link_text, LINK: _linked_item_value, LINKS: _linked_items_value}
 
 
 def form_value(spec: Spec, value: Any) -> Any:
     """``value`` as Fusion Manage holds it in an item, as the form of ``spec`` takes it (see ``dev/workspace-forms.md``): text as it is, a number as
     text, a tick as ``True``, a picklist option as its link, a linked item as ``{"link"}`` and several as ``[{"link"}]``. A blank value is None.
     Raises ``FmApiError`` for a value that is not shaped as its kind of field is held: it is not guessed at."""
-    kind = spec["kind"]
-
-    def wrong() -> Any:
-        raise FmApiError(t("app.bought_value_shape", field=spec["title"], kind=kind))
-
     if value is None or value == [] or (isinstance(value, str) and not value.strip()):
         return None
-    if kind in (TEXT, TEXTAREA):
-        return value if isinstance(value, str) else wrong()
-    if kind == DATE:
-        return value if isinstance(value, str) and _DATE.fullmatch(value) else wrong()
-    if kind in (INTEGER, NUMBER):
-        return str(value) if isinstance(value, (str, int, float)) and not isinstance(value, bool) else wrong()
-    if kind == CHECKBOX:   # ticked is ``true``; Fusion Manage gives it as a boolean or as the text "true" / "false" (the Products form reads both)
-        if isinstance(value, str) and value.strip().lower() in ("true", "false"):
-            value = value.strip().lower() == "true"
-        return (True if value else None) if isinstance(value, bool) else wrong()
-    link = value.get("link") if isinstance(value, dict) else None
-    if kind in (SELECT, RADIO):
-        return link if isinstance(link, str) and link else wrong()
-    if kind == LINK:
-        return {"link": link} if isinstance(link, str) and link else wrong()
-    if kind == LINKS:
-        links = [item.get("link") for item in value if isinstance(item, dict)] if isinstance(value, list) else []
-        return [{"link": link} for link in links] if links and all(isinstance(link, str) and link for link in links) else wrong()
-    return wrong()
+    read = _SHAPE_READERS.get(spec["kind"])
+    shaped = read(value) if read else _WRONG
+    if shaped is _WRONG:
+        raise FmApiError(t("app.bought_value_shape", field=spec["title"], kind=spec["kind"]))
+    return shaped
 
 
-def plan_copy(form: Dict[str, Any], source: Dict[str, Any], make_buy: MakeBuyConfig, number_field: str, component_field: str
-              ) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
+def _copy_reasons(make_buy: MakeBuyConfig, cfg: WorkspaceConfig) -> Dict[str, str]:
+    """``{field id: why it is not copied}`` for the fields the add-in sets: the item number, Make or buy, the source link and the component link."""
+    reasons = {cfg.item_number_field(): t("data.bought_skip_number"), make_buy.field: t("data.bought_skip_make_buy"),
+               make_buy.source_field: t("data.bought_skip_source")}
+    if cfg.component_field:
+        reasons[cfg.component_field] = t("data.bought_skip_component")
+    return reasons
+
+
+def plan_copy(form: Dict[str, Any], source: Dict[str, Any], cfg: WorkspaceConfig) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
     """What a bought item takes from its source: ``(values, skipped)``. ``values`` is ``{field id: value as the form takes it}`` for each
     field of the form the source has a value in (a field the form leaves out, being hidden, computed or never edited, is never copied: the form
-    has already decided that, and a field in ``make_buy.skip_fields`` is left out); ``skipped`` is ``[{"field", "reason"}]`` for the fields that are set by the add-in or
+    has already decided that, and a field in ``cfg.make_buy.skip_fields`` is left out); ``skipped`` is ``[{"field", "reason"}]`` for the fields that are set by the add-in or
     are not the bought item's (the item number, Make or buy, the source link and the component link) or are not chosen on the form (a picture: ``create_bought`` copies it as it is). An ``info`` field is never sent."""
-    reasons = {number_field: t("data.bought_skip_number"), make_buy.field: t("data.bought_skip_make_buy"),
-               make_buy.source_field: t("data.bought_skip_source")}
-    if component_field:
-        reasons[component_field] = t("data.bought_skip_component")
-    specs = specs_of(form)
+    reasons = _copy_reasons(cfg.make_buy, cfg)
     skipped = [{"field": field, "reason": reason} for field, reason in reasons.items()]
     values: Dict[str, Any] = {}
-    left_out = set(make_buy.skip_fields)   # the fields Settings says are not copied
-    for field, spec in specs.items():
+    left_out = set(cfg.make_buy.skip_fields)   # the fields Settings says are not copied
+    for field, spec in specs_of(form).items():
         if field in reasons or field in left_out:
             continue
         if spec["kind"] == IMAGE:   # not on the form: ``create_bought`` copies the picture as it is
             skipped.append({"field": field, "reason": t("data.bought_skip_image")})
-        elif spec["kind"] not in _NOT_FILLED:
-            value = form_value(spec, source.get(field))
-            if value is not None:
-                values[field] = value
+            continue
+        value = None if spec["kind"] in _NOT_FILLED else form_value(spec, source.get(field))
+        if value is not None:
+            values[field] = value
     return values, skipped
 
 
@@ -264,11 +296,13 @@ class BoughtItems:
         with ThreadPoolExecutor(max_workers=2) as pair:   # the source and the form do not depend on each other
             read = pair.submit(ItemService(self._client).read_named, self._workspace, source_id)
             form, specs = self._form()
-            descriptor, source = read.result()
-        return self._planned(source_id, form, specs, descriptor, source)
+            named = read.result()
+        return self._planned(source_id, form, specs, named)
 
-    def _planned(self, source_id: str, form: Dict[str, Any], specs: Dict[str, Spec], descriptor: str, source: Dict[str, Any]) -> Plan:
-        """The ``Plan`` for the source item read (``descriptor``, ``source``) and the form, after the checks ``_plan`` describes."""
+    def _planned(self, source_id: str, form: Dict[str, Any], specs: Dict[str, Spec], named: Tuple[str, Dict[str, Any]]) -> Plan:
+        """The ``Plan`` for the source item read (``named``: its descriptor and values, as ``read_named`` gives them) and the form, after the checks
+        ``_plan`` describes."""
+        descriptor, source = named
         make_buy = self._make_buy
         number_field, form = self._number_spec(specs, form)
         self._check_make_buy(specs, source=True)
@@ -358,7 +392,8 @@ class BoughtItems:
             read = pool.submit(ItemService(self._client).read_named, self._workspace, source_id)
             form_read = pool.submit(self._form)
             looks = self._look(pool, expected) if expected else None
-            descriptor, source = read.result()
+            named = read.result()
+            descriptor, source = named
             number = display_text(source.get(number_field)).strip()
             if number.casefold() != expected.casefold():   # not the item the page expects: what was started was for another number
                 looks = self._look(pool, number) if number else None
@@ -367,9 +402,9 @@ class BoughtItems:
             found = self._found(looks[2].result(), buy_title, number, descriptor) if looks else None
             if found:
                 return {"found": found}
-            plan = self._planned(source_id, form, specs, descriptor, source)   # refuses a source with no number: ``looks`` is set from here on
+            plan = self._planned(source_id, form, specs, named)   # refuses a source with no number: ``looks`` is set from here on
             self._refuse(plan, looks[0].result(), looks[1].result())
-        values, skipped = plan_copy(plan.form, plan.source, make_buy, number_field, self._cfg.component_field)
+        values, skipped = plan_copy(plan.form, plan.source, self._cfg)
         locked = self._locked(plan)
         form = without(plan.form, {item["field"] for item in skipped} - set(locked))
         return {"form": form, "number": plan.number, "number_field": number_field, "values": values, "locked": locked, "source_id": source_id}
