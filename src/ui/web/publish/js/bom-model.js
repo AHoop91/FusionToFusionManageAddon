@@ -2,7 +2,7 @@
  * Publish Item panel: the data side of the Bill of Materials, as ``ns.bomModel``.
  *
  * Turns the compared rows (design rows compared with Fusion Manage) into the lines the check and the structure viewer read: the status of
- * each line, its quantity, and the lines that share an item number and so are skipped.
+ * each line, its quantity, and the lines that share an item number and so are skipped. Pure data, no DOM. Layer: domain.
  *
  * Fusion Manage extends the design BOM, so lines only it has are kept. When the item number
  * differs at one position, the design line and the Fusion Manage line are paired as one 'mismatch' line.
@@ -86,43 +86,61 @@
     });
   }
 
+  /** One side of a line, "Item Number - Part Name": a line without an item number shows its part number, and the description when it has no name. */
+  function lineSide(r, quantity, edge) {
+    return { pn: r.item_number || r.part_number, name: r.name || r.description, quantity: plainQuantity(quantity), sequence: String(r.sequence), edge: edge || '' };
+  }
+
+  /** The line for the open design itself, first in the list. */
+  function rootLine(root) {
+    const rootName = root.name || root.description || '';
+    const rootPn = root.item_number || root.part_number || '';   // the item number is the master; the part number only stands in when there is none
+    return { level: 0, root: true, sequence: '', status: 'root', hidden: false, component: rootComponent(root),
+             design: { pn: rootPn, name: rootName || (rootPn ? '' : t('publish.tree_this_design')), quantity: '', sequence: '' },
+             fm: { pn: rootPn, name: rootName, quantity: '', sequence: '' } };
+  }
+
+  /** A row with no item number, or below a line with none: nothing is published for it, and it has no details to open. */
+  function skippedLine(r) {
+    return { level: r.level + 1, root: false, sequence: String(r.sequence), status: 'skipped', hidden: !!r.hidden, skip: r.skip || '', componentName: r.name || '',
+             assembly: !!r.has_children, lineId: r.id || '', design: lineSide(r, r.quantity), fm: lineSide(r, '') };
+  }
+
+  /** A row only Fusion Manage has. */
+  function extraLine(r) {
+    return { level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: lineSide(r, ''), fm: lineSide(r, r.quantity, r.edge_id) };
+  }
+
+  /** A row of the design, with the Fusion Manage line that waited for it (``held``, or null) paired in as a 'mismatch' when its item number is the one held. */
+  function designLine(r, held) {
+    const item = { level: r.level + 1, root: false, sequence: String(r.sequence), status: r.status || 'unchecked', hidden: !!r.hidden, component: lineComponent(r),
+                   assembly: !!r.has_children, lineId: r.id || '',
+                   design: lineSide(r, r.quantity), fm: lineSide(r, r.status === 'match' ? r.quantity : r.fm_quantity || '', r.fm_edge_id) };
+    if (held && held.pair === String(r.item_number)) {
+      item.status = 'mismatch';
+      item.fm = lineSide(held, held.quantity, held.edge_id);
+    }
+    return item;
+  }
+
   /**
    * Lines to draw: the open design first, then each compared row. A Fusion Manage line that
    * sits beside a design line with another item number is folded into that design line.
    */
   function buildItems(rows, root) {
-    const rootName = root.name || root.description || '';
-    const rootPn = root.item_number || root.part_number || '';   // the item number is the master; the part number only stands in when there is none
-    const items = [{ level: 0, root: true, sequence: '', status: 'root', hidden: false, component: rootComponent(root),
-                     design: { pn: rootPn, name: rootName || (rootPn ? '' : t('publish.tree_this_design')), quantity: '', sequence: '' },
-                     fm: { pn: rootPn, name: rootName, quantity: '', sequence: '' } }];
+    const items = [rootLine(root)];
     let held = null;   // paired Fusion Manage line waiting for its design line, which follows it
-    function side(r, quantity, edge) {
-      // "Item Number - Part Name"; a line without an item number shows its part number, and the description when it has no name.
-      return { pn: r.item_number || r.part_number, name: r.name || r.description, quantity: plainQuantity(quantity), sequence: String(r.sequence), edge: edge || '' };
-    }
     rows.forEach(function (r) {
-      if (r.status === 'skipped') {   // no item number, or below a line with none: nothing is published for it, and it has no details to open
-        const line = { level: r.level + 1, root: false, sequence: String(r.sequence), status: 'skipped', hidden: !!r.hidden, skip: r.skip || '', componentName: r.name || '',
-                       assembly: !!r.has_children, lineId: r.id || '', design: side(r, r.quantity), fm: side(r, '') };
-        items.push(line);
-        return;
+      if (r.status === 'skipped') {
+        items.push(skippedLine(r));
+      } else if (r.status === 'extra' && r.pair) {
+        held = r;
+      } else if (r.status === 'extra') {
+        items.push(extraLine(r));
+      } else {
+        items.push(designLine(r, held));
+        held = null;
       }
-      if (r.status === 'extra' && r.pair) { held = r; return; }
-      if (r.status === 'extra') {
-        const line = { level: r.level + 1, root: false, sequence: String(r.sequence), status: 'extra', hidden: false, design: side(r, ''), fm: side(r, r.quantity, r.edge_id) };
-        items.push(line);
-        return;
-      }
-      const item = { level: r.level + 1, root: false, sequence: String(r.sequence), status: r.status || 'unchecked', hidden: !!r.hidden, component: lineComponent(r),
-                     assembly: !!r.has_children, lineId: r.id || '',
-                     design: side(r, r.quantity), fm: side(r, r.status === 'match' ? r.quantity : r.fm_quantity || '', r.fm_edge_id) };
-      if (held && held.pair === String(r.item_number)) {
-        item.status = 'mismatch';
-        item.fm = side(held, held.quantity, held.edge_id);
-      }
-      held = null;
-      items.push(item);
     });
     markShared(items);
     return items;

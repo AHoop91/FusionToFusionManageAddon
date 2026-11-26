@@ -3,7 +3,7 @@
  * to the queue in Python (which asks for the folder) and returns at once; the panel then shows a progress
  * dialog that follows the job until it ends. The dialog can be closed at any time: the job keeps running
  * in the background. The queue itself is shown in the Job Queue window (web/jobs), opened from the ribbon: its list
- * has each job's progress, time, folder and failures. The jobs run in the background either way.
+ * has each job's progress, time, folder and failures. The jobs run in the background either way. Layer: UI. (It also holds the step that follows a job until it ends, a known mix of UI and application.)
  */
 (function (ns) {
   'use strict';
@@ -68,13 +68,30 @@
   /** The line under a job's name in the list: where it stands, in a sentence. The details window has the rest. */
   function jobLine(job) {
     const total = job.total || 0;
-    const counts = tally(job);
     if (job.phase === 'queued') return job.place ? t('jobs.line_waiting_place', { place: job.place }) : t('jobs.line_waiting');
-    if (job.phase === 'running' && job.stage === 'bom') return t('jobs.line_bom', { count: bomCount(job) });
-    if (job.phase === 'running') return job.stage === 'validating' ? t('jobs.line_checking') : total ? t('jobs.line_publishing_of', { done: job.done, items: itemsText(total) }) : t('jobs.line_publishing');
-    if (job.phase === 'cancelled') return counts.successful ? t('jobs.line_cancelled_some', { n: counts.successful, items: itemsText(total) }) : t('jobs.line_cancelled_none');
-    if (job.phase === 'error') return counts.failed ? t('jobs.line_failed_of', { n: counts.failed, items: itemsText(total) }) : t('jobs.line_failed');
+    if (job.phase === 'running') return runningLine(job, total);
+    if (job.phase === 'cancelled') return cancelledLine(job, total);
+    if (job.phase === 'error') return failedLine(job, total);
     return failedRows(job) ? t('jobs.line_with_errors', { steps: stepsText(failedRows(job)) }) : t('jobs.line_complete');
+  }
+
+  /** The list line of a running job: the stage it is in, or how many items are done. */
+  function runningLine(job, total) {
+    if (job.stage === 'bom') return t('jobs.line_bom', { count: bomCount(job) });
+    if (job.stage === 'validating') return t('jobs.line_checking');
+    return total ? t('jobs.line_publishing_of', { done: job.done, items: itemsText(total) }) : t('jobs.line_publishing');
+  }
+
+  /** The list line of a cancelled job: how many items went through before it stopped. */
+  function cancelledLine(job, total) {
+    const counts = tally(job);
+    return counts.successful ? t('jobs.line_cancelled_some', { n: counts.successful, items: itemsText(total) }) : t('jobs.line_cancelled_none');
+  }
+
+  /** The list line of a failed job: how many items failed. */
+  function failedLine(job, total) {
+    const counts = tally(job);
+    return counts.failed ? t('jobs.line_failed_of', { n: counts.failed, items: itemsText(total) }) : t('jobs.line_failed');
   }
 
   /** Does the job still have something to show? One that went through leaves the list. */
@@ -133,16 +150,24 @@
   function queueMessage() {
     const running = jobs.filter(function (j) { return j.phase === 'running'; }).length;
     const waiting = jobs.filter(function (j) { return j.phase === 'queued'; }).length;
+    if (!running && !waiting) return keptMessage();
+    return activeMessage(running, waiting);
+  }
+
+  /** Nothing is running or waiting: what stays until cleared (cancelled publishes, failed items), or that the queue is empty. */
+  function keptMessage() {
     const failed = jobs.reduce(function (n, j) { return n + (j.rows || []).filter(function (r) { return r.status === 'error'; }).length; }, 0);
     const cancelled = jobs.filter(function (j) { return j.phase === 'cancelled'; }).length;
-    if (!running && !waiting) {
-      const kept = [];
-      if (cancelled) kept.push(cancelled === 1 ? t('jobs.kept_cancelled_one', { n: cancelled }) : t('jobs.kept_cancelled_other', { n: cancelled }));
-      if (failed) kept.push(failed === 1 ? t('jobs.kept_failed_one', { n: failed }) : t('jobs.kept_failed_other', { n: failed }));
-      if (!kept.length) return t('jobs.queue_empty');
-      const what = kept.length === 2 ? t('jobs.kept_both', { first: kept[0], second: kept[1] }) : kept[0];
-      return cancelled + failed === 1 ? t('jobs.kept_stays', { what: what }) : t('jobs.kept_stay', { what: what });
-    }
+    const kept = [];
+    if (cancelled) kept.push(cancelled === 1 ? t('jobs.kept_cancelled_one', { n: cancelled }) : t('jobs.kept_cancelled_other', { n: cancelled }));
+    if (failed) kept.push(failed === 1 ? t('jobs.kept_failed_one', { n: failed }) : t('jobs.kept_failed_other', { n: failed }));
+    if (!kept.length) return t('jobs.queue_empty');
+    const what = kept.length === 2 ? t('jobs.kept_both', { first: kept[0], second: kept[1] }) : kept[0];
+    return cancelled + failed === 1 ? t('jobs.kept_stays', { what: what }) : t('jobs.kept_stay', { what: what });
+  }
+
+  /** Something is running or waiting: how many of each. */
+  function activeMessage(running, waiting) {
     const counts = [];
     if (running) counts.push(t('jobs.count_running', { n: running }));
     if (waiting) counts.push(t('jobs.count_waiting', { n: waiting }));
@@ -392,24 +417,39 @@
   function describe(job) {
     const total = job.total || 0;
     const count = total ? t('jobs.count_items', { done: job.done, total: total }) : '';
-    if (job.phase === 'queued') {
-      return { title: t('jobs.title_queued'), status: job.place > 1 ? t('jobs.line_waiting_place', { place: job.place }) : t('jobs.waiting_to_start'), count: count, percent: null, tone: '' };
-    }
-    const validating = job.stage === 'validating';
-    if (job.phase === 'running') {   // at the Bill of Materials every item is done: it goes last
-      return { title: t('jobs.title_publishing', { name: job.name }), status: runningStatus(job), count: validating ? t('jobs.waiting_validation') : count,
-               percent: validating ? 0 : publishPercent(job), tone: '' };
-    }
-    if (job.phase === 'error') {   // a failure in the validation leaves nothing published: its own bar is the red one
-      return { title: validating ? t('jobs.title_validation_failed') : t('jobs.title_failed'), status: job.message || t('jobs.failed_default'), count: validating ? t('jobs.not_started') : '',
-               percent: validating ? 0 : 100, tone: validating ? '' : 'error' };
-    }
-    if (job.phase === 'cancelled') return { title: t('jobs.title_cancelled'), status: t('jobs.not_published', { name: job.name }), count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
+    if (job.phase === 'queued') return describeQueued(job, count);
+    if (job.phase === 'running') return describeRunning(job, count);
+    if (job.phase === 'error') return describeFailed(job);
+    if (job.phase === 'cancelled') return describeCancelled(job, total, count);
     if (failedRows(job)) {
       return { title: t('jobs.title_with_errors'), status: t('jobs.see_queue', { summary: failureSummary(job) }), count: count, percent: 100, tone: 'error' };
     }
     return { title: t('jobs.title_complete'), percent: 100, tone: 'ok', count: count,
              status: job.sends ? t('jobs.published', { name: job.name }) : t('jobs.ready', { name: job.name }) };
+  }
+
+  /** The dialog's view of a waiting job: its place in the queue, no progress yet. */
+  function describeQueued(job, count) {
+    return { title: t('jobs.title_queued'), status: job.place > 1 ? t('jobs.line_waiting_place', { place: job.place }) : t('jobs.waiting_to_start'), count: count, percent: null, tone: '' };
+  }
+
+  /** The dialog's view of a running job. At the Bill of Materials every item is done: it goes last. */
+  function describeRunning(job, count) {
+    const validating = job.stage === 'validating';
+    return { title: t('jobs.title_publishing', { name: job.name }), status: runningStatus(job), count: validating ? t('jobs.waiting_validation') : count,
+             percent: validating ? 0 : publishPercent(job), tone: '' };
+  }
+
+  /** The dialog's view of a failed job. A failure in the validation leaves nothing published: its own bar is the red one. */
+  function describeFailed(job) {
+    const validating = job.stage === 'validating';
+    return { title: validating ? t('jobs.title_validation_failed') : t('jobs.title_failed'), status: job.message || t('jobs.failed_default'), count: validating ? t('jobs.not_started') : '',
+             percent: validating ? 0 : 100, tone: validating ? '' : 'error' };
+  }
+
+  /** The dialog's view of a cancelled job: how far it got. */
+  function describeCancelled(job, total, count) {
+    return { title: t('jobs.title_cancelled'), status: t('jobs.not_published', { name: job.name }), count: count, percent: total ? Math.round(job.done * 100 / total) : 0, tone: 'error' };
   }
 
   /** What failed in a job that finished with errors: the items, then the Bill of Materials. */
@@ -574,9 +614,15 @@
     if (r.ok && r.result.jobs) jobs = r.result.jobs;
     const list = listOpen();
     if (list && r.ok) renderList();
-    const following = watched && r.ok ? updateProgress() : !!watched;   // keep polling through a failed read
+    const following = followWatched(r);
     const waiting = r.ok ? settleUnseen() : !!unseen;
     if (list || following || waiting) schedule();
+  }
+
+  /** Redraw the dialog from an answer; true while its job is still active. A failed read keeps polling while a job is watched. */
+  function followWatched(r) {
+    if (watched && r.ok) return updateProgress();
+    return !!watched;
   }
 
   let stamp = '';   // what the design on the panel was read under (see ``setStamp``)

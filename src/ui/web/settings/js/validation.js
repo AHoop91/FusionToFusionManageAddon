@@ -22,17 +22,19 @@
     if (where.input) return document.getElementById(where.input);
     const card = where.workspace ? document.querySelector('.ws-kind[data-kind="' + where.workspace + '"]') : null;
     if (!card) return null;
-    let part = null;
-    if (where.area === 'id') part = card.querySelector('.ws-id');
-    else if (where.area === 'component') part = card.querySelector('.ws-component-field');
-    else if (where.area === 'mappings') return card.querySelector('.ws-add-btn');
-    else if (where.area === 'make_buy') return findMakeBuy(card, where.part);
-    else {
-      const rows = card.querySelectorAll(where.area === 'static' ? '.ws-static-row' : '.ws-row:not(.ws-static-row)');
-      const row = rows[where.row];
-      if (row) part = row.querySelector(where.part === 'source' ? '.ws-source' : '.ws-fm-field');
-    }
+    if (where.area === 'mappings') return card.querySelector('.ws-add-btn');
+    if (where.area === 'make_buy') return findMakeBuy(card, where.part);
+    const part = findValueInput(card, where);
     return part ? part.parentNode : null;   // a picker's wrapper holds its value input and its button
+  }
+
+  /** The value input a problem is about: the workspace's id, its component field, or one field of a mapping or default-value row. */
+  function findValueInput(card, where) {
+    if (where.area === 'id') return card.querySelector('.ws-id');
+    if (where.area === 'component') return card.querySelector('.ws-component-field');
+    const rows = card.querySelectorAll(where.area === 'static' ? '.ws-static-row' : '.ws-row:not(.ws-static-row)');
+    const row = rows[where.row];
+    return row ? row.querySelector(where.part === 'source' ? '.ws-source' : '.ws-fm-field') : null;
   }
 
   /** The control of a Make or buy problem. A field used twice is named by ``part`` "field" whichever of the two it is, so it is the one whose

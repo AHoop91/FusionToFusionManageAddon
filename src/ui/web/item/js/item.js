@@ -1,6 +1,7 @@
 /**
  * Item panel. Python finds the Fusion Manage item of the selected component and reads its
  * sections; this page polls for the answer and draws it.
+ * Layer: UI, with the page controller (it polls Python and decides which screen shows). It holds no business rules.
  */
 (function (ns) {
   'use strict';
@@ -33,15 +34,21 @@
   const ICON_SEVERAL = '<path d="M8 7h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>';
   const ICON_DENIED = '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>';
 
-  /** Say, in the middle of the panel and in place of the item, ``text`` with a ``hint`` under it. */
-  function showEmpty(icon, text, hint, canPublish, number) {
+  /**
+   * Say, in the middle of the panel and in place of the item, ``spec.text`` with a ``spec.hint`` under it. ``spec``: ``icon`` (static markup),
+   * ``text``, ``hint``, ``canPublish`` (offer Publish) and ``number`` (the item number that has no item yet).
+   */
+  function showEmpty(spec) {
+    const icon = spec.icon;
+    const hint = spec.hint;
+    const number = spec.number;
     setLoading(false);
-    offerPublish = !!canPublish;
+    offerPublish = !!spec.canPublish;
     $('item-empty-publish').hidden = true;   // shown once Python says the open document is a design, not a drawing
     if (offerPublish) bridge.send('upload_context');
     document.querySelectorAll('.item-part').forEach(function (part) { part.hidden = true; });
     $('item-empty-icon').innerHTML = icon;   // static markup
-    $('item-empty-text').textContent = text;
+    $('item-empty-text').textContent = spec.text;
     $('item-empty-hint').textContent = hint;
     $('item-empty-hint').hidden = !hint;
     $('item-empty-number').textContent = number || '';
@@ -57,7 +64,7 @@
 
   /** Several items share the item number: list them, one button each, and send the one picked. */
   function showChoices(entry) {
-    showEmpty(ICON_SEVERAL, t('item.several_title'), t('item.several_hint'), false, entry.choose_number);
+    showEmpty({ icon: ICON_SEVERAL, text: t('item.several_title'), hint: t('item.several_hint'), canPublish: false, number: entry.choose_number });
     const box = $('item-empty-picker');
     const list = $('item-empty-choices');
     const filter = $('item-empty-filter');
@@ -208,22 +215,59 @@
 
   /** The Actions drop-down: opens under its button, closes on a choice, a click elsewhere or Escape. */
   function initActions() {
+    const menu = mountActionsMenu();
+    const upload = createUploadFollower(menu);
+    menu.button.addEventListener('click', function (event) {
+      event.stopPropagation();
+      menu.setOpen(menu.list.hidden);
+      if (!menu.list.hidden) bridge.send('upload_context');   // the document may have changed since the last time
+    });
+    uploadTool.run = upload.startUpload;
+    menu.uploads.forEach(function (entry) { entry.addEventListener('click', function () { upload.startUpload(entry.dataset.action); }); });
+    $('item-republish').addEventListener('click', function () { menu.setOpen(false); bridge.send('open_publish'); });
+    bridge.on('add_step_file', upload.started);
+    bridge.on('upload_drawing', upload.started);
+    bridge.on('upload_dwg', upload.started);
+    bridge.on('upload_dxf', upload.started);
+    bridge.on('upload_context', function (r) { if (r.ok) upload.setUpload(r.result); });
+    window.addEventListener('focus', function () { if (currentView) bridge.send('upload_context'); });   // the open document may have changed
+    bridge.on('upload_status', upload.onStatus);
+    bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
+  }
+
+  /** The drop-down's button and list, and its closing on a click elsewhere or Escape. Returns ``{button, list, uploads, setOpen}``. */
+  function mountActionsMenu() {
     const button = $('item-actions-btn');
     const list = $('item-actions-list');
     function setOpen(open) {
       list.hidden = !open;
       button.setAttribute('aria-expanded', String(open));
     }
-
     document.addEventListener('click', function () { setOpen(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
     const uploads = Array.prototype.slice.call(list.querySelectorAll('[data-upload]'));   // the STEP file of a design, or the PDF, DWG and DXF of a drawing: Python says which are offered
+    return { button: button, list: list, uploads: uploads, setOpen: setOpen };
+  }
+
+  /** Set one Upload entry of the menu from ``found``, what Python offers for its action (``label``, ``ext`` of the file, ``ready``). */
+  function showUploadEntry(entry, found) {
+    entry.querySelector('.item-menu-label').textContent = found.label;
+    entry.querySelector('.item-menu-icon').replaceChildren(ns.itemFiles.icon(found.ext));   // the icon the Files tab shows for that kind of file
+    entry.dataset.ready = String(found.ready);
+    entry.title = found.ready ? '' : t('item.drawing_loading');
+  }
+
+  /**
+   * The upload of the open document as the menu shows it: the Upload entries, the progress dialog and the polling of Python for its progress.
+   * Returns ``{setUpload, startUpload, started, onStatus}``.
+   */
+  function createUploadFollower(menu) {
     let uploading = false;
     let following = false;   // an upload started here is under way; the progress of one started elsewhere is not shown
     let uploadTimer = 0;
     const card = ns.uploadProgress.mount($('progress-card'));
     function syncUpload() {
-      uploads.forEach(function (entry) { entry.disabled = uploading || entry.dataset.ready !== 'true'; });
+      menu.uploads.forEach(function (entry) { entry.disabled = uploading || entry.dataset.ready !== 'true'; });
     }
     /** The Upload entries for what the open document uploads (``actions``: each has ``action``, ``label``, ``ext`` of the file, ``ready``). */
     function setUpload(context) {
@@ -235,15 +279,11 @@
       $('item-republish').classList.toggle('item-menu-divided', offered.length > 0);
       const empty = !offered.length && !context.publish;
       $('item-actions-menu').hidden = empty;   // nothing offered: no three dots
-      if (empty) setOpen(false);
-      uploads.forEach(function (entry) {
+      if (empty) menu.setOpen(false);
+      menu.uploads.forEach(function (entry) {
         const found = offered.find(function (a) { return a.action === entry.dataset.action; });
         entry.hidden = !found;
-        if (!found) return;
-        entry.querySelector('.item-menu-label').textContent = found.label;
-        entry.querySelector('.item-menu-icon').replaceChildren(ns.itemFiles.icon(found.ext));   // the icon the Files tab shows for that kind of file
-        entry.dataset.ready = String(found.ready);
-        entry.title = found.ready ? '' : t('item.drawing_loading');
+        if (found) showUploadEntry(entry, found);
       });
       syncUpload();
     }
@@ -257,42 +297,28 @@
       if (uploading) card.show(state);
     }
     function pollUpload() { clearTimeout(uploadTimer); bridge.send('upload_status'); }
-    function toggleMenu(open) {
-      setOpen(open);
-      if (open) bridge.send('upload_context');   // the document may have changed since the last time
-    }
-    button.addEventListener('click', function (event) { event.stopPropagation(); toggleMenu(list.hidden); });
     /** Start the upload ``action`` for the item shown (from the menu, or the Files tab's toolbar). */
     function startUpload(action) {
-      setOpen(false);
+      menu.setOpen(false);
       if (!currentView) return;
       following = true;
       showUpload({ active: true, stage: t('item.upload_starting'), step: -1, steps: [], percent: null });   // at once: Python is busy for a while
       bridge.send(action, { workspace_id: currentView.workspace_id, item_id: currentView.item_id, stamp: currentView.stamp, request: action });
     }
-    uploadTool.run = startUpload;
-    uploads.forEach(function (entry) { entry.addEventListener('click', function () { startUpload(entry.dataset.action); }); });
-    $('item-republish').addEventListener('click', function () { setOpen(false); bridge.send('open_publish'); });
     function started(r) {
       if (r.ok && r.result && r.result.started) { pollUpload(); return; }
       following = false;
       showUpload({ active: false });   // not started: declined, or one is under way
     }
-    bridge.on('add_step_file', started);
-    bridge.on('upload_drawing', started);
-    bridge.on('upload_dwg', started);
-    bridge.on('upload_dxf', started);
-    bridge.on('upload_context', function (r) { if (r.ok) setUpload(r.result); });
-    window.addEventListener('focus', function () { if (currentView) bridge.send('upload_context'); });   // the open document may have changed
-    bridge.on('upload_status', function (r) {
+    function onStatus(r) {
       if (!following) return;   // pushed for an upload started in another window
       if (!r.ok) { following = false; showUpload({ active: false }); return; }
       following = !!r.result.active;
       showUpload(r.result);
       clearTimeout(uploadTimer);
       if (following) uploadTimer = setTimeout(pollUpload, UPLOAD_POLL_MS);
-    });
-    bridge.on('toast', function (note) { ns.toast.show(note.message, { tone: note.tone }); });   // Python reports how an action ended
+    }
+    return { setUpload: setUpload, startUpload: startUpload, started: started, onStatus: onStatus };
   }
 
   // ---- Up-to-date check of a tab ----------------------------------------------------
@@ -411,17 +437,27 @@
     if (!r.ok) { message(r.error || t('item.read_error'), true); return; }
     const entry = r.result;
     if (entry.pending) {
-      if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, t('item.finding')); }
-      timer = setTimeout(poll, POLL_INTERVAL_MS);
+      waitForItem(entry);
       return;
     }
     const quiet = quietRead;   // the Item tab was clicked: the item is drawn again, but not checked again
     quietRead = false;
     shownSeq = entry.seq;
-    if (entry.denied) { showEmpty(ICON_DENIED, entry.denied, ''); return; }
+    showAnswer(entry, quiet);
+  }
+
+  /** Python is still reading the item: show the loading screen once for each open, and ask again soon. */
+  function waitForItem(entry) {
+    if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, t('item.finding')); }
+    timer = setTimeout(poll, POLL_INTERVAL_MS);
+  }
+
+  /** Show what Python answered once it is no longer pending: a refusal, a choice, a missing item, a message or the item. */
+  function showAnswer(entry, quiet) {
+    if (entry.denied) { showEmpty({ icon: ICON_DENIED, text: entry.denied, hint: '' }); return; }
     if (entry.choose && entry.choose.length) { showChoices(entry); return; }
     if (entry.missing) {
-      showEmpty(ICON_MISSING, t('item.missing_title'), t('item.missing_hint'), true, entry.missing);
+      showEmpty({ icon: ICON_MISSING, text: t('item.missing_title'), hint: t('item.missing_hint'), canPublish: true, number: entry.missing });
       return;
     }
     if (!entry.seq) { message(t('item.select_component')); return; }

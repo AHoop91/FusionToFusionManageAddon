@@ -74,7 +74,7 @@ All of it is in `src/ui/web/products/js/`.
 | Card menu | `usageMenu(entries)` is the three dots and the menu they open (`[{label, run}]`), made with the page's own `menu(button, list)` (arrow keys, Escape, one open at a time) and the `products-menu` classes; `forgetMenus` drops the menus of cards that are replaced. A card offers Open in Fusion Manage (`open_url`). Every action the page asks for must be in the `bridge.on` list near the end of `products-page.js`: `tests/test_products.py` checks it. |
 | Pictures | `cellOf` puts a shimmering block in the cell and queues the picture. `pumpPictures` asks `products_image` for at most 8 at once. `pictureCache` (`'item:field'` to data URI) stops a picture being asked for twice. |
 | Filters | `filters.js`, below. |
-| Sorting | `sortable.js` is drag to reorder, not row sorting: `ns.sortable.start(event, row, list, rowSelector, onDrop)` moves a row of a list by its grip. It is used for the columns lists (the Columns tab and the new view dialog). The table does not sort rows; a view's own `sort` is kept when it is saved. |
+| Sorting | `sortable.js` is drag to reorder, not row sorting: `ns.sortable.start(event, {row, list, rowSelector, onDrop})` moves a row of a list by its grip. It is used for the columns lists (the Columns tab and the new view dialog). The table does not sort rows; a view's own `sort` is kept when it is saved. |
 
 ### `filters.js`
 

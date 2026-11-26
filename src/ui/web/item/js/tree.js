@@ -1,6 +1,7 @@
 /**
  * Pieces the Where Used and Bill of Materials tabs share: asking Python for an answer that takes a while,
  * a centred message or loader, and the item cell of a tree row (chevron, icon box, number, part number - description).
+ * Layer: UI. It holds no business rules; the request plumbing (``load``) calls the bridge and leaves the decisions to the tab.
  */
 (function (ns) {
   'use strict';
@@ -126,11 +127,10 @@
     return stamp && !isNaN(date) ? date.toLocaleString() : '';
   }
 
-  /** A line of text (and a hint under it) in the middle of ``target``. */
-  function centred(target, className, text, isError, hint) {
+  /** A line of text in the middle of ``target``, in the error style when ``isError``. */
+  function centred(target, className, text, isError) {
     target.className = 'view-scroll item-centred ' + className;
     target.replaceChildren(el('p', 'item-empty-text' + (isError ? ' error' : ''), text));
-    if (hint) target.appendChild(el('p', 'item-empty-hint', hint));
   }
 
   /** Under a table that shows only its columns: an icon (static markup), a line of text and a hint, centred in the space left. */
@@ -239,10 +239,22 @@
    * chevron when this row has none), ``quiet`` (black text that looks like a link only under the pointer), ``loading`` and ``error`` (notes beside the name).
    */
   function itemCell(opts) {
-    const row = opts.row;
     const td = el('td', 'item-tree-first');
     const cell = el('div', 'item-tree-cell');
     cell.style.paddingLeft = Math.max(0, opts.iconX - (opts.chevron || opts.room ? SLOT_PX : 0)) + 'px';
+    const toggle = makeToggle(opts);
+    if (toggle) cell.appendChild(toggle);
+    cell.appendChild(makeKindIcon(opts.kind));
+    cell.appendChild(el('span', 'item-tree-seq', opts.number));
+    cell.appendChild(makeRowLabel(opts.row, opts.quiet));
+    if (opts.loading) cell.appendChild(el('span', 'item-tree-note muted', t('item.loading')));
+    if (opts.error) cell.appendChild(el('span', 'item-tree-note error', opts.error));
+    td.appendChild(cell);
+    return td;
+  }
+
+  /** The chevron button of an item cell (``opts.chevron``), an empty box of its width (``opts.room``), or null when the row has neither. */
+  function makeToggle(opts) {
     if (opts.chevron) {
       const chevron = el('button', 'item-tree-toggle');
       chevron.type = 'button';
@@ -250,16 +262,23 @@
       chevron.setAttribute('aria-expanded', opts.chevron.open ? 'true' : 'false');
       chevron.innerHTML = opts.chevron.open ? CHEVRON_OPEN : CHEVRON_CLOSED;   // static markup
       chevron.addEventListener('click', opts.chevron.onClick);
-      cell.appendChild(chevron);
-    } else if (opts.room) {
-      cell.appendChild(el('span', 'item-tree-toggle'));
+      return chevron;
     }
-    const icon = el('span', 'item-tree-icon' + (opts.kind === 'part' ? ' item-tree-icon-part' : ''));
-    icon.title = opts.kind === 'root' ? t('item.kind_item') : opts.kind === 'part' ? t('item.kind_part') : t('item.kind_assembly');
-    icon.innerHTML = opts.kind === 'root' ? ROOT : CUBE;   // static markup
-    cell.appendChild(icon);
-    cell.appendChild(el('span', 'item-tree-seq', opts.number));
-    const label = row.url ? el('a', 'item-tree-label item-link' + (opts.quiet ? ' item-tree-label-quiet' : '')) : el('span', 'item-tree-label');
+    if (opts.room) return el('span', 'item-tree-toggle');
+    return null;
+  }
+
+  /** The icon of an item cell for ``kind`` ('root', 'assembly' or 'part'), with its tooltip. */
+  function makeKindIcon(kind) {
+    const icon = el('span', 'item-tree-icon' + (kind === 'part' ? ' item-tree-icon-part' : ''));
+    icon.title = kind === 'root' ? t('item.kind_item') : kind === 'part' ? t('item.kind_part') : t('item.kind_assembly');
+    icon.innerHTML = kind === 'root' ? ROOT : CUBE;   // static markup
+    return icon;
+  }
+
+  /** The label of an item cell: a link that opens the item in Fusion Manage when ``row`` has a url, else plain text; then part number and name. */
+  function makeRowLabel(row, quiet) {
+    const label = row.url ? el('a', 'item-tree-label item-link' + (quiet ? ' item-tree-label-quiet' : '')) : el('span', 'item-tree-label');
     if (row.url) {
       label.href = '#';
       label.addEventListener('click', function (event) { event.preventDefault(); bridge.send('open_url', { url: row.url }); });
@@ -267,11 +286,7 @@
     label.title = row.url ? t('item.open_in_fusion_manage_named', { title: row.title }) : row.title;
     if (row.number) label.appendChild(el('span', 'item-tree-pn', row.number));
     if (row.name) label.appendChild(el('span', 'item-tree-name', row.name));
-    cell.appendChild(label);
-    if (opts.loading) cell.appendChild(el('span', 'item-tree-note muted', t('item.loading')));
-    if (opts.error) cell.appendChild(el('span', 'item-tree-note error', opts.error));
-    td.appendChild(cell);
-    return td;
+    return label;
   }
 
   /** Name a tab's button as Fusion Manage does (``tab`` is one entry of an item's ``tabs``: ``label``, ``count``, ``allowed``), with how many entries it holds; a tab

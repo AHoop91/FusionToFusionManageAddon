@@ -137,6 +137,29 @@
     return listed.join(', ') + (count > listed.length ? ' ' + t('language.check_more', { n: count - listed.length }) : '');
   }
 
+  /** A line saying what is wrong, then the names of the first ones. */
+  function appendNamedProblem(box, text, listed, count) {
+    box.appendChild(el('p', null, text));
+    box.appendChild(el('code', 'lang-path', names(listed, count)));
+  }
+
+  /** The placeholders (``{name}``) a translation changed: for each key, those expected and those found. */
+  function appendPlaceholderProblems(box, found) {
+    box.appendChild(el('p', null, t('language.check_placeholders', { n: found.placeholder_count })));
+    found.placeholders.forEach(function (item) {
+      function braces(list) { return list.length ? list.map(function (name) { return '{' + name + '}'; }).join(' ') : t('language.check_none'); }
+      box.appendChild(el('code', 'lang-path', t('language.check_placeholder_item', { key: item.key, expected: braces(item.expected), found: braces(item.found) })));
+    });
+  }
+
+  /** The problems that are counted: names missing, placeholders changed, values that are not text, keys English does not have. */
+  function appendCountedProblems(box, found) {
+    if (found.missing_count) appendNamedProblem(box, t('language.check_missing', { n: found.missing_count }), found.missing, found.missing_count);
+    if (found.placeholder_count) appendPlaceholderProblems(box, found);
+    if (found.not_text_count) appendNamedProblem(box, t('language.check_not_text', { n: found.not_text_count }), found.not_text, found.not_text_count);
+    if (found.unknown_count) appendNamedProblem(box, t('language.check_unknown', { n: found.unknown_count }), found.unknown, found.unknown_count);
+  }
+
   /** What checking a language file against English's found: how much is translated, and what needs a look. */
   function buildReport(found) {
     const trouble = found.errors.length > 0;
@@ -146,25 +169,7 @@
     box.appendChild(el('strong', null, attention ? t('language.check_attention', { name: found.name }) : t('language.check_good', { name: found.name })));
     box.appendChild(el('p', null, t('language.check_summary', { translated: found.translated, total: found.total, same: found.same_as_english })));
     found.errors.concat(found.warnings).forEach(function (text) { box.appendChild(el('p', null, text)); });
-    if (found.missing_count) {
-      box.appendChild(el('p', null, t('language.check_missing', { n: found.missing_count })));
-      box.appendChild(el('code', 'lang-path', names(found.missing, found.missing_count)));
-    }
-    if (found.placeholder_count) {
-      box.appendChild(el('p', null, t('language.check_placeholders', { n: found.placeholder_count })));
-      found.placeholders.forEach(function (item) {
-        function braces(list) { return list.length ? list.map(function (name) { return '{' + name + '}'; }).join(' ') : t('language.check_none'); }
-        box.appendChild(el('code', 'lang-path', t('language.check_placeholder_item', { key: item.key, expected: braces(item.expected), found: braces(item.found) })));
-      });
-    }
-    if (found.not_text_count) {
-      box.appendChild(el('p', null, t('language.check_not_text', { n: found.not_text_count })));
-      box.appendChild(el('code', 'lang-path', names(found.not_text, found.not_text_count)));
-    }
-    if (found.unknown_count) {
-      box.appendChild(el('p', null, t('language.check_unknown', { n: found.unknown_count })));
-      box.appendChild(el('code', 'lang-path', names(found.unknown, found.unknown_count)));
-    }
+    appendCountedProblems(box, found);
     return box;
   }
 

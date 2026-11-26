@@ -332,13 +332,154 @@
     return input && input.value ? [input.value] : [];
   }
 
-  /** The fields a bought version copies from its source: every field with a tick, all ticked to begin with, in the sections of the form (each folds and
-   *  has a tick of its own). What the add-in sets itself comes first, locked. What is unticked is saved (``.skipped()``) so a field added to the
-   *  workspace later is copied. */
-  function buildCopyList(kindId, stored) {
-    const skip = new Set(stored.skip_fields || []);
-    const shut = new Set([t('settings.ws_make_buy_copy_group_set')]);   // the titles of the sections folded: what the add-in sets (nothing to choose there) to begin with
-    let query = '';
+  // ---- The copy list of the Make or buy section ----------------------------
+  // ``ctx`` is the state of one list: ``kindId``, ``skip`` (ids not copied), ``shut`` (titles of the folded groups), ``query`` (the search, lower case)
+  // and the elements ``box``, ``search``, ``all``, ``none``, ``list`` and ``count``.
+
+  function copyMatches(ctx, f) { return (f.title + ' ' + f.id).toLowerCase().indexOf(ctx.query) >= 0; }
+
+  /** What the add-in sets itself, and the fields that can be chosen: those the form shows (a picture is never copied, a hidden or computed field is
+   *  never written, and once the sections are known, a field in none of them is not on the form). */
+  function splitCopyFields(ctx) {
+    const box = ctx.box;
+    const panel = box.closest('.ws-kind');
+    const known = (panel && fmFields[ctx.kindId]) || [];
+    const laidOut = known.some(function (f) { return !!f.section; });
+    const set = panel ? makeBuyFields(box).concat(componentValue(box), numberValue(box)) : [];
+    const fields = known.filter(function (f) { return !/image/i.test(f.type || ''); });
+    const onForm = function (f) { return f.shown !== false && !f.computed && (!laidOut || !!f.section); };
+    return { fixed: fields.filter(function (f) { return set.indexOf(f.id) >= 0; }), free: fields.filter(function (f) { return set.indexOf(f.id) < 0 && onForm(f); }) };
+  }
+
+  /** The free fields by section, in the order of the form (the title of a field in no section is empty and comes last). */
+  function groupCopyFields(free) {
+    const found = [];
+    free.forEach(function (f) {
+      const title = f.section || '';
+      let group = found.filter(function (g) { return g.title === title; })[0];
+      if (!group) { group = { title: title, order: f.section_order || 0, fields: [] }; found.push(group); }
+      group.fields.push(f);
+    });
+    found.forEach(function (g) { g.fields.sort(function (x, y) { return (x.field_order || 0) - (y.field_order || 0); }); });
+    return found.sort(function (x, y) { return x.order - y.order; });
+  }
+
+  function buildCopyRow(ctx, f, locked) {
+    const line = el('label', 'ws-copy-row' + (locked ? ' locked' : ''));
+    const tick = el('input');
+    tick.type = 'checkbox';
+    tick.checked = locked || !ctx.skip.has(f.id);
+    tick.disabled = locked;
+    tick.dataset.id = f.id;
+    tick.addEventListener('change', function () {
+      if (tick.checked) ctx.skip.delete(f.id); else ctx.skip.add(f.id);
+      ctx.box.rebuild();
+    });
+    const name = el('span', 'ws-copy-name', f.title);
+    name.title = f.title;   // the shared tooltip shows it when the name is cut short
+    const id = el('span', 'ws-copy-id', f.id);
+    id.title = f.id;
+    line.append(tick, name, id);
+    return line;
+  }
+
+  /** The tick of a group's bar: all of its fields, or some of them (indeterminate). */
+  function buildCopyGroupTick(ctx, group, copied) {
+    const { title, fields, locked } = group;
+    const mark = el('input');
+    mark.type = 'checkbox';
+    mark.checked = copied === fields.length;
+    mark.indeterminate = copied > 0 && copied < fields.length;
+    mark.disabled = locked;
+    mark.setAttribute('aria-label', title);
+    mark.dataset.group = title;
+    mark.addEventListener('click', function (event) { event.stopPropagation(); });
+    mark.addEventListener('change', function () {
+      fields.forEach(function (f) { if (mark.checked) ctx.skip.delete(f.id); else ctx.skip.add(f.id); });
+      ctx.box.rebuild();
+    });
+    return mark;
+  }
+
+  /** The bar of a group: chevron, title, tick, how many are copied. Clicking it folds the group (not while searching). */
+  function buildCopyGroupHead(ctx, group, open) {
+    const { title, fields, locked } = group;
+    const copied = fields.filter(function (f) { return locked || !ctx.skip.has(f.id); }).length;
+    const head = el('div', 'ws-copy-head');
+    head.setAttribute('role', 'button');
+    head.tabIndex = 0;
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    head.dataset.group = title;
+    const mark = buildCopyGroupTick(ctx, group, copied);
+    head.append(el('span', 'ws-copy-chevron'), mark, el('span', 'ws-copy-title', title), el('span', 'ws-copy-of', t('settings.ws_make_buy_copy_group_count', { count: copied, total: fields.length })));
+    function fold() { if (ctx.shut.has(title)) ctx.shut.delete(title); else ctx.shut.add(title); ctx.box.rebuild(); }
+    head.addEventListener('click', function () { if (!ctx.query) fold(); });
+    head.addEventListener('keydown', function (event) {
+      if (!ctx.query && (event.key === 'Enter' || event.key === ' ') && event.target === head) { event.preventDefault(); fold(); }
+    });
+    return head;
+  }
+
+  /** One folding group: its bar and its rows. */
+  function buildCopyGroup(ctx, title, fields, locked) {
+    const open = !!ctx.query || !ctx.shut.has(title);
+    const part = el('div', 'ws-copy-group' + (open ? ' open' : ''));
+    part.appendChild(buildCopyGroupHead(ctx, { title: title, fields: fields, locked: locked }, open));
+    if (open) {
+      const rows = el('div', 'ws-copy-rows');
+      fields.forEach(function (f) { rows.appendChild(buildCopyRow(ctx, f, locked)); });
+      part.appendChild(rows);
+    }
+    return part;
+  }
+
+  /** What has the focus in the list, to find it again after the list is rebuilt (or null). */
+  function readCopyFocus(list) {
+    const on = document.activeElement;
+    if (!on || !list.contains(on)) return null;
+    return { id: on.dataset.id, group: on.dataset.group, head: on.classList.contains('ws-copy-head') };
+  }
+
+  function restoreCopyFocus(list, focus) {
+    if (!focus) return;
+    const again = focus.id ? list.querySelector('input[data-id="' + focus.id + '"]') :
+      Array.prototype.filter.call(list.querySelectorAll(focus.head ? '.ws-copy-head' : 'input[data-group]'), function (n) { return n.dataset.group === focus.group; })[0];
+    if (again) again.focus({ preventScroll: true });
+  }
+
+  /** Fill the list with the groups that match the search (or a line saying why there are none). */
+  function fillCopyList(ctx, fixed, free) {
+    const list = ctx.list;
+    const own = fixed.filter(function (f) { return copyMatches(ctx, f); });
+    if (own.length) list.appendChild(buildCopyGroup(ctx, t('settings.ws_make_buy_copy_group_set'), own, true));
+    groupCopyFields(free.filter(function (f) { return copyMatches(ctx, f); })).forEach(function (g) {
+      list.appendChild(buildCopyGroup(ctx, g.title || t('settings.ws_make_buy_copy_group_other'), g.fields, false));
+    });
+    if (!list.children.length) list.appendChild(el('p', 'ws-copy-empty', t('settings.ws_no_match_fields')));
+  }
+
+  function rebuildCopyList(ctx) {
+    const { fixed, free } = splitCopyFields(ctx);
+    const list = ctx.list;
+    const top = list.scrollTop;
+    const focus = readCopyFocus(list);   // what has the focus is rebuilt: find it again after
+    list.replaceChildren();
+    ctx.box.classList.toggle('searching', !!ctx.query);
+    const empty = !fixed.length && !free.length;
+    ctx.search.disabled = ctx.all.disabled = ctx.none.disabled = empty;
+    if (empty) {
+      list.appendChild(el('p', 'ws-copy-empty', fmFieldsError[ctx.kindId] || t('settings.ws_no_fields_loaded')));
+      ctx.count.textContent = '';
+      return;
+    }
+    fillCopyList(ctx, fixed, free);
+    list.scrollTop = top;
+    restoreCopyFocus(list, focus);
+    ctx.count.textContent = t('settings.ws_make_buy_copy_count', { count: free.filter(function (f) { return !ctx.skip.has(f.id); }).length, total: free.length });
+  }
+
+  /** The elements of a copy list: the search and its two buttons, the list, and the count under it. */
+  function buildCopyShell() {
     const box = el('div', 'ws-copy ws-mb-copy');
     const search = el('input', 'ws-copy-search');
     search.type = 'text';
@@ -359,122 +500,24 @@
     const foot = el('div', 'ws-copy-foot');
     foot.appendChild(count);
     box.append(bar, list, foot);
+    return { box: box, search: search, all: all, none: none, list: list, count: count };
+  }
 
-    function matches(f) { return (f.title + ' ' + f.id).toLowerCase().indexOf(query) >= 0; }
-
-    /** What the add-in sets itself, and the fields that can be chosen: those the form shows (a picture is never copied, a hidden or computed field is
-     *  never written, and once the sections are known, a field in none of them is not on the form). */
-    function parts() {
-      const panel = box.closest('.ws-kind');
-      const known = (panel && fmFields[kindId]) || [];
-      const laidOut = known.some(function (f) { return !!f.section; });
-      const set = panel ? makeBuyFields(box).concat(componentValue(box), numberValue(box)) : [];
-      const fields = known.filter(function (f) { return !/image/i.test(f.type || ''); });
-      const onForm = function (f) { return f.shown !== false && !f.computed && (!laidOut || !!f.section); };
-      return { fixed: fields.filter(function (f) { return set.indexOf(f.id) >= 0; }), free: fields.filter(function (f) { return set.indexOf(f.id) < 0 && onForm(f); }) };
-    }
-
-    /** The free fields by section, in the order of the form (the title of a field in no section is empty and comes last). */
-    function groups(free) {
-      const found = [];
-      free.forEach(function (f) {
-        const title = f.section || '';
-        let group = found.filter(function (g) { return g.title === title; })[0];
-        if (!group) { group = { title: title, order: f.section_order || 0, fields: [] }; found.push(group); }
-        group.fields.push(f);
-      });
-      found.forEach(function (g) { g.fields.sort(function (x, y) { return (x.field_order || 0) - (y.field_order || 0); }); });
-      return found.sort(function (x, y) { return x.order - y.order; });
-    }
-
-    function row(f, locked) {
-      const line = el('label', 'ws-copy-row' + (locked ? ' locked' : ''));
-      const tick = el('input');
-      tick.type = 'checkbox';
-      tick.checked = locked || !skip.has(f.id);
-      tick.disabled = locked;
-      tick.dataset.id = f.id;
-      tick.addEventListener('change', function () {
-        if (tick.checked) skip.delete(f.id); else skip.add(f.id);
-        box.rebuild();
-      });
-      const name = el('span', 'ws-copy-name', f.title);
-      name.title = f.title;   // the shared tooltip shows it when the name is cut short
-      const id = el('span', 'ws-copy-id', f.id);
-      id.title = f.id;
-      line.append(tick, name, id);
-      return line;
-    }
-
-    /** One folding group: its bar (chevron, title, a tick for all of it, how many are copied) and its rows. */
-    function group(title, fields, locked) {
-      const open = !!query || !shut.has(title);
-      const copied = fields.filter(function (f) { return locked || !skip.has(f.id); }).length;
-      const part = el('div', 'ws-copy-group' + (open ? ' open' : ''));
-      const head = el('div', 'ws-copy-head');
-      head.setAttribute('role', 'button');
-      head.tabIndex = 0;
-      head.setAttribute('aria-expanded', open ? 'true' : 'false');
-      const mark = el('input');
-      mark.type = 'checkbox';
-      mark.checked = copied === fields.length;
-      mark.indeterminate = copied > 0 && copied < fields.length;
-      mark.disabled = locked;
-      mark.setAttribute('aria-label', title);
-      mark.dataset.group = title;
-      head.dataset.group = title;
-      mark.addEventListener('click', function (event) { event.stopPropagation(); });
-      mark.addEventListener('change', function () {
-        fields.forEach(function (f) { if (mark.checked) skip.delete(f.id); else skip.add(f.id); });
-        box.rebuild();
-      });
-      head.append(el('span', 'ws-copy-chevron'), mark, el('span', 'ws-copy-title', title), el('span', 'ws-copy-of', t('settings.ws_make_buy_copy_group_count', { count: copied, total: fields.length })));
-      function fold() { if (shut.has(title)) shut.delete(title); else shut.add(title); box.rebuild(); }
-      head.addEventListener('click', function () { if (!query) fold(); });
-      head.addEventListener('keydown', function (event) {
-        if (!query && (event.key === 'Enter' || event.key === ' ') && event.target === head) { event.preventDefault(); fold(); }
-      });
-      part.appendChild(head);
-      if (open) {
-        const rows = el('div', 'ws-copy-rows');
-        fields.forEach(function (f) { rows.appendChild(row(f, locked)); });
-        part.appendChild(rows);
-      }
-      return part;
-    }
-
-    box.rebuild = function () {
-      const { fixed, free } = parts();
-      const top = list.scrollTop;
-      const on = document.activeElement;   // what has the focus is rebuilt: find it again after
-      const focus = on && list.contains(on) ? { id: on.dataset.id, group: on.dataset.group, head: on.classList.contains('ws-copy-head') } : null;
-      list.replaceChildren();
-      box.classList.toggle('searching', !!query);
-      const empty = !fixed.length && !free.length;
-      search.disabled = all.disabled = none.disabled = empty;
-      if (empty) {
-        list.appendChild(el('p', 'ws-copy-empty', fmFieldsError[kindId] || t('settings.ws_no_fields_loaded')));
-        count.textContent = '';
-        return;
-      }
-      const own = fixed.filter(matches);
-      if (own.length) list.appendChild(group(t('settings.ws_make_buy_copy_group_set'), own, true));
-      groups(free.filter(matches)).forEach(function (g) {
-        list.appendChild(group(g.title || t('settings.ws_make_buy_copy_group_other'), g.fields, false));
-      });
-      if (!list.children.length) list.appendChild(el('p', 'ws-copy-empty', t('settings.ws_no_match_fields')));
-      list.scrollTop = top;
-      if (focus) {
-        const again = focus.id ? list.querySelector('input[data-id="' + focus.id + '"]') :
-          Array.prototype.filter.call(list.querySelectorAll(focus.head ? '.ws-copy-head' : 'input[data-group]'), function (n) { return n.dataset.group === focus.group; })[0];
-        if (again) again.focus({ preventScroll: true });
-      }
-      count.textContent = t('settings.ws_make_buy_copy_count', { count: free.filter(function (f) { return !skip.has(f.id); }).length, total: free.length });
-    };
-    all.addEventListener('click', function () { parts().free.filter(matches).forEach(function (f) { skip.delete(f.id); }); box.rebuild(); });
-    none.addEventListener('click', function () { parts().free.filter(matches).forEach(function (f) { skip.add(f.id); }); box.rebuild(); });
-    search.addEventListener('input', function () { query = search.value.trim().toLowerCase(); box.rebuild(); });
-    box.skipped = function () { return Array.from(skip); };
+  /** The fields a bought version copies from its source: every field with a tick, all ticked to begin with, in the sections of the form (each folds and
+   *  has a tick of its own). What the add-in sets itself comes first, locked. What is unticked is saved (``.skipped()``) so a field added to the
+   *  workspace later is copied. */
+  function buildCopyList(kindId, stored) {
+    const ctx = buildCopyShell();
+    ctx.kindId = kindId;
+    ctx.skip = new Set(stored.skip_fields || []);
+    ctx.shut = new Set([t('settings.ws_make_buy_copy_group_set')]);   // the titles of the sections folded: what the add-in sets (nothing to choose there) to begin with
+    ctx.query = '';
+    const box = ctx.box;
+    box.rebuild = function () { rebuildCopyList(ctx); };
+    ctx.all.addEventListener('click', function () { splitCopyFields(ctx).free.filter(function (f) { return copyMatches(ctx, f); }).forEach(function (f) { ctx.skip.delete(f.id); }); box.rebuild(); });
+    ctx.none.addEventListener('click', function () { splitCopyFields(ctx).free.filter(function (f) { return copyMatches(ctx, f); }).forEach(function (f) { ctx.skip.add(f.id); }); box.rebuild(); });
+    ctx.search.addEventListener('input', function () { ctx.query = ctx.search.value.trim().toLowerCase(); box.rebuild(); });
+    box.skipped = function () { return Array.from(ctx.skip); };
     return box;
   }
 
@@ -848,8 +891,8 @@
   /** The Fusion Manage field that links each item to its component (for a workspace that is assigned: the field of the Primary Component). */
   function buildComponentSection(kind, config) {
     if (kind.assign) {
-      return buildFieldSection(t('settings.ws_primary_title'), t('settings.ws_primary_tip'), t('settings.ws_primary_field'), '',
-        makePicker(componentCfg, config.component_field || ''));
+      return buildFieldSection({ title: t('settings.ws_primary_title'), text: t('settings.ws_primary_tip'), label: t('settings.ws_primary_field'), note: '',
+        picker: makePicker(componentCfg, config.component_field || '') });
     }
     const section = el('div', 'ws-section');
     section.appendChild(heading(t('settings.ws_component_linking')));
@@ -864,7 +907,8 @@
   // The Portfolio Management tab is laid out like the Items tab: a heading, a line saying what it is for, then the setting.
 
   /** A section that sets one field: heading and what it is for, then a labelled picker. Locked until the workspace validates. */
-  function buildFieldSection(title, text, label, note, picker) {
+  function buildFieldSection(spec) {
+    const { title, text, label, note, picker } = spec;
     const section = el('div', 'ws-section');
     section.appendChild(heading(title));
     section.appendChild(describe(text));
@@ -896,8 +940,8 @@
 
   /** The Variants grid: the column that links each row to its component. */
   function buildVariantsSection(config) {
-    return buildFieldSection(t('settings.ws_variants_title'), t('settings.ws_variants_tip'), t('settings.ws_variants_link'),
-      t('settings.ws_variants_link_tip'), makePicker(gridLinkCfg, config.variants.link_column));
+    return buildFieldSection({ title: t('settings.ws_variants_title'), text: t('settings.ws_variants_tip'), label: t('settings.ws_variants_link'),
+      note: t('settings.ws_variants_link_tip'), picker: makePicker(gridLinkCfg, config.variants.link_column) });
   }
 
   /** Source field -> FM field id rows, then the static values. */
@@ -983,6 +1027,22 @@
   // One card holds a tab per workspace kind ("Items", ...). Each tab shows
   // that workspace's sections.
 
+  /** The sections of one workspace panel, each a card that folds. */
+  function appendKindSections(rest, kind, config) {
+    // Each setting is a card that folds, so a long page stays short. What is rarely changed starts folded; a problem found in a folded one opens it.
+    if (kind.id === 'items') {   // as ``ITEMS_KIND`` in ``workspace_models``: the linking and mapping together, then what is extra (folded to begin with)
+      const linking = [];
+      if (kind.component_lookup) linking.push(buildComponentSection(kind, config));
+      if (kind.mapped !== false) linking.push(buildMappingSection(kind, config));
+      if (linking.length) rest.appendChild(group(t('settings.ws_group_mapping'), linking, false));
+      rest.appendChild(group(t('settings.ws_group_extra'), [buildMakeBuySection(kind, config)], true));
+    } else {
+      if (kind.component_lookup || kind.assign) rest.appendChild(foldable(buildComponentSection(kind, config), false));
+      if (kind.assign) rest.appendChild(foldable(buildVariantsSection(config), false));
+      if (kind.mapped !== false) rest.appendChild(foldable(buildMappingSection(kind, config), false));   // a workspace only chosen by its id has no mapping
+    }
+  }
+
   /** ``titled``: the workspace is alone on its card, so the panel opens with the card's header (the title, as on the Connection card). */
   function buildKindPanel(kind, config, titled) {
     const panel = el('div', 'ws-kind ws-panel');
@@ -1001,18 +1061,7 @@
     enabled.querySelector('.ws-enabled').addEventListener('change', function (e) { rest.disabled = !e.target.checked; });
     panel.appendChild(rest);
     rest.appendChild(buildIdSection(kind, config));
-    // Each setting is a card that folds, so a long page stays short. What is rarely changed starts folded; a problem found in a folded one opens it.
-    if (kind.id === 'items') {   // as ``ITEMS_KIND`` in ``workspace_models``: the linking and mapping together, then what is extra (folded to begin with)
-      const linking = [];
-      if (kind.component_lookup) linking.push(buildComponentSection(kind, config));
-      if (kind.mapped !== false) linking.push(buildMappingSection(kind, config));
-      if (linking.length) rest.appendChild(group(t('settings.ws_group_mapping'), linking, false));
-      rest.appendChild(group(t('settings.ws_group_extra'), [buildMakeBuySection(kind, config)], true));
-    } else {
-      if (kind.component_lookup || kind.assign) rest.appendChild(foldable(buildComponentSection(kind, config), false));
-      if (kind.assign) rest.appendChild(foldable(buildVariantsSection(config), false));
-      if (kind.mapped !== false) rest.appendChild(foldable(buildMappingSection(kind, config), false));   // a workspace only chosen by its id has no mapping
-    }
+    appendKindSections(rest, kind, config);
 
     panel.addEventListener('pick', function () { panel.querySelectorAll('.ws-mb-copy').forEach(function (list) { list.rebuild(); }); }, true);   // what the add-in sets itself moves with the choices
     // Wiring: choosing a workspace invalidates, then asks Python to validate.

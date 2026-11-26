@@ -7,6 +7,7 @@
  *
  * Save, in either, hands the fields that changed to the page (``host.apply``), which writes them into the view (a view is shared, so Save says so)
  * in one go.
+ * Layer: UI.
  */
 (function (ns) {
   'use strict';
@@ -47,11 +48,14 @@
     }) };
   }
 
-  /** A drop-down list in place of the browser's own: the shared picker with nothing to search. ``options`` is ``[{value, label}]``; ``clearable``
-   *  adds an entry (named ``label``) that takes the choice back; ``onChange(value)`` is told of a new choice, '' for that entry. */
-  function dropdown(options, value, label, className, clearable, onChange) {
+  /** A drop-down list in place of the browser's own: the shared picker with nothing to search. ``options`` is ``[{value, label}]``; ``look`` is
+   *  ``{label, className, clearable, onChange}``: ``clearable`` adds an entry (named ``label``) that takes the choice back; ``onChange(value)`` is told
+   *  of a new choice, '' for that entry. */
+  function dropdown(options, value, look) {
+    const label = look.label;
+    const clearable = look.clearable;
     const picker = ns.picker.make({
-      className: 'pk-dd ' + className,
+      className: 'pk-dd ' + look.className,
       ariaLabel: label,
       required: !clearable,
       searchFrom: Infinity,
@@ -64,7 +68,7 @@
     picker.addEventListener('pick', function () {
       const picked = picker.getPicked();
       const next = picked.length ? picked[0].value : '';
-      if (next !== value) onChange(next);
+      if (next !== value) look.onChange(next);
     });
     return picker;
   }
@@ -74,7 +78,12 @@
   function filterRowEl(filters, row, o) {
     const line = el('div', o.rowClass);
     const choices = filters.map(function (f) { return { value: f.id, label: f.name }; });
-    line.appendChild(dropdown(choices, row.type, t('products.filter_select'), o.typeClass, true, function (type) { row.type = type; o.onType(); }));
+    line.appendChild(dropdown(choices, row.type, {
+      label: t('products.filter_select'),
+      className: o.typeClass,
+      clearable: true,
+      onChange: function (type) { row.type = type; o.onType(); },
+    }));
     const f = filterOf(filters, row.type);
     if (f && f.takes_value) {
       const box = el('span', 'pfl-value');
@@ -131,7 +140,12 @@
   /** The And / Or choice of a line: a column that takes one filter has nothing to join. */
   function joinChoice() {
     const choices = [{ value: 'ALL', label: t('products.filter_and') }, { value: 'ANY', label: t('products.filter_or') }];
-    const join = dropdown(choices, filterMatch, t('products.filter_and'), 'pfl-join', false, function (match) { filterMatch = match; paintFilter(); });
+    const join = dropdown(choices, filterMatch, {
+      label: t('products.filter_and'),
+      className: 'pfl-join',
+      clearable: false,
+      onChange: function (match) { filterMatch = match; paintFilter(); },
+    });
     join.querySelector('button').disabled = !filterColumn.multiple;
     return join;
   }
@@ -284,12 +298,15 @@
     return item;
   }
 
-  /** The sections of ``tree`` that open to their fields: ``offered(group)`` gives the fields to list, those matching ``query`` (all of a section whose
-   *  name does; every section is open while there is a query), ``mark(group)`` says whether the section is marked with the green funnel, ``button(f)``
-   *  makes the entry of a field, and ``again`` paints the tree anew when a section is opened or closed (in ``opened``). */
-  function paintGroups(tree, query, opened, again, offered, mark, button) {
+  /** The sections of ``tree`` that open to their fields. ``spec`` is ``{query, opened, again, offered, mark, button}``: ``offered(group)`` gives the
+   *  fields to list, those matching ``query`` (all of a section whose name does; every section is open while there is a query), ``mark(group)`` says
+   *  whether the section is marked with the green funnel, ``button(f)`` makes the entry of a field, and ``again`` paints the tree anew when a section is
+   *  opened or closed (in ``opened``). */
+  function paintGroups(tree, spec) {
+    const query = spec.query;
+    const opened = spec.opened;
     fieldGroups.forEach(function (group) {
-      const left = offered(group);
+      const left = spec.offered(group);
       const shown = !query || group.name.toLowerCase().indexOf(query) >= 0 ? left : left.filter(function (f) { return f.lower.indexOf(query) >= 0; });
       if (!shown.length) return;
       const open = !!query || !!opened[group.name];
@@ -298,10 +315,10 @@
       head.setAttribute('aria-expanded', open ? 'true' : 'false');
       head.appendChild(ns.svg(open ? ['M6 9l6 6 6-6'] : ['M9 6l6 6-6 6'], 14));
       head.appendChild(el('span', 'pvp-group-name', group.name || t('products.panel_fields')));
-      if (mark(group)) head.appendChild(funnelMark());
-      head.addEventListener('click', function () { opened[group.name] = !opened[group.name]; again(); });
+      if (spec.mark(group)) head.appendChild(funnelMark());
+      head.addEventListener('click', function () { opened[group.name] = !opened[group.name]; spec.again(); });
       tree.appendChild(head);
-      if (open) shown.forEach(function (f) { tree.appendChild(button(f)); });
+      if (open) shown.forEach(function (f) { tree.appendChild(spec.button(f)); });
     });
   }
 
@@ -309,10 +326,13 @@
   function paintTree() {
     const tree = $('products-view-tree');
     tree.textContent = '';
-    paintGroups(tree, $('products-view-pick').value.trim().toLowerCase(), treeOpen, paintTree,
-      function (group) { return group.fields; },
-      function (group) { return group.fields.some(function (f) { return panelState[f.key]; }); },
-      function (f) {
+    paintGroups(tree, {
+      query: $('products-view-pick').value.trim().toLowerCase(),
+      opened: treeOpen,
+      again: paintTree,
+      offered: function (group) { return group.fields; },
+      mark: function (group) { return group.fields.some(function (f) { return panelState[f.key]; }); },
+      button: function (f) {
         const item = fieldButton(f);
         item.disabled = !!panelState[f.key];
         if (panelState[f.key]) item.appendChild(funnelMark());
@@ -324,7 +344,8 @@
           paintPanel();
         });
         return item;
-      });
+      },
+    });
     if (!tree.firstChild) tree.appendChild(el('p', 'muted pvp-empty', t('products.panel_nothing')));
   }
 
@@ -436,7 +457,7 @@
       const grip = el('span', 'pvp-col-grip');
       grip.appendChild(ns.svg(ns.sortable.GRIP, 16));
       grip.addEventListener('pointerdown', function (event) {
-        ns.sortable.start(event, row, list, '.pvp-col-row', function (from, to) { moveColumn(from, to); });
+        ns.sortable.start(event, { row: row, list: list, rowSelector: '.pvp-col-row', onDrop: function (from, to) { moveColumn(from, to); } });
       });
       row.appendChild(grip);
       const tick = el('input');
@@ -473,15 +494,19 @@
     const top = tree.scrollTop;
     tree.textContent = '';
     if (!fields) { tree.appendChild(ns.balls(t('products.panel_loading'), 'pvp-loading')); return; }
-    paintGroups(tree, $('products-cols-search').value.trim().toLowerCase(), colOpen, paintAvailable,
-      function (group) { return group.fields.filter(function (f) { return colState.indexOf(f.key) < 0; }); },
-      function () { return false; },
-      function (f) {
+    paintGroups(tree, {
+      query: $('products-cols-search').value.trim().toLowerCase(),
+      opened: colOpen,
+      again: paintAvailable,
+      offered: function (group) { return group.fields.filter(function (f) { return colState.indexOf(f.key) < 0; }); },
+      mark: function () { return false; },
+      button: function (f) {
         const item = fieldButton(f);
         item.title = t('products.cols_show', { title: f.title });
         item.addEventListener('click', function () { colState.push(f.key); paintColumns(); });
         return item;
-      });
+      },
+    });
     if (!tree.firstChild) tree.appendChild(el('p', 'muted pvp-empty', t('products.cols_none')));
     tree.scrollTop = top;
   }

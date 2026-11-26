@@ -3,6 +3,7 @@
  * the rows of the one chosen (``products_rows``), and creates a new product (``products_create``) from a form made of the workspace's own
  * sections and fields (``products_form``). Python answers a request at once with
  * "pending" and the page asks for the outcome (``products_status``) until it is there. Choosing a row only marks it for now.
+ * Layer: UI, and the page controller (application) of this window.
  */
 (function (ns) {
   'use strict';
@@ -103,6 +104,15 @@
     return Array.prototype.filter.call(m.list.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"]'), function (i) { return !i.disabled; });
   }
 
+  /** The entry of a menu that the arrow, Home or End key moves to from the entry ``at`` (-1 for none); null for any other key. */
+  function menuTarget(entries, at, key) {
+    if (key === 'ArrowDown') return entries[(at + 1) % entries.length];
+    if (key === 'ArrowUp') return entries[(at - 1 + entries.length) % entries.length];
+    if (key === 'Home') return entries[0];
+    if (key === 'End') return entries[entries.length - 1];
+    return null;
+  }
+
   /** Make ``button`` open and close ``list``, with the arrow keys moving through its entries. */
   function menu(button, list) {
     const m = { button: button, list: list };
@@ -125,14 +135,13 @@
       else if (event.key === 'ArrowUp') { event.preventDefault(); open(true); }
     });
     list.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { event.preventDefault(); close(true); return; }
+      if (event.key === 'Tab') { close(false); return; }
       const entries = items(m);
-      const at = entries.indexOf(document.activeElement);
-      if (event.key === 'ArrowDown') { event.preventDefault(); entries[(at + 1) % entries.length].focus(); }
-      else if (event.key === 'ArrowUp') { event.preventDefault(); entries[(at - 1 + entries.length) % entries.length].focus(); }
-      else if (event.key === 'Home') { event.preventDefault(); entries[0].focus(); }
-      else if (event.key === 'End') { event.preventDefault(); entries[entries.length - 1].focus(); }
-      else if (event.key === 'Escape') { event.preventDefault(); close(true); }
-      else if (event.key === 'Tab') close(false);
+      const target = menuTarget(entries, entries.indexOf(document.activeElement), event.key);
+      if (target === null) return;
+      event.preventDefault();
+      target.focus();
     });
     list.addEventListener('click', function () { close(true); });
   }
@@ -158,17 +167,27 @@
 
   /** Let the buttons be pressed, or not: none while the list is read. */
   function refreshControls() {
+    refreshViewControls();
+    refreshRowControls();
+    $('products-prev').disabled = busy || page === 1;
+    $('products-next').disabled = busy || !more;
+  }
+
+  /** The view picker and the buttons that act on the view. */
+  function refreshViewControls() {
     viewPicker.querySelector('.pk-btn').disabled = busy || !views.length;
     $('products-refresh-view').disabled = busy;
     $('products-view-filter').disabled = busy || !definition;
     $('products-view-columns').disabled = busy || !definition;
+  }
+
+  /** The buttons that create a product or act on the row chosen. */
+  function refreshRowControls() {
     $('products-new').hidden = !canCreate || browsing;   // a browser only views
     $('products-new').disabled = busy;
     $('products-edit').disabled = busy || assigning || !selected;
     $('products-assign').disabled = busy || assigning || !selected;
     $('products-details').disabled = busy || !selected;
-    $('products-prev').disabled = busy || page === 1;
-    $('products-next').disabled = busy || !more;
   }
 
   /** Say something in the middle of the table (nothing clears it). Whatever was loading is done. */
@@ -1216,7 +1235,7 @@
 
   /** Drag a chosen column by its grip to a new place (see sortable.js). */
   function dragChosen(event, row) {
-    ns.sortable.start(event, row, $('products-newview-chosen'), '.pf-newview-row', moveChosen);
+    ns.sortable.start(event, { row: row, list: $('products-newview-chosen'), rowSelector: '.pf-newview-row', onDrop: moveChosen });
   }
 
   function chooseField(key) {
@@ -1436,6 +1455,16 @@
     if (signedIn && !checked) { checked = true; bridge.send('products_mode'); }
   }
 
+  /** Escape closes the one thing in front: a dialog, else the form. */
+  function closeFrontmost() {
+    if (!$('products-renview-modal').hidden) { closeRenameView(); return; }
+    if (!$('products-delview-modal').hidden) { closeDeleteView(); return; }
+    if (!$('products-newview-modal').hidden) { closeNewView(); return; }
+    if (!$('products-assign-modal').hidden) { closeAssignAsk(); return; }
+    if (!$('products-checklist-modal').hidden) { closeChecklist(); return; }
+    if (formShown()) closeForm();
+  }
+
   (function start() {
     // Fusion injects `adsk` asynchronously, so wait for it.
     if (typeof adsk === 'undefined') { setTimeout(start, 100); return; }
@@ -1492,13 +1521,7 @@
     $('products-form-cancel').addEventListener('click', closeForm);
     $('products-form').addEventListener('submit', create);
     document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Escape' || sending) return;
-      if (!$('products-renview-modal').hidden) closeRenameView();
-      else if (!$('products-delview-modal').hidden) closeDeleteView();
-      else if (!$('products-newview-modal').hidden) closeNewView();
-      else if (!$('products-assign-modal').hidden) closeAssignAsk();
-      else if (!$('products-checklist-modal').hidden) closeChecklist();
-      else if (formShown()) closeForm();
+      if (event.key === 'Escape' && !sending) closeFrontmost();
     });
     ['input', 'change', 'click'].forEach(function (name) { $('products-form').addEventListener(name, scheduleFooter); });
     $('products-checklist').addEventListener('click', openChecklist);

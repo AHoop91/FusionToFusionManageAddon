@@ -396,39 +396,63 @@
     return box;
   }
 
-  /** Header: the component's thumbnail, number and name, the state pill and, once an item is chosen among several, a Change button. */
-  function headCard(compare) {
-    const head = el('div', 'pub-props-head');
+  /** The thumbnail of the header: a skeleton while it loads, nothing (null) when the component has none. */
+  function thumbBox() {
     let url = selected.id ? thumbs[selected.id] : '';
     if (selected.root && url === undefined) url = null;   // the top bar is still reading it
-    if (url === null || url) {   // a skeleton while it loads, nothing when the component has none
-      const thumb = el('div', 'pub-props-thumb' + (url === null ? ' pub-thumb-loading' : ''));
-      // Only http(s) URLs, so nothing else is ever loaded into the style.
-      if (url && /^https?:\/\//i.test(url)) thumb.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
-      head.appendChild(thumb);
-    }
-    // The number is the title; the name (the design's description) is a sub heading under it.
+    if (url !== null && !url) return null;
+    const thumb = el('div', 'pub-props-thumb' + (url === null ? ' pub-thumb-loading' : ''));
+    // Only http(s) URLs, so nothing else is ever loaded into the style.
+    if (url && /^https?:\/\//i.test(url)) thumb.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
+    return thumb;
+  }
+
+  /** The number is the title; the name (the design's description) is a sub heading under it. */
+  function titleBlock() {
     const number = selected.item_number || selected.part_number || '';   // the item number is the master; the part number only stands in when there is none
     const name = selected.root ? selected.description : selected.name || selected.description;
     const text = el('div', 'pub-props-text');
     text.appendChild(el('h3', 'pub-props-title', number || selected.title));
     if (number && name) text.appendChild(el('p', 'pub-props-subtitle', name));
-    head.appendChild(text);
+    return text;
+  }
+
+  /** The state pill, in the top right corner. */
+  function stateSide(state, pillOf) {
+    const side = el('div', 'pub-props-side');
+    const pill = el('span', 'pub-state pub-state-' + state);
+    pill.appendChild(el('span', 'pub-state-dot'));
+    pill.appendChild(el('span', 'pub-state-label', pillOf.text));
+    const info = el('span', 'pub-state-info');   // the small "i" says there is a tooltip to read
+    info.appendChild(ui.svg(['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5']));
+    pill.appendChild(info);
+    pill.title = pillOf.title;
+    side.appendChild(pill);
+    return side;
+  }
+
+  /** Header: the component's thumbnail, number and name, the state pill and, once an item is chosen among several, a Change button. */
+  function headCard(compare) {
+    const head = el('div', 'pub-props-head');
+    const thumb = thumbBox();
+    if (thumb) head.appendChild(thumb);
+    head.appendChild(titleBlock());
     const state = changeState(compare);
     const pillOf = pills()[state];
-    if (compare && pillOf) {
-      const side = el('div', 'pub-props-side');   // the state pill, in the top right corner
-      const pill = el('span', 'pub-state pub-state-' + state);
-      pill.appendChild(el('span', 'pub-state-dot'));
-      pill.appendChild(el('span', 'pub-state-label', pillOf.text));
-      const info = el('span', 'pub-state-info');   // the small "i" says there is a tooltip to read
-      info.appendChild(ui.svg(['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 11v6', 'M12 7.5v.5']));
-      pill.appendChild(info);
-      pill.title = pillOf.title;
-      side.appendChild(pill);
-      head.appendChild(side);
-    }
+    if (compare && pillOf) head.appendChild(stateSide(state, pillOf));
     return head;
+  }
+
+  /** The Properties section of a line the comparison has not answered yet: its error, or a loader. */
+  function waitingSection() {
+    let content;
+    if (errorOf(selected)) {
+      content = ui.errorState(errorOf(selected), retry);
+    } else {
+      content = el('div', 'card pub-props-wait');
+      content.appendChild(ui.loaderNode());
+    }
+    return section(t('publish.properties'), content);
   }
 
   /** The Overview tab: what is known of the line against Fusion Manage. Whether an item exists is the comparison's ``fm.state`` (new: none; found: one; multiple:
@@ -437,23 +461,23 @@
     const known = !!selected.itemId;
     if (selected.noComponent) {
       pane.appendChild(noteCard(known ? t('publish.detail_no_component') : t('publish.detail_no_component_new')));
-    } else if (!compare) {
-      let content;
-      if (errorOf(selected)) {
-        content = ui.errorState(errorOf(selected), retry);
-      } else {
-        content = el('div', 'card pub-props-wait');
-        content.appendChild(ui.loaderNode());
-      }
-      pane.appendChild(section(t('publish.properties'), content));
-    } else if (isShared(compare)) {   // only the explanation, nothing else
+      return;
+    }
+    if (!compare) {
+      pane.appendChild(waitingSection());
+      return;
+    }
+    if (isShared(compare)) {   // only the explanation, nothing else
       pane.appendChild(sharedCard(compare.fm));
-    } else if (compare.fm.state === 'new' && !known) {
+      return;
+    }
+    if (compare.fm.state === 'new' && !known) {
       pane.appendChild(noItemCard(compare.fm));
       pane.appendChild(section(t('publish.properties'), propertiesCard(compare, false)));
-    } else {   // the old view; also the message of an unknown or unchecked line
-      pane.appendChild(section(t('publish.properties'), propertiesCard(compare, true)));
+      return;
     }
+    // the old view; also the message of an unknown or unchecked line
+    pane.appendChild(section(t('publish.properties'), propertiesCard(compare, true)));
   }
 
   /** The strip beside Overview, shown once the item's tabs are read: a tab is hidden when the workspace has none, and disabled when the user may not use it. */

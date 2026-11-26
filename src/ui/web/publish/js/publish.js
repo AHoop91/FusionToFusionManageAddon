@@ -1,7 +1,7 @@
 /**
  * Publish Item panel: summary of the open model and the loading of what it shows. It asks Python for the sections of the model (the Bill of
  * Materials and the MBOM tree together, once the MBOM is chosen), and hands each answer on: the Bill of Materials to publish-bom.js (which gives the structure to mbom-viewer.js, what Publish
- * sends), the design's own details to details.js.
+ * sends), the design's own details to details.js. Layer: application (the page controller).
  */
 (function (ns) {
   'use strict';
@@ -196,34 +196,69 @@
     bom.showError(failure, function () { loaded.mbom = false; bom.showChecking(); loadSection('mbom'); });
   }
 
+  /** A section that is a family of answers (``component:<id>``, ...): the prefix, and what the details panel does with the rest of the name. */
+  const DETAILS_SECTIONS = [
+    ['component:', function (id, entry) { details.handleComponent(id, entry); }],
+    ['item_tabs:', function (id, entry) { details.handleItemTabs(id, entry); }],
+    ['item_picture:', function (id, entry) { details.handlePicture(id, entry); }],
+    ['item_view:', function (id, entry) { details.handleItemView(id, entry); }],
+    ['thumbnail:', function (id, entry) { details.handleThumbnail(id, entry); }],
+  ];
+
+  /** Hand an answer of the details panel to it. False when ``name`` is not one of its sections. */
+  function answerDetailsSection(name, entry) {
+    const found = DETAILS_SECTIONS.find(function (section) { return name.indexOf(section[0]) === 0; });
+    if (!found) return false;
+    found[1](name.slice(found[0].length), entry);
+    return true;
+  }
+
+  /** Answer a section that is not kept in ``loaded``. False when ``name`` is not one of them. */
+  function answerUnkeptSection(name, entry) {
+    if (answerDetailsSection(name, entry)) return true;
+    if (name === 'summary') { answerSummary(entry); return true; }
+    if (name === 'mbom_tree') { viewer.answer(entry); return true; }   // the MBOM of the target, for the structure viewer
+    return false;
+  }
+
+  /** The design's thumbnail: no thumbnail (or none yet) just leaves the box empty. */
+  function answerThumbnail(entry) {
+    const url = entry.ok ? entry.data.url : '';
+    setThumbnail(url, false);
+    details.setThumbnail(currentSummary ? currentSummary.component_id : '', url);   // the design's details show the same one
+  }
+
+  /** Answer a section that is kept in ``loaded``. */
+  function answerKeptSection(name, entry) {
+    if (name === 'mbom') { answerMbom(entry); return; }
+    if (name === 'mbom_number') { mbom.answer(entry); return; }
+    if (name === 'thumbnail') { answerThumbnail(entry); return; }
+    if (name === 'properties') { answerProperties(entry); return; }
+    answerStructure(entry);
+  }
+
+  /** Asked before the last reload: it is not wanted. */
+  function isAskedBeforeReload(name) {
+    return askedIn[name] !== undefined && askedIn[name] !== generation;
+  }
+
+  /** Read for an MBOM that is no longer the one chosen: it is not wanted. */
+  function isForOtherMbom(name, entry) {
+    return (name === 'structure' || name === 'mbom_tree') && entry.target_id !== mbom.idOf(target);
+  }
+
   function handleSection(r) {
     if (!r.ok) return;
     const entry = r.result;
     const name = entry.section;
-    if (askedIn[name] !== undefined && askedIn[name] !== generation) return;   // asked before the last reload: it is not wanted
+    if (isAskedBeforeReload(name)) return;
     clearTimeout(timers[name]);
     if (entry.pending) { waitFor(name, entry); return; }
-    if ((name === 'structure' || name === 'mbom_tree') && entry.target_id !== mbom.idOf(target)) return;   // read for an MBOM that is no longer the one chosen
+    if (isForOtherMbom(name, entry)) return;
     inflight[name] = false;
-    if (name.indexOf('component:') === 0) { details.handleComponent(name.slice('component:'.length), entry); return; }
-    if (name.indexOf('item_tabs:') === 0) { details.handleItemTabs(name.slice('item_tabs:'.length), entry); return; }
-    if (name.indexOf('item_picture:') === 0) { details.handlePicture(name.slice('item_picture:'.length), entry); return; }
-    if (name.indexOf('item_view:') === 0) { details.handleItemView(name.slice('item_view:'.length), entry); return; }
-    if (name === 'summary') { answerSummary(entry); return; }
-    if (name.indexOf('thumbnail:') === 0) { details.handleThumbnail(name.slice('thumbnail:'.length), entry); return; }
-    if (name === 'mbom_tree') { viewer.answer(entry); return; }   // the MBOM of the target, for the structure viewer
+    if (answerUnkeptSection(name, entry)) return;
     loaded[name] = true;
-    if (name === 'mbom') { answerMbom(entry); return; }
-    if (name === 'mbom_number') { mbom.answer(entry); return; }
-    if (name === 'thumbnail') {   // no thumbnail (or none yet) just leaves the box empty
-      const url = entry.ok ? entry.data.url : '';
-      setThumbnail(url, false);
-      details.setThumbnail(currentSummary ? currentSummary.component_id : '', url);   // the design's details show the same one
-    } else if (name === 'properties') {
-      answerProperties(entry);
-    } else {
-      answerStructure(entry);
-    }
+    answerKeptSection(name, entry);
   }
 
   /** Read the Bill of Materials and its check again; answers still on their way for the old contents are ignored. The thumbnail and the MBOM lookup are left as they are. */

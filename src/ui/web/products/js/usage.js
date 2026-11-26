@@ -5,6 +5,7 @@
  *
  * The page lends what it shares (``host``: ``ask`` for a request to Python, ``failure``, ``openLightbox``, and its pop-up ``menu`` with
  * ``forgetMenus``) and asks for a check with ``ns.usage.init(host).load()``.
+ * Layer: UI.
  */
 (function (ns) {
   'use strict';
@@ -278,22 +279,31 @@
     $('products-usage').hidden = !!(result && result.denied);   // the head says what the design is: not when the user may not see the rest
     if (!result) { body.appendChild(usageSkeleton()); return; }
     if (result.error) { usageLine(t('products.usage_failed', { reason: result.error }), 'pu-bad'); return; }
-    if (result.denied) {   // as the Item panel says it, and nothing else on the page
-      const denied = el('div', 'pu-empty plain item-empty item-empty-denied');
-      const icon = ns.svg(DENIED_ICON, 24);
-      icon.classList.add('item-empty-icon');
-      denied.appendChild(icon);
-      denied.appendChild(el('p', 'item-empty-text', result.denied));
-      body.appendChild(denied);
-      return;
-    }
+    if (result.denied) { body.appendChild(usageDenied(result.denied)); return; }
     if (result.unpublished) { usageLine(result.message, 'pu-muted'); return; }
-    if (!result.primary.length && !result.variants.length) {   // used nowhere: one message, in the middle of the space there is
-      const empty = usageEmpty(t('products.usage_none', { number: result.number }), 56, true);
-      if (!result.variants_checked) empty.appendChild(el('p', 'pu-muted', t('products.usage_no_variants')));
-      body.appendChild(empty);
-      return;
-    }
+    if (!result.primary.length && !result.variants.length) { body.appendChild(usageUnused(result)); return; }
+    showUsageGroups(body, result);
+  }
+
+  /** What the page says, and nothing else, when the user may not see where the design is used: as the Item panel says it. */
+  function usageDenied(message) {
+    const denied = el('div', 'pu-empty plain item-empty item-empty-denied');
+    const icon = ns.svg(DENIED_ICON, 24);
+    icon.classList.add('item-empty-icon');
+    denied.appendChild(icon);
+    denied.appendChild(el('p', 'item-empty-text', message));
+    return denied;
+  }
+
+  /** Used nowhere: one message, in the middle of the space there is. */
+  function usageUnused(result) {
+    const empty = usageEmpty(t('products.usage_none', { number: result.number }), 56, true);
+    if (!result.variants_checked) empty.appendChild(el('p', 'pu-muted', t('products.usage_no_variants')));
+    return empty;
+  }
+
+  /** The tabs of the products the design is the Primary Component of and (when they were checked) a variant of. */
+  function showUsageGroups(body, result) {
     const groups = [usageGroup(result.primary, false)];
     if (result.variants_checked) groups.push(usageGroup(result.variants, true));
     body.appendChild(usageTabs(groups));

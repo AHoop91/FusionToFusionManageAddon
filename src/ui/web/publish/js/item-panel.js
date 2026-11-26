@@ -269,21 +269,56 @@
     });
   }
 
+  /** Save in the confirm mode: close the dialog, then run what the caller asked for. */
+  function submitConfirm() {
+    const go = view.onConfirm;
+    close_();
+    go();
+  }
+
+  /** The bought version that is there already is used: nothing is made. */
+  function submitFound() {
+    const found = view.found;
+    const use = view.onFound;
+    close_();
+    if (use) use(found);
+  }
+
+  /** The answer to a create: refused values stay as typed; a made item is said and handed on. */
+  function handleCreateAnswer(mine, answer) {
+    mine.working = false;
+    if (view !== mine) return;
+    if (!answer.ok) {   // the values stay as they were typed
+      const first = showRefusal(answer);
+      reveal();
+      if (first) (first.input.control || first.input).focus();
+      setButtons();
+      return;
+    }
+    mine.saved = true;
+    if (mine.onCreated) mine.onCreated(answer.result);
+    fc.reset();
+    modal.body.replaceChildren(el('p', 'ic-saved', t('publish.item_saved', { number: answer.result.number })));
+    say('');
+    setButtons();
+    modal.cancel.focus();
+  }
+
+  /** Send the typed values to make the item (or the bought version of the source). */
+  function sendCreate(values) {
+    const mine = view;
+    const bought = mine.mode === 'bought';
+    mine.working = true;
+    setButtons();
+    ask(bought ? 'bought_create' : 'items_create', bought ? { source_id: mine.sourceId, values: values } : { values: values }, function (answer) {
+      handleCreateAnswer(mine, answer);
+    });
+  }
+
   function submit() {
     if (!view || !view.ready || view.working) return;
-    if (view.mode === 'confirm') {
-      const go = view.onConfirm;
-      close_();
-      go();
-      return;
-    }
-    if (view.found) {   // the bought version that is there already is used: nothing is made
-      const found = view.found;
-      const use = view.onFound;
-      close_();
-      if (use) use(found);
-      return;
-    }
+    if (view.mode === 'confirm') { submitConfirm(); return; }
+    if (view.found) { submitFound(); return; }
     say('');
     const picked = fc.collect();
     if (picked.first) {
@@ -292,28 +327,7 @@
       (picked.first.input.control || picked.first.input).focus();
       return;
     }
-    const mine = view;
-    const bought = mine.mode === 'bought';
-    mine.working = true;
-    setButtons();
-    ask(bought ? 'bought_create' : 'items_create', bought ? { source_id: mine.sourceId, values: picked.values } : { values: picked.values }, function (answer) {
-      mine.working = false;
-      if (view !== mine) return;
-      if (!answer.ok) {   // the values stay as they were typed
-        const first = showRefusal(answer);
-        reveal();
-        if (first) (first.input.control || first.input).focus();
-        setButtons();
-        return;
-      }
-      mine.saved = true;
-      if (mine.onCreated) mine.onCreated(answer.result);
-      fc.reset();
-      modal.body.replaceChildren(el('p', 'ic-saved', t('publish.item_saved', { number: answer.result.number })));
-      say('');
-      setButtons();
-      modal.cancel.focus();
-    });
+    sendCreate(picked.values);
   }
 
   /** Say that the bought version exists; Save (now "Use existing item") hands it to ``onFound`` and closes the dialog. */

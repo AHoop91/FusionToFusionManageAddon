@@ -3,7 +3,7 @@
  *
  * Turns the edited MBOM (``ns.mbomStructure``, with what it changed since it was read) into the same job the publish has always sent: the
  * components whose Fusion Manage item is created or updated and the BOM operations (``add``, ``update``, ``renumber``, ``remove``), each naming its parent by
- * item number. Python is not changed: ``bom_requests`` writes the requests from these operations. Pure data, no DOM and no requests.
+ * item number. Python is not changed: ``bom_requests`` writes the requests from these operations. Pure data, no DOM and no requests. Layer: domain.
  *
  * What it does with the structure:
  * * a line the user added or moved is added under its assembly; a moved line is also removed from the one it left;
@@ -94,90 +94,129 @@
     return out;
   }
 
-  /**
-   * ``input``: ``structure`` (``ns.mbomStructure``'s), ``ebom`` (its tree), ``rows`` (every compared row of the design), ``summary`` (the design as
-   * the panel reads it, with the target's item number in place of its own) and ``skipped`` (the ids of the rows that are left out of publishing, from
-   * ``bomModel.buildItems``, with their item numbers: ``{id: number}``) and, when the caller has it, ``changes`` (the structure's ``changes()``, so it is not
-   * worked out twice).
-   * Returns ``{components, operations, problems}``.
-   */
-  function build(input) {
-    const structure = input.structure;
-    const root = structure.root();
-    const rootNumber = String(input.summary.item_number || root.number || '');
-    const found = input.changes || structure.changes();
-    const changes = found.changes;
-    const problems = [];
-    function problem(kind, number) {
-      let entry = problems.find(function (p) { return p.kind === kind; });
-      if (!entry) { entry = { kind: kind, numbers: [] }; problems.push(entry); }
-      if (number && entry.numbers.indexOf(number) < 0) entry.numbers.push(number);
-    }
+  /** The line number a line has in Fusion Manage now: the one of the line it replaces when it was added again, else its own. */
+  function sequenceOf(identity, c) { return identity[c.uid] ? identity[c.uid].sequence : c.sequence; }
 
-    const ebomAt = {};   // EBOM key -> its node
-    (function index(node) { ebomAt[node.key] = node; node.children.forEach(index); })(input.ebom);
-    const nodeAt = {};   // MBOM uid -> {node, parent}
+  /** The edge id a line has in Fusion Manage now: the one of the line it replaces when it was added again, else its own. */
+  function edgeIdOf(identity, c) { return identity[c.uid] ? identity[c.uid].edgeId : c.edgeId; }
+
+  /** Note a problem of ``kind`` (once per kind) with the item number or name it is about (once each). */
+  function addProblem(problems, kind, number) {
+    let entry = problems.find(function (p) { return p.kind === kind; });
+    if (!entry) { entry = { kind: kind, numbers: [] }; problems.push(entry); }
+    if (number && entry.numbers.indexOf(number) < 0) entry.numbers.push(number);
+  }
+
+  /** EBOM key -> its node. */
+  function indexEbom(ebom) {
+    const ebomAt = {};
+    (function index(node) { ebomAt[node.key] = node; node.children.forEach(index); })(ebom);
+    return ebomAt;
+  }
+
+  /** MBOM uid -> {node, parent}. */
+  function indexMbom(root) {
+    const nodeAt = {};
     nodeAt[root.uid] = { node: root, parent: null };
     (function index(node) { node.children.forEach(function (c) { nodeAt[c.uid] = { node: c, parent: node }; index(c); }); })(root);
-    function numberOf(parent) { return parent.uid === root.uid ? rootNumber : String(parent.number); }
+    return nodeAt;
+  }
 
+  /** The state the plan is built in: the structure's changes, the numbering, and the operations and problems found so far. */
+  function makeContext(input) {
+    const root = input.structure.root();
+    const found = input.changes || input.structure.changes();
     const identity = found.identity || {};
-    const held = found.held || {};
-    const seqOf = function (c) { return identity[c.uid] ? identity[c.uid].sequence : c.sequence; };
-    const edgeOf = function (c) { return identity[c.uid] ? identity[c.uid].edgeId : c.edgeId; };
-    const numbers = numbering(root, changes, identity);
-    const sequences = numbers.sequences;
-    const rank = numbers.rank;
+    const numbers = numbering(root, found.changes, identity);
+    return {
+      root: root, rootNumber: String(input.summary.item_number || root.number || ''),
+      found: found, changes: found.changes, identity: identity, held: found.held || {},
+      sequences: numbers.sequences, rank: numbers.rank, nodeAt: indexMbom(root),
+      operations: [], direct: [],   // direct: the lines that take their number at once, with their ``rank``
+      seen: {}, problems: [],
+    };
+  }
 
-    const operations = [];
-    const direct = [];   // the lines that take their number at once, with their ``rank``
-    const seen = {};
-    function push(operation) {
-      const id = JSON.stringify(operation);
-      if (seen[id]) return;   // the same assembly in two places gives the same lines twice
-      seen[id] = true;
-      operations.push(operation);
+  function numberOfParent(ctx, parent) { return parent.uid === ctx.root.uid ? ctx.rootNumber : String(parent.number); }
+
+  function pushOperation(ctx, operation) {
+    const id = JSON.stringify(operation);
+    if (ctx.seen[id]) return;   // the same assembly in two places gives the same lines twice
+    ctx.seen[id] = true;
+    ctx.operations.push(operation);
+  }
+
+  /** A moved line is removed from the assembly it left. */
+  function planLeftAssembly(ctx, c, flags) {
+    const was = ctx.nodeAt[flags.oldParent];
+    if (!was) return;
+    pushOperation(ctx, { op: 'remove', parent: numberOfParent(ctx, was.node), number: c.number, sequence: sequenceOf(ctx.identity, c) || '', edge: flags.edgeId || '' });
+  }
+
+  /** A line the user added or moved in: added under its assembly, unless the item has it in its own bill of materials already. */
+  function planEnteringLine(ctx, c, parent, given) {
+    const there = (ctx.held[key(parent)] || {})[key(c.number)];   // the item has this line in its own bill of materials in Fusion Manage already
+    if (there) {   // (a copy of an assembly that was removed and added again): it is not added a second time, only its quantity brought in step
+      if (Number(there.quantity) !== Number(c.quantity)) pushOperation(ctx, { op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: there.quantity, sequence: there.sequence, edge: there.edgeId });
+      return;
     }
+    const line = { op: 'add', parent: parent, number: c.number, quantity: c.quantity, sequence: given };
+    if (c.kind === 'added') { line.link = c.link || ''; line.linkable = c.linkable || null; }   // it has its item already: only the line is added
+    pushOperation(ctx, line);
+  }
+
+  /** A line of Fusion Manage's that takes another number; its new quantity goes with it, in the one request that gives its number. */
+  function planRenumberedLine(ctx, c, parent) {
+    const flags = ctx.changes[c.uid];
+    const given = ctx.sequences[c.uid];
+    const edge = (flags && flags.edgeId) || edgeIdOf(ctx.identity, c) || '';
+    const line = { op: 'renumber', parent: parent, number: c.number, from_sequence: sequenceOf(ctx.identity, c) || '', sequence: given, edge: edge };
+    if (flags && flags.quantity) line.quantity = c.quantity;
+    ctx.direct.push({ rank: ctx.rank[c.uid], line: line });
+  }
+
+  function planQuantityUpdate(ctx, c, parent, flags) {
+    pushOperation(ctx, { op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: flags.oldQuantity, sequence: sequenceOf(ctx.identity, c) || '', edge: flags.edgeId || edgeIdOf(ctx.identity, c) || '' });
+  }
+
+  /** A component line with an item number that the user changed or that takes another number. */
+  function planChangedLine(ctx, node, c) {
+    const flags = ctx.changes[c.uid];
+    const given = ctx.sequences[c.uid];
+    const parent = numberOfParent(ctx, node);
+    if (flags && flags.moved) planLeftAssembly(ctx, c, flags);
+    if (flags && (flags.new || flags.moved)) planEnteringLine(ctx, c, parent, given);
+    else if (given) planRenumberedLine(ctx, c, parent);
+    else if (flags && flags.quantity) planQuantityUpdate(ctx, c, parent, flags);
+  }
+
+  /** The operations for one line of ``node``, or the problem that stops it being published. */
+  function planLine(ctx, node, c) {
+    const flags = ctx.changes[c.uid];
+    const given = ctx.sequences[c.uid];
+    if ((flags || given) && !String(c.number).trim()) addProblem(ctx.problems, 'skipped', c.name);   // no item number: there is no item to put in a BOM
+    else if (c.kind === 'assembly' || c.kind === 'phantom') { if (flags) addProblem(ctx.problems, 'unpublishable', c.number); }
+    else if (flags || given) planChangedLine(ctx, node, c);
+  }
+
+  /** The operations for every line of the tree, then the lines that were removed. */
+  function planOperations(ctx) {
     (function walk(node) {
       node.children.forEach(function (c) {
-        const flags = changes[c.uid];
-        const given = sequences[c.uid];
-        if ((flags || given) && !String(c.number).trim()) problem('skipped', c.name);   // no item number: there is no item to put in a BOM
-        else if (c.kind === 'assembly' || c.kind === 'phantom') { if (flags) problem('unpublishable', c.number); }
-        else if (flags || given) {
-          const parent = numberOf(node);
-          if (flags && flags.moved) {
-            const was = nodeAt[flags.oldParent];
-            if (was) push({ op: 'remove', parent: numberOf(was.node), number: c.number, sequence: seqOf(c) || '', edge: flags.edgeId || '' });   // from the assembly it left
-          }
-          if (flags && (flags.new || flags.moved)) {
-            const there = (held[key(parent)] || {})[key(c.number)];   // the item has this line in its own bill of materials in Fusion Manage already
-            if (there) {   // (a copy of an assembly that was removed and added again): it is not added a second time, only its quantity brought in step
-              if (Number(there.quantity) !== Number(c.quantity)) push({ op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: there.quantity, sequence: there.sequence, edge: there.edgeId });
-            } else {
-              const line = { op: 'add', parent: parent, number: c.number, quantity: c.quantity, sequence: given };
-              if (c.kind === 'added') { line.link = c.link || ''; line.linkable = c.linkable || null; }   // it has its item already: only the line is added
-              push(line);
-            }
-          } else if (given) {   // a line of Fusion Manage's that takes another number; its new quantity goes with it, in the one request that gives its number
-            const edge = (flags && flags.edgeId) || edgeOf(c) || '';
-            const line = { op: 'renumber', parent: parent, number: c.number, from_sequence: seqOf(c) || '', sequence: given, edge: edge };
-            if (flags && flags.quantity) line.quantity = c.quantity;
-            direct.push({ rank: rank[c.uid], line: line });
-          } else if (flags && flags.quantity) {
-            push({ op: 'update', parent: parent, number: c.number, quantity: c.quantity, fm_quantity: flags.oldQuantity, sequence: seqOf(c) || '', edge: flags.edgeId || edgeOf(c) || '' });
-          }
-        }
+        planLine(ctx, node, c);
         walk(c);
       });
-    })(root);
-    direct.sort(function (x, y) { return x.rank - y.rank; }).forEach(function (d) { push(d.line); });   // sort is stable: lines of other assemblies keep their places
-    found.removed.forEach(function (r) {
-      const was = nodeAt[r.parent];
-      if (was) push({ op: 'remove', parent: numberOf(was.node), number: r.number, sequence: r.sequence || '', edge: r.edgeId || '' });
+    })(ctx.root);
+    ctx.direct.sort(function (x, y) { return x.rank - y.rank; }).forEach(function (d) { pushOperation(ctx, d.line); });   // sort is stable: lines of other assemblies keep their places
+    ctx.found.removed.forEach(function (r) {
+      const was = ctx.nodeAt[r.parent];
+      if (was) pushOperation(ctx, { op: 'remove', parent: numberOfParent(ctx, was.node), number: r.number, sequence: r.sequence || '', edge: r.edgeId || '' });
     });
+  }
 
-    // An assembly in two places has one BOM in Fusion Manage: its lines have to be the same in both.
+  /** An assembly in two places has one BOM in Fusion Manage: its lines have to be the same in both. */
+  function checkAmbiguousAssemblies(ctx) {
+    const changes = ctx.changes;
     const instances = {};   // number -> the lines under each place of it
     (function index(node) {
       node.children.forEach(function (c) {
@@ -186,13 +225,16 @@
         }
         index(c);
       });
-    })(root);
-    operations.forEach(function (o) {
+    })(ctx.root);
+    ctx.operations.forEach(function (o) {
       const lines = instances[key(o.parent)] || [];
-      if (lines.some(function (l) { return l !== lines[0]; })) problem('ambiguous', o.parent);
+      if (lines.some(function (l) { return l !== lines[0]; })) addProblem(ctx.problems, 'ambiguous', o.parent);
     });
+  }
 
-    // The components: the design, then each EBOM component a line was made from, once.
+  /** The components: the design, then each EBOM component a line was made from, once. */
+  function collectComponents(ctx, input) {
+    const ebomAt = indexEbom(input.ebom);
     const rowById = {};
     input.rows.forEach(function (r) { if (r.id && !rowById[r.id]) rowById[r.id] = r; });
     const components = [ns.bomModel.rootComponent(input.summary)];
@@ -203,15 +245,35 @@
         const id = from ? from.componentId : '';
         if (id && !taken[id]) {
           taken[id] = true;
-          if (Object.prototype.hasOwnProperty.call(input.skipped, id)) problem('skipped', input.skipped[id] || c.number);
+          if (Object.prototype.hasOwnProperty.call(input.skipped, id)) addProblem(ctx.problems, 'skipped', input.skipped[id] || c.number);
           else if (rowById[id]) components.push(ns.bomModel.lineComponent(rowById[id]));
         }
         collect(c);
       });
-    })(root);
+    })(ctx.root);
+    return components;
+  }
+
+  /** Remove first, then renumber, then the rest: a line is freed, then moved, before another takes its number (the sort is stable). */
+  function sortByPhase(operations) {
     const phase = { remove: 0, renumber: 1 };
-    operations.sort(function (x, y) { return (x.op in phase ? phase[x.op] : 2) - (y.op in phase ? phase[y.op] : 2); });   // a line is freed, then moved, before another takes its number (stable)
-    return { components: components, operations: operations, problems: problems };
+    operations.sort(function (x, y) { return (x.op in phase ? phase[x.op] : 2) - (y.op in phase ? phase[y.op] : 2); });
+  }
+
+  /**
+   * ``input``: ``structure`` (``ns.mbomStructure``'s), ``ebom`` (its tree), ``rows`` (every compared row of the design), ``summary`` (the design as
+   * the panel reads it, with the target's item number in place of its own) and ``skipped`` (the ids of the rows that are left out of publishing, from
+   * ``bomModel.buildItems``, with their item numbers: ``{id: number}``) and, when the caller has it, ``changes`` (the structure's ``changes()``, so it is not
+   * worked out twice).
+   * Returns ``{components, operations, problems}``.
+   */
+  function build(input) {
+    const ctx = makeContext(input);
+    planOperations(ctx);
+    checkAmbiguousAssemblies(ctx);
+    const components = collectComponents(ctx, input);
+    sortByPhase(ctx.operations);
+    return { components: components, operations: ctx.operations, problems: ctx.problems };
   }
 
   ns.mbomPlan = { build: build, lineNumbers: lineNumbers };

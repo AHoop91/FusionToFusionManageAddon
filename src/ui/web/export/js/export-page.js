@@ -6,6 +6,7 @@
  * until then a grey bar stands where the reason a destination is off would be. The file the export affects is read when the format or
  * destination is chosen (``export_files``, answered by ``export_files_found``) and shown on a card: new, or already attached and whether it
  * is up to date.
+ * Layer: UI, and the page controller (application) of this window.
  */
 (function (ns) {
   'use strict';
@@ -47,14 +48,14 @@
     chosen.classList.add('is-checked');
   }
 
-  /** A radio button (for the keyboard) in a joined button: a format, or a destination (turned off when ``off``). */
-  function segment(item, name, checked, off, onPick) {
-    const part = el('label', 'export-segment' + (checked ? ' is-checked' : '') + (off ? ' is-off' : ''));
+  /** A radio button (for the keyboard) in a joined button: a format, or a destination. ``look`` is ``{checked, off}``: ``off`` turns it off. */
+  function segment(item, name, look, onPick) {
+    const part = el('label', 'export-segment' + (look.checked ? ' is-checked' : '') + (look.off ? ' is-off' : ''));
     const input = el('input');
     input.type = 'radio';
     input.name = name;
-    input.checked = checked;
-    input.disabled = off;
+    input.checked = look.checked;
+    input.disabled = look.off;
     input.addEventListener('change', function () { mark(part, '.export-segment'); onPick(item.key); });
     part.appendChild(input);
     part.appendChild(el('span', '', item.label));
@@ -76,7 +77,7 @@
     const box = $('export-formats');
     box.replaceChildren();
     context.formats.forEach(function (f) {
-      box.appendChild(segment(f, 'export-format', f.key === format, false, function (key) {
+      box.appendChild(segment(f, 'export-format', { checked: f.key === format, off: false }, function (key) {
         format = key;
         destination = preferred();
         renderDestinations();
@@ -124,7 +125,7 @@
     const offered = context.destinations.filter(function (d) { return !d.hidden; });
     $('export-destination-group').hidden = offered.length < context.destinations.length && offered.every(function (d) { return !d.reason; });
     offered.forEach(function (d) {
-      box.appendChild(segment(d, 'export-destination', d.key === destination, !!d.reason || d.checking, function (key) {
+      box.appendChild(segment(d, 'export-destination', { checked: d.key === destination, off: !!d.reason || d.checking }, function (key) {
         destination = key;
         summarizeDestination();
         renderDestinationNote();
@@ -195,23 +196,37 @@
       box.appendChild(el('p', 'export-note is-off', files.message || t('export.files_unreadable')));
       return;
     }
-    const old = files.existing;
-    const state = old ? (old.freshness || {}).state || 'unknown' : 'new';
+    box.appendChild(buildFileCard(files));
+  }
+
+  /** The state of the file already attached (``old``, or null when there is none: the export would add a new one). */
+  function attachedState(old) {
+    if (!old) return 'new';
+    return (old.freshness || {}).state || 'unknown';
+  }
+
+  /** The lines about the file already attached: when it was modified, its version and size, and who changed it when. */
+  function buildFileRows(old) {
+    const rows = el('dl', 'export-file-rows');
+    if (old.freshness && old.freshness.modified) rows.appendChild(detail(t('export.row_modified'), shortDate(old.freshness.modified)));
+    rows.appendChild(detail(t('export.row_version'), old.version || t('export.unknown')));
+    if (old.size) rows.appendChild(detail(t('export.row_size'), fileSize(old.size)));
+    rows.appendChild(detail(t('export.row_changed'), old.updated ? shortDate(old.updated) : t('export.unknown')));
+    if (old.user) rows.appendChild(detail(t('export.row_changed_by'), old.user));
+    return rows;
+  }
+
+  /** The card of an answer about the files that was read: the name and the state, and the lines about what is attached already. */
+  function buildFileCard(found) {
+    const old = found.existing;
+    const state = attachedState(old);
     const card = el('div', 'export-file is-' + state);
     const head = el('div', 'export-file-head');
-    head.appendChild(el('span', 'export-file-name', files.name));
+    head.appendChild(el('span', 'export-file-name', found.name));
     head.appendChild(el('span', 'export-file-badge', stateName(state)));
     card.appendChild(head);
-    if (old) {
-      const rows = el('dl', 'export-file-rows');
-      if (old.freshness && old.freshness.modified) rows.appendChild(detail(t('export.row_modified'), shortDate(old.freshness.modified)));
-      rows.appendChild(detail(t('export.row_version'), old.version || t('export.unknown')));
-      if (old.size) rows.appendChild(detail(t('export.row_size'), fileSize(old.size)));
-      rows.appendChild(detail(t('export.row_changed'), old.updated ? shortDate(old.updated) : t('export.unknown')));
-      if (old.user) rows.appendChild(detail(t('export.row_changed_by'), old.user));
-      card.appendChild(rows);
-    }
-    box.appendChild(card);
+    if (old) card.appendChild(buildFileRows(old));
+    return card;
   }
 
   /** Ask what is attached for the format and destination chosen, unless that was asked already or there is nothing to ask about. */

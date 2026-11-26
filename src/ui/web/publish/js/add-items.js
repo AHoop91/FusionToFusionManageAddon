@@ -247,38 +247,57 @@
     if (left) box.appendChild(el('span', 'pub-add-total-note', t('publish.add_hidden_count', { count: left.toLocaleString() })));
   }
 
+  /** The status when the page could not be read: the message and a Retry button. */
+  function paintStatusFailed(status) {
+    status.classList.add('pub-add-status-card');
+    status.appendChild(ui.svg(['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
+    status.appendChild(el('h4', 'pub-error-title', t('publish.add_load_failed')));
+    status.appendChild(el('p', 'muted', failed));
+    const retry = el('button', 'pub-outline-button pub-retry', t('publish.retry'));
+    retry.type = 'button';
+    retry.addEventListener('click', loadNext);
+    status.appendChild(retry);
+  }
+
+  /** The status while later pages load: small bouncing balls beside the caption. */
+  function paintStatusLoadingMore(status) {
+    status.classList.add('pub-add-status-busy');
+    const balls = el('div', 'balls');
+    balls.setAttribute('role', 'status');
+    balls.setAttribute('aria-label', t('publish.loading_aria'));
+    for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
+    status.appendChild(balls);
+    status.appendChild(el('span', '', t('publish.add_loading_more')));
+  }
+
+  /** True when every loaded item is hidden and nothing more will come to show. */
+  function allRowsHidden() {
+    if (!onlySelected && moreToLoad()) return false;
+    return items.every(function (item) { return rows.get(item.id).hidden; });
+  }
+
+  /** The text of the status when it is only words (nothing loading or failed); '' when the list needs no status. */
+  function statusWords() {
+    if (!items.length) return t('publish.add_no_match');
+    if (!allRowsHidden()) return '';
+    return onlySelected ? t('publish.add_none_selected') : t('publish.add_all_added');
+  }
+
   function paintStatus() {
     const status = dialog.status;
     status.textContent = '';
     status.className = 'pub-add-status';
     status.hidden = false;
-    if (failed) {
-      status.classList.add('pub-add-status-card');
-      status.appendChild(ui.svg(['M12 3l10 18H2z', 'M12 10v5', 'M12 18.2v.3'], 28));
-      status.appendChild(el('h4', 'pub-error-title', t('publish.add_load_failed')));
-      status.appendChild(el('p', 'muted', failed));
-      const retry = el('button', 'pub-outline-button pub-retry', t('publish.retry'));
-      retry.type = 'button';
-      retry.addEventListener('click', loadNext);
-      status.appendChild(retry);
-    } else if (loading && !items.length) {
+    if (failed) { paintStatusFailed(status); return; }
+    if (loading && !items.length) {
       status.classList.add('pub-add-status-card');
       status.appendChild(ui.loaderNode());
-    } else if (loading) {   // later pages: small bouncing balls beside the caption
-      status.classList.add('pub-add-status-busy');
-      const balls = el('div', 'balls');
-      balls.setAttribute('role', 'status');
-      balls.setAttribute('aria-label', t('publish.loading_aria'));
-      for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
-      status.appendChild(balls);
-      status.appendChild(el('span', '', t('publish.add_loading_more')));
-    } else if (!items.length) {
-      status.textContent = t('publish.add_no_match');
-    } else if ((onlySelected || !moreToLoad()) && items.every(function (item) { return rows.get(item.id).hidden; })) {
-      status.textContent = onlySelected ? t('publish.add_none_selected') : t('publish.add_all_added');
-    } else {
-      status.hidden = true;
+      return;
     }
+    if (loading) { paintStatusLoadingMore(status); return; }
+    const words = statusWords();
+    if (words) status.textContent = words;
+    else status.hidden = true;
   }
 
   /** The count, the status line and the footer. */
@@ -428,11 +447,14 @@
   }
 
   /**
-   * A drop-down in place of a native select: the picker, with a round X on the field while a value is chosen. ``source`` is either
+   * A drop-down in place of a native select: the picker, with a round X on the field while a value is chosen. ``spec``: ``{ source, value, placeholder, pick, kind }``. ``source`` is either
    * ``[{ value, label }]`` (a short list, searched here) or a picker source ``function (text, offset, done)`` for a long one: it is read in
    * batches as the list is scrolled, and typing searches it on the server. ``pick(value)`` is called on a choice, with '' when it is cleared.
    */
-  function combo(source, value, placeholder, pick, kind) {   // ``kind``: 'property' or 'value', which names the box for a screen reader
+  function combo(spec) {
+    const source = spec.source;
+    const pick = spec.pick;
+    const kind = spec.kind;   // 'property' or 'value', which names the box for a screen reader
     const remote = typeof source === 'function';
     const wrap = el('div', 'pub-add-combo-wrap');
     const picker = ns.picker.make(Object.assign({
@@ -440,7 +462,7 @@
       buttonClass: 'pub-add-combo',
       ariaLabel: kind === 'property' ? t('publish.add_property') : t('publish.add_value'),
       required: true,   // the X on the field clears it
-      placeholder: placeholder,
+      placeholder: spec.placeholder,
       search: t('publish.add_menu_search'),
       empty: function (box) { return box.querySelector('.pk-search').value.trim() ? t('publish.add_menu_no_match') : t('publish.add_menu_empty'); },
       text: {
@@ -448,7 +470,7 @@
         showing: function (shown, total) { return t('publish.add_showing', { shown: shown.toLocaleString(), total: total.toLocaleString() }); },
       },
       label: remote ? function (v) { return v; } : function (v) { return source.find(function (e) { return e.value === v; }).label; },
-    }, remote ? { source: source } : { groups: function () { return [{ title: '', items: source }]; } }), value);
+    }, remote ? { source: source } : { groups: function () { return [{ title: '', items: source }]; } }), spec.value);
 
     function paintSet() { wrap.classList.toggle('pub-add-combo-set', picker.getPicked().length > 0); }
     picker.addEventListener('pick', function () { paintSet(); pick(picker.getPicked()[0].value); });
@@ -477,7 +499,7 @@
           });
         });
       };
-      return combo(source, row.value, t('publish.add_select_value'), function (value) { row.value = value; }, 'value');
+      return combo({ source: source, value: row.value, placeholder: t('publish.add_select_value'), pick: function (value) { row.value = value; }, kind: 'value' });
     }
     const input = el('input', 'pub-add-input');
     input.type = 'text';
@@ -495,11 +517,17 @@
     if (!first) wrap.appendChild(joinSwitch(row.join, t('publish.add_join_row'), function (join) { row.join = join; }));
     const line = el('div', 'pub-add-filter-line');
     const entries = fields.map(function (f) { return { value: f.id, label: f.title }; });
-    line.appendChild(combo(entries, row.field, t('publish.add_choose_property'), function (id) {
-      row.field = id;
-      row.value = '';
-      renderFilters();
-    }, 'property'));
+    line.appendChild(combo({
+      source: entries,
+      value: row.field,
+      placeholder: t('publish.add_choose_property'),
+      pick: function (id) {
+        row.field = id;
+        row.value = '';
+        renderFilters();
+      },
+      kind: 'property',
+    }));
     if (group.rows.length > 1 || groups.length > 1) {
       line.appendChild(iconButton('pub-add-remove', t('publish.add_remove_row'), 12, function () {
         group.rows.splice(group.rows.indexOf(row), 1);
@@ -620,24 +648,19 @@
     });
   }
 
-  function build() {
-    const overlay = el('div', 'pub-add-overlay');
-    const box = el('div', 'pub-add-dialog');
-    box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', t('publish.add_dialog_label'));
-
+  /** The title bar: the heading and the close button. Names the dialog after the heading. */
+  function buildTitleBar(box) {
     const titleBar = el('div', 'pub-add-title');
     const title = el('h2', 'pub-add-heading', t('publish.add_items'));
     title.id = 'pub-add-heading';
     box.setAttribute('aria-labelledby', title.id);
-    const closeButton = iconButton('pub-add-close', t('publish.close'), undefined, close);
     titleBar.appendChild(title);
-    titleBar.appendChild(closeButton);
-    box.appendChild(titleBar);
+    titleBar.appendChild(iconButton('pub-add-close', t('publish.close'), undefined, close));
+    return titleBar;
+  }
 
-    const body = el('div', 'pub-add-body');
-    box.appendChild(body);
-
+  /** The top row: the text search, the version picker and the Search button. */
+  function buildTopRow() {
     const top = el('div', 'pub-add-top');
     const search = el('input', 'pub-add-filter');
     search.type = 'search';
@@ -649,41 +672,43 @@
     top.appendChild(search);
     top.appendChild(version);
     top.appendChild(searchButton);
-    body.appendChild(top);
+    return { top: top, search: search, version: version, searchButton: searchButton };
+  }
 
-    const panes = el('div', 'pub-add-panes');
-    body.appendChild(panes);
-
-    // Left: the property filters.
+  /** Left: the property filters. */
+  function buildFilterSide() {
     const side = el('div', 'pub-add-side');
     const filterNote = el('p', 'pub-add-note muted');
     const filters = el('div', 'pub-add-filters');
     side.appendChild(filterNote);
     side.appendChild(filters);
-    panes.appendChild(side);
+    return { side: side, filterNote: filterNote, filters: filters };
+  }
 
-    // Right: the matches.
+  /** Right: the matches, with their count and the switch that shows the added ones. */
+  function buildResultsSide() {
     const main = el('div', 'pub-add-main');
     const resultsHead = el('div', 'pub-add-results-head');
     resultsHead.appendChild(el('span', 'pub-add-results-title', t('publish.add_results')));
     const totalLine = el('span', 'pub-add-total');
     resultsHead.appendChild(totalLine);
     const hideSwitch = switchLabel(t('publish.add_show_hidden'), t('publish.add_show_hidden_title'));
-    const hideBox = hideSwitch.box;
     resultsHead.appendChild(hideSwitch.label);
     main.appendChild(resultsHead);
     const list = el('div', 'pub-add-list');
     const status = el('div', 'pub-add-status');
     list.appendChild(status);
     main.appendChild(list);
-    panes.appendChild(main);
+    return { main: main, totalLine: totalLine, hideBox: hideSwitch.box, list: list, status: status };
+  }
 
+  /** The footer: the selection count, the "selected only" switch and the Cancel, Clear and Add buttons. */
+  function buildFooter() {
     const footer = el('div', 'pub-add-footer');
     const count = el('span', 'pub-add-count');
     footer.appendChild(count);
     const onlySwitch = switchLabel(t('publish.add_show_selected'), t('publish.add_show_selected_title'));
-    const onlyBox = onlySwitch.box;
-    onlyBox.disabled = true;
+    onlySwitch.box.disabled = true;
     footer.appendChild(onlySwitch.label);
     const cancel = el('button', 'btn btn-secondary', t('publish.cancel'));
     cancel.type = 'button';
@@ -694,38 +719,71 @@
     footer.appendChild(cancel);
     footer.appendChild(clear);
     footer.appendChild(add);
-    box.appendChild(footer);
+    return { footer: footer, count: count, onlyBox: onlySwitch.box, cancel: cancel, clear: clear, add: add };
+  }
+
+  /** A click anywhere on an unlocked row ticks it: one listener serves every row. */
+  function tickRowOnClick(event) {
+    const row = event.target.closest('.pub-add-row');
+    const item = row && byId.get(row.dataset.id);
+    if (!item || isAdded(item)) return;
+    const tick = row.firstChild;
+    if (event.target !== tick) tick.checked = !tick.checked;
+    if (tick.checked) selected.set(item.id, item); else selected.delete(item.id);
+    tickChanged(item, row);
+  }
+
+  /** Hook the dialog's controls to what they do. ``parts``: ``{ overlay, top, results, footer }`` as built. */
+  function wireDialog(parts) {
+    const results = parts.results;
+    const footer = parts.footer;
+    results.list.addEventListener('click', tickRowOnClick);
+    results.list.addEventListener('scroll', onScroll, { passive: true });
+    parts.top.search.addEventListener('keydown', function (event) { if (event.key === 'Enter') restart(); });
+    parts.top.searchButton.addEventListener('click', restart);
+    footer.clear.addEventListener('click', clearSelection);
+    footer.cancel.addEventListener('click', close);
+    footer.onlyBox.addEventListener('change', function () {
+      onlySelected = footer.onlyBox.checked;
+      repaintRows();
+    });
+    footer.add.addEventListener('click', confirm);
+    results.hideBox.addEventListener('change', function () {
+      hideAdded = !results.hideBox.checked;
+      repaintRows();
+    });
+    parts.overlay.addEventListener('mousedown', function (event) { if (event.target === parts.overlay) close(); });
+    document.addEventListener('keydown', onKey);
+  }
+
+  function build() {
+    const overlay = el('div', 'pub-add-overlay');
+    const box = el('div', 'pub-add-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', t('publish.add_dialog_label'));
+
+    const titleBar = buildTitleBar(box);
+    box.appendChild(titleBar);
+
+    const body = el('div', 'pub-add-body');
+    box.appendChild(body);
+    const top = buildTopRow();
+    body.appendChild(top.top);
+    const panes = el('div', 'pub-add-panes');
+    body.appendChild(panes);
+    const side = buildFilterSide();
+    panes.appendChild(side.side);
+    const results = buildResultsSide();
+    panes.appendChild(results.main);
+
+    const footer = buildFooter();
+    box.appendChild(footer.footer);
     overlay.appendChild(box);
     enableMoveAndResize(box, titleBar);
 
-    // One listener serves every row; a click anywhere on an unlocked row ticks it.
-    list.addEventListener('click', function (event) {
-      const row = event.target.closest('.pub-add-row');
-      const item = row && byId.get(row.dataset.id);
-      if (!item || isAdded(item)) return;
-      const tick = row.firstChild;
-      if (event.target !== tick) tick.checked = !tick.checked;
-      if (tick.checked) selected.set(item.id, item); else selected.delete(item.id);
-      tickChanged(item, row);
-    });
-    list.addEventListener('scroll', onScroll, { passive: true });
-    search.addEventListener('keydown', function (event) { if (event.key === 'Enter') restart(); });
-    searchButton.addEventListener('click', restart);
-    clear.addEventListener('click', clearSelection);
-    cancel.addEventListener('click', close);
-    onlyBox.addEventListener('change', function () {
-      onlySelected = onlyBox.checked;
-      repaintRows();
-    });
-    add.addEventListener('click', confirm);
-    hideBox.addEventListener('change', function () {
-      hideAdded = !hideBox.checked;
-      repaintRows();
-    });
-    overlay.addEventListener('mousedown', function (event) { if (event.target === overlay) close(); });
-    document.addEventListener('keydown', onKey);
+    wireDialog({ overlay: overlay, top: top, results: results, footer: footer });
     document.body.appendChild(overlay);
-    return { overlay: overlay, list: list, status: status, total: totalLine, add: add, clear: clear, count: count, only: onlyBox, search: search, version: version, filters: filters, filterNote: filterNote };
+    return { overlay: overlay, list: results.list, status: results.status, total: results.totalLine, add: footer.add, clear: footer.clear, count: footer.count, only: footer.onlyBox, search: top.search, version: top.version, filters: side.filters, filterNote: side.filterNote };
   }
 
   /**

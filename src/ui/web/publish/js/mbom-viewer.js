@@ -2,7 +2,7 @@
  * Publish Item panel: the structure viewer, as ``ns.mbomViewer``. Two panes side by side: the EBOM (the design's Bill of Materials, read-only) and the
  * MBOM (the manufacturing Bill of Materials, which can be edited). The MBOM is ``ns.mbomStructure``; this file draws it and turns what the user
  * does into its edits. Nothing here is sent to Fusion Manage by the viewer itself: the Publish button sends what ``plan()`` makes of the structure
- * (mbom-plan.js).
+ * (mbom-plan.js). Layer: UI (DOM and events); the rules are in mbom-structure.js and mbom-plan.js.
  *
  * Where the trees come from: the EBOM from the rows the panel has read (all levels, read at once); the
  * MBOM from the ``mbom_tree`` section (the target item read by its id, every level), mapped to the EBOM by item number. A design with no MBOM item
@@ -361,23 +361,21 @@
     destMenu = null;
   }
 
-  /** The MBOM as a tree to choose an assembly from, with a search above it: the one of "Add to assembly" and of "Split Quantity". It shows every line but the ones in
-   *  ``spec.moving`` (and what is under them), each with the line number it has in the MBOM pane (3.1 is the first line of line 3). ``spec.onPick(uid)`` is called for a line chosen;
-   *  ``spec.locked(uid)`` (optional) gives the reason a line cannot be chosen (it is greyed out, with the reason as its tooltip) or '', ``spec.chosen()`` (optional) gives the one to mark. A search shows the lines that match with the
-   *  ones above them, all open. Only the lines in view are drawn, and no more than ``DEST_LIMIT``, so a large MBOM stays quick.
-   *  Returns ``{node, draw, toggleSearch, focus, focusFirst}``: the element to place, drawing it again, showing or hiding the search (it starts hidden unless ``spec.searchShown``) and the focus. */
-  function destTree(spec) {
-    const moving = spec.moving;
-    const open = new Set([S.ROOT]);
-    let query = '';
+  /** The line numbers of the MBOM pane for each line, by uid, as "3.1" (the numbers of the lines from the top down). */
+  function numberDestLines() {
     const numbers = ns.mbomPlan.lineNumbers(structure, compare().chg);   // the line numbers the MBOM pane shows
-    const lead = {};   // uid -> "3.1": the numbers of the lines from the top down
+    const lead = {};
     (function number(node, dotted) {
       node.children.forEach(function (c) {
         lead[c.uid] = dotted ? dotted + '.' + numbers[c.uid] : numbers[c.uid];
         number(c, lead[c.uid]);
       });
     })(structure.root(), '');
+    return lead;
+  }
+
+  /** The elements of the tree menu: the tree, the search field, its count, the list of lines and the bar that holds the search. */
+  function buildDestShell(spec) {
     const node = el('div', 'sv-dest-tree');
     const find = el('input', 'sv-input sv-dest-search');
     find.type = 'text';
@@ -392,118 +390,158 @@
     bar.hidden = !spec.searchShown;
     bar.append(find, count);
     node.append(bar, list);
+    return { node: node, find: find, count: count, list: list, bar: bar };
+  }
 
-    function matches(line) {
-      return ((lead[line.uid] || '') + ' ' + line.number + ' ' + line.name).toLowerCase().indexOf(query) >= 0;
-    }
-    /** Whether the line, or a line under it, matches the search. */
-    function wanted(line) {
-      if (moving.has(line.uid)) return false;
-      return matches(line) || line.children.some(wanted);
-    }
+  function destMatches(ctx, line) {
+    return ((ctx.lead[line.uid] || '') + ' ' + line.number + ' ' + line.name).toLowerCase().indexOf(ctx.query) >= 0;
+  }
 
-    /** How many lines match the search, drawn or not. */
-    function countHits(line) {
-      if (moving.has(line.uid)) return 0;
-      return (matches(line) ? 1 : 0) + line.children.reduce(function (sum, child) { return sum + countHits(child); }, 0);
-    }
+  /** Whether the line, or a line under it, matches the search. */
+  function destWanted(ctx, line) {
+    if (ctx.moving.has(line.uid)) return false;
+    return destMatches(ctx, line) || line.children.some(function (child) { return destWanted(ctx, child); });
+  }
 
-    function draw() {
-      list.replaceChildren();
-      let drawn = 0;
-      let cut = false;
-      (function walk(line, depth) {
-        if (moving.has(line.uid) || (query && !wanted(line))) return;
-        const hit = !!query && matches(line);
-        if (drawn >= DEST_LIMIT) { cut = true; return; }
-        drawn += 1;
-        const kids = line.children.filter(function (child) { return !moving.has(child.uid); });
-        const isOpen = !!query || open.has(line.uid);
-        const row = el('div', 'sv-dest-row' + (hit ? ' sv-dest-hit' : ''));
-        row.setAttribute('role', 'treeitem');
-        row.setAttribute('aria-level', String(depth + 1));
-        if (spec.chosen) row.setAttribute('aria-selected', String(spec.chosen() === line.uid));
-        if (kids.length) row.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        for (let g = 0; g < depth; g++) row.appendChild(el('span', 'sv-dest-guide'));   // a line down from each line above, so the tree reads as one
-        const toggle = el('button', 'sv-dest-toggle');
-        toggle.type = 'button';
-        toggle.tabIndex = -1;
-        toggle.dataset.id = line.uid;
-        toggle.disabled = !kids.length || !!query || line.uid === S.ROOT;
-        if (kids.length && line.uid !== S.ROOT) {
-          const chevron = ui.chevron();
-          ui.setChevron(chevron, !isOpen);
-          toggle.appendChild(chevron);
-        }
-        toggle.addEventListener('click', function () {
-          if (open.has(line.uid)) open.delete(line.uid); else open.add(line.uid);
-          draw();
-        });
-        const pick = el('button', 'sv-dest-pick' + (spec.chosen && spec.chosen() === line.uid ? ' sv-dest-chosen' : ''));
-        pick.type = 'button';
-        pick.dataset.id = line.uid;
-        const why = spec.locked ? spec.locked(line.uid) : '';
-        if (why) { pick.disabled = true; pick.title = why; }
-        if (lead[line.uid]) pick.appendChild(el('span', 'sv-dest-lead', lead[line.uid]));
-        pick.appendChild(el('span', 'sv-dest-number', line.number));
-        if (line.name) pick.appendChild(el('span', 'sv-dest-name', line.name));
-        pick.addEventListener('mouseover', function (event) {   // the full text for the shared tooltip (it reads the title as the pointer arrives, after this), only when the line cuts it short
-          if (pick.contains(event.relatedTarget)) return;   // moving between the parts of this line, not arriving
-          const label = pick.querySelector('.sv-dest-name');
-          if (label && label.scrollWidth > label.clientWidth) pick.title = line.number + ' ' + line.name; else pick.removeAttribute('title');
-        });
-        pick.addEventListener('click', function () { spec.onPick(line.uid); });
-        row.append(toggle, pick);
-        list.appendChild(row);
-        if (isOpen) kids.forEach(function (child) { walk(child, depth + 1); });
-      })(structure.root(), 0);
-      if (cut) list.appendChild(el('div', 'sv-dest-more', t('publish.sv_dest_more', { count: DEST_LIMIT })));
-      const total = query ? countHits(structure.root()) : 0;
-      count.textContent = query ? (total ? t('publish.sv_search_count', { count: total }) : t('publish.sv_search_none')) : '';
-    }
+  /** How many lines match the search, drawn or not. */
+  function countDestHits(ctx, line) {
+    if (ctx.moving.has(line.uid)) return 0;
+    return (destMatches(ctx, line) ? 1 : 0) + line.children.reduce(function (sum, child) { return sum + countDestHits(ctx, child); }, 0);
+  }
 
-    function picks() { return Array.from(node.querySelectorAll('.sv-dest-pick:not(:disabled)')); }
-    function step(from, by) {
-      const all = picks();
-      const at = all.indexOf(from);
-      const next = all[Math.max(0, Math.min(all.length - 1, (at < 0 ? (by > 0 ? -1 : all.length) : at) + by))];
-      if (next) next.focus();
+  /** The fold button of a line of the tree menu. */
+  function buildDestToggle(ctx, entry) {
+    const line = entry.line;
+    const toggle = el('button', 'sv-dest-toggle');
+    toggle.type = 'button';
+    toggle.tabIndex = -1;
+    toggle.dataset.id = line.uid;
+    toggle.disabled = !entry.kids.length || !!ctx.query || line.uid === S.ROOT;
+    if (entry.kids.length && line.uid !== S.ROOT) {
+      const chevron = ui.chevron();
+      ui.setChevron(chevron, !entry.isOpen);
+      toggle.appendChild(chevron);
     }
-
-    find.addEventListener('input', function () { query = find.value.trim().toLowerCase(); draw(); });
-    node.addEventListener('keydown', function (event) {
-      const on = document.activeElement;
-      if (event.key === 'ArrowDown') { event.preventDefault(); step(on, 1); }
-      else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        if (on === find) return;   // the search is the top of the menu
-        if (picks()[0] === on) { if (!bar.hidden) find.focus(); } else step(on, -1);
-      } else if (!query && on && on.classList.contains('sv-dest-pick') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
-        const row = on.parentNode;
-        if (row.hasAttribute('aria-expanded') && on.dataset.id !== S.ROOT && (row.getAttribute('aria-expanded') === 'true') === (event.key === 'ArrowLeft')) {
-          event.preventDefault();
-          row.querySelector('.sv-dest-toggle').click();
-          const again = node.querySelector('.sv-dest-pick[data-id="' + on.dataset.id + '"]');
-          if (again) again.focus();
-        }
-      }
+    toggle.addEventListener('click', function () {
+      if (ctx.open.has(line.uid)) ctx.open.delete(line.uid); else ctx.open.add(line.uid);
+      ctx.draw();
     });
+    return toggle;
+  }
 
-    draw();
+  /** The button that chooses a line of the tree menu. */
+  function buildDestPick(ctx, line) {
+    const spec = ctx.spec;
+    const pick = el('button', 'sv-dest-pick' + (spec.chosen && spec.chosen() === line.uid ? ' sv-dest-chosen' : ''));
+    pick.type = 'button';
+    pick.dataset.id = line.uid;
+    const why = spec.locked ? spec.locked(line.uid) : '';
+    if (why) { pick.disabled = true; pick.title = why; }
+    if (ctx.lead[line.uid]) pick.appendChild(el('span', 'sv-dest-lead', ctx.lead[line.uid]));
+    pick.appendChild(el('span', 'sv-dest-number', line.number));
+    if (line.name) pick.appendChild(el('span', 'sv-dest-name', line.name));
+    pick.addEventListener('mouseover', function (event) {   // the full text for the shared tooltip (it reads the title as the pointer arrives, after this), only when the line cuts it short
+      if (pick.contains(event.relatedTarget)) return;   // moving between the parts of this line, not arriving
+      const label = pick.querySelector('.sv-dest-name');
+      if (label && label.scrollWidth > label.clientWidth) pick.title = line.number + ' ' + line.name; else pick.removeAttribute('title');
+    });
+    pick.addEventListener('click', function () { spec.onPick(line.uid); });
+    return pick;
+  }
+
+  /** One line of the tree menu. ``entry``: line, depth, kids (the lines under it that are not moving), isOpen, hit. */
+  function buildDestRow(ctx, entry) {
+    const line = entry.line;
+    const row = el('div', 'sv-dest-row' + (entry.hit ? ' sv-dest-hit' : ''));
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-level', String(entry.depth + 1));
+    if (ctx.spec.chosen) row.setAttribute('aria-selected', String(ctx.spec.chosen() === line.uid));
+    if (entry.kids.length) row.setAttribute('aria-expanded', entry.isOpen ? 'true' : 'false');
+    for (let g = 0; g < entry.depth; g++) row.appendChild(el('span', 'sv-dest-guide'));   // a line down from each line above, so the tree reads as one
+    row.append(buildDestToggle(ctx, entry), buildDestPick(ctx, line));
+    return row;
+  }
+
+  /** Draws the lines of the tree menu from the top, no more than ``DEST_LIMIT``, and the count of the search. */
+  function drawDestTree(ctx) {
+    ctx.list.replaceChildren();
+    const progress = { drawn: 0, cut: false };
+    function walk(line, depth) {
+      if (ctx.moving.has(line.uid) || (ctx.query && !destWanted(ctx, line))) return;
+      const hit = !!ctx.query && destMatches(ctx, line);
+      if (progress.drawn >= DEST_LIMIT) { progress.cut = true; return; }
+      progress.drawn += 1;
+      const kids = line.children.filter(function (child) { return !ctx.moving.has(child.uid); });
+      const isOpen = !!ctx.query || ctx.open.has(line.uid);
+      ctx.list.appendChild(buildDestRow(ctx, { line: line, depth: depth, kids: kids, isOpen: isOpen, hit: hit }));
+      if (isOpen) kids.forEach(function (child) { walk(child, depth + 1); });
+    }
+    walk(structure.root(), 0);
+    if (progress.cut) ctx.list.appendChild(el('div', 'sv-dest-more', t('publish.sv_dest_more', { count: DEST_LIMIT })));
+    const total = ctx.query ? countDestHits(ctx, structure.root()) : 0;
+    ctx.count.textContent = ctx.query ? (total ? t('publish.sv_search_count', { count: total }) : t('publish.sv_search_none')) : '';
+  }
+
+  function listDestPicks(ctx) { return Array.from(ctx.node.querySelectorAll('.sv-dest-pick:not(:disabled)')); }
+
+  /** The focus moves ``by`` lines from ``from`` (a line is the focus, or the search). */
+  function stepDestFocus(ctx, from, by) {
+    const all = listDestPicks(ctx);
+    const at = all.indexOf(from);
+    const next = all[Math.max(0, Math.min(all.length - 1, (at < 0 ? (by > 0 ? -1 : all.length) : at) + by))];
+    if (next) next.focus();
+  }
+
+  function moveDestFocusUp(ctx, on) {
+    if (on === ctx.find) return;   // the search is the top of the menu
+    if (listDestPicks(ctx)[0] === on) { if (!ctx.bar.hidden) ctx.find.focus(); } else stepDestFocus(ctx, on, -1);
+  }
+
+  /** Right opens and Left closes the line in focus (the root and a line with nothing under it have no fold). */
+  function foldDestLineByKey(ctx, event, on) {
+    if (ctx.query || !on || !on.classList.contains('sv-dest-pick')) return;
+    const row = on.parentNode;
+    if (!row.hasAttribute('aria-expanded') || on.dataset.id === S.ROOT) return;
+    if ((row.getAttribute('aria-expanded') === 'true') !== (event.key === 'ArrowLeft')) return;
+    event.preventDefault();
+    row.querySelector('.sv-dest-toggle').click();
+    const again = ctx.node.querySelector('.sv-dest-pick[data-id="' + on.dataset.id + '"]');
+    if (again) again.focus();
+  }
+
+  function handleDestKey(ctx, event) {
+    const on = document.activeElement;
+    if (event.key === 'ArrowDown') { event.preventDefault(); stepDestFocus(ctx, on, 1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); moveDestFocusUp(ctx, on); }
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') foldDestLineByKey(ctx, event, on);
+  }
+
+  /** The MBOM as a tree to choose an assembly from, with a search above it: the one of "Add to assembly" and of "Split Quantity". It shows every line but the ones in
+   *  ``spec.moving`` (and what is under them), each with the line number it has in the MBOM pane (3.1 is the first line of line 3). ``spec.onPick(uid)`` is called for a line chosen;
+   *  ``spec.locked(uid)`` (optional) gives the reason a line cannot be chosen (it is greyed out, with the reason as its tooltip) or '', ``spec.chosen()`` (optional) gives the one to mark. A search shows the lines that match with the
+   *  ones above them, all open. Only the lines in view are drawn, and no more than ``DEST_LIMIT``, so a large MBOM stays quick.
+   *  Returns ``{node, draw, toggleSearch, focus, focusFirst}``: the element to place, drawing it again, showing or hiding the search (it starts hidden unless ``spec.searchShown``) and the focus. */
+  function destTree(spec) {
+    const shell = buildDestShell(spec);
+    const ctx = Object.assign({ spec: spec, moving: spec.moving, open: new Set([S.ROOT]), lead: numberDestLines(), query: '' }, shell);
+    ctx.draw = function () { drawDestTree(ctx); };
+    shell.find.addEventListener('input', function () { ctx.query = shell.find.value.trim().toLowerCase(); ctx.draw(); });
+    shell.node.addEventListener('keydown', function (event) { handleDestKey(ctx, event); });
+    ctx.draw();
     return {
-      node: node,
-      draw: draw,
+      node: shell.node,
+      draw: ctx.draw,
       toggleSearch: function () {   // shows or hides the search; returns whether it is shown
-        bar.hidden = !bar.hidden;
-        if (bar.hidden) { find.value = ''; query = ''; draw(); } else find.focus();
-        return !bar.hidden;
+        shell.bar.hidden = !shell.bar.hidden;
+        if (shell.bar.hidden) { shell.find.value = ''; ctx.query = ''; ctx.draw(); } else shell.find.focus();
+        return !shell.bar.hidden;
       },
       focus: function (uid) {   // the focus back on a line after the tree was drawn again
-        const pick = node.querySelector('.sv-dest-pick[data-id="' + uid + '"]');
+        const pick = shell.node.querySelector('.sv-dest-pick[data-id="' + uid + '"]');
         if (pick) pick.focus();
       },
       focusFirst: function () {
-        const first = node.querySelector('.sv-dest-pick:not(:disabled)');
+        const first = shell.node.querySelector('.sv-dest-pick:not(:disabled)');
         if (first) first.focus();
       },
     };
@@ -750,26 +788,33 @@
                            onCreated: function (made) { addBought(mine, node, made); } });
   }
 
+  /** An icon on an EBOM line was used: Create Bought Version, or else add the line (an assembly comes with the lines under it, as a drag does). */
+  function ebomRowAction(id, act, targets) {
+    if (act === 'bought') {
+      const node = ebomNode(id);   // the dialog finds the component's item from the Data Model's link, else by number
+      createBought(node);
+      return;
+    }
+    const place = placeForNew();
+    openPlace(place);
+    run(function () { structure.addFromEbom(targets, place.parentId, place.before, true); });
+  }
+
+  /** An icon on an MBOM line was used (not the magnifier). */
+  function mbomRowAction(id, act, button, targets) {
+    if (act === 'position') { openPositionBox(button, id); return; }
+    if (act === 'split') { openSplitBox(button, id); return; }
+    if (act === 'remove') { run(function () { structure.remove(targets); }); return; }
+    if (act !== 'addTo') return;
+    if (destMenu && destMenu.button === button) closeDestMenu(); else openDestMenu(button, targets);
+  }
+
   /** An icon on a line was used. */
   function rowAction(pane, id, act, button) {
     if (act === 'details') { showDetails(pane, id); return; }
     const targets = targetsOf(pane, id);
-    if (pane === 'ebom' && act === 'bought') {
-      const node = ebomNode(id);   // the dialog finds the component's item from the Data Model's link, else by number
-      createBought(node);
-    } else if (pane === 'ebom') {
-      const place = placeForNew();
-      openPlace(place);
-      run(function () { structure.addFromEbom(targets, place.parentId, place.before, true); });   // an assembly comes with the lines under it, as a drag does
-    } else if (act === 'position') {
-      openPositionBox(button, id);
-    } else if (act === 'split') {
-      openSplitBox(button, id);
-    } else if (act === 'remove') {
-      run(function () { structure.remove(targets); });
-    } else if (act === 'addTo') {
-      if (destMenu && destMenu.button === button) closeDestMenu(); else openDestMenu(button, targets);
-    }
+    if (pane === 'ebom') ebomRowAction(id, act, targets);
+    else mbomRowAction(id, act, button, targets);
   }
 
   /** The component of the EBOM with this key. */
@@ -782,6 +827,14 @@
     return model.lineComponent(row);
   }
 
+  /** The EBOM line whose component a line is (``from``, or null) and the Fusion Manage item it is (``itemId``, or ''). */
+  function detailsOrigin(pane, node) {
+    if (pane === 'ebom') return { from: node, itemId: '' };
+    const source = node.source ? ebomNode(node.source) : null;
+    const same = !!source && S.numberKey(source.number) === S.numberKey(node.number);   // the same item: not a bought version (number and suffix) or an added item
+    return { from: same ? source : null, itemId: node.itemId || '' };
+  }
+
   /** What the Details Panel opens for a line (``pubDetails.open``): the design itself for either root; a line with a Fusion Component, to compare with Fusion Manage;
    *  else a line with no component (``noComponent``: one only Fusion Manage has, one added, a bought version, a new one). ``itemId`` is the Fusion Manage item the
    *  line is, when it is known (an MBOM line read from Fusion Manage), and decides the item tabs. */
@@ -789,15 +842,9 @@
     const base = { key: id, pane: pane };
     if (id === (pane === 'ebom' ? '0' : S.ROOT)) return Object.assign(model.rootComponent(host.summary()), base);
     const node = pane === 'ebom' ? ebomNode(id) : index.get(id).node;
-    let from = null;   // the EBOM line whose component the line is
-    let itemId = '';
-    if (pane === 'ebom') {
-      from = node;
-    } else {
-      itemId = node.itemId || '';
-      const source = node.source ? ebomNode(node.source) : null;
-      if (source && S.numberKey(source.number) === S.numberKey(node.number)) from = source;   // the same item: not a bought version (number and suffix) or an added item
-    }
+    const origin = detailsOrigin(pane, node);
+    const from = origin.from;
+    const itemId = origin.itemId;
     if (from && from.componentId) return Object.assign(componentOf(from.componentId), base, { itemId: itemId });
     return Object.assign({ id: '', root: false, noComponent: true, item_number: node.number, part_number: '', description: '', name: node.name,
                            title: [node.number, node.name].filter(Boolean).join(' - '), itemId: itemId }, base);
@@ -932,56 +979,67 @@
     return notes;
   }
 
-  /** What is to be said of an MBOM line: what it stands for, what changed in it, and whether it holds more than the EBOM has. */
-  function mbomNotes(node, cmp, flags) {
+  /** The notes of an MBOM line on what it stands for: added, an assembly, a phantom, cut. ``from`` is the EBOM line it was made from, or null. */
+  function mbomKindNotes(node, from) {
     const notes = [];
-    const from = node.source ? view.ebomAt[node.source] : null;
     if (node.kind === 'added' && !from) notes.push({ tone: 'info', text: t('publish.sv_note_added') });
     if (node.kind === 'assembly') notes.push({ tone: 'info', text: t('publish.sv_note_assembly') });
     if (node.kind === 'phantom') notes.push({ tone: 'info', text: t('publish.sv_note_phantom') });
     if (node.cut) notes.push({ tone: 'warn', text: t('publish.sv_note_cut') });
+    return notes;
+  }
+
+  /** The notes of an MBOM line on where it comes from: a bought version of an EBOM line, or an item only Fusion Manage has. */
+  function mbomOriginNotes(node, from, cmp) {
+    const notes = [];
     if (from && (node.bought || node.kind === 'added')) notes.push({ tone: 'info', text: t('publish.sv_note_bought_for', { number: from.number }) });
     if (cmp.mbom[node.uid] === 'mfg' && node.kind === 'component') notes.push({ tone: 'info', text: t('publish.sv_note_mfg') });
+    return notes;
+  }
+
+  /** The notes of an MBOM line on what changed in it since Fusion Manage (``flags`` is its entry in ``changes()``). */
+  function mbomChangeNotes(node, flags) {
+    const notes = [];
+    if (flags.new) notes.push({ tone: 'new', text: t('publish.sv_note_new') });
+    if (flags.moved) {
+      const was = structure.find(flags.oldParent);
+      notes.push({ tone: 'update', text: t('publish.sv_note_moved', { number: was ? was.number || '-' : '-' }) });
+    }
+    if (flags.quantity) notes.push({ tone: 'update', text: t('publish.sv_note_quantity', { from: shownQuantity(flags.oldQuantity), to: shownQuantity(node.quantity) }) });
+    if (flags.reordered) notes.push({ tone: 'update', text: t('publish.sv_note_reordered') });
+    return notes;
+  }
+
+  /** What is to be said of an MBOM line: what it stands for, what changed in it, and whether it holds more than the EBOM has. */
+  function mbomNotes(node, cmp, flags) {
+    const from = node.source ? view.ebomAt[node.source] : null;
+    const notes = mbomKindNotes(node, from).concat(mbomOriginNotes(node, from, cmp));
     const state = from ? cmp.ebom[node.source] : null;
     if (state && state.exceeded) {
       notes.push({ tone: 'warn', text: t('publish.sv_note_exceeds', { total: shownQuantity(String(heldTotal(node.source))), quantity: shownQuantity(from.quantity) }) });
     }
-    if (flags) {
-      if (flags.new) notes.push({ tone: 'new', text: t('publish.sv_note_new') });
-      if (flags.moved) {
-        const was = structure.find(flags.oldParent);
-        notes.push({ tone: 'update', text: t('publish.sv_note_moved', { number: was ? was.number || '-' : '-' }) });
-      }
-      if (flags.quantity) notes.push({ tone: 'update', text: t('publish.sv_note_quantity', { from: shownQuantity(flags.oldQuantity), to: shownQuantity(node.quantity) }) });
-      if (flags.reordered) notes.push({ tone: 'update', text: t('publish.sv_note_reordered') });
-    }
+    if (flags) notes.push.apply(notes, mbomChangeNotes(node, flags));
     return notes;
   }
 
-  /** One line: indent, open/close, label, quantity and badges. ``spec``: id, depth, number, name, quantity, editable, hasKids, isOpen, selected, badges, classes,
-   *  draggable, actions, seq, notes, noteKey, tone (of the notes), purchased, details (its Details Panel is open). */
-  function lineNode(spec) {
-    const row = el('div', 'sv-row' + (spec.selected ? ' selected' : '') + (spec.details ? ' sv-details' : '') + (spec.classes ? ' ' + spec.classes : ''));
-    row.dataset.id = spec.id;
-    if (spec.details) row.setAttribute('aria-current', 'true');
-    row.setAttribute('role', 'treeitem');
-    row.setAttribute('aria-level', String(spec.depth + 1));
-    row.setAttribute('aria-selected', spec.selected ? 'true' : 'false');
-    if (spec.hasKids) row.setAttribute('aria-expanded', spec.isOpen ? 'true' : 'false');
-    row.style.setProperty('--indent', (spec.depth * 32) + 'px');
-    if (spec.draggable) row.dataset.drag = '1';   // it can be dragged (by the pointer, see pointerDown)
+  /** The open/close button of a line (disabled when it holds no lines). */
+  function buildLineToggle(spec) {
     const toggle = el('button', 'sv-toggle');
     toggle.type = 'button';
-    if (spec.hasKids) {
-      toggle.setAttribute('aria-label', t('publish.sv_toggle'));
-      toggle.setAttribute('aria-expanded', spec.isOpen ? 'true' : 'false');
-      const chevron = ui.chevron();
-      ui.setChevron(chevron, !spec.isOpen);
-      toggle.appendChild(chevron);
-    } else {
+    if (!spec.hasKids) {
       toggle.disabled = true;
+      return toggle;
     }
-    row.appendChild(toggle);
+    toggle.setAttribute('aria-label', t('publish.sv_toggle'));
+    toggle.setAttribute('aria-expanded', spec.isOpen ? 'true' : 'false');
+    const chevron = ui.chevron();
+    ui.setChevron(chevron, !spec.isOpen);
+    toggle.appendChild(chevron);
+    return toggle;
+  }
+
+  /** The icon of a line: the table's icon, a cart for a purchased part, a spanner for an item only Fusion Manage has. */
+  function buildLineIcon(spec) {
     const icon = ui.treeIcon(spec.depth === 0 ? 'root' : spec.hasKids ? 'assembly' : 'part');   // the table's icon, with its bar on the right
     if (spec.purchased) {   // a purchased part is a cart, not a box
       icon.replaceChildren(ns.svg(ICONS.cart, 16));
@@ -991,26 +1049,54 @@
       icon.replaceChildren(ns.svg(ICONS.spanner, 16));
       icon.title = t('publish.sv_mfg_item');
     }
-    row.appendChild(icon);
-    if (spec.seq) row.appendChild(el('span', 'sv-seq', spec.seq));   // the line's number, as the table shows it
+    return icon;
+  }
+
+  function buildLineLabel(spec) {
     const label = el('span', 'sv-label');
     label.appendChild(el('span', 'sv-pn', spec.number || '-'));
     if (spec.name) label.appendChild(el('span', 'sv-name', spec.name));
-    row.appendChild(label);
+    return label;
+  }
+
+  /** The quantity of a line (a button when it can be edited) and the room for its note button. */
+  function appendLineQuantity(row, spec) {
+    if (spec.editable) {
+      const qty = el('button', 'sv-qty', shownQuantity(spec.quantity));
+      qty.type = 'button';
+      qty.title = t('publish.sv_qty_title');
+      row.appendChild(qty);
+    } else {
+      row.appendChild(el('span', 'sv-qty sv-qty-fixed', shownQuantity(spec.quantity)));
+    }
+    // The note's button is right of the quantity; a line with none keeps the room, so the quantities stay in one column.
+    row.appendChild(spec.notes && spec.notes.length ? noteButton(spec.notes, spec.noteKey, spec.tone) : el('span', 'sv-note-slot'));
+  }
+
+  /** The attributes of a line: its id, its tree role and level, and what it shows of its state. */
+  function describeLine(row, spec) {
+    row.dataset.id = spec.id;
+    if (spec.details) row.setAttribute('aria-current', 'true');
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-level', String(spec.depth + 1));
+    row.setAttribute('aria-selected', spec.selected ? 'true' : 'false');
+    if (spec.hasKids) row.setAttribute('aria-expanded', spec.isOpen ? 'true' : 'false');
+    row.style.setProperty('--indent', (spec.depth * 32) + 'px');
+    if (spec.draggable) row.dataset.drag = '1';   // it can be dragged (by the pointer, see pointerDown)
+  }
+
+  /** One line: indent, open/close, label, quantity and badges. ``spec``: id, depth, number, name, quantity, editable, hasKids, isOpen, selected, badges, classes,
+   *  draggable, actions, seq, notes, noteKey, tone (of the notes), purchased, details (its Details Panel is open). */
+  function lineNode(spec) {
+    const row = el('div', 'sv-row' + (spec.selected ? ' selected' : '') + (spec.details ? ' sv-details' : '') + (spec.classes ? ' ' + spec.classes : ''));
+    describeLine(row, spec);
+    row.appendChild(buildLineToggle(spec));
+    row.appendChild(buildLineIcon(spec));
+    if (spec.seq) row.appendChild(el('span', 'sv-seq', spec.seq));   // the line's number, as the table shows it
+    row.appendChild(buildLineLabel(spec));
     spec.badges.forEach(function (b) { row.appendChild(b); });   // the tick, just left of the quantity
     if (spec.actions && spec.actions.length) row.appendChild(actionsNode(spec.actions, spec.draggable));   // over the end of the label, left of the quantity
-    if (spec.quantity !== '') {
-      if (spec.editable) {
-        const qty = el('button', 'sv-qty', shownQuantity(spec.quantity));
-        qty.type = 'button';
-        qty.title = t('publish.sv_qty_title');
-        row.appendChild(qty);
-      } else {
-        row.appendChild(el('span', 'sv-qty sv-qty-fixed', shownQuantity(spec.quantity)));
-      }
-      // The note's button is right of the quantity; a line with none keeps the room, so the quantities stay in one column.
-      row.appendChild(spec.notes && spec.notes.length ? noteButton(spec.notes, spec.noteKey, spec.tone) : el('span', 'sv-note-slot'));
-    }
+    if (spec.quantity !== '') appendLineQuantity(row, spec);
     return row;
   }
 
@@ -1021,73 +1107,128 @@
     return row;
   }
 
+  /** The lines under an open assembly, no more than were asked for (``LIMIT`` at first), and "Show more" under them when there are others. ``drawKid(line)`` draws one. */
+  function drawKidLines(container, parentId, kids, drawKid) {
+    const shown = more[parentId] || LIMIT;
+    kids.slice(0, shown).forEach(function (kid) { drawKid(kid); });
+    if (kids.length > shown) container.appendChild(moreNode(parentId, kids.length - shown));
+  }
+
+  /** The icons on an EBOM line: the magnifier on every line, then Create Bought Version and add. */
+  function ebomActions(node, depth, state, full) {
+    const count = ebomSelected.has(node.key) ? ebomSelected.size : 1;
+    const actions = [{ act: 'details', icon: 'search', label: t('publish.sv_act_details') }];   // first, on every line
+    // A bought version is for a component not built in the MBOM: one already in it has none. Off, with the reason, until Make or buy is set up.
+    // A component with no item in Fusion Manage is told by the dialog, which looks for it when asked. Always first, then add with its children, then add.
+    if (depth && !(state && !state.missing) && !(state && state.blocked)) {
+      const reason = !host.boughtReady() ? t('publish.item_bought_not_set_up') : '';
+      actions.push({ act: 'bought', icon: 'bought', label: t('publish.item_act_bought', { number: node.number }), reason: reason });   // one that exists is offered by the dialog
+    }
+    if (depth && !full) actions.push({ act: 'add', icon: 'addOne', label: actionLabel(t('publish.sv_act_add'), count) });
+    return actions;
+  }
+
+  /** The classes of an EBOM line that come from its state in the colour bar. */
+  function ebomStateClasses(state) {
+    if (!state) return [];
+    return [state.missing && !state.blocked ? 'sv-row-missing' : '', state.matched || state.blocked ? 'sv-row-matched' : ''];
+  }
+
+  /** Whether all of an EBOM line is in the MBOM (adding it again would be more than the EBOM has), or a purchased part above it stands for it. */
+  function isEbomLineFull(state) { return !!(state && (state.exceeded || state.matched || state.blocked)); }
+
+  /** Whether the Details Panel is open for the line ``id`` of the pane. */
+  function isDetailsAt(pane, id) { return !!detailsAt && detailsAt.pane === pane && detailsAt.id === id; }
+
+  /** The classes of an EBOM line: its state, a search hit, the colour bar's context lines, and the tone of its notes. */
+  function ebomLineClasses(entry, tone) {
+    const node = entry.node;
+    const context = entry.filter && entry.depth && !entry.filter.keep.has(node.key);
+    const classes = ebomStateClasses(entry.state).concat([ebomHits.has(node.key) ? 'sv-hit' : '', context ? 'sv-row-context' : '', toneClass(tone)]);
+    return classes.filter(Boolean).join(' ');
+  }
+
+  /** The ``lineNode`` spec of an EBOM line. ``entry``: node, depth, state, filter, notes, isOpen, kids. */
+  function ebomLineSpec(entry) {
+    const node = entry.node;
+    const depth = entry.depth;
+    const state = entry.state;
+    const full = isEbomLineFull(state);
+    const tone = toneOf(entry.notes);
+    const badges = [];
+    if (state && state.matched) badges.push(matchedMark(state.bought));
+    return { id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: entry.kids.length > 0,
+             isOpen: entry.isOpen, selected: ebomSelected.has(node.key), details: isDetailsAt('ebom', node.key), badges: badges, draggable: depth > 0 && !full,
+             actions: ebomActions(node, depth, state, full), seq: depth ? node.sequence : '', notes: entry.notes, noteKey: 'ebom:' + node.key, tone: tone, classes: ebomLineClasses(entry, tone) };
+  }
+
   function drawEbom(container, cmp) {
     const list = [];
     const filter = filterView();
-    (function walk(node, depth) {
+    function walk(node, depth) {
       const state = cmp.ebom[node.key];
-      const badges = [];
-      if (state && state.matched) badges.push(matchedMark(state.bought));
       const isOpen = ebomOpened.has(node.key) || (!!filter && filter.ebom.has(node.key));   // with the filter on, what has a match under it is open
       const kids = filter ? node.children.filter(function (c) { return filter.keep.has(c.key) || filter.ebom.has(c.key); }) : node.children;
       if (depth) list.push(node.key);
-      const count = ebomSelected.has(node.key) ? ebomSelected.size : 1;
-      const full = !!(state && (state.exceeded || state.matched || state.blocked));   // all of it is in the MBOM (adding it again would be more than the EBOM has), or a purchased part above it stands for it
-      const actions = [{ act: 'details', icon: 'search', label: t('publish.sv_act_details') }];   // first, on every line
-      // A bought version is for a component not built in the MBOM: one already in it has none. Off, with the reason, until Make or buy is set up.
-      // A component with no item in Fusion Manage is told by the dialog, which looks for it when asked. Always first, then add with its children, then add.
-      if (depth && !(state && !state.missing) && !(state && state.blocked)) {
-        const reason = !host.boughtReady() ? t('publish.item_bought_not_set_up') : '';
-        actions.push({ act: 'bought', icon: 'bought', label: t('publish.item_act_bought', { number: node.number }), reason: reason });   // one that exists is offered by the dialog
-      }
-      if (depth && !full) actions.push({ act: 'add', icon: 'addOne', label: actionLabel(t('publish.sv_act_add'), count) });
       const notes = depth ? ebomNotes(node, state) : [];
-      const tone = toneOf(notes);
-      const row = lineNode({ id: node.key, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: false, hasKids: kids.length > 0,
-                             isOpen: isOpen, selected: ebomSelected.has(node.key), details: !!detailsAt && detailsAt.pane === 'ebom' && detailsAt.id === node.key, badges: badges, draggable: depth > 0 && !full, actions: actions, seq: depth ? node.sequence : '', notes: notes, noteKey: 'ebom:' + node.key,
-                             tone: tone, classes: [state && state.missing && !state.blocked ? 'sv-row-missing' : '', state && (state.matched || state.blocked) ? 'sv-row-matched' : '', ebomHits.has(node.key) ? 'sv-hit' : '',
-                                         filter && depth && !filter.keep.has(node.key) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' ') });
-      container.appendChild(row);
+      container.appendChild(lineNode(ebomLineSpec({ node: node, depth: depth, state: state, filter: filter, notes: notes, isOpen: isOpen, kids: kids })));
       if (notes.length && openNotes.has('ebom:' + node.key)) container.appendChild(noteRow(notes, depth));
-      if (!isOpen) return;
-      const shown = more[node.key] || LIMIT;
-      kids.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
-      if (kids.length > shown) container.appendChild(moreNode(node.key, kids.length - shown));
-    })(ebom, 0);
+      if (isOpen) drawKidLines(container, node.key, kids, function (kid) { walk(kid, depth + 1); });
+    }
+    walk(ebom, 0);
     visible.ebom = list;
+  }
+
+  /** The icons on an MBOM line: the magnifier on every line, and below the root the position, add to an assembly, and the bin last. */
+  function mbomActions(node, depth) {
+    const count = selected.has(node.uid) ? selected.size : 1;
+    const actions = [{ act: 'details', icon: 'search', label: t('publish.sv_act_details') }];   // first, on every line
+    if (depth) {
+      actions.push({ act: 'position', icon: 'position', label: t('publish.sv_act_position') },
+                   { act: 'split', icon: 'split', label: t('publish.sv_act_split'), reason: Number(node.quantity) > 0 && Number(node.quantity) <= 1 ? t('publish.sv_split_one') : '' },
+                   { act: 'addTo', icon: 'assembly', label: actionLabel(t('publish.sv_act_add_to'), count) },
+                   { act: 'remove', icon: 'remove', label: actionLabel(t('publish.sv_act_remove'), count) });
+    }
+    return actions;
+  }
+
+  /** Whether an MBOM line is an item only Fusion Manage has. */
+  function isMfgOwnLine(node, cmp) { return cmp.mbom[node.uid] === 'mfg' && (node.kind === 'component' || node.kind === 'added'); }
+
+  /** The classes of an MBOM line: a search hit, the colour bar's context lines, and the tone of its notes. */
+  function mbomLineClasses(entry, tone) {
+    const uid = entry.node.uid;
+    const context = entry.filter && entry.depth && !hits.has(uid);
+    return [hits.has(uid) ? 'sv-hit' : '', context ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' ');
+  }
+
+  /** The ``lineNode`` spec of an MBOM line. ``entry``: node, depth, cmp, numbers, filter, notes, isOpen, kids. */
+  function mbomLineSpec(entry) {
+    const node = entry.node;
+    const depth = entry.depth;
+    const tone = toneOf(entry.notes);
+    return { id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
+             hasKids: entry.kids.length > 0, isOpen: entry.isOpen, selected: selected.has(node.uid), details: isDetailsAt('mbom', node.uid), badges: [], draggable: depth > 0,
+             actions: mbomActions(node, depth), seq: depth ? entry.numbers[node.uid] || '' : '', classes: mbomLineClasses(entry, tone), tone: tone, notes: entry.notes, noteKey: 'mbom:' + node.uid,
+             purchased: !!node.bought || (node.kind === 'added' && !!node.source), mfgOwn: isMfgOwnLine(node, entry.cmp) };
   }
 
   function drawMbom(container, cmp, chg) {
     const numbers = ns.mbomPlan.lineNumbers(structure, chg);   // the line numbers Fusion Manage has, or will have when published
     const list = [];
-    const view = filterView();
-    const filter = view && view.mbomOn ? view : null;   // the colour bar cuts down the EBOM only
-    (function walk(node, depth) {
-      const badges = [];
+    const cut = filterView();
+    const filter = cut && cut.mbomOn ? cut : null;   // the colour bar cuts down the EBOM only
+    function walk(node, depth) {
       const flags = chg.changes[node.uid];
       const isOpen = opened.has(node.uid) || (!!filter && filter.mbom.has(node.uid));   // with the filter on, what has a match under it is open
       const kids = filter ? node.children.filter(function (c) { return hits.has(c.uid) || filter.mbom.has(c.uid); }) : node.children;
       if (depth) list.push(node.uid);
-      const count = selected.has(node.uid) ? selected.size : 1;
-      const actions = [{ act: 'details', icon: 'search', label: t('publish.sv_act_details') }];   // first, on every line
-      if (depth) {   // the position, add to an assembly, and the bin last
-        actions.push({ act: 'position', icon: 'position', label: t('publish.sv_act_position') },
-                     { act: 'split', icon: 'split', label: t('publish.sv_act_split'), reason: Number(node.quantity) > 0 && Number(node.quantity) <= 1 ? t('publish.sv_split_one') : '' },
-                     { act: 'addTo', icon: 'assembly', label: actionLabel(t('publish.sv_act_add_to'), count) },
-                     { act: 'remove', icon: 'remove', label: actionLabel(t('publish.sv_act_remove'), count) });
-      }
       const notes = depth ? mbomNotes(node, cmp, flags) : [];
-      const tone = toneOf(notes);
-      container.appendChild(lineNode({ id: node.uid, depth: depth, number: node.number, name: node.name, quantity: depth ? node.quantity : '', editable: depth > 0,
-                                       hasKids: kids.length > 0, isOpen: isOpen, selected: selected.has(node.uid), details: !!detailsAt && detailsAt.pane === 'mbom' && detailsAt.id === node.uid, badges: badges, draggable: depth > 0, actions: actions, seq: depth ? numbers[node.uid] || '' : '',
-                                       classes: [hits.has(node.uid) ? 'sv-hit' : '', filter && depth && !hits.has(node.uid) ? 'sv-row-context' : '', toneClass(tone)].filter(Boolean).join(' '), tone: tone, notes: notes, noteKey: 'mbom:' + node.uid, purchased: !!node.bought || (node.kind === 'added' && !!node.source),
-                                       mfgOwn: cmp.mbom[node.uid] === 'mfg' && (node.kind === 'component' || node.kind === 'added') }));
+      container.appendChild(lineNode(mbomLineSpec({ node: node, depth: depth, cmp: cmp, numbers: numbers, filter: filter, notes: notes, isOpen: isOpen, kids: kids })));
       if (notes.length && openNotes.has('mbom:' + node.uid)) container.appendChild(noteRow(notes, depth));
-      if (!isOpen) return;
-      const shown = more[node.uid] || LIMIT;
-      kids.slice(0, shown).forEach(function (c) { walk(c, depth + 1); });
-      if (kids.length > shown) container.appendChild(moreNode(node.uid, kids.length - shown));
-    })(structure.root(), 0);
+      if (isOpen) drawKidLines(container, node.uid, kids, function (kid) { walk(kid, depth + 1); });
+    }
+    walk(structure.root(), 0);
     visible.mbom = list;
   }
 
@@ -1112,6 +1253,39 @@
     dom.found.textContent = '';
   }
 
+  /** Shows the parts of the viewer that fit the phase: the panes, or the error; the status and the busy mark while the structure is awaited. */
+  function showPhase(failed, waiting) {
+    dom.panes.hidden = failed;
+    dom.tools.bar.hidden = failed;
+    dom.footer.hidden = failed;
+    dom.state.hidden = !failed;
+    dom.tools.bar.toggleAttribute('inert', waiting);   // nothing to search or edit yet
+    dom.status.hidden = !waiting;
+    dom.removed.hidden = waiting;
+    [dom.ebomTree, dom.mbomTree].forEach(function (tree) { tree.setAttribute('aria-busy', String(waiting)); });
+  }
+
+  /** A line the filters leave undrawn is not selected any more: Add, Remove and drag would act on what cannot be seen. ``cut`` is ``filterView()``. */
+  function dropUndrawnSelection(cut) {
+    if (!cut) return;
+    Array.from(ebomSelected).forEach(function (key) { if (!cut.keep.has(key) && !cut.ebom.has(key)) ebomSelected.delete(key); });
+    if (cut.mbomOn) Array.from(selected).forEach(function (uid) { if (!hits.has(uid) && !cut.mbom.has(uid)) selected.delete(uid); });
+  }
+
+  /** The numbers of the lines the plan removes, under the MBOM. */
+  function showRemoved(chg) {
+    dom.removed.textContent = chg.removed.length
+      ? t('publish.sv_removed', { numbers: chg.removed.map(function (r) { return r.cascade ? r.number + ' (+' + r.cascade + ')' : r.number; }).join(', ') }) : '';
+  }
+
+  /** How many lines the search found, with where as the tooltip. */
+  function showFound() {
+    const found = hits.size + ebomHits.size;   // in both panes
+    dom.found.textContent = !searchText ? '' : !found ? t('publish.sv_found_none') : found === 1 ? t('publish.sv_found_one') : t('publish.sv_found_many', { count: found });
+    dom.found.title = searchText && found ? t('publish.sv_found_where', { ebom: ebomHits.size, mbom: hits.size }) : '';
+    dom.found.classList.toggle('none', !!searchText && !found);
+  }
+
   function render() {
     closeDestMenu();
     if (!dom) return;
@@ -1121,14 +1295,7 @@
     }
     const failed = phase === 'error';
     const waiting = !structure && !failed;   // the toolbar and the two tables with no lines yet, and what they wait for
-    dom.panes.hidden = failed;
-    dom.tools.bar.hidden = failed;
-    dom.footer.hidden = failed;
-    dom.state.hidden = !failed;
-    dom.tools.bar.toggleAttribute('inert', waiting);   // nothing to search or edit yet
-    dom.status.hidden = !waiting;
-    dom.removed.hidden = waiting;
-    [dom.ebomTree, dom.mbomTree].forEach(function (tree) { tree.setAttribute('aria-busy', String(waiting)); });
+    showPhase(failed, waiting);
     if (waiting) { drawSkeleton(); return; }
     if (failed) return;
     skeleton = false;
@@ -1138,21 +1305,13 @@
     dom.ebomTree.replaceChildren();
     dom.mbomTree.replaceChildren();
     drawMeter(cmp);
-    const cut = filterView();
-    if (cut) {   // a line the filters leave undrawn is not selected any more: Add, Remove and drag would act on what cannot be seen
-      Array.from(ebomSelected).forEach(function (key) { if (!cut.keep.has(key) && !cut.ebom.has(key)) ebomSelected.delete(key); });
-      if (cut.mbomOn) Array.from(selected).forEach(function (uid) { if (!hits.has(uid) && !cut.mbom.has(uid)) selected.delete(uid); });
-    }
+    dropUndrawnSelection(filterView());
     drawEbom(dom.ebomTree, cmp);
     drawMbom(dom.mbomTree, cmp, chg);
     dom.ebomTree.scrollTop = scroll[0];
     dom.mbomTree.scrollTop = scroll[1];
-    dom.removed.textContent = chg.removed.length
-      ? t('publish.sv_removed', { numbers: chg.removed.map(function (r) { return r.cascade ? r.number + ' (+' + r.cascade + ')' : r.number; }).join(', ') }) : '';
-    const found = hits.size + ebomHits.size;   // in both panes
-    dom.found.textContent = !searchText ? '' : !found ? t('publish.sv_found_none') : found === 1 ? t('publish.sv_found_one') : t('publish.sv_found_many', { count: found });
-    dom.found.title = searchText && found ? t('publish.sv_found_where', { ebom: ebomHits.size, mbom: hits.size }) : '';
-    dom.found.classList.toggle('none', !!searchText && !found);
+    showRemoved(chg);
+    showFound();
     dom.tools.filter.setAttribute('aria-pressed', String(filtering));
     updateTools();
   }
@@ -1288,34 +1447,42 @@
     render();
   }
 
-  function paneClick(pane, event) {
-    const moreButton = event.target.closest('.sv-more');
-    if (moreButton) { moreClick(moreButton.dataset.more); return; }
-    const noteButtonClicked = event.target.closest('.sv-note-btn');
-    if (noteButtonClicked) {   // the note of a line opens or closes under it
-      const key = noteButtonClicked.dataset.note;
-      if (openNotes.has(key)) openNotes.delete(key); else openNotes.add(key);
-      render();
-      return;
-    }
-    const row = event.target.closest('.sv-row');
-    if (!row) return;
-    const id = row.dataset.id;
-    const act = event.target.closest('.sv-act');
-    if (act) { if (!act.disabled) rowAction(pane, id, act.dataset.act, act); return; }
+  /** The note of a line opens or closes under it. */
+  function toggleNote(button) {
+    const key = button.dataset.note;
+    if (openNotes.has(key)) openNotes.delete(key); else openNotes.add(key);
+    render();
+  }
+
+  /** The fold button of a line: the assembly opens or closes. */
+  function toggleFold(pane, id) {
+    const set = pane === 'mbom' ? opened : ebomOpened;
+    if (set.has(id)) set.delete(id); else set.add(id);
+    dropHidden();
+    render();
+  }
+
+  /** A click on a line that was not on an icon, the note or "Show more": the grip, the fold, the quantity, or else the line is selected. */
+  function clickLine(pane, id, event) {
     if (event.target.closest('.sv-grip')) return;
-    if (event.target.closest('.sv-toggle')) {
-      const set = pane === 'mbom' ? opened : ebomOpened;
-      if (set.has(id)) set.delete(id); else set.add(id);
-      dropHidden();
-      render();
-      return;
-    }
+    if (event.target.closest('.sv-toggle')) { toggleFold(pane, id); return; }
     if (pane === 'mbom' && event.target.closest('button.sv-qty')) { editQuantity(event.target.closest('button.sv-qty'), id); return; }
     if (pane === 'mbom' && id === S.ROOT) return;
     if (pane === 'mbom') choose(selected, visible.mbom, id, event);
     else if (id !== '0') choose(ebomSelected, visible.ebom, id, event);
     render();
+  }
+
+  function paneClick(pane, event) {
+    const moreButton = event.target.closest('.sv-more');
+    if (moreButton) { moreClick(moreButton.dataset.more); return; }
+    const noteButtonClicked = event.target.closest('.sv-note-btn');
+    if (noteButtonClicked) { toggleNote(noteButtonClicked); return; }
+    const row = event.target.closest('.sv-row');
+    if (!row) return;
+    const act = event.target.closest('.sv-act');
+    if (act) { if (!act.disabled) rowAction(pane, row.dataset.id, act.dataset.act, act); return; }
+    clickLine(pane, row.dataset.id, event);
   }
 
   function moreClick(id) {
@@ -1370,28 +1537,47 @@
     else if (y > box.bottom - EDGE_PX) tree.scrollTop += 14;
   }
 
-  function pointerMove(event) {
-    if (!pressed || !structure) return;
-    if (!pressed.ghost) {
-      if (Math.abs(event.clientX - pressed.x) < DRAG_START_PX && Math.abs(event.clientY - pressed.y) < DRAG_START_PX) return;
-      startDrag(pressed.pane, pressed.row);
-      const first = pressed.row.querySelector('.sv-label');
-      pressed.ghost = el('div', 'sv-ghost', (first ? first.textContent : '') + (drag.ids.length > 1 ? ' +' + (drag.ids.length - 1) : ''));
-      document.body.appendChild(pressed.ghost);
-      document.body.style.cursor = 'grabbing';
-    }
-    event.preventDefault();
+  /** The pointer, with the button down, went far enough from where it was pressed for it to be a drag and not a click. */
+  function pointerPassedStart(event) {
+    return Math.abs(event.clientX - pressed.x) >= DRAG_START_PX || Math.abs(event.clientY - pressed.y) >= DRAG_START_PX;
+  }
+
+  /** The drag starts: the lines to drag are chosen, and the ghost that follows the pointer is made. */
+  function beginDrag() {
+    startDrag(pressed.pane, pressed.row);
+    const first = pressed.row.querySelector('.sv-label');
+    pressed.ghost = el('div', 'sv-ghost', (first ? first.textContent : '') + (drag.ids.length > 1 ? ' +' + (drag.ids.length - 1) : ''));
+    document.body.appendChild(pressed.ghost);
+    document.body.style.cursor = 'grabbing';
+  }
+
+  function moveGhost(event) {
     const ghost = pressed.ghost;
     ghost.style.left = (event.clientX + 14) + 'px';
     ghost.style.top = (event.clientY + 10) + 'px';
     ghost.dataset.mode = drag.from === 'mbom' ? 'move' : 'add';
-    const over = mbomTarget(event);
-    if (!over) { clearMark(); return; }
-    scrollNear(dom.mbomTree, event.clientY);
+  }
+
+  /** Marks the place a drop over ``over`` (an element of the MBOM pane) would go to, and the mark of the place before goes. */
+  function markDropPlace(over, event) {
     const where = placeAt({ target: over, clientY: event.clientY });
     if (where.row && where.row === dropMark && dropMark.classList.contains('sv-drop-' + where.zone)) return;   // the same place as the last move
     clearMark();
     if (where.row) { dropMark = where.row; dropMark.classList.add('sv-drop-' + where.zone); }
+  }
+
+  function pointerMove(event) {
+    if (!pressed || !structure) return;
+    if (!pressed.ghost) {
+      if (!pointerPassedStart(event)) return;
+      beginDrag();
+    }
+    event.preventDefault();
+    moveGhost(event);
+    const over = mbomTarget(event);
+    if (!over) { clearMark(); return; }
+    scrollNear(dom.mbomTree, event.clientY);
+    markDropPlace(over, event);
   }
 
   function endPointer() {
@@ -1432,11 +1618,22 @@
     document.addEventListener('keydown', pointerKey);
   }
 
+  /** Whether the key is Ctrl (or Command) with ``letter``. */
+  function isShortcut(event, letter) { return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === letter; }
+
   function keyMbom(event) {
     if (event.target.closest('input, button')) return;   // a key in a field or on an icon is that control's
-    if (event.key === 'Delete' && selected.size) { event.preventDefault(); const ids = chosenIds(); run(function () { structure.remove(ids); }); }
-    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && structure.canUndo()) { event.preventDefault(); undo(); }
-    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y' && structure.canRedo()) { event.preventDefault(); redo(); }
+    if (event.key === 'Delete' && selected.size) {
+      event.preventDefault();
+      const ids = chosenIds();
+      run(function () { structure.remove(ids); });
+    } else if (isShortcut(event, 'z') && structure.canUndo()) {
+      event.preventDefault();
+      undo();
+    } else if (isShortcut(event, 'y') && structure.canRedo()) {
+      event.preventDefault();
+      redo();
+    }
   }
 
   // ---- The page --------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 /**
  * The Bill of Materials tab: the item's lines as a tree. The columns are the ones Fusion Manage's own BOM view
  * of the workspace has; Python reads the whole tree in one go, so a chevron only opens or closes what is here.
+ * Layer: UI. The numbering of the lines (``rowsOf``) is the only rule here, and it is a pure function.
  */
 (function (ns) {
   'use strict';
@@ -159,10 +160,40 @@
     else if (cell) td.textContent = cell.value;
   }
 
-  function draw(target, full, onView, view) {
-    target.className = 'view-scroll ' + CLASS;
-    const bom = { rows: full.rows, views: full.views, view: full.view, columns: full.columns.filter(function (c) { return !hidden[c.id]; }) };
-    const columns = bom.rows.length ? bom.columns : emptyColumns().map(function (title) { return { title: title, icon: false }; });
+  function makeNode(row) { return { row: row, open: false, children: row.children.map(makeNode) }; }
+
+  /** Open or close every node under ``nodes``; the item's own lines stay open. */
+  function setOpenAll(nodes, open) {
+    nodes.forEach(function (node) {
+      node.open = open || !!node.row.root;
+      setOpenAll(node.children, open);
+    });
+  }
+
+  /** The lines to show, in order, for the nodes that are open. */
+  function rowsOf(nodes, depth, out) {
+    nodes.forEach(function (node, i) {
+      const number = node.row.root ? '' : String(i + 1);   // the item itself has no number; the lines of each assembly start again at 1
+      out.push({ node: node, depth: depth, number: number });
+      if (node.open) rowsOf(node.children, depth + 1, out);
+    });
+    return out;
+  }
+
+  /** The heading cell of column ``c``: its title, or (for an icon column) its icon with the title as the tooltip. */
+  function makeHeadCell(c) {
+    const th = el('th', c.icon ? 'item-bom-icon-head' : '', c.icon ? '' : c.title);
+    if (c.icon) {
+      th.title = c.title;
+      const mark = el('span', 'item-bom-head-icon item-bom-' + HEAD_KIND[c.icon]);
+      mark.innerHTML = ICONS[HEAD_KIND[c.icon]];   // static markup
+      th.appendChild(mark);
+    }
+    return th;
+  }
+
+  /** An empty table for the item column and ``columns``, with its resizable <colgroup> and heading row filled. Returns ``{table, body}``. */
+  function makeTableParts(columns) {
     const table = el('table', 'item-files-table item-tree-table');
     const colgroup = el('colgroup');
     const head = el('tr');
@@ -173,34 +204,26 @@
     const heads = [];
     [{ title: t('item.col_item'), icon: false }].concat(columns).forEach(function (c, i) {
       const col = el('col');
-      const width = i === 0 ? ITEM_COLUMN_PX : c.icon ? ICON_COLUMN_PX : COLUMN_PX;
-      col.style.width = width + 'px';
+      col.style.width = (i === 0 ? ITEM_COLUMN_PX : c.icon ? ICON_COLUMN_PX : COLUMN_PX) + 'px';
       cols.push(col);
       colgroup.appendChild(col);
-      const th = el('th', c.icon ? 'item-bom-icon-head' : '', c.icon ? '' : c.title);
-      if (c.icon) {   // headed by its icon; hovering says what it is
-        th.title = c.title;
-        const mark = el('span', 'item-bom-head-icon item-bom-' + HEAD_KIND[c.icon]);
-        mark.innerHTML = ICONS[HEAD_KIND[c.icon]];   // static markup
-        th.appendChild(mark);
-      }
+      const th = makeHeadCell(c);
       heads.push(th);
       head.appendChild(th);
     });
     tree.resizable(table, cols, heads, COLUMN_PX);
+    return { table: table, body: body };
+  }
 
-    function makeNode(row) { return { row: row, open: false, children: row.children.map(makeNode) }; }
+  function draw(target, full, onView, view) {
+    target.className = 'view-scroll ' + CLASS;
+    const bom = { rows: full.rows, views: full.views, view: full.view, columns: full.columns.filter(function (c) { return !hidden[c.id]; }) };
+    const columns = bom.rows.length ? bom.columns : emptyColumns().map(function (title) { return { title: title, icon: false }; });
+    const parts = makeTableParts(columns);
+    const table = parts.table;
+    const body = parts.body;
     const roots = bom.rows.map(makeNode);
     roots.forEach(function (node) { if (node.row.root) node.open = true; });   // the item's own lines show at once
-
-    function rowsOf(nodes, depth, out) {
-      nodes.forEach(function (node, i) {
-        const number = node.row.root ? '' : String(i + 1);   // the item itself has no number; the lines of each assembly start again at 1
-        out.push({ node: node, depth: depth, number: number });
-        if (node.open) rowsOf(node.children, depth + 1, out);
-      });
-      return out;
-    }
 
     function drawRows() {
       body.replaceChildren();
@@ -228,7 +251,7 @@
     }
 
     function setAll(open) {   // every assembly open or closed; the item's own lines stay shown
-      (function walk(nodes) { nodes.forEach(function (node) { node.open = open || !!node.row.root; walk(node.children); }); })(roots);
+      setOpenAll(roots, open);
       drawRows();
     }
 

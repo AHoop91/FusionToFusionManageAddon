@@ -149,8 +149,8 @@
     $('cfg-status-sub').textContent = sub || '';
   }
 
-  function renderHubFile() {
-    const shown = hubFile || {};
+  /** The details of the file in the hub (blank until one is read). */
+  function renderHubFileDetails(shown) {
     $('hub-file-name').textContent = shown.name || '';
     $('hub-file-place').textContent = shown.project_name ? t('settings.in_project', { name: shown.project_name }) : '';
     $('hub-file-modified').textContent = whenText(shown.modified) || '-';
@@ -158,6 +158,10 @@
     $('hub-file-version').textContent = shown.version || '-';
     $('hub-file-read').textContent = whenText(shown.read_at) || '-';
     fill($('cfg-file-icon'), [ns.svg(FILE_ICON, 20)]);
+  }
+
+  function renderHubFile() {
+    renderHubFileDetails(hubFile || {});
     if (hubFile && $('cfg-status').dataset.state === 'current' && !$('cfg-status-sub').textContent) setFileStatus('current', t('settings.up_to_date'), t('settings.read_at', { when: whenText(hubFile.read_at) }));
   }
 
@@ -460,35 +464,54 @@
   let savedTenant = '';
   let tenantStepDone = false;   // a tenant has been saved: the step is not shown again until the panel is reloaded
 
+  let memberTabShown = false;   // the Configuration tab has been opened for this member since they became one
+
+  /** The Configuration tab is a member's: it comes first, and is what they see when they open the panel. */
+  function showConfigTab(member) {
+    const fileTab = document.querySelector('.tab[data-tab="config"]');
+    fileTab.hidden = !member;
+    if (!member) memberTabShown = false;
+    if (!member && fileTab.classList.contains('active')) document.querySelector('.tab[data-tab="connection"]').click();
+    if (member && !memberTabShown) { memberTabShown = true; fileTab.click(); }
+  }
+
+  /** Which of the one-at-a-time views applies now: ``checking``, ``prompt``, ``tenant``, and whether the user is a ``member``. */
+  function viewFlags() {
+    const checking = signedInNow && roleState === 'pending';
+    const member = signedInNow && roleState === 'member';
+    const prompt = member && !hubFile;
+    const tenant = signedInNow && !checking && !member && !tenantStepDone;
+    return { checking: checking, member: member, prompt: prompt, tenant: tenant };
+  }
+
+  function showSettingsTabs(shown) {
+    $('settings-tabs').hidden = !shown;
+    $('settings-main').hidden = !shown;
+  }
+
+  /** Only a Hub Admin publishes. */
+  function showPublishButtons() {
+    const publisher = signedInNow && roleState === 'admin';
+    TAB_SAVES.forEach(function (prefix) { $(prefix + '-publish-btn').hidden = !publisher; });
+  }
+
   /**
    * What the signed-in panel shows, one thing at a time: while the user's role in the hub is checked, a loader; a member of the hub (not a
    * Hub Admin) with no Configuration File yet, the request to find it; an admin with no tenant saved yet, the tenant step; otherwise the
    * tabs, read-only for a member (who also sees which file they came from). When the check could not be made ('unknown') the panel is
    * left usable, so a failed check does not lock out an admin.
    */
-  let memberTabShown = false;   // the Configuration tab has been opened for this member since they became one
   function updateViews() {
     if (savedTenant) tenantStepDone = true;
-    const checking = signedInNow && roleState === 'pending';
-    const member = signedInNow && roleState === 'member';
-    const prompt = member && !hubFile;
-    const tenant = signedInNow && !checking && !member && !tenantStepDone;
+    const { checking, member, prompt, tenant } = viewFlags();
     $('role-check').hidden = !checking;
     $('member-prompt').hidden = !prompt;
     $('tenant-wizard').hidden = !tenant;
-    const tabs = !(checking || prompt || tenant);
-    $('settings-tabs').hidden = !tabs;
-    $('settings-main').hidden = !tabs;
+    showSettingsTabs(!(checking || prompt || tenant));
     $('cfg-file-view').hidden = !(member && hubFile);
-    // The Configuration tab is a member's: it comes first, and is what they see when they open the panel.
-    const fileTab = document.querySelector('.tab[data-tab="config"]');
-    fileTab.hidden = !member;
-    if (!member) memberTabShown = false;
-    if (!member && fileTab.classList.contains('active')) document.querySelector('.tab[data-tab="connection"]').click();
-    if (member && !memberTabShown) { memberTabShown = true; fileTab.click(); }
+    showConfigTab(member);
     applyMemberLock(member);
-    const publisher = signedInNow && roleState === 'admin';   // only a Hub Admin publishes
-    TAB_SAVES.forEach(function (prefix) { $(prefix + '-publish-btn').hidden = !publisher; });
+    showPublishButtons();
   }
 
   function initTenantStep() {
