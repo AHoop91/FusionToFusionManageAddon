@@ -14,7 +14,7 @@ options offered for its static value (``GET /api/v3/lookups/{name}``).
 """
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 from urllib.parse import quote_plus
 
 from ..auth.errors import AuthError
@@ -77,6 +77,15 @@ def _field(row: Dict[str, Any], field_id: str) -> Field:
 def is_computed(row: Dict[str, Any]) -> bool:
     """Whether a field's value is worked out by Fusion Manage (a computed field) rather than entered: its ``formulaField`` flag."""
     return row.get("formulaField") is True or row.get("derived") is True
+
+
+def _field_places(layouts: Dict[str, Dict[str, Any]]) -> Dict[str, int]:
+    """Where a section puts each field (from 0), by field id; a field in more than one section keeps its first place."""
+    at: Dict[str, int] = {}
+    for section in layouts.values():
+        for place, ref in enumerate(_field_refs(section)):
+            at.setdefault(field_id(ref), place)
+    return at
 
 
 def _verdict(kind: WorkspaceKind, valid: bool, message: str) -> Dict[str, Any]:
@@ -147,24 +156,35 @@ class WorkspaceService:
         if not workspace_id.isdigit():   # the id goes into an address: nothing but digits may
             return _verdict(kind, False, t("data.fm_workspace_id_number"))
         base = f"{WORKSPACES}/{workspace_id}"
+        refusal, workspace, granted = self._read_access(kind, workspace_id, base)
+        if refusal:
+            return refusal
+        name = str(workspace.get("name") or workspace_id)
+        lacking = missing(kind.required_permissions, granted)
+        if lacking:
+            return _verdict(kind, False, t("data.fm_workspace_lacking", name=name, missing=", ".join(title(p) for p in lacking)))
+        return self._describe(kind, name, workspace_id, base)
+
+    def _read_access(self, kind: WorkspaceKind, workspace_id: str, base: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any], Set[str]]:
+        """``(refusal, workspace, granted)``: the workspace and the permissions the user holds in it, or, when it cannot be used, the verdict that says why
+        (and an empty workspace and no permissions)."""
         try:
             workspace = self._client.get_json(base)
             if not isinstance(workspace, dict) or workspace.get("deleted"):
-                return _verdict(kind, False, t("data.fm_workspace_deleted", workspace=workspace_id))
+                return _verdict(kind, False, t("data.fm_workspace_deleted", workspace=workspace_id)), {}, set()
             granted = parse_granted(self._client.get_json(f"{base}/users/@me/permissions"))
         except FmApiError as exc:
             log.warning("Workspace %s validation failed: %s", workspace_id, exc)
             verdict = _verdict(kind, False, _explain(exc, workspace_id))
             if exc.status in REFUSED:
                 verdict["unauthorized"] = True   # the page says what to check, in a dialog
-            return verdict
+            return verdict, {}, set()
         except AuthError as exc:
-            return _verdict(kind, False, t("data.fm_not_signed_in", reason=exc))
+            return _verdict(kind, False, t("data.fm_not_signed_in", reason=exc)), {}, set()
+        return None, workspace, granted
 
-        name = str(workspace.get("name") or workspace_id)
-        lacking = missing(kind.required_permissions, granted)
-        if lacking:
-            return _verdict(kind, False, t("data.fm_workspace_lacking", name=name, missing=", ".join(title(p) for p in lacking)))
+    def _describe(self, kind: WorkspaceKind, name: str, workspace_id: str, base: str) -> Dict[str, Any]:
+        """The verdict for a workspace the user may use: valid with its fields and picklists, or not valid when its fields or schema are wrong."""
         fields, fields_error = self.fields(base)   # read once: the schema check and the mapping picker both use it
         if kind.kind_id == ITEMS_KIND and not fields_error:   # only the Items workspace's copy checklist in Settings lays the fields out by section
             self._place(fields, workspace_id)
@@ -181,24 +201,25 @@ class WorkspaceService:
         """Say which section of the form holds each field: its ``section`` (title), ``section_order`` (where the form puts that section, by its ``displayOrder``) and
         ``field_order`` (where the section puts the field). Fields of a classification section are left in none. A field no section holds, or any field when the sections cannot be read, has an empty
         ``section``; the workspace is usable without them."""
-        try:
-            layouts = SectionService(self._client).layouts(workspace_id)
-        except (FmApiError, AuthError) as exc:
-            log.warning("Could not read the sections of workspace %s: %s", workspace_id, exc)
-            layouts = {}
-        layouts = {i: s for i, s in layouts.items() if s.get("sectionType") != CLASSIFICATION_SECTION}   # classification data is not copied: its fields are in no section offered
+        layouts = self._form_sections(workspace_id)
         order = {section_id: place for place, section_id in enumerate(sorted(layouts, key=lambda i: whole(layouts[i].get("displayOrder"))))}   # as the form lays them out
         titles = {section_id: str(section.get("title") or section.get("name") or "") for section_id, section in layouts.items()}
         held = {field_id: last_segment(link) for field_id, link in parse_sections(list(layouts.values())).items()}
-        at = {}
-        for section in layouts.values():
-            for place, ref in enumerate(_field_refs(section)):
-                at.setdefault(field_id(ref), place)
+        at = _field_places(layouts)
         for field in fields:
             section_id = held.get(field["id"], "")
             field["section"] = titles.get(section_id, "")
             field["section_order"] = order.get(section_id, len(order))
             field["field_order"] = at.get(field["id"], 0)
+
+    def _form_sections(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:
+        """The workspace's sections by id, without the classification sections; none when they cannot be read."""
+        try:
+            layouts = SectionService(self._client).layouts(workspace_id)
+        except (FmApiError, AuthError) as exc:
+            log.warning("Could not read the sections of workspace %s: %s", workspace_id, exc)
+            return {}
+        return {i: s for i, s in layouts.items() if s.get("sectionType") != CLASSIFICATION_SECTION}   # classification data is not copied: its fields are in no section offered
 
     def _schema_problem(self, kind: WorkspaceKind, name: str, workspace_id: str, fields: List[Field]) -> str:
         """Why the workspace is not one the kind can work with ("" when it has everything its schema needs)."""

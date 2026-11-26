@@ -66,14 +66,14 @@ class PathTests(unittest.TestCase):
         self.assertEqual(encode("(A=1 OR B=2) AND workspaceId=57"), "(A%3D1+OR+B%3D2)+AND+workspaceId%3D57")
 
     def test_path_pages_and_sorts(self):
-        path = search_path("57", "bag", None, 100, 100)
+        path = search_path(build_query("57", "bag"), 100, 100)
         self.assertEqual(path, "/api/v3/search-results?limit=100&offset=100&query=(bag)+AND+workspaceId%3D57"
                                "&revision=1&sort=createdOn+asc")
 
 
     def test_the_revision_is_asked_for_and_defaults_to_the_latest(self):
-        self.assertIn("&revision=3&", search_path("57", "bag", None, 0, 50, 3))
-        self.assertIn("&revision=1&", search_path("57", "bag", None, 0, 50, 9))
+        self.assertIn("&revision=3&", search_path(build_query("57", "bag"), 0, 50, 3))
+        self.assertIn("&revision=1&", search_path(build_query("57", "bag"), 0, 50, 9))
 
 
 if __name__ == "__main__":
