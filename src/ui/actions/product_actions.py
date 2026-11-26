@@ -2,6 +2,8 @@
 
 They are read and written on a worker thread and the panel polls ``products_status`` for the answer, as the Add Items picker does
 (``PickerReads``): Fusion's palette handler never waits on the network.
+
+Layer: application. It sequences reads of ``fm/`` and ``publish/`` for the palette page; the rules live in those services.
 """
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Tuple
@@ -87,6 +89,8 @@ class WorkspaceReads(PickerReads):
 class ProductReads(WorkspaceReads):
     """The reads and the create of the Assign Product panel, one answer for each request token."""
 
+    # Five parameters: the first four are ``PickerReads``' own plus the design; ``contexts`` is keyword-only, so callers read clearly.
+    # The measure's "unused" names in the methods below are false positives: they are read inside the ``lambda`` handed to ``_in_workspace``.
     def __init__(self, config: ConfigService, make_client: Callable[[], FmClient], run: Runner = in_thread, design: Optional[OpenDesign] = None, *,
                  contexts: HubContexts) -> None:
         super().__init__(config, make_client, run)
