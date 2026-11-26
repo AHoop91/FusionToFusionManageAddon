@@ -1,5 +1,7 @@
 """One publish run: write the requests and files of the items into a folder, and send them to Fusion Manage.
 
+Layer: application (sequences the reads, the writes and the sends of a run).
+
 A run is a job in the ``JobQueue``. ``work`` runs on the queue's worker thread and does everything
 that needs the network (Data Model and Fusion Manage reads, thumbnail downloads) and writes the
 JSON; the items are prepared several at a time (their shared reads are in ``read_ahead``), and each is sent as soon as its request is written.
@@ -11,7 +13,7 @@ import base64
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import WorkspaceConfig
@@ -76,6 +78,15 @@ def _needs_matching(row: Dict[str, Any]) -> bool:
             and not value.startswith(LOOKUPS + "/"))
 
 
+class ItemSource(NamedTuple):
+    """Where one item's request and files come from: its number, its folder in the run, and its component's id and thumbnail url."""
+
+    number: str
+    folder: str
+    component_id: str
+    thumbnail_url: str
+
+
 class SharedItemNumbers(JobStopped):
     """Item numbers that several Fusion Manage items carry: the run cannot tell which item each means, and must not guess."""
 
@@ -94,6 +105,7 @@ class PublishRun(JobState):
     def unreached(self) -> str:
         return t("run.publish_not_published")
 
+    # Eight parameters: the run is made from these and nothing else, and its one caller (and the tests) pass them by name or position.
     def __init__(self, folder: PublishFolder, job: Dict[str, Any], cfg: WorkspaceConfig, client: FusionGraphQlClient,
                  fm: FmClient, model_id: str, timestamp: str, send: bool = False) -> None:
         super().__init__(str(job.get("root_number") or "design"), folder.path)
@@ -107,18 +119,22 @@ class PublishRun(JobState):
         self.rows = [self.row(item_number_of(i), str(i.get("description") or i.get("name") or ""), bool(i.get("root"))) for i in job["items"]]
         self._row_of = {id(i): row for i, row in zip(job["items"], self.rows)}
         self._bom_requests = bom_requests(cfg.workspace_id, job["operations"])
-        # A Bill of Materials is sent after the items, so its rows come last and are not counted in the items processed.
-        self._bom_row_of = {parent: self.row(parent, t("run.bom_row", count=len(lines)))
-                            for parent, lines in self._bom_requests.items()} if send else {}
-        self.rows.extend(self._bom_row_of.values())
+        self._bom_row_of = self._add_bom_rows() if send else {}
         self._bom_total = sum(len(lines) for lines in self._bom_requests.values()) if send else 0   # requests, not parents: one parent can have many
         self._bom_done = 0   # requests sent or found sent already, so far
+        self._bom_sent: Dict[str, int] = {}   # the same, of each parent
         self._field_sections: Dict[str, str] = {}   # FM field id -> section link, read once per run
         self._physical = cfg.maps_physical()   # read them only when something maps them
         self._picklists = PicklistResolver(self._fm, cfg.workspace_id)   # options of the picklist fields, read once per run
         self._shared = shared_numbers(job["items"], job["summary"])   # item number -> the components that carry it: none of them is published
         self._ahead: Optional[ReadAhead] = None   # the reads the items share, while the run is on them
         self._skipped = 0   # items left out on purpose, so the progress dialog does not count them as published
+
+    def _add_bom_rows(self) -> Dict[str, Dict[str, Any]]:
+        """A row for each parent whose Bill of Materials is sent. It is sent after the items, so its row comes last and is not counted in the items processed."""
+        rows = {parent: self.row(parent, t("run.bom_row", count=len(lines))) for parent, lines in self._bom_requests.items()}
+        self.rows.extend(rows.values())
+        return rows
 
     @property
     def unlisted(self) -> bool:
@@ -196,17 +212,8 @@ class PublishRun(JobState):
             return
         row = self._bom_row_of[parent]
         row["status"] = RUNNING
-        sent = 0
-
-        def progress() -> None:   # called from the threads that send the parent's requests together
-            nonlocal sent
-            with self._lock:
-                sent += 1
-                row["detail"] = t("run.bom_progress", sent=sent, count=len(lines))
-                self._bom_done += 1
-
         try:
-            row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled, progress)
+            row["detail"] = self._dispatcher.send_bom(parent, lines, lambda: self.cancelled, lambda: self._count_bom_sent(parent, lines))
             row["status"] = CANCELLED if was_cancelled(row["detail"]) else DONE
         except Cancelled:   # the requests under way were cut off; the others in this parent were not started
             row["status"], row["detail"] = CANCELLED, cut_off_text()
@@ -215,20 +222,34 @@ class PublishRun(JobState):
             row["status"], row["detail"] = ERROR, str(exc)
             self.folder.record(parent, SENT, FAILED, str(exc))
 
+    def _count_bom_sent(self, parent: str, lines: List[Dict[str, Any]]) -> None:
+        """One more request of a parent's Bill of Materials is sent (or was sent already): called from the threads that send its requests together."""
+        with self._lock:
+            self._bom_sent[parent] = self._bom_sent.get(parent, 0) + 1
+            self._bom_row_of[parent]["detail"] = t("run.bom_progress", sent=self._bom_sent[parent], count=len(lines))
+            self._bom_done += 1
+
+    def _left_out_without_item(self, number: str, row: Dict[str, Any]) -> bool:
+        """Leave the item out, and say True, when it has no number or shares one. The panel leaves out what has no item number or shares one;
+        this keeps a job that has them anyway from sending an empty number, or from writing one item from several components."""
+        if not number:
+            self._leave_out(row, t("run.publish_skipped_no_number"))
+            return True
+        if shared_key(number) in self._shared:
+            reason = shared_reason(number, self._shared[shared_key(number)])
+            self.folder.record(number, "item", SKIPPED, reason)
+            self._leave_out(row, reason)
+            return True
+        return False
+
     def _prepare(self, item: Dict[str, Any]) -> None:
         """One item, on a pool thread; a failure here never stops the others."""
         if self.cancelled:
             return
         number = item_number_of(item)
         row = self._row_of[id(item)]
-        # The panel leaves out what has no item number or shares one; this keeps a job that has them anyway from sending an empty
-        # number, or from writing one item from several components.
-        if not number:
-            return self._leave_out(row, t("run.publish_skipped_no_number"))
-        if shared_key(number) in self._shared:
-            reason = shared_reason(number, self._shared[shared_key(number)])
-            self.folder.record(number, "item", SKIPPED, reason)
-            return self._leave_out(row, reason)
+        if self._left_out_without_item(number, row):
+            return
         row["status"] = RUNNING
         left_out = False
         try:
@@ -268,7 +289,7 @@ class PublishRun(JobState):
         link = self._component(number, result["fm"], read["link"])
         rows = self._option_rows(number, result["rows"])
         self._record_blank(number, rows)
-        request, reason = self._request(number, folder, component_id, read["thumbnail_url"], result, rows, link)
+        request, reason = self._request(ItemSource(number, folder, component_id, read["thumbnail_url"]), result, rows, link)
         request_file = self._write_request(number, folder, request, reason)
         state = {"id": str(result["fm"].get("item_id") or ""), "state": str(result["fm"].get("state") or ""), "request": request_file}
         self.folder.set_item(number, state)
@@ -279,19 +300,23 @@ class PublishRun(JobState):
         log.info("Prepared %s in %.1fs", number, time.monotonic() - began)
         return request is None and state["state"] != FOUND
 
-    def _request(self, number: str, folder: str, component_id: str, thumbnail_url: str, result: Dict[str, Any],
-                 rows: List[Dict[str, Any]], link: Optional[Tuple[str, str, List[Derived]]]) -> Tuple[Optional[Dict[str, Any]], str]:
-        """``(request, reason)`` of the item (see ``item_request``). The thumbnail is sent with every item that is created or updated: a picture
+    def _thumbnail_files(self, source: "ItemSource", state: Any) -> List[Tuple[str, Any]]:
+        """The (field id, image) pairs the thumbnail is sent as. The thumbnail is sent with every item that is created or updated: a picture
         cannot be compared with the one Fusion Manage holds, so an item whose other values match gets it too."""
         fields = [m.fm_field_id for m in self.cfg.mappings if m.source == "thumbnail" and m.fm_field_id]
-        files: List[Tuple[str, Any]] = []
         if not fields:
-            self.folder.record(number, THUMBNAIL, SKIPPED, t("run.thumbnail_no_field"))
-        elif result["fm"].get("state") not in (NEW, FOUND):   # nothing is sent for the item: the picture would not be used
-            self.folder.record(number, THUMBNAIL, SKIPPED, t("run.thumbnail_not_needed"))
-        else:
-            image = self._thumbnail(number, folder, component_id, thumbnail_url)
-            files = [(field, image) for field in fields] if image else []
+            self.folder.record(source.number, THUMBNAIL, SKIPPED, t("run.thumbnail_no_field"))
+            return []
+        if state not in (NEW, FOUND):   # nothing is sent for the item: the picture would not be used
+            self.folder.record(source.number, THUMBNAIL, SKIPPED, t("run.thumbnail_not_needed"))
+            return []
+        image = self._thumbnail(source.number, source.folder, source.component_id, source.thumbnail_url)
+        return [(field, image) for field in fields] if image else []
+
+    def _request(self, source: "ItemSource", result: Dict[str, Any], rows: List[Dict[str, Any]],
+                 link: Optional[Tuple[str, str, List[Derived]]]) -> Tuple[Optional[Dict[str, Any]], str]:
+        """``(request, reason)`` of the item (see ``item_request`` and ``_thumbnail_files``)."""
+        files = self._thumbnail_files(source, result["fm"].get("state"))
         return item_request(self.cfg.workspace_id, result["fm"], rows, self.cfg.static_values, self._field_sections, files,
                             result["values"], link)   # the values tell which static values an existing item lacks
 

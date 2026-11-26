@@ -14,7 +14,7 @@ from src.core.cancel import Cancelled
 from src.fm.client import FmApiError
 from src.fm.pivots import Derived
 from src.publish import runner
-from src.publish.runner import ITEMS, VALIDATING, PublishRun, SharedItemNumbers, _needs_matching
+from src.publish.runner import ITEMS, VALIDATING, ItemSource, PublishRun, SharedItemNumbers, _needs_matching
 from src.publish.sender import cut_off_text
 from src.publish.states import CANCELLED, DONE, ERROR, RUNNING
 from src.publish.writer import FAILED, OK, SKIPPED, PublishFolder
@@ -149,7 +149,7 @@ class ThumbnailRequestTests(RunTestCase):
         run._field_sections = dict(self.SECTIONS)
         result = {"fm": {"state": state, "item_id": "7"}, "values": {}}
         with mock.patch.object(PublishRun, "_thumbnail", return_value=image) as thumbnail:
-            request, reason = run._request("PN-1", self.folder.path, "c1", "https://x.example/t.png", result, list(rows), None)
+            request, reason = run._request(ItemSource("PN-1", self.folder.path, "c1", "https://x.example/t.png"), result, list(rows), None)
         return run, request, reason, thumbnail
 
     def test_an_item_whose_other_values_match_still_gets_its_thumbnail(self):

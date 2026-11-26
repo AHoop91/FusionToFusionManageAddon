@@ -2,7 +2,7 @@
 
 The files are written before anything exists in Fusion Manage, so what only Fusion Manage knows is a marker:
 ``{{item:<number>}}`` an item's id, ``{{version:<number>}}`` its revision, ``{{tenant}}`` the tenant code of the urns,
-``{{edge:<parent>><number>@<sequence>}}`` a BOM line's id. Pure functions, no I/O.
+``{{edge:<parent>><number>@<sequence>}}`` a BOM line's id. Pure functions, no I/O. Layer: domain.
 
 A request is JSON (text, lists and objects): markers are found in its text values, not in the names of an object's fields.
 """
@@ -52,12 +52,10 @@ def _texts(node: Any) -> Iterator[str]:
     """The text values anywhere in a request: its url, its body and what the body holds."""
     if isinstance(node, str):
         yield node
-    elif isinstance(node, dict):
-        for value in node.values():
-            yield from _texts(value)
-    elif isinstance(node, list):
-        for value in node:
-            yield from _texts(value)
+        return
+    children = node.values() if isinstance(node, dict) else node if isinstance(node, list) else ()
+    for child in children:
+        yield from _texts(child)
 
 
 def _mapped(node: Any, change: Callable[[str], str]) -> Any:

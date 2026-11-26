@@ -1,4 +1,7 @@
-"""The request that creates or updates one Fusion Manage item."""
+"""The request that creates or updates one Fusion Manage item.
+
+Layer: domain. Pure builders of the request body from compared rows; no network, no files.
+"""
 
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -68,6 +71,28 @@ def _of_status(rows: List[Row], status: str) -> Fields:
     return [(row["fm_field"], row["value"]) for row in rows if row["status"] == status and _given(row["value"])]
 
 
+def _fixed_fields(static_values: List[StaticValue], component: Optional[Tuple[str, str, List[Derived]]],
+                  field_sections: Dict[str, str]) -> Tuple[Fields, Dict[str, str]]:
+    """``(fixed, field_sections)``: the values sent like static values (the static ones, the component link and the derived fields), and the
+    sections of the fields, with those of the derived fields added."""
+    fixed: Fields = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id]
+    if component:
+        component_field, link, derived = component
+        fixed.append((component_field, {"link": link}))
+        fixed += [(d.field_id, d.value) for d in derived]
+        field_sections = {**field_sections, **{d.field_id: d.section for d in derived}}
+    return fixed, field_sections
+
+
+def _update_fields(rows: List[Row], fixed: Fields, files: Fields, current: Optional[Dict[str, Any]]) -> Fields:
+    """What an update of an existing item sends: the values that differ, the fixed values it does not hold yet, and the files. Empty when nothing."""
+    lacking = [(field_id, value) for field_id, value in fixed if current is None or not holds(current.get(field_id), value)]
+    fields = _of_status(rows, MISMATCH) + lacking
+    return fields + files if fields or files else []
+
+
+# ``item_request`` takes 8 parameters: it is the module's one public call, its callers (and their tests) pass them by position, and each is a
+# different part of what the request is made from.
 def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_values: List[StaticValue],
                  field_sections: Dict[str, str], files: Optional[Fields] = None,
                  current: Optional[Dict[str, Any]] = None, component: Optional[Tuple[str, str, List[Derived]]] = None) -> Outcome:
@@ -87,12 +112,7 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_
     """
     state = fm.get("state")
     files = list(files or [])
-    fixed: Fields = [(s.fm_field_id, s.value) for s in static_values if s.fm_field_id]
-    if component:
-        component_field, link, derived = component
-        fixed.append((component_field, {"link": link}))
-        fixed += [(d.field_id, d.value) for d in derived]
-        field_sections = {**field_sections, **{d.field_id: d.section for d in derived}}
+    fixed, field_sections = _fixed_fields(static_values, component, field_sections)
     if state == NEW:
         fields = _of_status(rows, NEW) + fixed + files
         method, url, item_id = "POST", f"{WORKSPACES}/{workspace_id}/items", ""
@@ -100,11 +120,9 @@ def item_request(workspace_id: str, fm: Dict[str, Any], rows: List[Row], static_
         item_id = str(fm.get("item_id") or "")
         if not item_id:   # an update has to say which item
             return None, t("run.request_no_id")
-        fields = _of_status(rows, MISMATCH) + [(field_id, value) for field_id, value in fixed
-                                               if current is None or not holds(current.get(field_id), value)]
-        if not fields and not files:
+        fields = _update_fields(rows, fixed, files, current)
+        if not fields:
             return None, t("run.request_same_values")
-        fields += files
         method, url = "PATCH", f"{WORKSPACES}/{workspace_id}/items/{item_id}"
     else:
         return None, fm.get("message") or t("run.request_state", state=state)

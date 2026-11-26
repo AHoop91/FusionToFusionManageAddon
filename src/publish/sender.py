@@ -12,6 +12,8 @@ there for its Bill of Materials; the other items carry on.
 Cancelling ends a request at once, even a write. A write that was cut off, or that got no answer (a timeout, a dropped connection), may or
 may not have been done, so it is logged as in doubt, and sending again finds out before it sends: an item is looked for by its number (it is
 there, or it is created), a line that is already there or already gone is not an error.
+
+Layer: application (sequences the sends and keeps the log); the requests themselves are made by ``fm``.
 """
 
 import json
@@ -165,33 +167,53 @@ class Dispatcher:
             raise FmApiError(t("run.send_created_unclear", item=shown, count=len(hits)))
         return hits[0]["id"] if hits else ""
 
+    def _earlier_send(self, number: str, key: str) -> Tuple[str, bool]:
+        """``(done, doubtful)``: ``done`` is what to report when an earlier send accepted the item ("" if it did not), ``doubtful`` whether an
+        earlier send was cut off while sending it."""
+        with self._lock:
+            if self._sent.done(key):
+                self.learn(number, str(self._sent.entry(key).get("id") or ""))
+                return t("run.send_already_sent"), False
+            return "", self._sent.in_doubt(key)
+
+    def _adopt_created(self, number: str, key: str) -> bool:
+        """Whether the create an earlier send was cut off in had made the item: if so it is learned and logged as accepted."""
+        existing = self._created_before(number)
+        if existing:
+            self.learn(number, existing)
+            self._sent.accept(key, {"id": existing})
+        return bool(existing)
+
     def send_item(self, number: str, request: Dict[str, Any]) -> str:
         """Create or update one item; returns what was done. Raises ``FmApiError`` or ``AuthError`` when Fusion Manage refuses, and
         ``Cancelled`` when the send is cancelled (the item is then logged as in doubt)."""
         key, method = "item:" + number, request["method"]
-        with self._lock:
-            if self._sent.done(key):
-                self.learn(number, str(self._sent.entry(key).get("id") or ""))
-                return t("run.send_already_sent")
-            doubtful = self._sent.in_doubt(key)
-        if doubtful and method == "POST":   # an update can be sent again; a create may have made the item
-            existing = self._created_before(number)
-            if existing:
-                self.learn(number, existing)
-                self._sent.accept(key, {"id": existing})
-                return t("run.send_already_created")
+        done, doubtful = self._earlier_send(number, key)
+        if done:
+            return done
+        if doubtful and method == "POST" and self._adopt_created(number, key):   # an update can be sent again; a create may have made the item
+            return t("run.send_already_created")
         intended = method == "POST" and not doubtful   # an entry of its own is logged first: a crash while the create is under way leaves it in doubt
         if intended:
             self._sent.intend(key)
-        try:   # outside the lock, so the items go out at the same time
+        result = self._write_item(number, key, request, intended)
+        match = _ITEM_ID.search(request["url"])
+        new_id = created_id(result) if method == "POST" else (match.group(1) if match else "")
+        self.learn(number, new_id)
+        self._sent.accept(key, {"id": new_id})
+        return f"{method} {result.status}" if new_id else t("run.send_no_new_id", method=method, status=result.status)
+
+    def _write_item(self, number: str, key: str, request: Dict[str, Any], intended: bool) -> SendResult:
+        """Make the request of an item, outside the lock so the items go out at the same time, and log what a failure means for a resend."""
+        try:
             with self._slots:
-                result = self._fm.send_json(method, request["url"], request.get("body"))
+                return self._fm.send_json(request["method"], request["url"], request.get("body"))
         except Cancelled:
             self._sent.doubt(key, "was cancelled while it was being sent")
             raise
         except (FmApiError, AuthError) as exc:
             log.warning("Sending item %s failed: %s", number, exc)
-            if method == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
+            if request["method"] == "POST":   # a failed update leaves the item there, so its Bill of Materials can still be changed
                 with self._lock:
                     self._failed.add(number.casefold())
             if isinstance(exc, FmApiError) and exc.outcome_unknown:   # sent, perhaps, and done, perhaps: a resend finds out first
@@ -199,11 +221,6 @@ class Dispatcher:
             elif intended:   # refused for good: not done, so nothing to find out
                 self._sent.forget(key)
             raise
-        match = _ITEM_ID.search(request["url"])
-        new_id = created_id(result) if method == "POST" else (match.group(1) if match else "")
-        self.learn(number, new_id)
-        self._sent.accept(key, {"id": new_id})
-        return f"{method} {result.status}" if new_id else t("run.send_no_new_id", method=method, status=result.status)
 
     # ---- Bill of Materials -----------------------------------------------------------
 
@@ -222,63 +239,63 @@ class Dispatcher:
             if parent.casefold() in self._failed:
                 raise FmApiError(t("run.send_parent_not_created", item=parent))
         indexed = list(enumerate(requests))
-        steps = [([(i, r) for i, r in indexed if r["method"] == "DELETE"], BOM_REQUESTS),
-                 ([(i, r) for i, r in indexed if r["method"] == "PATCH"], BOM_REQUESTS),
-                 ([(i, r) for i, r in indexed if r["method"] not in ("DELETE", "PATCH")], BOM_REQUESTS)]
+        steps = [[(i, r) for i, r in indexed if r["method"] == "DELETE"],
+                 [(i, r) for i, r in indexed if r["method"] == "PATCH"],
+                 [(i, r) for i, r in indexed if r["method"] not in ("DELETE", "PATCH")]]
+        send = _BomSend(parent, len(requests), cancelled, progress)
         sent = 0
-        for batch, workers in steps:
+        for batch in steps:
             if batch:
-                sent += self._send_batch(parent, batch, len(requests), cancelled, progress, workers)
+                sent += self._send_batch(send, batch)
                 if cancelled():
                     return t("run.send_bom_cancelled", sent=sent)
         return t("run.send_bom_sent", count=len(requests))
 
-    def _send_batch(self, parent: str, batch: List[Tuple[int, Dict[str, Any]]], count: int, cancelled: Callable[[], bool],
-                    progress: Callable[[], None], workers: int) -> int:
-        """Send the requests of a batch, ``workers`` at a time, and return how many were sent. The first to fail is raised once the
+    def _send_batch(self, send: "_BomSend", batch: List[Tuple[int, Dict[str, Any]]]) -> int:
+        """Send the requests of a batch, ``BOM_REQUESTS`` at a time, and return how many were sent. The first to fail is raised once the
         others in flight have finished; those not started by then are left unsent."""
-        failed = threading.Event()
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            sent = pool.map(lambda item: self._send_bom_request(parent, item[0], item[1], count, cancelled, failed, progress), batch)
+        with ThreadPoolExecutor(max_workers=BOM_REQUESTS) as pool:
+            sent = pool.map(lambda item: self._send_bom_request(send, item[0], item[1]), batch)
             return list(sent).count(True)
 
-    def _send_bom_request(self, parent: str, index: int, request: Dict[str, Any], count: int, cancelled: Callable[[], bool],
-                          failed: threading.Event, progress: Callable[[], None]) -> bool:
+    def _send_bom_request(self, send: "_BomSend", index: int, request: Dict[str, Any]) -> bool:
         """One request of a Bill of Materials, on a pool thread: True when it was sent, False when it was skipped (sent before, cancelled, or another request has failed)."""
-        if cancelled() or failed.is_set():
+        if send.cancelled() or send.failed.is_set():
             return False
-        key = f"bom:{parent}:{index}"
+        key = f"bom:{send.parent}:{index}"
         try:
             with self._lock:   # the ids it needs may be searched for, once, and shared
                 if self._sent.done(key):
-                    progress()
+                    send.progress()
                     return False
                 doubtful = self._sent.in_doubt(key)
                 final = resolve(request, self._values(request))
-            try:   # outside the lock, so the others go out at the same time
-                with self._slots:
-                    self._fm.send_json(final["method"], final["url"], final.get("body"))
-            except Cancelled:
-                self._sent.doubt(key, "was cancelled while it was being sent")
-                raise
-            except FmApiError as exc:
-                if final["method"] == "POST" and DUPLICATE_LINE in str(exc):
-                    log.info("BOM line already there, nothing to add: %s", final["url"])   # e.g. an earlier send added it
-                elif doubtful and final["method"] == "DELETE" and exc.status == 404:
-                    log.info("BOM line already gone, nothing to remove: %s", final["url"])   # the cancelled send removed it
-                else:
-                    if exc.outcome_unknown:   # a resend finds out whether it was done
-                        self._sent.doubt(key, "got no answer or a server error")
-                    raise
+            self._write_line(key, final, doubtful)
         except (FmApiError, AuthError, Unresolved) as exc:
-            failed.set()
-            log.warning("Sending the Bill of Materials of %s failed at request %d: %s", parent, index + 1, exc)
+            send.failed.set()
+            log.warning("Sending the Bill of Materials of %s failed at request %d: %s", send.parent, index + 1, exc)
             if isinstance(exc, FmApiError):   # which request, and the status it was refused with
-                raise FmApiError(t("run.send_request_failed", number=index + 1, count=count, error=refusal_text(exc)), exc.status) from exc
+                raise FmApiError(t("run.send_request_failed", number=index + 1, count=send.count, error=refusal_text(exc)), exc.status) from exc
             raise
         self._sent.accept(key, {})
-        progress()
+        send.progress()
         return True
+
+    def _write_line(self, key: str, final: Dict[str, Any], doubtful: bool) -> None:
+        """Make one resolved request of a Bill of Materials, outside the lock so the others go out at the same time. A line that is
+        already there (an add) or already gone (a remove the cancelled send made) is not an error."""
+        try:
+            with self._slots:
+                self._fm.send_json(final["method"], final["url"], final.get("body"))
+        except Cancelled:
+            self._sent.doubt(key, "was cancelled while it was being sent")
+            raise
+        except FmApiError as exc:
+            if _already_settled(final, exc, doubtful):
+                return
+            if exc.outcome_unknown:   # a resend finds out whether it was done
+                self._sent.doubt(key, "got no answer or a server error")
+            raise
 
     # ---- Ids -------------------------------------------------------------------------
 
@@ -321,18 +338,47 @@ class Dispatcher:
         found = markers(request)
         self._read_facts([self._item_id(argument) for kind, argument in found if kind == VERSION])
         for kind, argument in found:
-            if kind == ITEM:
-                values[(kind, argument)] = self._item_id(argument)
-            elif kind == VERSION:
-                version = self._item_facts(self._item_id(argument))["version"]
-                if version:
-                    values[(kind, argument)] = version
-        if key_of(TENANT) in found:   # the tenant is the same for every item: any item of the request tells it
-            first = next((a for k, a in found if k == ITEM), "")
-            tenant = self._item_facts(self._item_id(first))["tenant"] if first else ""
+            value = self._marker_value(kind, argument)
+            if value:
+                values[(kind, argument)] = value
+        if key_of(TENANT) in found:
+            tenant = self._tenant_of(found)
             if tenant:
                 values[key_of(TENANT)] = tenant
         return values
+
+    def _marker_value(self, kind: str, argument: str) -> str:
+        """The value of an ``{{item:...}}`` or ``{{version:...}}`` marker ("" for a version the item does not have, and for other kinds)."""
+        if kind == ITEM:
+            return self._item_id(argument)
+        if kind == VERSION:
+            return self._item_facts(self._item_id(argument))["version"]
+        return ""
+
+    def _tenant_of(self, found: Set[Key]) -> str:
+        """The tenant code for a request's ``{{tenant}}``: the same for every item, so any item of the request tells it ("" if it holds none)."""
+        first = next((a for k, a in found if k == ITEM), "")
+        return self._item_facts(self._item_id(first))["tenant"] if first else ""
+
+
+def _already_settled(final: Dict[str, Any], exc: FmApiError, doubtful: bool) -> bool:
+    """Whether a refused Bill of Materials request has nothing left to do: the line is already there (an add), or already gone (a remove)."""
+    if final["method"] == "POST" and DUPLICATE_LINE in str(exc):
+        log.info("BOM line already there, nothing to add: %s", final["url"])   # e.g. an earlier send added it
+        return True
+    if doubtful and final["method"] == "DELETE" and exc.status == 404:
+        log.info("BOM line already gone, nothing to remove: %s", final["url"])   # the cancelled send removed it
+        return True
+    return False
+
+
+class _BomSend:
+    """What the requests of one parent's Bill of Materials share while they are sent: the parent, how many there are, the cancel and progress
+    callbacks, and the flag the first failure sets so the requests not yet started are left unsent."""
+
+    def __init__(self, parent: str, count: int, cancelled: Callable[[], bool], progress: Callable[[], None]) -> None:
+        self.parent, self.count, self.cancelled, self.progress = parent, count, cancelled, progress
+        self.failed = threading.Event()
 
 
 class SendRun(JobState):
@@ -366,7 +412,11 @@ class SendRun(JobState):
         for row, job in zip(self.rows[len(items):], self.plan["boms"]):   # every item is sent before the first Bill of Materials
             if self.cancelled:
                 break
-            self._step(row, lambda: self._dispatcher.send_bom(job["parent"], job["requests"], lambda: self.cancelled))
+            self._send_parent(row, job)
+
+    def _send_parent(self, row: Dict[str, Any], job: Dict[str, Any]) -> None:
+        """One parent's Bill of Materials, as a step of its row."""
+        self._step(row, lambda: self._dispatcher.send_bom(job["parent"], job["requests"], lambda: self.cancelled))
 
     def _send_item(self, row: Dict[str, Any], job: Dict[str, Any]) -> None:
         """One item's send, on a pool thread (nothing once the run is cancelled)."""
