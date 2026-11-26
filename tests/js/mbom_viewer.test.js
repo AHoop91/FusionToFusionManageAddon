@@ -28,7 +28,7 @@ function open(options) {
   const opened = [];   // the lines the Details Panel was opened for
   const closes = [];   // one entry each time the Details Panel closes, as opened does for opening
   ns.pubDetails = { open: (line) => opened.push(line), close: () => { closes.push(true); ns.mbomViewer.detailsClosed(); } };   // as the real one: closing tells the viewer
-  ['js/ui.js', 'js/bom-model.js', 'js/mbom-structure.js', 'js/mbom-plan.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
+  ['js/ui.js', 'js/bom-model.js', 'js/mbom-structure.js', 'js/mbom-plan.js', 'js/mbom-viewer-draw.js', 'js/mbom-viewer.js'].forEach((src) => run(w, src));
   const calls = { askMbom: 0, planned: 0 };
   ns.mbomViewer.init({
     design: () => ({ item_number: 'TOP', name: 'Top', component_id: 'R', composition: 'WORKING' }), rows: () => opts.rows,

@@ -2,7 +2,7 @@
 
 This note follows one design through the Publish Item panel, from opening it to the last request sent to Fusion Manage. It says what the code does now, in the order it does it. The last section lists where the order is uneven, as a starting point for clean-up.
 
-Files: the panel is `src/ui/web/publish/js/publish.js` (loading), `publish-mbom.js` (the MBOM dropdown), `publish-bom.js` (the Bill of Materials and the Publish button), `mbom-viewer.js` and `mbom-structure.js` (the structure viewer, section 5) and `publish-jobs.js` (the progress dialog and the Jobs window). Python is `src/publish/panel_sections.py` (the sections), `src/ui/actions/publish_run_actions.py` (starting a run), `src/publish/runner.py` (a run) and `src/publish/sender.py` (the sending).
+Files: the panel is `src/ui/web/publish/js/publish.js` (loading), `publish-mbom.js` (the MBOM dropdown), `publish-bom.js` (the Bill of Materials and the Publish button), `mbom-viewer.js` (the viewer: state, events, edits), `mbom-viewer-draw.js` (the drawing of the two panes, `ns.mbomViewerDraw`: lines, notes, icons) and `mbom-structure.js` (the structure viewer, section 5) and `publish-jobs.js` (the progress dialog and the Jobs window). Python is `src/publish/panel_sections.py` (the sections), `src/ui/actions/publish_run_actions.py` (starting a run), `src/publish/runner.py` (a run) and `src/publish/sender.py` (the sending).
 
 ## 1. Opening the panel: the sections, in order
 
