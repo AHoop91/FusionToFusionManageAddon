@@ -35,5 +35,15 @@ class ItemFactsTests(unittest.TestCase):
             self.assertEqual(dispatcher._item_facts("2")["version"], "1")
 
 
+class MarkerValueTests(unittest.TestCase):
+    def test_an_item_marker_keeps_its_id_even_when_empty_and_a_missing_version_is_left_out(self):
+        with tempfile.TemporaryDirectory() as folder:
+            dispatcher = Dispatcher(folder, Waiting(), "57")
+            dispatcher._item_id = lambda number: ""
+            dispatcher._item_facts = lambda item_id: {"version": "", "tenant": ""}
+            request = {"url": "/items/{{item:A}}/versions/{{version:A}}"}
+            self.assertEqual(dispatcher._values(request), {("item", "a"): ""})
+
+
 if __name__ == "__main__":
     unittest.main()

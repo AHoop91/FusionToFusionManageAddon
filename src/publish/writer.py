@@ -2,7 +2,7 @@
 
 Every artifact (item request, thumbnail, BOM requests) gets an entry in
 the manifest saying whether it was written, skipped or failed and why, so a run can be
-reviewed from the folder alone. A failed artifact never stops the run.
+reviewed from the folder alone. A failed artifact never stops the run. Layer: integration (files on disk).
 """
 
 import json
@@ -83,6 +83,7 @@ class PublishFolder:
         write_atomically(full, data)
         return full
 
+    # Five parameters: each is a column of a manifest entry, and every caller in the run names them as they are.
     def record(self, item: str, artifact: str, status: str, detail: str = "", file: str = "") -> Dict[str, Any]:
         """Note what became of one artifact of an item (or Bill of Materials parent): ``status`` is ``OK``, ``SKIPPED`` or ``FAILED``."""
         entry = {"item": item, "artifact": artifact, "status": status, "detail": detail, "file": file}
