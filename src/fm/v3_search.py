@@ -124,14 +124,13 @@ def page_path(query: str, offset: int, limit: int, revision: int) -> str:
     return f"{SEARCH_RESULTS}?limit={limit}&offset={offset}&page={offset // limit + 1}&query={encode(query)}&revision={revision}"
 
 
-def search_path(workspace_id: str, text: str, groups: Any, offset: int, limit: int, revision: int = LATEST) -> str:
-    """The request path of one page of the picker's search, oldest first.
+def search_path(query: str, offset: int, limit: int, revision: int = LATEST) -> str:
+    """The request path of one page of the picker's search, oldest first. ``query`` is as ``build_query`` gives it.
 
     ``revision`` picks the versions listed: 1 the latest version of each item (a working one included), 3 the working version
     only. Items that are not revision controlled are listed in both."""
     revision = revision if revision in REVISIONS else LATEST
-    query = encode(build_query(workspace_id, text, groups))
-    return f"{SEARCH_RESULTS}?limit={int(limit)}&offset={max(0, whole(offset))}&query={query}&revision={revision}&sort={quote_plus(SORT)}"
+    return f"{SEARCH_RESULTS}?limit={int(limit)}&offset={max(0, whole(offset))}&query={encode(query)}&revision={revision}&sort={quote_plus(SORT)}"
 
 
 # ---- Reading the answer -------------------------------------------------------------------------------------------------------------
@@ -310,13 +309,14 @@ class ItemSearchService:
     def __init__(self, client: FmClient) -> None:
         self._client = client
 
+    # Six parameters: they are the fields of the Add Items picker's request, and ``search_actions`` passes them one by one; naming them in one object would change that module too.
     def page(self, workspace_id: str, parent_id: str, text: str, groups: Any, offset: int, revision: int = LATEST) -> Dict[str, Any]:
         """One page of the items matching ``text`` and the filter ``groups``, from ``offset``, oldest first; ``revision`` is as in ``search_path``.
 
         The answer is that of ``parse_search`` and ``limit``, how many rows a page holds: the picker keeps reading pages until that many
         rows are visible, so a page whose items are mostly hidden (already in the Bill of Materials) does not leave the list short.
         """
-        data = self._client.get_json(search_path(workspace_id, text, groups, offset, PAGE_SIZE, revision))
+        data = self._client.get_json(search_path(build_query(workspace_id, text, groups), offset, PAGE_SIZE, revision))
         return {**parse_search(data, workspace_id, parent_id), "limit": PAGE_SIZE}
 
     def members(self, workspace_id: str, item_id: str) -> Dict[str, List[str]]:

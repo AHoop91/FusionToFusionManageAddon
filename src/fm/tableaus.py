@@ -21,7 +21,7 @@ import json
 import re
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from ..core.logging_setup import endpoint, get_logger, log_body
 from ..core.shapes import as_dict, dict_rows, dig, rows_in, whole
@@ -178,16 +178,29 @@ def _chosen_filters(entry: Dict[str, Any], filters: List[Dict[str, Any]]) -> Lis
     takes = {str(f.get("link")): bool(f.get("allowValue")) for f in dict_rows(entry.get("applicableFilters")) if f.get("link")}
     if len(filters) > 1 and not entry.get("allowMultipleFilters"):
         raise FmApiError("The column takes one filter only.")
-    chosen = []
-    for given in dict_rows(filters):
-        kind = str(given.get("type") or "")
-        if not kind.startswith(FILTER_TYPE_PREFIX) or kind not in takes:
-            raise FmApiError("The column does not take that filter.")
-        value = str(given.get("value") or "").strip()[:MAX_FILTER_VALUE]
-        if takes[kind] and not value:
-            raise FmApiError("A filter needs a value.")
-        chosen.append({"type": kind, "value": value} if takes[kind] else {"type": kind})
-    return chosen
+    return [_chosen_filter(given, takes) for given in dict_rows(filters)]
+
+
+def _chosen_filter(given: Dict[str, Any], takes: Dict[str, bool]) -> Dict[str, str]:
+    """``given`` as the column takes it. ``takes`` says, for each filter the column takes, whether it needs a value. Raises ``FmApiError`` when the
+    column does not take the filter or the filter lacks its value."""
+    kind = str(given.get("type") or "")
+    if not kind.startswith(FILTER_TYPE_PREFIX) or kind not in takes:
+        raise FmApiError("The column does not take that filter.")
+    value = str(given.get("value") or "").strip()[:MAX_FILTER_VALUE]
+    if takes[kind] and not value:
+        raise FmApiError("A filter needs a value.")
+    return {"type": kind, "value": value} if takes[kind] else {"type": kind}
+
+
+def _understood_change(change: Dict[str, Any]) -> Tuple[str, str, List[Dict[str, Any]]]:
+    """``(column, match rule, filters)`` of one change of a view's filters. Raises ``FmApiError`` when the match rule is not one Fusion Manage has or the
+    filters are not a list of at most ``MAX_FILTERS``."""
+    filters = change.get("filters")
+    match = str(change.get("match") or "ALL").upper()
+    if match not in MATCH_RULES or not isinstance(filters, list) or len(filters) > MAX_FILTERS:
+        raise FmApiError("The filters are not understood.")
+    return str(change.get("column") or ""), match, filters
 
 
 def _view_path(workspace_id: str, view_id: str) -> str:
@@ -267,10 +280,7 @@ class TableauService:
         if not isinstance(definition.get("columns"), list):
             definition["columns"] = []
         for change in dict_rows(changes):
-            column_id, filters = str(change.get("column") or ""), change.get("filters")
-            match = str(change.get("match") or "ALL").upper()
-            if match not in MATCH_RULES or not isinstance(filters, list) or len(filters) > MAX_FILTERS:
-                raise FmApiError("The filters are not understood.")
+            column_id, match, filters = _understood_change(change)
             entry = _entry_for(column_id, definition["columns"], lambda: self._fields_meta(workspace_id))
             chosen = _chosen_filters(entry, filters)
             if chosen:

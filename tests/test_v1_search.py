@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from src.fm.client import FmApiError
-from src.fm.v1_search import (CONTAINS, GRIDVIEW, MAX_PAGES, OR, Field, Filter, Sort, V1SearchService, build_definition, parse_page)
+from src.fm.v1_search import (CONTAINS, GRIDVIEW, MAX_PAGES, OR, Field, Filter, Paging, Sort, V1SearchService, build_definition, parse_page)
 
 
 SORT = [Sort("TITLE")]
@@ -28,7 +28,7 @@ def answer(total, *ids):
 class DefinitionTests(unittest.TestCase):
     def test_fields_filters_and_sort_are_named_with_their_tab(self):
         body = build_definition([Field("TITLE"), Field("QTY", GRIDVIEW)], [Sort("TITLE", descending=True)],
-                                [Filter("TITLE", CONTAINS, "Flash"), Filter("QTY", 15, "1", GRIDVIEW)], page=2, page_size=10)
+                                [Filter("TITLE", CONTAINS, "Flash"), Filter("QTY", 15, "1", GRIDVIEW)], Paging(2, 10))
         self.assertEqual(body["fields"], [{"fieldID": "TITLE", "fieldTypeID": 0}, {"fieldID": "QTY", "fieldTypeID": 2}])
         self.assertEqual(body["filter"][1], {"fieldID": "QTY", "fieldTypeID": 2, "filterType": {"filterID": 15}, "filterValue": "1"})
         self.assertEqual(body["sort"], [{"fieldID": "TITLE", "fieldTypeID": 0, "sortDescending": True}])
@@ -44,7 +44,7 @@ class DefinitionTests(unittest.TestCase):
     def test_a_page_the_service_would_refuse_is_not_sent(self):
         for page, size in ((0, 10), (1, 0), (1, 1000)):
             with self.assertRaises(ValueError):
-                build_definition([Field("TITLE")], SORT, page=page, page_size=size)
+                build_definition([Field("TITLE")], SORT, paging=Paging(page, size))
 
 
 class NoMatchTests(unittest.TestCase):
@@ -84,14 +84,14 @@ class ServiceTests(unittest.TestCase):
 
     def test_pages_are_read_until_the_total_is_reached(self):
         client = Client(answer(3, 1, 2), answer(3, 3))
-        rows = V1SearchService(client).rows("242", [Field("TITLE")], SORT, page_size=2)
+        rows = V1SearchService(client, page_size=2).rows("242", [Field("TITLE")], SORT)
         self.assertEqual([r.dms_id for r in rows], ["1", "2", "3"])
         self.assertEqual([body["pageNo"] for _, _, body in client.sent], [1, 2])
 
     def test_a_search_that_never_ends_raises_and_does_not_return_a_cut_off_list(self):
         client = Client(*[answer(10 ** 6, n) for n in range(1, MAX_PAGES + 1)])
         with self.assertRaises(FmApiError):
-            V1SearchService(client).rows("242", [Field("TITLE")], SORT, page_size=1)
+            V1SearchService(client, page_size=1).rows("242", [Field("TITLE")], SORT)
 
 
 if __name__ == "__main__":

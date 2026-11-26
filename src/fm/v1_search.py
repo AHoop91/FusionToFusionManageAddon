@@ -77,17 +77,23 @@ class V1Page:
     rows: List[V1Row]
 
 
-def build_definition(fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (), page: int = 1,
-                     page_size: int = DEFAULT_PAGE_SIZE) -> Dict[str, Any]:
+@dataclass(frozen=True)
+class Paging:
+    """Which page to ask for (from 1) and how many rows it holds."""
+    page: int = 1
+    size: int = DEFAULT_PAGE_SIZE
+
+
+def build_definition(fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (), paging: Paging = Paging()) -> Dict[str, Any]:
     """The search definition to send: every filter must match (``AND``), but a single filter is sent with ``OR``, as the service requires. A ``sort`` is required: the service refuses a
     search with none ("sortFieldsList is not specified", seen live)."""
-    if page < 1 or not 0 < page_size <= MAX_PAGE_SIZE:
-        raise ValueError(f"page {page} and page size {page_size} are not allowed")
+    if paging.page < 1 or not 0 < paging.size <= MAX_PAGE_SIZE:
+        raise ValueError(f"page {paging.page} and page size {paging.size} are not allowed")
     if not sort:
         raise ValueError("a v1 search needs a sort")
     return {
-        "pageNo": page,
-        "pageSize": page_size,
+        "pageNo": paging.page,
+        "pageSize": paging.size,
         "logicClause": OR if len(filters) == 1 else AND,
         "fields": [{"fieldID": f.id, "fieldTypeID": f.type_id} for f in fields],
         "sort": [{"fieldID": s.field_id, "fieldTypeID": s.type_id, "sortDescending": s.descending} for s in sort],
@@ -118,10 +124,11 @@ def parse_page(data: Any) -> V1Page:
 
 
 class V1SearchService:
-    """Searches one workspace through the v1 API. Call from a worker thread."""
+    """Searches one workspace through the v1 API. Call from a worker thread. ``page_size`` is how many rows ``rows`` asks for in each page."""
 
-    def __init__(self, client: FmClient) -> None:
+    def __init__(self, client: FmClient, page_size: int = DEFAULT_PAGE_SIZE) -> None:
         self._client = client
+        self._page_size = page_size
 
     def page(self, workspace_id: str, definition: Dict[str, Any]) -> V1Page:
         """One page of the items that match ``definition`` (see ``build_definition``)."""
@@ -133,14 +140,13 @@ class V1SearchService:
             return V1Page(0, [])
         return parse_page(result.data)
 
-    def rows(self, workspace_id: str, fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = (),
-             page_size: int = DEFAULT_PAGE_SIZE) -> List[V1Row]:
+    def rows(self, workspace_id: str, fields: Sequence[Field], sort: Sequence[Sort], filters: Sequence[Filter] = ()) -> List[V1Row]:
         """Every matching row, reading page after page until the total is reached.
 
         Raises when the search would need more than ``MAX_PAGES`` pages, and does not return a cut-off list."""
         found: List[V1Row] = []
         for number in range(1, MAX_PAGES + 1):
-            page = self.page(workspace_id, build_definition(fields, sort, filters, number, page_size))
+            page = self.page(workspace_id, build_definition(fields, sort, filters, Paging(number, self._page_size)))
             found.extend(page.rows)
             if not page.rows or len(found) >= page.total:
                 return found
