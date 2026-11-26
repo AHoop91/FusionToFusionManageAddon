@@ -136,6 +136,11 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Show a Fusion message box | `ui/file_dialogs.py` | `ui/` |
 | Read or write in the workspace of one kind from the settings, with the answer polled by token | Subclass `WorkspaceReads` (set `kind`, override `_problem`): `ProductReads` (Portfolio Management), `ItemCreateReads` (Items) | `ui/actions/product_actions.py`, `ui/actions/item_create_actions.py` | [workspace-forms.md](workspace-forms.md) |
 | Register a palette action | a `register_*_actions` function, called from `ui/actions/__init__.py` | `ui/actions/` |
+| Read what is selected or open in Fusion: the component of an entity, the part number of the selection or open design, its Data Model reference, what Export exports | `fusion_selection.component_of`, `selected_part_number`, `part_ref`, `active_ref`, `export_component` (the selection the right-click menu saw: `menu_selection`) | `ui/fusion_selection.py` |
+| Add entries to Fusion's right-click menu | `ItemContextMenu` | `ui/item_context_menu.py` |
+| Find the item number of a component on a worker thread, then act on it on the UI thread | `NumberFinder.find` with `FindOptions` | `ui/number_finder.py` |
+| What the Export window reads and does: what is exported, its names, the item number read ahead, the look at the attached files, the export | `ExportPanel` (the Item panel's `exporter`) | `ui/export_panel.py` |
+| The Item page's actions: tab look-ups, item loading, selection following, uploads from the Actions menu, files freshness | `ItemPanel` | `ui/item_panel.py` |
 
 ## Web: shared scripts (`ui/web/shared/js/`)
 

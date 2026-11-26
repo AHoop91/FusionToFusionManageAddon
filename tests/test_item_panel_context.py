@@ -10,7 +10,7 @@ from tests.hub_fixtures import auth_of, capture, config_of, items_workspace
 from tests.without_fusion import fusion_modules_stubbed
 
 with fusion_modules_stubbed():
-    from src.ui import item_panel
+    from src.ui import export_panel, fusion_selection, item_panel, number_finder
     from src.ui.item_panel import ItemNotFound, ItemPanel
 
 
@@ -113,7 +113,7 @@ class RequestTests(Setup):
     def test_a_design_check_uses_the_workspace_of_the_context_not_the_one_active_now(self):
         seen = []
         check = mock.Mock(side_effect=lambda shown: seen.append(shown.cfg.workspace_id) or {"state": "ok"})
-        with mock.patch.object(item_panel, "_active_ref"), mock.patch.object(item_panel, "FmClient"), \
+        with mock.patch.object(fusion_selection, "active_ref"), mock.patch.object(item_panel, "FmClient"), \
                 mock.patch.object(item_panel, "FusionGraphQlClient"), mock.patch.object(self.panel._numbers, "model_of"):
             self.panel._design_check(self.ask(), check, "sync_check_result")
             self.change_settings()
@@ -138,7 +138,7 @@ class RequestTests(Setup):
     def test_an_upload_is_made_under_the_context_the_item_was_read_under(self):
         self.panel._number = "PN-1"
         self.panel._uploads = mock.Mock()
-        with mock.patch.object(item_panel, "_active_selection", return_value=[]), mock.patch.object(item_panel, "pick"):
+        with mock.patch.object(fusion_selection, "active_selection", return_value=[]), mock.patch.object(item_panel, "pick"):
             self.panel._upload_for_item(mock.Mock(), self.ask())
         context = self.panel._uploads.from_panel.call_args.args[1]
         self.assertEqual((context.tenant, context.cfg.workspace_id), ("acme", "242"))
@@ -209,16 +209,16 @@ class WarmTests(Setup):
     def test_the_workspace_that_is_prepared_is_that_of_the_context(self):
         context = capture(self.config)
         self.change_settings()
-        with mock.patch.object(item_panel, "ItemViewService") as service, mock.patch.object(item_panel, "FmClient") as client:
-            self.panel._warm(context)
+        with mock.patch.object(number_finder, "ItemViewService") as service, mock.patch.object(number_finder, "FmClient") as client:
+            self.panel._finder.warm(context)
         self.assertEqual(client.call_args.args[0].tenant, "acme")
         self.run_threads()
         service.return_value.prepare.assert_called_once_with("242")
 
     def test_nothing_is_prepared_without_a_context_or_an_items_workspace(self):
-        self.panel._warm(None)
+        self.panel._finder.warm(None)
         self.config.config.workspaces = {ITEMS_KIND: items_workspace("")}
-        self.panel._warm(capture(self.config))
+        self.panel._finder.warm(capture(self.config))
         self.assertEqual(self.started, [])
 
 

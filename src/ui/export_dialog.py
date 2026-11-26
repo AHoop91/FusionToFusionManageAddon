@@ -2,6 +2,7 @@
 
 The page (``web/export``) asks what is on offer (``export_context``), then says what was chosen (``export_run``). What is offered is worked
 out again at each call, since the open document can change while the window is open.
+What it reads from Fusion and Fusion Manage for the window, and the export itself, are ``ExportPanel`` (``export_panel.py``).
 
 A destination is off when it is not set up (the Items workspace not being configured in Preferences, or no connection), and also when the
 user may not attach files to its workspace. The permissions are read from Fusion Manage when the window opens, on a worker thread so
@@ -32,7 +33,7 @@ from ..fm.components import ComponentService
 from ..fm.permissions import ATTACH_PERMISSIONS, REFUSED, denial
 from . import drawing_source
 from .export_options import DESIGN, DRAWING, describe, formats_for
-from .item_panel import ItemPanel
+from .export_panel import ExportPanel
 from .message_bridge import MessageBridge
 from .palette_host import PaletteHost
 from .ui_thread import UiThread
@@ -57,7 +58,7 @@ class ExportDialog:
 
     # Six collaborators, each a different one (the caller in ``main`` owns them all): over the guardrail of four, and not ones to bundle.
     def __init__(self, host: PaletteHost, bridge: MessageBridge, tasks: UiThread, config: ConfigService, auth: AuthService,
-                 panel: ItemPanel) -> None:
+                 panel: ExportPanel) -> None:
         self._host = host
         self._tasks = tasks
         self._config = config

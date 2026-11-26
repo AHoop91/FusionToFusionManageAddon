@@ -37,7 +37,8 @@ from src.ui.export_dialog import ExportDialog  # noqa: E402
 from src.ui.file_dialogs import FileDialogs  # noqa: E402
 from src.ui.message_bridge import MessageBridge  # noqa: E402
 from src.ui.job_alerts import JobAlerts  # noqa: E402
-from src.ui.item_panel import ItemContextMenu, ItemPanel  # noqa: E402
+from src.ui.item_context_menu import ItemContextMenu  # noqa: E402
+from src.ui.item_panel import ItemPanel  # noqa: E402
 from src.ui.jobs_badge import JobsBadge  # noqa: E402
 from src.ui.palette_host import PaletteHost  # noqa: E402
 from src.ui.ui_thread import UiThread  # noqa: E402
@@ -286,7 +287,7 @@ def _run(context) -> None:
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, upload_title(), "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host, _publish_host.show)
         _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, export_title(), "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
-        _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel)
+        _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel.exporter)
         _product_host = PaletteHost(_ui, bridge, PRODUCT_PALETTE_ID, products_title(), "products", True, PRODUCT_WIDTH, PRODUCT_HEIGHT)
         bridge.set_pusher(_push_to_panels)   # background work can now tell the panels when it is done, instead of being asked
         menu_commands = [
