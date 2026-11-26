@@ -3,6 +3,8 @@
 ``start_publish`` adds the run to the job queue, which writes the requests and files into a folder of
 its own and then sends them to Fusion Manage, all on its own thread; the panel polls ``list_publish_jobs``
 to show the runs. ``retry_publish`` sends the folder of a failed run again: what Fusion Manage accepted is skipped.
+
+Application layer: it sequences the use case and leaves the page to the UI layer.
 """
 
 from functools import partial
@@ -46,6 +48,13 @@ class Announcement(NamedTuple):
     title: str
 
 
+def _failure_title(run: Any, sending: bool) -> str:
+    """The title of the message for a run that failed, or that finished with failed items."""
+    if sending:
+        return t("app.announce_send_failed")
+    return t("app.alert_failed_title") if run.phase == ERROR else t("app.announce_completed_errors")
+
+
 def announcement(run: Any) -> Optional[Announcement]:
     """What to tell the user of the run that just ended, or None when there is nothing to say (the user stopped it, and no request was cut off)."""
     sending = run.kind == SendRun.kind
@@ -54,8 +63,7 @@ def announcement(run: Any) -> Optional[Announcement]:
         return Announcement(True, report(run), t("app.announce_cancelled")) if cut_off(run) else None
     failed_items = any(row["status"] == ERROR for row in run.rows)
     if run.phase == ERROR or (run.phase == DONE and failed_items):
-        title = t("app.announce_send_failed") if sending else t("app.alert_failed_title") if run.phase == ERROR else t("app.announce_completed_errors")
-        return Announcement(True, report(run), title)
+        return Announcement(True, report(run), _failure_title(run, sending))
     if run.phase == DONE:
         return Announcement(False, report(run), t("app.announce_sent") if sending else t("app.alert_done_title"))
     return None
@@ -81,6 +89,7 @@ class PublishRuns:
     on a worker; a test gives its own. ``files_root`` is the folder the runs write into.
     """
 
+    # Many parameters: the collaborators the add-in builds once, then three seams a test replaces (model ref, worker, files root) that have defaults.
     def __init__(self, bridge: MessageBridge, config: ConfigService, auth: AuthService, dialogs: FileDialogs, badge: JobsBadge,
                  alerts: JobAlerts, open_model_ref: Callable[[], Tuple[str, str]] = model_ref, run: Runner = in_thread,
                  files_root: Optional[str] = None) -> None:
@@ -188,6 +197,7 @@ class PublishRuns:
         (self._alerts.alert if told.warning else self._alerts.done)(told.text, told.title)
 
 
+# Six parameters: the collaborators the add-in entry point built, handed on to the one object that uses them.
 def register_publish_run_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
                                  dialogs: FileDialogs, badge: JobsBadge, alerts: JobAlerts) -> None:
     """Register the publish actions; the queue lives as long as the add-in."""

@@ -1,6 +1,8 @@
 """Palette actions for the Publish Item panel: loading the open design's sections, opening links, and saying which design is open.
 
 The sections and how each is loaded are in ``publish.panel_sections``.
+
+Application layer: it sequences the use case and leaves the page to the UI layer.
 """
 
 import webbrowser
@@ -39,6 +41,7 @@ def current_stamp(contexts: HubContexts) -> str:
     return context.stamp if context else ""
 
 
+# Five parameters: two collaborators, and two seams (Fusion's open design, the system browser) that a test replaces and that have defaults.
 def register_publish_actions(bridge: MessageBridge, config: ConfigService, auth: AuthService,
                              open_model_ref: Callable[[], Tuple[str, str]] = model_ref,
                              open_browser: Callable[[str], bool] = webbrowser.open) -> None:

@@ -4,6 +4,8 @@ Like the Assign Product panel's (``product_actions``), each runs on a worker thr
 ``token`` for the answer: ``{token, pending, ok, result, message, fields}``. ``result`` is what ``publish.bought_items.BoughtItems`` answers (see
 the note ``dev/publish-item-flow.md``; ``bought_open`` is one request for what a bought version's dialog shows); a refusal says ``message`` for the form and ``fields`` (``{field id: message}``) for the fields it names.
 The options of a picklist or link field are read with ``search_options`` and its ``search_status``, as the Add Items picker does.
+
+Application layer: it sequences the use case and leaves the page to the UI layer.
 """
 
 from typing import Any, Callable, Dict, Optional

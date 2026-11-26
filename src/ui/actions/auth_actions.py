@@ -1,4 +1,4 @@
-"""Palette actions for sign-in state, login, logout and the user profile."""
+"""Palette actions for sign-in state, login, logout and the user profile. Application layer."""
 
 import threading
 from typing import Any, Dict, Set, Tuple
@@ -26,6 +26,7 @@ class ProfileReads:
     profile is kept for a while. Any thread may use it.
     """
 
+    # ``seconds`` and ``run`` are seams a test replaces; both have defaults.
     def __init__(self, bridge: MessageBridge, config: ConfigService, auth: AuthService, seconds: float = PROFILE_SECONDS,
                  run: Runner = in_thread) -> None:
         self._bridge, self._config, self._auth, self._run = bridge, config, auth, run

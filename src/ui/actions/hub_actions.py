@@ -1,8 +1,8 @@
-"""Palette action that tells whether the signed-in user is an admin of the active hub."""
+"""Palette action that tells whether the signed-in user is an admin of the active hub. Application layer."""
 
 import threading
 import time
-from typing import Any, Callable, Dict, Set, Tuple
+from typing import Any, Callable, Dict, Optional, Set, Tuple
 
 from ...config.config_service import ConfigService
 from ...core.logging_setup import get_logger
@@ -41,6 +41,7 @@ class HubRoles:
     (the network, the service) is not, so a later call asks again. Any thread may use it, but ``get`` reads Fusion's user: call it on Fusion's.
     """
 
+    # The last three parameters are seams a test replaces (Fusion's user, the worker, the clock); each has a default, so callers pass two.
     def __init__(self, bridge: MessageBridge, config: ConfigService, user_email: Callable[[], str] = _fusion_user_email,
                  run: Runner = in_thread, clock: Callable[[], float] = time.monotonic) -> None:
         self._bridge, self._config, self._user_email, self._run, self._clock = bridge, config, user_email, run, clock
@@ -50,39 +51,50 @@ class HubRoles:
         self._failed_at: Dict[Key, float] = {}   # when a read last ended without an answer
         self._lock = threading.Lock()
 
+    def _key(self) -> Optional[Key]:
+        """The hub and user a role is kept under, or None when there is no hub or no user. Reads Fusion's user: call it on Fusion's thread."""
+        email = self._user_email()
+        key = (self._config.hub_id, email.strip().lower())
+        return key if key[0] and key[1] else None
+
     def get(self, refresh: bool = False) -> Dict[str, Any]:
         """The role, ``pending`` while it is read, or ``unknown`` when there is no hub or user, or a read just failed.
 
         ``refresh``: the panel was opened or came back, and a role may have changed since it was read, so it is read again.
         """
-        email = self._user_email()   # Fusion's user: read here, on Fusion's thread
-        key = (self._config.hub_id, email.strip().lower())
-        if not key[0] or not key[1]:
+        key = self._key()   # Fusion's user: read here, on Fusion's thread
+        if key is None:
             return _answer(ROLE_UNKNOWN)
         with self._lock:
             if refresh:
                 self._failed_at.pop(key, None)
-            now = self._clock()
-            kept = self._kept.get(key)
-            if kept and now - kept[1] < KEPT_SECONDS and not refresh:   # a refresh reads again, but the old answer stays for is_admin until the new one is in
-                return _answer(kept[0])
-            if key in self._running:
-                return {"state": PENDING, "role": ""}
-            failed_at = self._failed_at.get(key)
-            if failed_at is not None and now - failed_at < RETRY_AFTER_SECONDS:
-                return _answer(ROLE_UNKNOWN)
+            answer = self._answer_without_read(key, refresh)
+            if answer is not None:
+                return answer
             self._running.add(key)
             hub_name = self._config.hub_name
         self._run(lambda: self._read(key, hub_name))   # outside the lock: a runner may do the work at once, and the read takes the lock
         return {"state": PENDING, "role": ""}
 
+    def _answer_without_read(self, key: Key, refresh: bool) -> Optional[Dict[str, Any]]:
+        """What can be said without starting a read (the lock is held), or None when a read is to be started."""
+        now = self._clock()
+        kept = self._kept.get(key)
+        if kept and now - kept[1] < KEPT_SECONDS and not refresh:   # a refresh reads again, but the old answer stays for is_admin until the new one is in
+            return _answer(kept[0])
+        if key in self._running:
+            return {"state": PENDING, "role": ""}
+        failed_at = self._failed_at.get(key)
+        if failed_at is not None and now - failed_at < RETRY_AFTER_SECONDS:
+            return _answer(ROLE_UNKNOWN)
+        return None
+
     def is_admin(self) -> bool:
         """Is the user a Hub Admin of the active hub, as last read? False when the role is not known (yet) or a member's. An answer older than
         ``KEPT_SECONDS`` still counts (the panel can stay open longer than that, and refusing an admin for it is wrong) while a read in the
         background makes it fresh; it never waits for the network itself."""
-        email = self._user_email()
-        key = (self._config.hub_id, email.strip().lower())
-        if not key[0] or not key[1]:
+        key = self._key()
+        if key is None:
             return False
         with self._lock:
             kept = self._kept.get(key)
