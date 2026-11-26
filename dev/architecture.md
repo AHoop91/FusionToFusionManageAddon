@@ -43,7 +43,7 @@ Also: a name says what the function does, as a verb phrase. Prefer plain, straig
 
 ## Measuring
 
-`uv run python tools/measure_code.py` lists every Python function that breaks a guardrail (`--json` for the factory). The JavaScript side is measured by the reviewer agents until a linter is added.
+`uv run python tools/measure_code.py` lists every Python function that breaks a guardrail (`--json` for the factory). `npm install` once, then `node tools/measure_js.mjs` does the same for the JavaScript under `src/ui/web` (it skips the function that wraps a whole file, and needs acorn, the only dev dependency). Both exit 1 while a function breaks a guardrail. The JavaScript tests run inside the Python suite (`tests/test_panel_js.py`).
 
 ## The factory
 

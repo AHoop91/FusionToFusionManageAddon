@@ -1,0 +1,11 @@
+{
+  "name": "fusion-manage-item-management",
+  "private": true,
+  "description": "Developer tooling only. The add-in itself has no npm dependencies.",
+  "scripts": {
+    "measure": "node tools/measure_js.mjs"
+  },
+  "devDependencies": {
+    "acorn": "^8.14.0"
+  }
+}

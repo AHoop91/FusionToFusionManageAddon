@@ -10,3 +10,6 @@ dist/
 
 # Editor settings
 .vscode/
+
+# npm (developer tooling)
+node_modules/
