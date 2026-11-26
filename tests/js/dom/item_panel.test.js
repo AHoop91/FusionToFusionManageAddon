@@ -1,14 +1,11 @@
-// The dialog of the structure viewer (item-panel.js): a new manufacturing item and a bought version, with the shared form controls, in jsdom.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The dialog of the structure viewer (item-panel.js): a new manufacturing item and a bought version, with the shared form controls, in the browser.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { englishI18n, run } = require('./helpers');
+const { englishI18n, run } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
+const { PageWindow } = require('../browser/window');
 
 const field = (over) => Object.assign({ id: 'F', title: 'Field', kind: 'text', required: false, description: '', options: [], lookup: '', max_length: 0, validators: [] }, over);
 const NUMBER = field({ id: 'NUMBER', title: 'Item number', required: true });
@@ -18,7 +15,7 @@ const SUPPLIER = field({ id: 'SUPPLIER', title: 'Supplier', kind: 'link', lookup
 const formOf = (fields) => ({ sections: [{ title: 'Basic', fields: fields, matrices: [], collapsed: false }], left_out: [] });
 
 function setup() {
-  const dom = new JSDOM('<!doctype html><html><body><section id="pub-structure"></section></body></html>', { runScripts: 'outside-only' });
+  const dom = new PageWindow('<!doctype html><html><body><section id="pub-structure"></section></body></html>');
   const w = dom.window;
   w.MfgUi = {};
   const ns = w.MfgUi;
@@ -55,7 +52,7 @@ function openAssembly() {
   return s;
 }
 
-test('New item asks for the assembly form and draws it stacked, with required fields starred and the locked value shown in its section', { skip }, () => {
+test('New item asks for the assembly form and draws it stacked, with required fields starred and the locked value shown in its section', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   assert.strictEqual(s.last().action, 'items_form');
@@ -76,7 +73,7 @@ test('New item asks for the assembly form and draws it stacked, with required fi
   assert.strictEqual(s.save().textContent, 'Create item');
 });
 
-test('Save checks the form, then sends the values once and stays off while the request runs', { skip }, () => {
+test('Save checks the form, then sends the values once and stays off while the request runs', () => {
   const s = openAssembly();
   const before = s.sent.length;
   s.save().click();
@@ -101,7 +98,7 @@ test('Save checks the form, then sends the values once and stays off while the r
   assert.strictEqual(s.$('.ic-overlay').hidden, true);
 });
 
-test('a refused save keeps what was typed, shows each field named and the message, and Save works again', { skip }, () => {
+test('a refused save keeps what was typed, shows each field named and the message, and Save works again', () => {
   const s = openAssembly();
   s.type('NUMBER', 'MFG-1');
   s.type('TITLE', 'Frame');
@@ -121,7 +118,7 @@ test('a refused save keeps what was typed, shows each field named and the messag
   assert.deepStrictEqual(JSON.parse(JSON.stringify(s.last().payload.values)), { NUMBER: 'MFG-2', TITLE: 'Frame' });
 });
 
-test('a form that cannot be read says so, with a retry', { skip }, () => {
+test('a form that cannot be read says so, with a retry', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   s.reply({ ok: false, message: 'The Items workspace is not set.' });
@@ -133,7 +130,7 @@ test('a form that cannot be read says so, with a retry', { skip }, () => {
   assert.strictEqual(s.last().action, 'items_form');
 });
 
-test('without permission to add items Save is off and the reason is shown', { skip }, () => {
+test('without permission to add items Save is off and the reason is shown', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   s.reply({ ok: true, result: Object.assign({}, ASSEMBLY, { can_create: false }) });
@@ -153,7 +150,7 @@ const BOUGHT = {
   source_id: '17',
 };
 
-test('a bought version is opened with one request that carries the line, then shows its number read only, copies the values into the controls and says what is not copied', { skip }, () => {
+test('a bought version is opened with one request that carries the line, then shows its number read only, copies the values into the controls and says what is not copied', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1' });
   assert.strictEqual(s.last().action, 'bought_open', 'one request looks for a bought version and reads the form');
@@ -173,7 +170,7 @@ test('a bought version is opened with one request that carries the line, then sh
   assert.strictEqual(s.w.document.querySelectorAll('.ic-body .section').length, 1, 'no section of what the add-in sets');
 });
 
-test('saving a bought version sends the source id the open gave, with the values, and shows the number it was given', { skip }, () => {
+test('saving a bought version sends the source id the open gave, with the values, and shows the number it was given', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1' });
   s.reply({ ok: true, result: BOUGHT });
@@ -191,7 +188,7 @@ test('saving a bought version sends the source id the open gave, with the values
   assert.match(s.$('.ic-saved').textContent, /Item MFG-1-B was created/);
 });
 
-test('answers are polled with items_status, and a picklist is read with search_options and polled with search_status', { skip }, async () => {
+test('answers are polled with items_status, and a picklist is read with search_options and polled with search_status', async () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   const token = s.last().payload.token;
@@ -213,7 +210,7 @@ test('answers are polled with items_status, and a picklist is read with search_o
   assert.strictEqual(s.ns.pubItemPanel.claims('search_status', { ok: true, result: { token: 'other', pending: false } }), false, 'the Add Items picker keeps its own answers');
 });
 
-test('the dialog cannot be closed while a save runs, and closing forgets the form', { skip }, () => {
+test('the dialog cannot be closed while a save runs, and closing forgets the form', () => {
   const s = openAssembly();
   s.type('NUMBER', 'MFG-1');
   s.save().click();
@@ -225,7 +222,7 @@ test('the dialog cannot be closed while a save runs, and closing forgets the for
   assert.strictEqual(s.$('.ic-body').children.length, 0);
 });
 
-test('each section of the form is a card that folds, and a section with a refused field is unfolded', { skip }, () => {
+test('each section of the form is a card that folds, and a section with a refused field is unfolded', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   const form = { sections: [
@@ -243,7 +240,7 @@ test('each section of the form is a card that folds, and a section with a refuse
   assert.ok(!cards[1].classList.contains('folded'), 'the section of the refused field is open again');
 });
 
-test('a section the workspace folds starts folded, unless it holds a required field', { skip }, () => {
+test('a section the workspace folds starts folded, unless it holds a required field', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   const form = { sections: [
@@ -255,7 +252,7 @@ test('a section the workspace folds starts folded, unless it holds a required fi
   assert.deepStrictEqual(cards.map((c) => c.classList.contains('folded')), [false, true, false], 'Details is folded as the workspace has it; Basic holds a required field, so it is open');
 });
 
-test('a field of many radio buttons is drawn as a drop-down and a short one stays as radio buttons', { skip }, () => {
+test('a field of many radio buttons is drawn as a drop-down and a short one stays as radio buttons', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   const options = (n) => Array.from({ length: n }, (_, i) => ({ value: '/lookups/' + i, title: 'Option ' + i }));
@@ -266,7 +263,7 @@ test('a field of many radio buttons is drawn as a drop-down and a short one stay
   assert.strictEqual(s.w.document.querySelectorAll('.ic-body .form-radio').length, 3, 'three options stay radio buttons');
 });
 
-test('a drop-down of the form has its search box in the field, over the button, and none at the top of the list', { skip }, () => {
+test('a drop-down of the form has its search box in the field, over the button, and none at the top of the list', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'assembly' });
   const options = Array.from({ length: 9 }, (_, i) => ({ value: '/lookups/' + i, title: 'Option ' + i }));
@@ -284,7 +281,7 @@ test('a drop-down of the form has its search box in the field, over the button, 
 
 const FOUND = { id: '9', link: '/api/v3/workspaces/1/items/9', number: 'MFG-1-B', name: 'Frame', url: 'https://acme.autodeskplm360.net/plm/workspaces/1/items/itemDetails?itemId=9' };
 
-test('a bought version that exists is offered in the dialog; Use this item hands it over, closes and makes nothing', { skip }, () => {
+test('a bought version that exists is offered in the dialog; Use this item hands it over, closes and makes nothing', () => {
   const s = setup();
   const used = [];
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1', onFound: (item) => used.push(item.number) });
@@ -306,7 +303,7 @@ test('a bought version that exists is offered in the dialog; Use this item hands
   assert.strictEqual(s.sent.filter((r) => r.action === 'bought_create').length, 0);
 });
 
-test('Cancel on the offer of an existing bought version uses nothing; a failed search can be tried again', { skip }, () => {
+test('Cancel on the offer of an existing bought version uses nothing; a failed search can be tried again', () => {
   const s = setup();
   const used = [];
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1', onFound: (item) => used.push(item) });
@@ -320,7 +317,7 @@ test('Cancel on the offer of an existing bought version uses nothing; a failed s
   assert.strictEqual(s.$('.ic-overlay').hidden, true);
 });
 
-test('a bought version that is saved tells onCreated; a refused save tells nobody', { skip }, () => {
+test('a bought version that is saved tells onCreated; a refused save tells nobody', () => {
   const s = setup();
   const made = [];
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1', onCreated: (r) => made.push(r.number) });
@@ -333,7 +330,7 @@ test('a bought version that is saved tells onCreated; a refused save tells nobod
   assert.deepStrictEqual(made, ['MFG-1-B']);
 });
 
-test('a component with no item in Fusion Manage is told in the dialog, which looks for it when asked', { skip }, () => {
+test('a component with no item in Fusion Manage is told in the dialog, which looks for it when asked', () => {
   const s = setup();
   s.ns.pubItemPanel.open({ mode: 'bought', sourceNumber: 'MFG-1', number: 'MFG-1' });
   s.reply({ ok: false, message: 'Item number MFG-1 is not in Fusion Manage yet. Publish it first, then make its bought version.' });

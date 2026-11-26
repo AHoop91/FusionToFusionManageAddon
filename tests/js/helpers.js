@@ -23,7 +23,7 @@ function pageScripts() {
   return [...fs.readFileSync(PUBLISH_HTML, 'utf8').matchAll(/<script src="([^"]+)"/g)].map(function (m) { return m[1]; });
 }
 
-/** Run the script ``src`` (as written in index.html) in ``window``, a vm context or a jsdom window. */
+/** Run the script ``src`` (as written in index.html) in ``window``, a vm context or a page (browser/window.js). */
 function run(window, src) {
   const code = fs.readFileSync(path.join(WEB, 'publish', src), 'utf8');
   if (typeof window.eval === 'function') window.eval(code);

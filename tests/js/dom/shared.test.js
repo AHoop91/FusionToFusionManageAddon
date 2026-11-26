@@ -1,24 +1,21 @@
-// The scripts every panel shares (bridge.js, upload-progress.js), run in jsdom.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The scripts every panel shares (bridge.js, upload-progress.js), run in the browser.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run, englishI18n } = require('./helpers');
+const { run, englishI18n } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
+const { PageWindow } = require('../browser/window');
 
 function page(scripts) {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only' });
+  const dom = new PageWindow('<!doctype html><html><body></body></html>');
   dom.window.MfgUi = { i18n: englishI18n() };
   dom.window.adsk = { fusionSendData: () => {} };
   scripts.forEach((src) => run(dom.window, '../shared/js/' + src));
   return dom.window;
 }
 
-test('a listener that throws is logged and the next message is still delivered', { skip }, () => {
+test('a listener that throws is logged and the next message is still delivered', () => {
   const w = page(['dom.js', 'bridge.js']);
   const logged = [];
   w.console.error = (...args) => logged.push(args);
@@ -32,19 +29,19 @@ test('a listener that throws is logged and the next message is still delivered',
   assert.match(String(logged[0][0]), /"broken"/);
 });
 
-test('a message that is not JSON is logged, not thrown into Fusion', { skip }, () => {
+test('a message that is not JSON is logged, not thrown into Fusion', () => {
   const w = page(['dom.js', 'bridge.js']);
   w.console.error = () => {};
   w.MfgUi.bridge.on('x', () => assert.fail('no listener call for unreadable data'));
   assert.strictEqual(w.fusionJavaScriptHandler.handle('x', 'not json'), 'OK');
 });
 
-test('a message nobody listens for is ignored', { skip }, () => {
+test('a message nobody listens for is ignored', () => {
   const w = page(['dom.js', 'bridge.js']);
   assert.strictEqual(w.fusionJavaScriptHandler.handle('nobody', '{}'), 'OK');
 });
 
-test('the upload bar has no value while the share done is unknown', { skip }, () => {
+test('the upload bar has no value while the share done is unknown', () => {
   const w = page(['dom.js', 'upload-progress.js']);
   const card = w.document.createElement('div');
   const view = w.MfgUi.uploadProgress.mount(card);
@@ -56,8 +53,8 @@ test('the upload bar has no value while the share done is unknown', { skip }, ()
   assert.ok(bar.classList.contains('indeterminate'));
 });
 
-test('the restart in the account card asks the add-in to start again', { skip }, () => {
-  const dom = new JSDOM('<!doctype html><html><body><div id="app-header"></div></body></html>', { runScripts: 'outside-only' });
+test('the restart in the account card asks the add-in to start again', () => {
+  const dom = new PageWindow('<!doctype html><html><body><div id="app-header"></div></body></html>');
   const w = dom.window;
   w.MfgUi = {};
   w.sent = [];
@@ -70,8 +67,8 @@ test('the restart in the account card asks the add-in to start again', { skip },
   assert.deepStrictEqual(w.sent, [['restart_addin', {}]]);
 });
 
-test('the Help button in the top bar asks Python to open the documentation, signed in or not', { skip }, () => {
-  const w = new JSDOM('<!doctype html><html><body><div id="app-header"></div></body></html>', { runScripts: 'outside-only' }).window;
+test('the Help button in the top bar asks Python to open the documentation, signed in or not', () => {
+  const w = new PageWindow('<!doctype html><html><body><div id="app-header"></div></body></html>').window;
   w.MfgUi = {};
   w.sent = [];
   w.adsk = { fusionSendData: (action, data) => w.sent.push([action, JSON.parse(data)]) };
@@ -82,7 +79,7 @@ test('the Help button in the top bar asks Python to open the documentation, sign
   assert.deepStrictEqual(w.sent, [['open_help', {}]]);
 });
 
-test('a picture the view did not carry is a skeleton until it is loaded, and is dropped when the page has moved on', { skip }, () => {
+test('a picture the view did not carry is a skeleton until it is loaded, and is dropped when the page has moved on', () => {
   const w = page(['dom.js', 'section.js', '../../item/js/safe-html.js', '../../item/js/tree.js', '../../item/js/item-sections.js']);
   const field = { id: 'IMAGE', title: 'Image', kind: 'image', link: '/api/v2/workspaces/1/items/2/field-values/IMAGE/image/3', value: '' };
   const draw = (load, enlarged) => w.MfgUi.itemSections.section({ title: 'Basic', fields: [field], matrices: [] }, enlarged || (() => {}), load);
@@ -106,7 +103,7 @@ test('a picture the view did not carry is a skeleton until it is loaded, and is 
   assert.ok(!plain.querySelector('.item-image-skeleton'));
 });
 
-test('a section laid out folded starts folded and asks for its pictures only when it is first opened', { skip }, () => {
+test('a section laid out folded starts folded and asks for its pictures only when it is first opened', () => {
   const w = page(['dom.js', 'section.js', '../../item/js/safe-html.js', '../../item/js/tree.js', '../../item/js/item-sections.js']);
   const image = (id) => ({ id, title: id, kind: 'image', link: '/api/v2/workspaces/1/items/2/field-values/' + id + '/image/1', value: '' });
   const asked = [];

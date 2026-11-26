@@ -1,21 +1,18 @@
 // Tooltips that show quickly: the title is held back while the pointer is over an element, shown in the page's own box, and given back.
-// Needs jsdom (``npm install jsdom``); without it this test is skipped.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { WEB } = require('./helpers');
+const { WEB } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
+const { PageWindow } = require('../browser/window');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('a title shows in the page\'s own tooltip after a short pause, and goes back when the pointer leaves', { skip: JSDOM ? false : 'jsdom is not installed' }, async () => {
-  const dom = new JSDOM('<body><button id="b" title="Explains the button">Go</button><button id="i" title="Only a title"><svg></svg></button><p id="out">x</p></body>',
-    { runScripts: 'outside-only' });
+test('a title shows in the page\'s own tooltip after a short pause, and goes back when the pointer leaves', async () => {
+  const dom = new PageWindow('<body><button id="b" title="Explains the button">Go</button><button id="i" title="Only a title"><svg></svg></button><p id="out">x</p></body>');
   const w = dom.window;
   w.MfgUi = {};
   w.eval(fs.readFileSync(path.join(WEB, 'shared', 'js', 'tooltip.js'), 'utf8'));

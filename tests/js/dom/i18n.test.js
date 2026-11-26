@@ -1,16 +1,14 @@
-// i18n.js: the text a panel shows in the language the user chose. Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// i18n.js: the text a panel shows in the language the user chose.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run } = require('./helpers');
+const { run } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
+const { PageWindow } = require('../browser/window');
 
 function page(body) {
-  const dom = new JSDOM('<!doctype html><html><body>' + (body || '') + '</body></html>', { runScripts: 'outside-only' });
+  const dom = new PageWindow('<!doctype html><html><body>' + (body || '') + '</body></html>');
   const w = dom.window;
   w.MfgUi = {};
   w.sent = [];
@@ -19,7 +17,7 @@ function page(body) {
   return w;
 }
 
-test('t fills {name} and answers a key nothing has as itself', { skip }, () => {
+test('t fills {name} and answers a key nothing has as itself', () => {
   const w = page();
   w.MfgUi.i18n.use({ code: 'de', strings: { 'a.b': 'Hallo {name}' } });
   assert.strictEqual(w.MfgUi.i18n.t('a.b', { name: 'Ann' }), 'Hallo Ann');
@@ -28,7 +26,7 @@ test('t fills {name} and answers a key nothing has as itself', { skip }, () => {
   assert.strictEqual(w.document.documentElement.lang, 'de');
 });
 
-test('use translates the text, the markup of a text and the attributes of the page', { skip }, () => {
+test('use translates the text, the markup of a text and the attributes of the page', () => {
   const w = page('<p id="a" data-i18n="x.a">English</p><p id="b" data-i18n-html="x.b">English</p>' +
                  '<button id="c" title="English" data-i18n-attr="title:x.c;aria-label:x.c">English</button>');
   w.MfgUi.i18n.use({ code: 'de', strings: { 'x.a': 'Eins', 'x.b': 'Zwei <b>fett</b> <script>x</script>', 'x.c': 'Drei' } });
@@ -39,7 +37,7 @@ test('use translates the text, the markup of a text and the attributes of the pa
   assert.strictEqual($('c').getAttribute('aria-label'), 'Drei');
 });
 
-test('init asks for the language and starts the page once, when it arrives', { skip }, () => {
+test('init asks for the language and starts the page once, when it arrives', () => {
   const w = page('<p data-i18n="x.a">English</p>');
   let started = 0;
   w.MfgUi.i18n.init(() => { started += 1; });
@@ -51,7 +49,7 @@ test('init asks for the language and starts the page once, when it arrives', { s
   assert.strictEqual(w.MfgUi.i18n.gate(() => {}), true);
 });
 
-test('gate runs the page start again once the language has arrived', { skip }, () => {
+test('gate runs the page start again once the language has arrived', () => {
   const w = page();
   let starts = 0;
   const start = () => { starts += 1; if (!w.MfgUi.i18n.gate(start)) return; };
@@ -61,10 +59,10 @@ test('gate runs the page start again once the language has arrived', { skip }, (
   assert.strictEqual(starts, 2);
 });
 
-test('a page that loaded again in a new language opens the tab it was on, once', { skip }, () => {
+test('a page that loaded again in a new language opens the tab it was on, once', () => {
   const html = '<nav class="tabs" data-group="settings"><button class="tab active" data-tab="a"></button><button class="tab" data-tab="b"></button></nav>' +
     '<div id="sub-a" class="tab-panel active" data-group="settings"></div><div id="sub-b" class="tab-panel" data-group="settings"></div>';
-  const dom = new JSDOM('<!doctype html><html><body>' + html + '</body></html>', { runScripts: 'outside-only', url: 'http://localhost/' });
+  const dom = new PageWindow('<!doctype html><html><body>' + html + '</body></html>');
   const w = dom.window;
   w.MfgUi = {};
   w.adsk = { fusionSendData: () => {} };

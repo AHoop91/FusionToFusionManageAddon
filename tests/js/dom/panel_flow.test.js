@@ -1,14 +1,13 @@
-// The whole Publish panel (publish.js and its modules) driven in jsdom against a fake Python: the Bill of Materials, from the MBOM
-// lookup to publishing. Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The whole Publish panel (publish.js and its modules) driven in the browser against a fake Python: the Bill of Materials, from the MBOM
+// lookup to publishing.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const { englishI18n, pageScripts, run, PUBLISH_HTML } = require('./helpers');
+const { englishI18n, pageScripts, run, PUBLISH_HTML } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
+const { PageWindow } = require('../browser/window');
 
 const row = (id, number, extra) => Object.assign({
   level: 0, id: id, item_number: number, part_number: number, name: id + ' name', description: '', sequence: 1, quantity: '1',
@@ -23,7 +22,7 @@ const echoed = (sent, slot) => (sent.filter(([action, p]) => action === 'load_pu
 /** The panel loaded into a window, with the shell, bridge, account, auth, jobs and details replaced by stand-ins that record what they are told. */
 function openPanel() {
   const html = fs.readFileSync(PUBLISH_HTML, 'utf8');
-  const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom = new PageWindow(html);
   const w = dom.window;
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.adsk = {};
@@ -58,7 +57,7 @@ function openPanel() {
   return panel;
 }
 
-test('the structure, from the MBOM lookup to publishing', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('the structure, from the MBOM lookup to publishing', () => {
   const panel = openPanel();
   const { w, sent, handlers, started } = panel;
   const $ = (id) => w.document.getElementById(id);
@@ -139,7 +138,7 @@ test('the structure, from the MBOM lookup to publishing', { skip: JSDOM ? false 
   assert.strictEqual(started.length, 1);
 });
 
-test('choosing another MBOM reads the Bill of Materials again, compared with that item', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('choosing another MBOM reads the Bill of Materials again, compared with that item', () => {
   const panel = openPanel();
   panel.w.document.getElementById('view-app').hidden = false;
   panel.authChanged(true);
@@ -165,7 +164,7 @@ test('choosing another MBOM reads the Bill of Materials again, compared with tha
   assert.deepStrictEqual(plain(targets('properties')), ['M-1', 'M-2'], 'and the design\'s own properties are compared with it');
 });
 
-test('a structure that could not be read is read again by the retry button', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('a structure that could not be read is read again by the retry button', () => {
   const panel = openPanel();
   const doc = panel.w.document;
   doc.getElementById('view-app').hidden = false;
@@ -181,7 +180,7 @@ test('a structure that could not be read is read again by the retry button', { s
   assert.strictEqual(asks(), before + 1, 'retry reads the structure again');
 });
 
-test('when a publish ends the whole panel is read again, the MBOM included, and never from a copy kept before', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('when a publish ends the whole panel is read again, the MBOM included, and never from a copy kept before', () => {
   const panel = openPanel();
   const { w, sent, handlers } = panel;
   const $ = (id) => w.document.getElementById(id);
@@ -230,7 +229,7 @@ function openWithMbom() {
   return api;
 }
 
-test('the structure and the MBOM are asked for together, and the viewer keeps its skeleton until both are in', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('the structure and the MBOM are asked for together, and the viewer keeps its skeleton until both are in', () => {
   [['structure', 'mbom_tree'], ['mbom_tree', 'structure']].forEach(([first, second]) => {
     const p = openWithMbom();
     assert.strictEqual(p.sentOf('structure').length, 1, 'the structure is asked for as soon as the MBOM is known');
@@ -248,7 +247,7 @@ test('the structure and the MBOM are asked for together, and the viewer keeps it
   });
 });
 
-test('a failed read of the MBOM is said in the viewer and is read again alone', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('a failed read of the MBOM is said in the viewer and is read again alone', () => {
   const p = openWithMbom();
   p.reply('mbom_tree', { ok: false, message: 'Fusion Manage said no' });
   p.reply('structure', p.whole());
@@ -261,7 +260,7 @@ test('a failed read of the MBOM is said in the viewer and is read again alone', 
   assert.deepStrictEqual(plain(p.lines(1)), ['M-1', 'PN-P']);
 });
 
-test('another MBOM asks only for what depends on it, and a refresh asks for everything', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('another MBOM asks only for what depends on it, and a refresh asks for everything', () => {
   const p = openWithMbom();
   p.reply('structure', p.whole());
   p.reply('mbom_tree', p.mbomTree());
@@ -275,7 +274,7 @@ test('another MBOM asks only for what depends on it, and a refresh asks for ever
   assert.strictEqual(p.sentOf('structure').pop()[1].force, true, 'a refresh reads the design again');
 });
 
-test('answers for the Bill of Materials or the MBOM of an earlier reload are ignored', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('answers for the Bill of Materials or the MBOM of an earlier reload are ignored', () => {
   [['structure', 'mbom_tree'], ['mbom_tree', 'structure']].forEach(([first, second]) => {
     const p = openWithMbom();
     p.panel.w.document.getElementById('pub-refresh').click();   // read again: the summary is on its way
@@ -293,7 +292,7 @@ test('answers for the Bill of Materials or the MBOM of an earlier reload are ign
   });
 });
 
-test('an answer read for an MBOM that is no longer the one chosen is ignored', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('an answer read for an MBOM that is no longer the one chosen is ignored', () => {
   const p = openWithMbom();
   p.reply('mbom_tree', Object.assign(p.mbomTree('OLD'), { target_id: '2' }));
   p.reply('structure', Object.assign(p.whole(), { target_id: '2' }));
@@ -304,7 +303,7 @@ test('an answer read for an MBOM that is no longer the one chosen is ignored', {
   assert.deepStrictEqual(plain(p.lines(1)), ['M-1', 'PN-P'], 'the answers for the chosen one are');
 });
 
-test('a forced refresh keeps its force when the MBOM has to be chosen again', { skip: JSDOM ? false : 'jsdom is not installed' }, () => {
+test('a forced refresh keeps its force when the MBOM has to be chosen again', () => {
   const p = openWithMbom();
   p.panel.w.document.getElementById('pub-refresh').click();   // read it all again, past the copies kept
   p.reply('summary', { data: SUMMARY });

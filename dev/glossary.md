@@ -192,6 +192,15 @@ The pieces below are built but not yet shared, so a second page cannot call them
 | Show the details of a line of the structure viewer (a magnifier on every line of both panes; the Overview tab with the comparison, or the no-item card with the properties that would be sent; the item's tabs, Item details (`ns.itemSections.section`) then Attachments, more to add as one entry of `ITEM_TABS`) | `publish/js/details.js` (`ns.pubDetails.open(line)`, `handleItemTabs`), `detailsLine` and `showDetails` in `publish/js/mbom-viewer.js` | [publish-item-flow.md](publish-item-flow.md) |
 | Settings: workspaces, mappings, exports, language, hub picker | `settings/js/` | |
 
+## Testing the web scripts
+
+Paths are under `tests/js/`.
+
+| I need to | Use | Where |
+| --- | --- | --- |
+| Test a script that needs a page (the DOM, events, timers) | A `*.test.js` file in `dom/`; `new PageWindow(html).window` is a real window in headless Edge or Chrome, and `run(window, src)` loads a script into it. Run `node tests/js/browser/run.mjs [files]`; the Python suite runs it and skips when no browser is found | `browser/window.js`, `browser/run.mjs`, `browser/in-page.js`, `helpers.js` |
+| Test a script that needs no page (the Bill of Materials data) | A `*.test.js` file here; `dataWindow()` loads its scripts into a vm context, run by `node --test` | `helpers.js` |
+
 ## Keeping this glossary true
 
 - Add a row when you build something others could reuse, and change the row when you rename or move it. Do it in the same commit.

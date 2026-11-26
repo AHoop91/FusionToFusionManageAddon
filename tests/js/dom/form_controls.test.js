@@ -1,18 +1,15 @@
-// The shared form controls (shared/js/form-controls.js): one control for each kind of field of a WorkspaceFormService spec, run in jsdom.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The shared form controls (shared/js/form-controls.js): one control for each kind of field of a WorkspaceFormService spec, run in the browser.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run, englishI18n } = require('./helpers');
+const { run, englishI18n } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
+const { PageWindow } = require('../browser/window');
 
 /** A window with the shared scripts the module needs, and a form made with ``ask`` standing in for Python. */
 function setup(ask) {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only' });
+  const dom = new PageWindow('<!doctype html><html><body></body></html>');
   const w = dom.window;
   w.MfgUi = { i18n: englishI18n() };
   ['dom.js', 'picker.js', 'validators.js', 'form-controls.js'].forEach((src) => run(w, '../shared/js/' + src));
@@ -33,7 +30,7 @@ function place(s, field) {
   return record;
 }
 
-test('each plain kind gets its own control', { skip }, () => {
+test('each plain kind gets its own control', () => {
   const s = setup();
   const kinds = { text: 'INPUT', textarea: 'TEXTAREA', integer: 'INPUT', number: 'INPUT', date: 'INPUT', checkbox: 'INPUT' };
   Object.keys(kinds).forEach((kind) => {
@@ -45,7 +42,7 @@ test('each plain kind gets its own control', { skip }, () => {
   assert.strictEqual(s.fc.control(spec({ id: 'd', kind: 'checkbox' })).type, 'checkbox');
 });
 
-test('radio, select, link, links and image controls', { skip }, () => {
+test('radio, select, link, links and image controls', () => {
   const s = setup();
   const options = [{ value: '/o/1', title: 'One' }, { value: '/o/2', title: 'Two' }];
   const radio = s.fc.control(spec({ id: 'R', kind: 'radio', options }));
@@ -58,7 +55,7 @@ test('radio, select, link, links and image controls', { skip }, () => {
   assert.ok(s.fc.control(spec({ id: 'I', kind: 'image' })).querySelector('input[type=file]'));
 });
 
-test('values are read out as the form sends them', { skip }, () => {
+test('values are read out as the form sends them', () => {
   const s = setup();
   const options = [{ value: '/o/1', title: 'One' }, { value: '/o/2', title: 'Two' }];
   const text = place(s, spec({ id: 'T' }));
@@ -87,7 +84,7 @@ test('values are read out as the form sends them', { skip }, () => {
   assert.strictEqual(s.fc.valueOf(date), '2026-03-04');
 });
 
-test('a field with a limit shows a count and stops at it', { skip }, () => {
+test('a field with a limit shows a count and stops at it', () => {
   const s = setup();
   const record = place(s, spec({ id: 'T', max_length: 5 }));
   assert.strictEqual(record.input.control.maxLength, 5);
@@ -98,7 +95,7 @@ test('a field with a limit shows a count and stops at it', { skip }, () => {
   assert.strictEqual(s.fc.valueOf(record), 'abcd');
 });
 
-test('a required field is starred in its label', { skip }, () => {
+test('a required field is starred in its label', () => {
   const s = setup();
   const needed = s.fc.fieldLine(spec({ title: 'Name', required: true }));
   assert.strictEqual(needed.label.querySelector('.form-star').textContent, '* ');
@@ -107,7 +104,7 @@ test('a required field is starred in its label', { skip }, () => {
   assert.ok(s.fc.fieldLine(spec({ kind: 'textarea' })).row.classList.contains('top'));
 });
 
-test('a message shows under a field that is not right, and goes when it is put right', { skip }, () => {
+test('a message shows under a field that is not right, and goes when it is put right', () => {
   const s = setup();
   const record = place(s, spec({ id: 'T', title: 'Name', required: true }));
   assert.match(s.fc.showState(record), /Name/);
@@ -119,7 +116,7 @@ test('a message shows under a field that is not right, and goes when it is put r
   assert.ok(!record.wrap.classList.contains('invalid'));
 });
 
-test('collect gathers the non-blank values and the first field that is wrong', { skip }, () => {
+test('collect gathers the non-blank values and the first field that is wrong', () => {
   const s = setup();
   const a = place(s, spec({ id: 'A', title: 'A', required: true }));
   const b = place(s, spec({ id: 'B', title: 'B' }));
@@ -135,7 +132,7 @@ test('collect gathers the non-blank values and the first field that is wrong', {
   assert.strictEqual(s.fc.readiness().open, 0);
 });
 
-test('readiness counts what is required and empty, and what is entered wrongly', { skip }, () => {
+test('readiness counts what is required and empty, and what is entered wrongly', () => {
   const s = setup();
   place(s, spec({ id: 'A', title: 'A', required: true }));
   const n = place(s, spec({ id: 'N', title: 'N', kind: 'integer', validators: [{ name: 'integer', variables: {} }] }));
@@ -147,7 +144,7 @@ test('readiness counts what is required and empty, and what is entered wrongly',
   assert.strictEqual(now.problems.length, 1);
 });
 
-test('refusals from Fusion Manage show under the fields they name', { skip }, () => {
+test('refusals from Fusion Manage show under the fields they name', () => {
   const s = setup();
   place(s, spec({ id: 'A', title: 'A' }));
   const b = place(s, spec({ id: 'B', title: 'B' }));
@@ -157,7 +154,7 @@ test('refusals from Fusion Manage show under the fields they name', { skip }, ()
   assert.strictEqual(s.fc.showRefusals({}), null);
 });
 
-test('a link picker asks for its options; auto and info pieces', { skip }, () => {
+test('a link picker asks for its options; auto and info pieces', () => {
   const asked = [];
   const s = setup((action, payload, done) => asked.push({ action, payload, done }));
   const input = s.fc.control(spec({ id: 'L', kind: 'link', lookup: 'LK' }));
@@ -172,7 +169,7 @@ test('a link picker asks for its options; auto and info pieces', { skip }, () =>
   assert.strictEqual(s.fc.infoIcon('About').title, 'About');
 });
 
-test('a held picture is asked for and shown but not sent again; reset forgets the fields', { skip }, () => {
+test('a held picture is asked for and shown but not sent again; reset forgets the fields', () => {
   const asked = [];
   const s = setup((action, payload, done) => asked.push({ action, payload, done }));
   const image = place(s, spec({ id: 'I', kind: 'image' }));

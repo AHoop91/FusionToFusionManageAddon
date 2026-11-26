@@ -1,13 +1,11 @@
-// The Add Items picker (add-items.js) driven in jsdom against a fake Python: how many rows it reads, when it reads on, and the count it shows.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The Add Items picker (add-items.js) driven in the browser against a fake Python: how many rows it reads, when it reads on, and the count it shows.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run, englishI18n } = require('./helpers');
+const { run, englishI18n } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
+const { PageWindow } = require('../browser/window');
 
 const PAGE = 25;            // rows a page holds, as Python says (``limit``)
 const NEAR_END = 100;       // pixels from the end of the list a scroll has to reach before the next lot is wanted
@@ -20,7 +18,7 @@ const ROW_PX = 40;          // what a row adds to the height of the list, as in 
  * Bill of Materials already holds.
  */
 function openPicker({ matches, members = [], membersLate = false }) {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom = new PageWindow('<!doctype html><html><body></body></html>');
   const w = dom.window;
   w.MfgUi = {};
   w.MfgUi.i18n = englishI18n();
@@ -59,9 +57,10 @@ function openPicker({ matches, members = [], membersLate = false }) {
   picker.status = () => { const status = w.document.querySelector('.pub-add-status'); return status.hidden ? '' : status.textContent; };
   picker.scrollToEnd = async function scrollToEnd() {
     const list = w.document.querySelector('.pub-add-list');
-    list.scrollTop = list.scrollHeight - 500 - NEAR_END / 2;
+    // the page has no real height to scroll in (scrollHeight and clientHeight above are fixed), so the browser would hold scrollTop at 0
+    Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: list.scrollHeight - 500 - NEAR_END / 2 });
     list.dispatchEvent(new w.Event('scroll'));
-    await new Promise((resolve) => setTimeout(resolve, 60));   // the scroll is handled on the next frame
+    await new Promise((resolve) => w.requestAnimationFrame(resolve));   // the scroll is handled on the next frame: this callback comes after the page's own
     picker.serve();
   };
   w.MfgUi.pubAddItems.open({ itemId: '9', staged: [], onAdd() {} });
@@ -69,9 +68,8 @@ function openPicker({ matches, members = [], membersLate = false }) {
 }
 
 const many = (count, from = 1) => Array.from({ length: count }, (_, i) => ({ id: String(from + i) }));
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
 
-test('the count is that of the items shown once every row is read: the item of the design itself is not in it', { skip }, () => {
+test('the count is that of the items shown once every row is read: the item of the design itself is not in it', () => {
   // 26 rows: the design's own item is among the first 25, so that page shows 24 and the next page is read to make up the lot.
   const matches = many(3).concat([{ id: 'P', parent: true }], many(21, 4), [{ id: '25' }]);
   const picker = openPicker({ matches });
@@ -81,7 +79,7 @@ test('the count is that of the items shown once every row is read: the item of t
   assert.strictEqual(picker.count(), '25 of 25');   // the search counted 26
 });
 
-test('a lot is the rows of a page, and the next one is read only when the list is scrolled to its end', { skip }, async () => {
+test('a lot is the rows of a page, and the next one is read only when the list is scrolled to its end', async () => {
   const picker = openPicker({ matches: many(100) });
   picker.serve();
   assert.deepStrictEqual(picker.readOffsets, [0]);
@@ -92,7 +90,7 @@ test('a lot is the rows of a page, and the next one is read only when the list i
   assert.strictEqual(picker.visible(), 50);
 });
 
-test('when part of a page is hidden the next pages are read until a lot is visible', { skip }, () => {
+test('when part of a page is hidden the next pages are read until a lot is visible', () => {
   const picker = openPicker({ matches: many(100), members: many(15).map((one) => one.id) });   // the first 15 are already in the Bill of Materials
   picker.serve();
   assert.deepStrictEqual(picker.readOffsets, [0, 25]);   // 10 visible after the first page: the next is read at once
@@ -101,7 +99,7 @@ test('when part of a page is hidden the next pages are read until a lot is visib
   assert.strictEqual(picker.count(), '50 of 100');
 });
 
-test('members that arrive after the first page hide rows, and the lot is made up again', { skip }, () => {
+test('members that arrive after the first page hide rows, and the lot is made up again', () => {
   const picker = openPicker({ matches: many(100), members: many(15).map((one) => one.id), membersLate: true });
   picker.serve();
   assert.deepStrictEqual(picker.readOffsets, [0]);
@@ -111,7 +109,7 @@ test('members that arrive after the first page hide rows, and the lot is made up
   assert.strictEqual(picker.visible(), 35);
 });
 
-test('it reads on through pages that are all hidden, stops when the matches run out, and says so', { skip }, () => {
+test('it reads on through pages that are all hidden, stops when the matches run out, and says so', () => {
   const matches = many(60);
   const picker = openPicker({ matches, members: matches.map((one) => one.id) });
   picker.serve();
@@ -121,14 +119,14 @@ test('it reads on through pages that are all hidden, stops when the matches run 
   assert.strictEqual(picker.count(), '60 of 60');
 });
 
-test('a search with no match asks once and says so', { skip }, () => {
+test('a search with no match asks once and says so', () => {
   const picker = openPicker({ matches: [] });
   picker.serve();
   assert.deepStrictEqual(picker.readOffsets, [0]);
   assert.strictEqual(picker.status(), 'No items match the search.');
 });
 
-test('showing the hidden items reads nothing more, and hiding them again does not either while a lot is visible', { skip }, () => {
+test('showing the hidden items reads nothing more, and hiding them again does not either while a lot is visible', () => {
   const picker = openPicker({ matches: many(100), members: many(15).map((one) => one.id) });
   picker.serve();
   const before = picker.readOffsets.slice();

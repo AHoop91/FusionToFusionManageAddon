@@ -1,14 +1,11 @@
-// The language card of the settings panel (settings/js/language.js), driven in jsdom against a fake Python.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The language card of the settings panel (settings/js/language.js), driven in the browser against a fake Python.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { englishI18n, run } = require('./helpers');
+const { englishI18n, run } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
+const { PageWindow } = require('../browser/window');
 
 const STATE = {
   code: 'en',
@@ -19,11 +16,10 @@ const STATE = {
 };
 
 function openCard(role) {
-  const dom = new JSDOM('<!doctype html><html><body><div id="lang-slot-tab"></div><div id="lang-slot-login"></div>' +
-    '<div id="lang-banner" hidden></div><button id="lang-restart-btn"></button><button class="tab" data-tab="language"></button><button id="lang-save-btn"></button><button id="lang-save-publish-btn" hidden></button></body></html>', { runScripts: 'outside-only' });
+  const dom = new PageWindow('<!doctype html><html><body><div id="lang-slot-tab"></div><div id="lang-slot-login"></div>' +
+    '<div id="lang-banner" hidden></div><button id="lang-restart-btn"></button><button class="tab" data-tab="language"></button><button id="lang-save-btn"></button><button id="lang-save-publish-btn" hidden></button></body></html>');
   const w = dom.window;
   w.MfgUi = {};
-  w.Element.prototype.scrollIntoView = () => {};   // jsdom has no layout to scroll
   w.sent = [];
   w.adsk = { fusionSendData: (action, data) => w.sent.push([action, JSON.parse(data)]) };
   ['../shared/js/dom.js', '../shared/js/bridge.js'].forEach((src) => run(w, src));
@@ -44,7 +40,7 @@ const reply = (w, action, result) => w.fusionJavaScriptHandler.handle(action, JS
 const fail = (w, action, error) => w.fusionJavaScriptHandler.handle(action, JSON.stringify({ ok: false, result: null, error: error }));
 const $ = (w, id) => w.document.getElementById(id);
 
-test('Create sends what was typed, and the answer shows where the file is and offers the next steps', { skip }, () => {
+test('Create sends what was typed, and the answer shows where the file is and offers the next steps', () => {
   const w = openCard();
   $(w, 'lang-code').value = 'de';
   $(w, 'lang-code').dispatchEvent(new w.Event('input'));
@@ -66,7 +62,7 @@ test('Create sends what was typed, and the answer shows where the file is and of
   assert.ok([...w.document.querySelectorAll('.pk-item')].some((item) => item.textContent.includes('Deutsch')));
 });
 
-test('Create waits until both the code and the name are filled in', { skip }, () => {
+test('Create waits until both the code and the name are filled in', () => {
   const w = openCard();
   const create = w.document.querySelector('.lang-add-row .btn');
   assert.strictEqual(create.disabled, true);
@@ -82,14 +78,14 @@ test('Create waits until both the code and the name are filled in', { skip }, ()
   assert.strictEqual(create.disabled, false);
 });
 
-test('a short list has no search box and no heading', { skip }, () => {
+test('a short list has no search box and no heading', () => {
   const w = openCard();
   w.document.querySelector('.pk-btn').click();
   assert.strictEqual(w.document.querySelector('.pk-search').hidden, true);
   assert.strictEqual(w.document.querySelector('.pk-group'), null);
 });
 
-test('a language the add-in refuses is explained under the form and what was typed stays', { skip }, () => {
+test('a language the add-in refuses is explained under the form and what was typed stays', () => {
   const w = openCard();
   $(w, 'lang-code').value = 'x';
   $(w, 'lang-code').dispatchEvent(new w.Event('input'));
@@ -101,7 +97,7 @@ test('a language the add-in refuses is explained under the form and what was typ
   assert.strictEqual($(w, 'lang-code').value, 'X', 'typed capitals');
 });
 
-test('choosing a language in the list uses it at once, with no Save; the list has no clear entry', { skip }, () => {
+test('choosing a language in the list uses it at once, with no Save; the list has no clear entry', () => {
   const w = openCard();
   w.state = Object.assign({}, STATE, { languages: STATE.languages.concat([{ code: 'de', name: 'Deutsch', source: 'user' }]) });
   w.MfgUi.language.render();
@@ -111,24 +107,24 @@ test('choosing a language in the list uses it at once, with no Save; the list ha
   assert.deepStrictEqual(w.sent.pop(), ['set_language', { code: 'de' }]);
 });
 
-test('Save with nothing changed only says it is saved', { skip }, () => {
+test('Save with nothing changed only says it is saved', () => {
   const w = openCard();
   $(w, 'lang-save-btn').click();
   assert.strictEqual(w.sent.pop()[0], 'notify');
 });
 
-test('the Language tab has Save, and Save & Publish only for a Hub Admin', { skip }, () => {
+test('the Language tab has Save, and Save & Publish only for a Hub Admin', () => {
   assert.strictEqual($(openCard('admin'), 'lang-save-publish-btn').hidden, false);
   ['member', 'unknown', 'pending', ''].forEach((role) => assert.strictEqual($(openCard(role), 'lang-save-publish-btn').hidden, true, role));
 });
 
-test('the sign-in screen card only chooses: the language is used at once, so it has no Save', { skip }, () => {
+test('the sign-in screen card only chooses: the language is used at once, so it has no Save', () => {
   const w = openCard('member');
   assert.ok(w.document.querySelector('#lang-slot-login .lang-card'));
   assert.strictEqual(w.document.querySelector('#lang-slot-login .lang-login-save'), null);
 });
 
-test('anyone is offered to add a language, and the note says how it works', { skip }, () => {
+test('anyone is offered to add a language, and the note says how it works', () => {
   ['admin', 'member', 'unknown', 'pending'].forEach((role) => {
     const w = openCard(role);
     assert.match(w.document.querySelector('.lang-how').textContent, /not supported out of the box/, role);
@@ -138,14 +134,14 @@ test('anyone is offered to add a language, and the note says how it works', { sk
   });
 });
 
-test('Save & Publish opens the hub, and the language chosen was already in use', { skip }, () => {
+test('Save & Publish opens the hub, and the language chosen was already in use', () => {
   const w = openCard('admin');
   $(w, 'lang-save-publish-btn').click();
   assert.deepStrictEqual(w.sent.pop(), ['publish', {}]);
   assert.ok(!w.sent.some(([action]) => action === 'set_language'));
 });
 
-test('the languages the hub shares are in the list, under their own heading', { skip }, () => {
+test('the languages the hub shares are in the list, under their own heading', () => {
   const w = openCard('admin');
   w.state = Object.assign({}, STATE, { languages: STATE.languages.concat([{ code: 'es', name: 'Español', source: 'hub' }]) });
   w.MfgUi.language.render();
@@ -153,7 +149,7 @@ test('the languages the hub shares are in the list, under their own heading', { 
   assert.ok([...w.document.querySelectorAll('.pk-group')].some((g) => /Shared by your hub/.test(g.textContent)));
 });
 
-test('each custom language is a tile that says whether it is only local or shared in the hub; there is nothing to tick', { skip }, () => {
+test('each custom language is a tile that says whether it is only local or shared in the hub; there is nothing to tick', () => {
   const w = openCard('admin');
   w.state = Object.assign({}, STATE, { languages: STATE.languages.concat([
     { code: 'de', name: 'Deutsch', source: 'user', sharing: { included: true, reason: '', hub: 'same' } },
@@ -176,12 +172,12 @@ test('each custom language is a tile that says whether it is only local or share
   assert.deepStrictEqual(chips(tiles[3]), ['Local'], 'not in the hub yet');
 });
 
-test('a Hub Admin with no languages of their own is told so', { skip }, () => {
+test('a Hub Admin with no languages of their own is told so', () => {
   const w = openCard('admin');
   assert.match(w.document.querySelector('.lang-share-empty').textContent, /no custom languages yet/);
 });
 
-test('a member sees and manages languages of their own, but is only told that a Hub Admin publishes', { skip }, () => {
+test('a member sees and manages languages of their own, but is only told that a Hub Admin publishes', () => {
   const member = openCard('member');
   member.state = Object.assign({}, STATE, { languages: STATE.languages.concat([
     { code: 'de', name: 'Deutsch', source: 'user', sharing: { included: true, reason: '', hub: 'none' } },
@@ -198,7 +194,7 @@ const OWN = Object.assign({}, STATE, { languages: STATE.languages.concat([
   { code: 'de', name: 'Deutsch', source: 'user', sharing: { included: true, reason: '', hub: 'none' } },
   { code: 'fr', name: 'Français', source: 'user', sharing: { included: true, reason: '', hub: 'none' } }]) });
 
-test("each custom language has an Edit and a Delete icon, named for it", { skip }, () => {
+test("each custom language has an Edit and a Delete icon, named for it", () => {
   const w = openCard('admin');
   w.state = OWN;
   w.MfgUi.language.render();
@@ -212,7 +208,7 @@ test("each custom language has an Edit and a Delete icon, named for it", { skip 
   assert.strictEqual(tiles[1].querySelector('.lang-delete').title, 'Delete Français');
 });
 
-test('Edit opens the file without touching the page, and coming back from the editor reads the files again', { skip }, () => {
+test('Edit opens the file without touching the page, and coming back from the editor reads the files again', () => {
   const w = openCard('member');
   w.state = Object.assign({}, OWN, { code: 'fr' });
   w.MfgUi.language.render();
@@ -238,7 +234,7 @@ test('Edit opens the file without touching the page, and coming back from the ed
   assert.match(w.document.querySelector('#lang-slot-tab .lang-note.error').textContent, /could not be opened/);
 });
 
-test('Delete asks first, and only the confirmation deletes', { skip }, () => {
+test('Delete asks first, and only the confirmation deletes', () => {
   const w = openCard('admin');
   const asked = [];
   w.MfgUi.progress = { confirm: (title, text, action, go) => asked.push({ title, text, action, go }), notify() {} };
@@ -254,7 +250,7 @@ test('Delete asks first, and only the confirmation deletes', { skip }, () => {
   assert.deepStrictEqual(w.sent.pop(), ['delete_language', { code: 'de' }]);
 });
 
-test('after a delete the list is without the language, and deleting the one in use loads the panels again in English', { skip }, () => {
+test('after a delete the list is without the language, and deleting the one in use loads the panels again in English', () => {
   const w = openCard('admin');
   w.state = Object.assign({}, OWN, { code: 'fr' });
   w.MfgUi.language.render();
@@ -267,7 +263,7 @@ test('after a delete the list is without the language, and deleting the one in u
   assert.match(w.document.querySelector('#lang-slot-tab .lang-note.error').textContent, /not one of your own/);
 });
 
-test('each word of a language name starts with a capital as it is typed, and the rest is left as typed', { skip }, () => {
+test('each word of a language name starts with a capital as it is typed, and the rest is left as typed', () => {
   const w = openCard();
   $(w, 'lang-name').value = 'german tEst';
   $(w, 'lang-name').dispatchEvent(new w.Event('input'));
@@ -278,14 +274,14 @@ test('each word of a language name starts with a capital as it is typed, and the
   assert.deepStrictEqual(w.sent.pop(), ['new_language', { code: 'FR', name: 'German TEst' }]);
 });
 
-test('opening the Language tab reads the languages folders again', { skip }, () => {
+test('opening the Language tab reads the languages folders again', () => {
   const w = openCard('member');
   w.sent.length = 0;
   w.document.querySelector('.tab[data-tab="language"]').click();
   assert.deepStrictEqual(w.sent, [['get_language', {}]]);
 });
 
-test('a language picked is let go when the folders no longer have its file', { skip }, () => {
+test('a language picked is let go when the folders no longer have its file', () => {
   const w = openCard('member');
   const french = { code: 'FR', name: 'French', source: 'user', sharing: { included: true, hub: 'none' } };
   reply(w, 'get_language', Object.assign({}, STATE, { languages: STATE.languages.concat(french) }));
@@ -298,21 +294,21 @@ test('a language picked is let go when the folders no longer have its file', { s
   assert.strictEqual(w.document.querySelector('#lang-slot-tab .lang-value').value, 'en', 'the list shows the language in use again');
 });
 
-test('the Custom languages section always has a button beside its heading that opens the languages folder', { skip }, () => {
+test('the Custom languages section always has a button beside its heading that opens the languages folder', () => {
   const w = openCard('member');
   w.sent.length = 0;
   w.document.querySelector('.lang-share-head .btn').click();
   assert.deepStrictEqual(w.sent, [['open_language_folder', {}]]);
 });
 
-test('when the save to the hub ends, the languages are read again to show what the hub has', { skip }, () => {
+test('when the save to the hub ends, the languages are read again to show what the hub has', () => {
   const w = openCard('admin');
   w.sent.length = 0;
   w.MfgUi.language.settled();
   assert.deepStrictEqual(w.sent, [['get_language', {}]]);
 });
 
-test('the Restart add-in button of the notice asks the add-in to start again', { skip }, () => {
+test('the Restart add-in button of the notice asks the add-in to start again', () => {
   const w = openCard('member');
   w.sent.length = 0;
   $(w, 'lang-restart-btn').click();

@@ -1,14 +1,11 @@
-// The Make or buy section of the Items card in Settings (settings/js/make-or-buy.js, workspaces.js and validation.js), run in jsdom.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The Make or buy section of the Items card in Settings (settings/js/make-or-buy.js, workspaces.js and validation.js), run in the browser.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { run, englishI18n } = require('./helpers');
+const { run, englishI18n } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
-const skip = JSDOM ? false : 'jsdom is not installed (npm install jsdom)';
+const { PageWindow } = require('../browser/window');
 
 const MAKE = '/api/v3/lookups/MB/options/1';
 const BUY = '/api/v3/lookups/MB/options/2';
@@ -26,10 +23,9 @@ const PICKLISTS = { MB: [{ value: MAKE, title: 'Make' }, { value: BUY, title: 'B
 
 /** The settings page's own parts that workspaces.js reads, with the workspace already validated so the Items card is open. */
 function setup(makeBuy) {
-  const dom = new JSDOM('<!doctype html><html><body><div id="sub-workspaces" class="tab-panel active"><div class="ws-busy" hidden></div><div id="workspace-cards"></div></div>' +
-    '<div id="sub-portfolio" class="tab-panel"><div class="ws-busy" hidden></div><div id="portfolio-cards"></div></div><div id="bar" hidden></div></body></html>', { runScripts: 'outside-only' });
+  const dom = new PageWindow('<!doctype html><html><body><div id="sub-workspaces" class="tab-panel active"><div class="ws-busy" hidden></div><div id="workspace-cards"></div></div>' +
+    '<div id="sub-portfolio" class="tab-panel"><div class="ws-busy" hidden></div><div id="portfolio-cards"></div></div><div id="bar" hidden></div></body></html>');
   const w = dom.window;
-  w.HTMLElement.prototype.scrollIntoView = () => {};   // jsdom has none; the picker scrolls its chosen item into view
   const handlers = {};
   const sent = [];
   w.MfgUi = { i18n: englishI18n() };
@@ -49,7 +45,7 @@ function setup(makeBuy) {
 
 const SAVED = { field: 'MB', make_value: MAKE, buy_value: BUY, source_field: 'SOURCE', suffix: '-B', skip_fields: ['NUMBER'] };
 
-test('the Items card has a Make or buy section with a tip on each of its controls', { skip }, () => {
+test('the Items card has a Make or buy section with a tip on each of its controls', () => {
   const s = setup(SAVED);
   const section = s.w.document.querySelector('.ws-mb');
   assert.ok(section);
@@ -62,20 +58,20 @@ test('the Items card has a Make or buy section with a tip on each of its control
   assert.strictEqual(section.querySelector('.ws-mb-suffix').maxLength, 20);
 });
 
-test('read() sends the five settings, and none when the card has no section', { skip }, () => {
+test('read() sends the five settings, and none when the card has no section', () => {
   const s = setup(SAVED);
   assert.strictEqual(JSON.stringify(s.w.MfgUi.workspaces.read().items.make_buy), JSON.stringify(SAVED));
   s.w.document.querySelector('.ws-mb').remove();
   assert.ok(!('make_buy' in s.w.MfgUi.workspaces.read().items));
 });
 
-test('an Items card saved before Make or buy existed reads back empty settings', { skip }, () => {
+test('an Items card saved before Make or buy existed reads back empty settings', () => {
   const s = setup(undefined);
   const made = s.w.MfgUi.workspaces.read().items.make_buy;
   assert.strictEqual(JSON.stringify(made), JSON.stringify({ field: '', make_value: '', buy_value: '', source_field: '', suffix: '', skip_fields: [] }));
 });
 
-test('the pickers list the picklist fields, the linking fields and the options of the chosen field', { skip }, () => {
+test('the pickers list the picklist fields, the linking fields and the options of the chosen field', () => {
   const s = setup(SAVED);
   s.validate();
   const doc = s.w.document;
@@ -94,7 +90,7 @@ test('the pickers list the picklist fields, the linking fields and the options o
   assert.strictEqual(doc.querySelector('.ws-mb-buy').parentNode.querySelector('.pk-text').textContent, 'Buy');
 });
 
-test('choosing another field clears the two values', { skip }, () => {
+test('choosing another field clears the two values', () => {
   const s = setup(SAVED);
   s.validate();
   const doc = s.w.document;
@@ -104,7 +100,7 @@ test('choosing another field clears the two values', { skip }, () => {
   assert.strictEqual(doc.querySelector('.ws-mb-field').value, 'MB');
 });
 
-test('validating again keeps the saved values', { skip }, () => {
+test('validating again keeps the saved values', () => {
   const s = setup(SAVED);
   s.validate();
   s.validate();
@@ -112,7 +108,7 @@ test('validating again keeps the saved values', { skip }, () => {
   assert.strictEqual(s.w.document.querySelector('.ws-mb-buy').value, BUY);
 });
 
-test('the suffix drops characters an item number cannot hold', { skip }, () => {
+test('the suffix drops characters an item number cannot hold', () => {
   const s = setup(SAVED);
   const suffix = s.w.document.querySelector('.ws-mb-suffix');
   suffix.value = '-B 1/x*';
@@ -120,7 +116,7 @@ test('the suffix drops characters an item number cannot hold', { skip }, () => {
   assert.strictEqual(suffix.value, '-B1x');
 });
 
-test('the Make or buy section is locked until the workspace is validated', { skip }, () => {
+test('the Make or buy section is locked until the workspace is validated', () => {
   const s = setup(SAVED);
   const box = s.w.document.querySelector('.ws-mb .ws-locked');
   assert.strictEqual(box.disabled, true);
@@ -128,7 +124,7 @@ test('the Make or buy section is locked until the workspace is validated', { ski
   assert.strictEqual(box.disabled, false);
 });
 
-test('the Make or buy section is on the Items card only', { skip }, () => {
+test('the Make or buy section is on the Items card only', () => {
   const s = setup(SAVED);
   s.w.MfgUi.workspaces.render({
     catalog: { kinds: [{ id: 'products', title: 'Products', description: 'P.', assign: true, mapped: false }], source_fields: [] },
@@ -137,7 +133,7 @@ test('the Make or buy section is on the Items card only', { skip }, () => {
   assert.strictEqual(s.w.document.querySelectorAll('.ws-mb').length, 0);
 });
 
-test('a Make or buy problem marks its own control and goes away when the control is put right', { skip }, () => {
+test('a Make or buy problem marks its own control and goes away when the control is put right', () => {
   const s = setup({ field: 'MB', make_value: MAKE, buy_value: MAKE, source_field: 'SOURCE', suffix: '' });
   s.validate();
   const bar = s.w.document.getElementById('bar');
@@ -160,7 +156,7 @@ test('a Make or buy problem marks its own control and goes away when the control
   assert.strictEqual(doc.querySelectorAll('.ws-mb .field-error').length, 2);
 });
 
-test('a field used twice marks the source field when that is the one that clashes', { skip }, () => {
+test('a field used twice marks the source field when that is the one that clashes', () => {
   const s = setup({ field: 'MB', make_value: MAKE, buy_value: BUY, source_field: 'COMP', suffix: '-B' });   // COMP is also the Component field
   const bar = s.w.document.getElementById('bar');
   s.w.MfgUi.validation.show(bar, [{ message: 'The source link field: COMP is filled twice.',
@@ -169,7 +165,7 @@ test('a field used twice marks the source field when that is the one that clashe
   assert.ok(!s.w.document.querySelector('.ws-mb-field').parentNode.classList.contains('invalid'));
 });
 
-test('the Items settings are cards that fold: Make or buy starts folded and a problem in it opens it', { skip }, () => {
+test('the Items settings are cards that fold: Make or buy starts folded and a problem in it opens it', () => {
   const s = setup(SAVED);
   s.validate();
   const doc = s.w.document;
@@ -186,7 +182,7 @@ test('the Items settings are cards that fold: Make or buy starts folded and a pr
   assert.ok(!make.classList.contains('folded'), 'a problem found in it opens it');
 });
 
-test('a card of the settings still folds and opens when its fieldset is disabled (Enabled off, or a member who may only look)', { skip }, () => {
+test('a card of the settings still folds and opens when its fieldset is disabled (Enabled off, or a member who may only look)', () => {
   const s = setup(SAVED);
   const doc = s.w.document;
   doc.querySelector('.pf-rest').disabled = true;
@@ -198,7 +194,7 @@ test('a card of the settings still folds and opens when its fieldset is disabled
   assert.ok(make.classList.contains('folded'), 'and it answers the keyboard');
 });
 
-test('the fields to copy are a checklist, all ticked, with what the add-in sets locked and what is unticked saved', { skip }, () => {
+test('the fields to copy are a checklist, all ticked, with what the add-in sets locked and what is unticked saved', () => {
   const s = setup(Object.assign({}, SAVED, { skip_fields: ['NUMBER'] }));
   s.validate();
   const doc = s.w.document;

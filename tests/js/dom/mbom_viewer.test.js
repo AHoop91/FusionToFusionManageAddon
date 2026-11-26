@@ -1,13 +1,11 @@
-// The structure viewer (mbom-viewer.js) in jsdom with a stand-in panel: its two panes, selection, edits, drag and drop, and the errors an edit gives.
-// Needs jsdom (``npm install jsdom``); without it these tests are skipped.
+// The structure viewer (mbom-viewer.js) in the browser with a stand-in panel: its two panes, selection, edits, drag and drop, and the errors an edit gives.
 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { englishI18n, run } = require('./helpers');
+const { englishI18n, run } = require('../helpers');
 
-let JSDOM = null;
-try { JSDOM = require('jsdom').JSDOM; } catch (error) { /* skipped below */ }
+const { PageWindow } = require('../browser/window');
 
 const row = (level, number, quantity, extra) => Object.assign({ level: level, id: 'c' + number, item_number: number, name: number + ' name', quantity: quantity || '1' }, extra || {});
 // TOP: A (x2) [A1, A2], B [B1], C
@@ -15,7 +13,7 @@ const ROWS = [row(0, 'A', '2'), row(1, 'A1'), row(1, 'A2'), row(0, 'B'), row(1, 
 
 function open(options) {
   const opts = Object.assign({ rows: ROWS, targetId: '', phantom: false, bought: true }, options || {});
-  const dom = new JSDOM('<section id="pub-bom"></section><section id="pub-structure" hidden></section>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom = new PageWindow('<section id="pub-bom"></section><section id="pub-structure" hidden></section>');
   const w = dom.window;
   w.MfgUi = {};
   const ns = w.MfgUi;
@@ -58,18 +56,18 @@ function open(options) {
       };
       doc.elementFromPoint = () => toEl;
       mouse('mousedown', fromEl, 5, 5);
-      mouse('mousemove', doc, 40, 0);
+      const box = toEl.getBoundingClientRect();
+      const middle = box.top + box.height / 2;   // the middle of the line it is dropped on: a line that holds lines is dropped "into"
+      mouse('mousemove', doc, 40, middle);
       const ghost = doc.querySelector('.sv-ghost');
       const mode = ghost ? ghost.dataset.mode : '';
-      mouse('mouseup', doc, 40, 0);
+      mouse('mouseup', doc, 40, middle);
       if (ghost) mouse('click', doc.querySelector('.sv-tree'), 40, 0);   // the browser sends the click that ends a drag; it selects nothing
       return { mode: mode };
     },
   };
   return api;
 }
-
-const skip = { skip: JSDOM ? false : 'jsdom is not installed' };
 
 function built(options) {
   const v = open(options);
@@ -78,7 +76,7 @@ function built(options) {
   return v;
 }
 
-test('the viewer waits for the structure, then draws both panes', skip, () => {
+test('the viewer waits for the structure, then draws both panes', () => {
   const v = open();
   v.show();
   assert.strictEqual(v.w.document.getElementById('pub-structure').hidden, false);
@@ -91,7 +89,7 @@ test('the viewer waits for the structure, then draws both panes', skip, () => {
   assert.strictEqual(v.calls.askMbom, 0, 'a design with no MBOM item starts as a copy of the EBOM');
 });
 
-test('lines open and close one at a time and all at once, and only open lines are drawn', skip, () => {
+test('lines open and close one at a time and all at once, and only open lines are drawn', () => {
   const v = built();
   v.click(v.rowOf(v.ebom(), 'A').querySelector('.sv-toggle'));
   assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'A1', 'A2', 'B', 'C']);
@@ -102,7 +100,7 @@ test('lines open and close one at a time and all at once, and only open lines ar
   assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'B', 'C']);
 });
 
-test('click, ctrl-click and shift-click select lines of the MBOM', skip, () => {
+test('click, ctrl-click and shift-click select lines of the MBOM', () => {
   const v = built();
   v.openAll();
   const selected = () => [...v.mbom().querySelectorAll('.sv-row.selected .sv-pn')].map((n) => n.textContent);
@@ -117,7 +115,7 @@ test('click, ctrl-click and shift-click select lines of the MBOM', skip, () => {
   assert.deepStrictEqual(selected(), ['A1', 'A2', 'B']);
 });
 
-test('a quantity is changed in the line, and a refused one is said in the message line with the tree as it was', skip, () => {
+test('a quantity is changed in the line, and a refused one is said in the message line with the tree as it was', () => {
   const v = built();
   const quantity = () => v.rowOf(v.mbom(), 'C').querySelector('.sv-qty').textContent;
   const edit = (text) => {
@@ -139,7 +137,7 @@ test('a quantity is changed in the line, and a refused one is said in the messag
   assert.strictEqual(v.toasts.length, 1, 'an edit that works says nothing');
 });
 
-test('remove, undo and redo, and the buttons say why they cannot be used', skip, () => {
+test('remove, undo and redo, and the buttons say why they cannot be used', () => {
   const v = built();
   assert.strictEqual(v.button('Undo').disabled, true);
   assert.match(v.button('Undo').title, /nothing to undo/);
@@ -154,10 +152,10 @@ test('remove, undo and redo, and the buttons say why they cannot be used', skip,
   assert.strictEqual(v.button('Create assembly'), undefined, 'the toolbar has no Create assembly: Create item makes the new item');
 });
 
-test('dragging in the MBOM moves a line, and a refused drop is said', skip, () => {
+test('dragging in the MBOM moves a line, and a refused drop is said', () => {
   const v = built();
   v.openAll();
-  const moved = v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'B'));   // no layout in jsdom: the middle of a line that holds lines is "into"
+  const moved = v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'B'));   // the middle of a line that holds lines is "into"
   assert.strictEqual(moved.mode, 'move');
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'A1', 'A2', 'B', 'B1', 'C'], 'C went into B, which is open, after B1');
   assert.strictEqual(v.rowOf(v.mbom(), 'C').style.getPropertyValue('--indent'), '64px');
@@ -169,7 +167,7 @@ test('dragging in the MBOM moves a line, and a refused drop is said', skip, () =
   assert.strictEqual(v.lines(v.mbom()).filter((n) => n === 'B1').length, 1);
 });
 
-test('dragging an EBOM line into the MBOM adds it with what is under it, and Alt without', skip, () => {
+test('dragging an EBOM line into the MBOM adds it with what is under it, and Alt without', () => {
   const v = built();
   v.openAll();
   v.button('Collapse All').click();
@@ -185,7 +183,7 @@ test('dragging an EBOM line into the MBOM adds it with what is under it, and Alt
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'B', 'B1', 'A']);
 });
 
-test('the MBOM read from Fusion Manage is mapped by item number, marks what has no EBOM line, and the changes show', skip, () => {
+test('the MBOM read from Fusion Manage is mapped by item number, marks what has no EBOM line, and the changes show', () => {
   const v = open({ targetId: '77', phantom: false });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -203,7 +201,7 @@ test('the MBOM read from Fusion Manage is mapped by item number, marks what has 
   assert.strictEqual(v.rowOf(v.mbom(), 'A').classList.contains('sv-tone-new'), false);
 });
 
-test('the colour bar counts the EBOM lines added, with a different quantity and missing, and a part keeps only those lines', skip, () => {
+test('the colour bar counts the EBOM lines added, with a different quantity and missing, and a part keeps only those lines', () => {
   const v = built();   // the MBOM starts as a copy of the EBOM, so a line has to be removed to be missing
   const doc = v.w.document;
   const part = (cls) => doc.querySelector('.sv-meter-' + cls);
@@ -219,7 +217,7 @@ test('the colour bar counts the EBOM lines added, with a different quantity and 
   assert.deepStrictEqual(v.lines(v.ebom()), ['TOP', 'A', 'B', 'C'], 'again shows all');
 });
 
-test('a failed read of the MBOM is shown, and the search finds lines and opens what is above them', skip, () => {
+test('a failed read of the MBOM is shown, and the search finds lines and opens what is above them', () => {
   const bad = open({ targetId: '77' });
   bad.show();
   bad.ns.mbomViewer.structureRead();
@@ -235,7 +233,7 @@ test('a failed read of the MBOM is shown, and the search finds lines and opens w
   assert.match(v.w.document.querySelector('.sv-found').textContent, /2 Matches/, 'one in each pane');
 });
 
-test('the filter button shows only the lines the search found in both panes, with the assemblies above them greyed', skip, () => {
+test('the filter button shows only the lines the search found in both panes, with the assemblies above them greyed', () => {
   const v = built();
   const doc = v.w.document;
   const filter = doc.querySelector('.sv-bar [aria-pressed]');
@@ -259,7 +257,7 @@ test('the filter button shows only the lines the search found in both panes, wit
   assert.ok(!v.rowOf(v.mbom(), 'A').classList.contains('sv-row-context'));
 });
 
-test('add items opens the picker with the target item and puts what it returns into the MBOM', skip, () => {
+test('add items opens the picker with the target item and puts what it returns into the MBOM', () => {
   const v = built({ targetId: '' });
   v.button('Add Existing Part').click();
   assert.strictEqual(v.added.length, 1);
@@ -283,7 +281,7 @@ const search = (v, text) => {
 };
 const found = (v) => v.w.document.querySelector('.sv-found').textContent;
 
-test('the structure and the MBOM are read at the same time: the skeleton stays until both are in, whichever comes first', skip, () => {
+test('the structure and the MBOM are read at the same time: the skeleton stays until both are in, whichever comes first', () => {
   const skeleton = (v) => v.w.document.querySelectorAll('.pub-skel-row').length > 0;
   const mbomFirst = open({ targetId: '77' });
   mbomFirst.show();
@@ -304,7 +302,7 @@ test('the structure and the MBOM are read at the same time: the skeleton stays u
   assert.deepStrictEqual(ebomFirst.lines(ebomFirst.mbom()), ['TOP-M', 'C']);
 });
 
-test('a failed read of the MBOM is told, whichever comes first, and the retry asks for the MBOM alone', skip, () => {
+test('a failed read of the MBOM is told, whichever comes first, and the retry asks for the MBOM alone', () => {
   const v = open({ targetId: '77' });
   v.show();
   v.ns.mbomViewer.answer({ ok: false, message: 'Fusion Manage said no' });
@@ -318,7 +316,7 @@ test('a failed read of the MBOM is told, whichever comes first, and the retry as
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'C']);
 });
 
-test('an answer nobody waits for never replaces what is built', skip, () => {
+test('an answer nobody waits for never replaces what is built', () => {
   const none = open();   // a design with no MBOM item has no MBOM to wait for
   none.show();
   none.ns.mbomViewer.answer({ ok: true, data: mbomTree([treeLine('C', '1')]) });
@@ -337,7 +335,7 @@ test('an answer nobody waits for never replaces what is built', skip, () => {
   assert.strictEqual(v.rowOf(v.mbom(), 'C').querySelector('.sv-qty').textContent, '6.0');
 });
 
-test('reading the Bill of Materials again drops the structure, the selection and the search', skip, () => {
+test('reading the Bill of Materials again drops the structure, the selection and the search', () => {
   const v = built();
   v.click(v.rowOf(v.mbom(), 'C'));
   const box = search(v, 'c');
@@ -350,7 +348,7 @@ test('reading the Bill of Materials again drops the structure, the selection and
   assert.strictEqual(found(v), '');
 });
 
-test('the Add Items picker, answering after the Bill of Materials was read again, adds nothing', skip, () => {
+test('the Add Items picker, answering after the Bill of Materials was read again, adds nothing', () => {
   const v = built();
   v.button('Add Existing Part').click();
   v.ns.mbomViewer.reset();
@@ -359,7 +357,7 @@ test('the Add Items picker, answering after the Bill of Materials was read again
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP', 'A', 'B', 'C']);
 });
 
-test('lines a fold hides leave the selection, so an action on a line does not take them along', skip, () => {
+test('lines a fold hides leave the selection, so an action on a line does not take them along', () => {
   const v = built();
   const toggleA = () => v.click(v.rowOf(v.mbom(), 'A').querySelector('.sv-toggle'));
   toggleA();
@@ -378,7 +376,7 @@ test('lines a fold hides leave the selection, so an action on a line does not ta
   assert.strictEqual(v.mbom().querySelectorAll('.sv-row.selected').length, 0);
 });
 
-test('the search is run again after an edit and an undo', skip, () => {
+test('the search is run again after an edit and an undo', () => {
   const v = built();
   search(v, 'C');
   assert.match(found(v), /2 Matches/, 'one in each pane');
@@ -389,7 +387,7 @@ test('the search is run again after an edit and an undo', skip, () => {
   assert.ok(v.rowOf(v.mbom(), 'C').classList.contains('sv-hit'));
 });
 
-test('EBOM lines are added with the icons on them, no drag needed, the selection together', skip, () => {
+test('EBOM lines are added with the icons on them, no drag needed, the selection together', () => {
   const v = built();
   assert.strictEqual(v.act(v.ebom(), 'A', 'add'), undefined, 'all of it is in the MBOM: nothing to add');
   assert.strictEqual(v.rowOf(v.ebom(), 'A').dataset.drag, undefined);
@@ -406,7 +404,7 @@ test('EBOM lines are added with the icons on them, no drag needed, the selection
   assert.deepStrictEqual(v.lines(v.mbom()).slice(-3), ['A', 'A1', 'A2']);
 });
 
-test('the icons on a line: add to assembly, the bin last, and a handle to drag it by', skip, () => {
+test('the icons on a line: add to assembly, the bin last, and a handle to drag it by', () => {
   const v = built();
   v.openAll();
   assert.ok(v.rowOf(v.mbom(), 'B').querySelector('.sv-grip'));
@@ -418,7 +416,7 @@ test('the icons on a line: add to assembly, the bin last, and a handle to drag i
   v.click(v.rowOf(v.mbom(), 'C'), { ctrlKey: true });
 });
 
-test('Add to assembly opens a tree with a search and moves the selected lines to the one chosen', skip, () => {
+test('Add to assembly opens a tree with a search and moves the selected lines to the one chosen', () => {
   const v = built();
   v.openAll();
   v.click(v.rowOf(v.mbom(), 'B'));
@@ -442,7 +440,7 @@ test('Add to assembly opens a tree with a search and moves the selected lines to
   assert.strictEqual(v.rowOf(v.mbom(), 'B').parentNode, v.rowOf(v.mbom(), 'C').parentNode);
 });
 
-test('lines are tree items, and the line selected says so', skip, () => {
+test('lines are tree items, and the line selected says so', () => {
   const v = built();
   v.click(v.rowOf(v.mbom(), 'B'));
   assert.strictEqual(v.mbom().querySelector('.sv-tree').getAttribute('role'), 'tree');
@@ -452,7 +450,7 @@ test('lines are tree items, and the line selected says so', skip, () => {
   assert.strictEqual(v.rowOf(v.mbom(), 'A').getAttribute('aria-expanded'), 'false');
 });
 
-test('a line cut at the deepest level says its lines were not read', skip, () => {
+test('a line cut at the deepest level says its lines were not read', () => {
   const v = open({ targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -460,7 +458,7 @@ test('a line cut at the deepest level says its lines were not read', skip, () =>
   assert.match(v.rowOf(v.mbom(), 'C').querySelector('.sv-note-btn').title, /not read/);
 });
 
-test('a few thousand lines build and draw quickly, only the open ones drawn', skip, () => {
+test('a few thousand lines build and draw quickly, only the open ones drawn', () => {
   const rows = [];
   for (let i = 0; i < 4000; i++) { rows.push(row(0, 'P' + i, '1')); if (i % 8 === 0) rows.push(row(1, 'Q' + i, '1')); }
   const start = Date.now();
@@ -473,7 +471,7 @@ test('a few thousand lines build and draw quickly, only the open ones drawn', sk
   assert.ok(Date.now() - start < 5000, 'took ' + (Date.now() - start) + ' ms');
 });
 
-test('the MBOM read from Fusion Manage shows every line, and removing a selected range is one step that Undo gives back', skip, () => {
+test('the MBOM read from Fusion Manage shows every line, and removing a selected range is one step that Undo gives back', () => {
   const v = open({ targetId: '77', rows: [row(0, 'PN-000700'), row(0, 'PN-000699'), row(0, 'PN-000705'), row(1, 'PN-000703'), row(1, 'PN-000702'), row(0, 'PN-000704')] });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -493,7 +491,7 @@ test('the MBOM read from Fusion Manage shows every line, and removing a selected
   assert.strictEqual(v.w.document.querySelector('.sv-removed').textContent, '');
 });
 
-test('a Delete pressed on an icon or a field does not remove the selected lines', skip, () => {
+test('a Delete pressed on an icon or a field does not remove the selected lines', () => {
   const v = built();
   v.click(v.rowOf(v.mbom(), 'A'));
   v.click(v.rowOf(v.mbom(), 'C'), { shiftKey: true });
@@ -507,7 +505,7 @@ test('a Delete pressed on an icon or a field does not remove the selected lines'
 
 const seqs = (pane) => [...pane.querySelectorAll('.sv-row')].map((r) => (r.querySelector('.sv-seq') || { textContent: '' }).textContent);
 
-test('each line has its number: the design sequence in the EBOM, the place under its assembly in the MBOM, renumbered as lines move', skip, () => {
+test('each line has its number: the design sequence in the EBOM, the place under its assembly in the MBOM, renumbered as lines move', () => {
   const rows = ROWS.map((r, i) => Object.assign({}, r, { sequence: (i + 1) * 10 }));
   const v = built({ rows: rows });
   v.openAll();
@@ -520,7 +518,7 @@ test('each line has its number: the design sequence in the EBOM, the place under
   assert.deepStrictEqual(seqs(v.mbom()), ['', '1', '1', '2', '2', '1', '3']);
 });
 
-test('an EBOM line all in the MBOM is greyed with a check mark, an assembly only when everything under it is', skip, () => {
+test('an EBOM line all in the MBOM is greyed with a check mark, an assembly only when everything under it is', () => {
   const v = built();
   v.openAll();
   const matched = () => [...v.ebom().querySelectorAll('.sv-row-matched .sv-pn')].map((n) => n.textContent);
@@ -537,7 +535,7 @@ test('an EBOM line all in the MBOM is greyed with a check mark, an assembly only
   assert.ok(!matched().includes('C'));
 });
 
-test('the New item button and the Create bought version action open the side panel', skip, () => {
+test('the New item button and the Create bought version action open the side panel', () => {
   const v = open({ targetId: '77' });
   const opened = [];
   v.ns.pubItemPanel = { open: (o) => opened.push(o), close: () => {} };
@@ -562,7 +560,7 @@ test('the New item button and the Create bought version action open the side pan
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'C', 'OIL'], 'it does not add the component to the MBOM');
 });
 
-test('Create bought version is off, with the reason, until Make or buy is set up in Settings', skip, () => {
+test('Create bought version is off, with the reason, until Make or buy is set up in Settings', () => {
   const v = open({ targetId: '77', bought: false });
   const opened = [];
   v.ns.pubItemPanel = { open: (o) => opened.push(o), close: () => {} };
@@ -592,14 +590,14 @@ function withPanel() {
   return { v, opened, panel };
 }
 
-test('nothing is asked of Fusion Manage when the structure opens: no pill, and the action reads the same for every component', skip, () => {
+test('nothing is asked of Fusion Manage when the structure opens: no pill, and the action reads the same for every component', () => {
   const { v } = withPanel();
   assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn'), null);
   assert.strictEqual(v.act(v.ebom(), 'B', 'bought').getAttribute('aria-label'), 'Create Purchased Version of B');
   assert.strictEqual(v.act(v.ebom(), 'B', 'bought').disabled, false);
 });
 
-test('the dialog opens at once; a bought version it found and the user chose is added to the MBOM with no message line', skip, () => {
+test('the dialog opens at once; a bought version it found and the user chose is added to the MBOM with no message line', () => {
   const { v, opened } = withPanel();
   v.act(v.ebom(), 'B', 'bought').click();
   assert.strictEqual(opened.length, 1, 'opened without waiting for a search');
@@ -609,7 +607,7 @@ test('the dialog opens at once; a bought version it found and the user chose is 
   assert.strictEqual(v.act(v.ebom(), 'B', 'bought'), undefined, 'the EBOM line stands in the MBOM now');
 });
 
-test('a bought version created in the dialog is added to the MBOM in the quantity of the EBOM line', skip, () => {
+test('a bought version created in the dialog is added to the MBOM in the quantity of the EBOM line', () => {
   const { v, opened } = withPanel();
   v.act(v.ebom(), 'B', 'bought').click();
   opened[0].onCreated({ id: '9', number: 'B-B', link: '/api/v3/workspaces/1/items/9' });
@@ -618,7 +616,7 @@ test('a bought version created in the dialog is added to the MBOM in the quantit
   assert.strictEqual(v.rowOf(v.mbom(), 'B-B').querySelector('.sv-qty').textContent, '1.0', 'in the quantity of the EBOM line');
 });
 
-test('an EBOM line a purchased part stands for gets a check mark that says a purchased part matched it', skip, () => {
+test('an EBOM line a purchased part stands for gets a check mark that says a purchased part matched it', () => {
   const { v, opened } = withPanel();
   assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-matched'), null);
   v.act(v.ebom(), 'B', 'bought').click();
@@ -629,7 +627,7 @@ test('an EBOM line a purchased part stands for gets a check mark that says a pur
   assert.notStrictEqual(v.rowOf(v.ebom(), 'C').querySelector('.sv-matched').title, mark.title, 'a line made as it is has its own tooltip');
 });
 
-test('an EBOM line a purchased part stands for says which one, and a quantity that does not agree says by how much', skip, () => {
+test('an EBOM line a purchased part stands for says which one, and a quantity that does not agree says by how much', () => {
   const { v, opened } = withPanel();
   assert.strictEqual(v.rowOf(v.ebom(), 'B').querySelector('.sv-note-btn'), null, 'a line with nothing to say has no button');
   v.act(v.ebom(), 'B', 'bought').click();
@@ -660,13 +658,13 @@ test('an EBOM line a purchased part stands for says which one, and a quantity th
   assert.match(warn.title, /Qty 3\.0 exceeds 1\.0 in the EBOM/);
 });
 
-test('there are no pills on a line: what they said is in its note', skip, () => {
+test('there are no pills on a line: what they said is in its note', () => {
   const v = built();
   v.show();
   assert.strictEqual(v.w.document.querySelectorAll('.sv-badge').length, 0);
 });
 
-test('an EBOM line that is under another assembly in the MBOM says which one', skip, () => {
+test('an EBOM line that is under another assembly in the MBOM says which one', () => {
   const v = built();
   v.openAll();
   v.drag(v.rowOf(v.mbom(), 'B1'), v.rowOf(v.mbom(), 'A'));   // B1 into A (the middle of a line is into it)
@@ -675,7 +673,7 @@ test('an EBOM line that is under another assembly in the MBOM says which one', s
   assert.match(note.title, /Under A in the MBOM/);
 });
 
-test('adding an EBOM line the MBOM holds some of adds what is left to its line under the same assembly', skip, () => {
+test('adding an EBOM line the MBOM holds some of adds what is left to its line under the same assembly', () => {
   const v = open({ rows: [row(0, 'A', '4')], targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -688,7 +686,7 @@ test('adding an EBOM line the MBOM holds some of adds what is left to its line u
   assert.ok(v.rowOf(v.ebom(), 'A').classList.contains('sv-row-matched'), 'and now all of it is in');
 });
 
-test('the info button and the bar beside the line icon share a colour: amber for a warning or an update, green for a new line', skip, () => {
+test('the info button and the bar beside the line icon share a colour: amber for a warning or an update, green for a new line', () => {
   const v = built();
   v.openAll();
   v.click(v.rowOf(v.mbom(), 'C').querySelector('button.sv-qty'));
@@ -702,7 +700,7 @@ test('the info button and the bar beside the line icon share a colour: amber for
   assert.ok(ebom.querySelector('.sv-note-btn').classList.contains('sv-note-warn') && ebom.classList.contains('sv-tone-warn'), 'the same on the EBOM line');
 });
 
-test('a line read from Fusion Manage whose quantity was edited is amber (an update), with no bar at the left of the line', skip, () => {
+test('a line read from Fusion Manage whose quantity was edited is amber (an update), with no bar at the left of the line', () => {
   const v = open({ rows: [row(0, 'A', '4')], targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -717,7 +715,7 @@ test('a line read from Fusion Manage whose quantity was edited is amber (an upda
   assert.ok(![...line.classList].some((k) => k.startsWith('sv-chg-')), 'no bar at the left');
 });
 
-test('the panel is told to plan again only when the structure or its data changed, not by a selection, a fold, a note or the search', skip, () => {
+test('the panel is told to plan again only when the structure or its data changed, not by a selection, a fold, a note or the search', () => {
   const v = built();
   const planned = v.calls.planned;
   assert.ok(planned > 0, 'the first draw tells the panel');
@@ -729,7 +727,7 @@ test('the panel is told to plan again only when the structure or its data change
   assert.strictEqual(v.calls.planned, planned + 1, 'an edit tells it once');
 });
 
-test('quick add asks before it overrides the lines Fusion Manage has, and matches the MBOM to the EBOM once it is confirmed', skip, () => {
+test('quick add asks before it overrides the lines Fusion Manage has, and matches the MBOM to the EBOM once it is confirmed', () => {
   const v = open({ targetId: '77' });
   const asked = [];
   v.ns.pubItemPanel = { open: () => {}, close: () => {}, confirm: (o) => asked.push(o) };
@@ -752,7 +750,7 @@ test('quick add asks before it overrides the lines Fusion Manage has, and matche
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'OIL', 'C'], 'undo gives the lines back');
 });
 
-test('quick add with no lines in Fusion Manage matches at once, with no question', skip, () => {
+test('quick add with no lines in Fusion Manage matches at once, with no question', () => {
   const v = open({ targetId: '77' });
   const asked = [];
   v.ns.pubItemPanel = { open: () => {}, close: () => {}, confirm: (o) => asked.push(o) };
@@ -765,7 +763,7 @@ test('quick add with no lines in Fusion Manage matches at once, with no question
   assert.deepStrictEqual(v.lines(v.mbom()), ['TOP-M', 'A', 'A1', 'A2', 'B', 'B1', 'C']);
 });
 
-test('the MBOM shows the line numbers Fusion Manage has, in their order, until an edit gives the assembly the numbers of its places', skip, () => {
+test('the MBOM shows the line numbers Fusion Manage has, in their order, until an edit gives the assembly the numbers of its places', () => {
   const v = open({ targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -775,13 +773,13 @@ test('the MBOM shows the line numbers Fusion Manage has, in their order, until a
   v.act(v.mbom(), 'B', 'remove').click();
   assert.deepStrictEqual(numbers(), ['1', '8'], 'a removal leaves the others as they are');
   v.click(v.button('Undo'));
-  v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'A'));   // C goes into A (no layout in jsdom: the middle of a line is "into")
+  v.drag(v.rowOf(v.mbom(), 'C'), v.rowOf(v.mbom(), 'A'));   // C goes into A (the middle of a line is "into")
   v.openAll();
   assert.deepStrictEqual(v.lines(v.mbom()).slice(1), ['A', 'C', 'B']);
   assert.deepStrictEqual(numbers(), ['1', '1', '2'], 'A and B keep their numbers; C is line 1 of A, as it will be sent');
 });
 
-test('Automatic renumber asks first, then numbers the lines 1, 2, 3 in the order shown, says so when they are already, and undo gives the numbers back', skip, () => {
+test('Automatic renumber asks first, then numbers the lines 1, 2, 3 in the order shown, says so when they are already, and undo gives the numbers back', () => {
   const v = open({ targetId: '77' });
   const asked = [];
   v.ns.pubItemPanel = { open: () => {}, close: () => {}, confirm: (o) => asked.push(o) };
@@ -805,7 +803,7 @@ test('Automatic renumber asks first, then numbers the lines 1, 2, 3 in the order
   assert.deepStrictEqual(numbers(), ['1', '2', '8']);
 });
 
-test('the Set Position hover action opens a small box with the number the line shows, and gives the line any whole number', skip, () => {
+test('the Set Position hover action opens a small box with the number the line shows, and gives the line any whole number', () => {
   const v = open({ targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -844,7 +842,7 @@ test('the Set Position hover action opens a small box with the number the line s
   assert.deepStrictEqual(numbers(), ['1', '2', '1500'], 'each is one step');
 });
 
-test('the Split Quantity hover action is one box: the quantity and the assembly to give it to', skip, () => {
+test('the Split Quantity hover action is one box: the quantity and the assembly to give it to', () => {
   const v = open({ targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -891,7 +889,7 @@ test('the Split Quantity hover action is one box: the quantity and the assembly 
   assert.match(rowsOf('A')[1].textContent, /3\.0/, 'the other assembly has the 3');
 });
 
-test('the tree of assemblies numbers lines from the top down, locks the assembly the line is in, and Add to assembly shows the numbers too', skip, () => {
+test('the tree of assemblies numbers lines from the top down, locks the assembly the line is in, and Add to assembly shows the numbers too', () => {
   const v = open({ targetId: '77' });
   v.show();
   v.ns.mbomViewer.structureRead();
@@ -942,7 +940,7 @@ function withMbom() {
   return v;
 }
 
-test('the magnifier is the first icon on every line of both panes, the roots too, with its tooltip', skip, () => {
+test('the magnifier is the first icon on every line of both panes, the roots too, with its tooltip', () => {
   const v = built();
   v.openAll();
   [v.ebom(), v.mbom()].forEach((pane) => [...pane.querySelectorAll('.sv-row')].forEach((r) => {
@@ -953,7 +951,7 @@ test('the magnifier is the first icon on every line of both panes, the roots too
   }));
 });
 
-test('the magnifier opens the Details Panel for the line: the design for a root, the component for a line, no component for a line only Fusion Manage has', skip, () => {
+test('the magnifier opens the Details Panel for the line: the design for a root, the component for a line, no component for a line only Fusion Manage has', () => {
   const v = withMbom();
   v.click(v.act(v.ebom(), 'TOP', 'details'));
   assert.deepStrictEqual([v.opened[0].root, v.opened[0].id, v.opened[0].key, v.opened[0].pane], [true, 'R', '0', 'ebom'], 'the EBOM root is the design');
@@ -967,7 +965,7 @@ test('the magnifier opens the Details Panel for the line: the design for a root,
   assert.deepStrictEqual([v.opened[4].id, v.opened[4].itemId, v.opened[4].noComponent, v.opened[4].title], ['', 'iOIL', true, 'OIL - OIL name'], 'a line only Fusion Manage has: its item, no component');
 });
 
-test('a plain click on a line opens nothing, and the marked line is the one whose panel is open until the panel closes', skip, () => {
+test('a plain click on a line opens nothing, and the marked line is the one whose panel is open until the panel closes', () => {
   const v = withMbom();
   v.click(v.rowOf(v.ebom(), 'A1'));
   v.click(v.rowOf(v.mbom(), 'A1'));
@@ -981,7 +979,7 @@ test('a plain click on a line opens nothing, and the marked line is the one whos
   assert.strictEqual(v.w.document.querySelectorAll('.sv-details').length, 0, 'the mark goes with the panel');
 });
 
-test('the mark moves from line to line and clears on close without drawing the trees again', skip, () => {
+test('the mark moves from line to line and clears on close without drawing the trees again', () => {
   const v = withMbom();
   const first = v.rowOf(v.mbom(), 'A1');
   const second = v.rowOf(v.ebom(), 'A1');
@@ -996,7 +994,7 @@ test('the mark moves from line to line and clears on close without drawing the t
   assert.ok(!second.classList.contains('sv-details') && second.getAttribute('aria-current') === null, 'the mark clears on close');
 });
 
-test('the panel closes when its line is removed', skip, () => {
+test('the panel closes when its line is removed', () => {
   const v = withMbom();
   v.click(v.act(v.mbom(), 'OIL', 'details'));
   assert.strictEqual(v.closes.length, 0);
