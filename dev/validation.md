@@ -85,7 +85,7 @@ An empty required field is not marked until the person has left it or pressed Sa
 
 ## The refusal Fusion Manage sends
 
-**Seen** means the key is in a real answer written to the add-in log (`%LOCALAPPDATA%\MfgToFm\logs\MfgToFm.log` and its `.1`, `.2` and `.3` rotations, read on 2026-11-17, workspace 343 "Products" and workspace 57). **Assumed** means the code or a test relies on it but no logged answer shows it; treat it as a guess until it is seen. Do not add a key you have not seen. Where the code accepts an answer as a list or as an object holding the list, it goes through `rows_in(data, key)` (`src/core/shapes.py`).
+**Seen** means the key is in a real answer written to the add-in log (only a verbose one holds answers: switch it on with `MFGTOFM_DEBUG=1` or a `debug.flag` file, and do not share that log unreviewed) (`%LOCALAPPDATA%\MfgToFm\logs\MfgToFm.log` and its `.1`, `.2` and `.3` rotations, read on 2026-11-17, workspace 343 "Products" and workspace 57). **Assumed** means the code or a test relies on it but no logged answer shows it; treat it as a guess until it is seen. Do not add a key you have not seen. Where the code accepts an answer as a list or as an object holding the list, it goes through `rows_in(data, key)` (`src/core/shapes.py`).
 
 What Fusion Manage answered to a write it did not accept, as `FmApiError.body` holds it. Two shapes are in the log, both for a `POST` of a Grid row, both with status 400.
 

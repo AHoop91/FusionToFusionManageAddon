@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from ..core.i18n import t
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import get_logger, log_body
 from ..core.shapes import as_dict, as_list, dict_rows, rows_in, whole
 from .client import WORKSPACES, FmApiError, FmClient, id_of, last_segment
 from .item_view import COLUMN_KEYS, ROW_KEYS, layout_names, not_shown
@@ -25,8 +25,7 @@ from .workspace import GRID_VIEW, WorkspaceService, is_computed
 log = get_logger("fm.workspace_form")
 
 READERS = 4   # picklists read at once
-LOG_ROWS = 3   # field rows of the answer kept in the log
-LOG_CHARS = 6000
+LOG_ROWS = 3   # field rows of the answer a verbose log keeps
 
 # the control a field gets, by what its type's title says
 TEXT, TEXTAREA, INTEGER, NUMBER, DATE, CHECKBOX, SELECT, RADIO, INFO, LINK, LINKS, IMAGE, AUTO = (
@@ -96,7 +95,8 @@ def _spec(field_id: str, by_id: Dict[str, Dict[str, Any]], options: Dict[str, Li
     kind = _kind(row, options)
     if kind is None:
         left_out.append(field_id)
-        log.info("No control for field %s: %s", field_id, {k: row.get(k) for k in ("type", "picklist", "picklistFieldDefinition", "editability", "fieldLength")})
+        log.info("No control for field %s", field_id)
+        log_body(log, "the definition of", {k: row.get(k) for k in ("type", "picklist", "picklistFieldDefinition", "editability", "fieldLength")}, field_id)
         return None
     lookup = last_segment(row.get("picklist"))
     return {"id": field_id, "title": title, "kind": kind, "required": _required(row), "description": description,
@@ -168,7 +168,8 @@ class WorkspaceFormService:
             data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/fields")
             sections = list(sections_read.result().values())
         rows = rows_in(data, "fields")
-        log.info("Form of workspace %s: %d field(s); the first: %s", workspace_id, len(rows), str(rows[:LOG_ROWS])[:LOG_CHARS])
+        log.info("Form of workspace %s: %d field(s)", workspace_id, len(rows))
+        log_body(log, "the first fields of", rows[:LOG_ROWS], str(workspace_id))
         form = parse_form(rows, sections, self._options(rows), automatic)
         log.info("Form of workspace %s: %s; left out for want of a control: %s", workspace_id,
                  [(s["title"], [f["id"] for f in s["fields"]], len(s["matrices"])) for s in form["sections"]], form["left_out"])
@@ -199,7 +200,8 @@ class WorkspaceFormService:
         Raises ``FmApiError`` or ``AuthError`` when the grid cannot be read."""
         data = self._client.get_json(f"{WORKSPACES}/{workspace_id}/views/{GRID_VIEW}/fields")
         rows = self._with_validators(rows_in(data, "fields"))
-        log.info("Grid of workspace %s: %d column(s); the first: %s", workspace_id, len(rows), str(rows[:LOG_ROWS])[:LOG_CHARS])
+        log.info("Grid of workspace %s: %d column(s)", workspace_id, len(rows))
+        log_body(log, "the first columns of", rows[:LOG_ROWS], str(workspace_id))
         options = self._options(rows)
         by_id = {id_of(row): row for row in rows if id_of(row)}
         placed: Set[str] = set()

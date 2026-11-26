@@ -9,6 +9,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | I need to | Use | Where | Note |
 | --- | --- | --- | --- |
 | Call the Fusion Manage REST API (read, write, download, upload) | `FmClient` (`get_json`, `get_bytes`, `put_bytes`, `send_json`); `FmApiError` for a failure. A read is tried up to 3 times on 429, 502, 503, 504 or no answer; a write is tried again only on 429. Both wait as `Retry-After` says, else exponentially with jitter. A write with no answer or a 5xx is never sent again by the client: `FmApiError.outcome_unknown` says so, and a publish resolves it (see `publish/sender.py`) | `fm/client.py` | |
+| Log an API call without its content | `get_logger`; for an answer or request `describe_body`, `endpoint`, `new_request_id`; for a body that only a verbose log may hold `log_body`; `ALLOWED_FIELDS` is the allowlist of codes. An error with a `log_text` (`FmApiError`, `MfgApiError`) is logged as that, not as its message | `core/logging_setup.py` | |
 | Wait before trying a request again | `backoff.delay(attempt, retry_after)`, `backoff.retry_after(headers)` | `core/backoff.py` | |
 | Take an id or the last part off an API link | `last_segment`, `id_of` | `fm/client.py` | |
 | Build the address of an item's page in the Fusion Manage web UI | `page_url`, `link_page`, `item_page` | `fm/pages.py` | |

@@ -98,7 +98,7 @@ def _number(node: Any, kilograms: bool = False) -> Dict[str, str]:
         if kilograms:
             factor = KILOGRAMS_PER.get(_singular(unit_name))
             if factor is None:
-                log.warning("Mass is in an unknown unit %r (value %s, shown as %r); sent as it is", unit_name, value, node.get("displayValue"))
+                log.warning("Mass is in an unknown unit %r; sent as it is", unit_name)
             else:
                 value, unit = value * factor, "kg"
         return {"value": f"{value:.6g}", "unit": unit, "original": original}

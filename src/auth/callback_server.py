@@ -7,6 +7,7 @@ value (CSRF protection) and hands the authorization code back to the caller.
 """
 
 import html
+import re
 import secrets
 import threading
 import time
@@ -55,12 +56,15 @@ def _page(ok: bool, error: str = "") -> bytes:
     return _PAGE.format(title=title, icon=icon, colour=colour, text=text, close=t("data.auth_page_close"), detail=detail, script=script).encode("utf-8")
 
 
+OAUTH_ERROR = re.compile(r"[a-z_]{1,40}")   # the codes RFC 6749 gives an authorization error (``access_denied``, ``invalid_scope`` ...)
+
+
 class CallbackServer:
     """Serves one redirect on localhost and captures the authorization code."""
 
     def __init__(self, port: int, expected_state: str) -> None:
         # ``result`` is filled by the request handler: either a code or an error.
-        self.result: Dict[str, Optional[str]] = {"code": None, "error": None}
+        self.result: Dict[str, Optional[str]] = {"code": None, "error": None, "error_code": None}
         self._done = threading.Event()
         handler = self._build_handler(self.result, self._done, expected_state)
         try:
@@ -90,6 +94,7 @@ class CallbackServer:
                     return
                 if "error" in params:
                     result["error"] = params.get("error_description", params["error"])[0]
+                    result["error_code"] = params["error"][0] if OAUTH_ERROR.fullmatch(params["error"][0]) else "unrecognised"   # the log gets this, not the description
                 else:
                     result["code"] = params.get("code", [""])[0] or None
                     if not result["code"]:

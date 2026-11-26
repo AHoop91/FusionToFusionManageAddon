@@ -13,18 +13,17 @@
 * ``GET /api/v3/workspaces/{id}/tableaus/{view}?page=1&size=50`` gives the rows of a view, a page at a time.
 
 The list of views is ``{"tableaus": [{"link", "title"}]}``; a page of rows is ``{"total", "items": [{"item": {"link"}, "fields": [{"id", "value",
-"type"}]}]}``. Every answer is written to the log in full (``LOG_CHARS``).
+"type"}]}]}``. An answer is logged by its size only; its content goes into a verbose log (``log_body``).
 """
 
 import html
 import json
-import logging
 import re
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import endpoint, get_logger, log_body
 from ..core.shapes import as_dict, dict_rows, dig, rows_in, whole
 from .client import WORKSPACES, FmApiError, FmClient, id_of, last_segment
 from .item_view import IMAGE, load_image
@@ -35,7 +34,6 @@ from .ttl_cache import TtlCache
 log = get_logger("fm.tableaus")
 
 META = "application/vnd.autodesk.plm.meta+json"   # asks for the fields a view can be filtered by, not the views
-LOG_CHARS = 20000   # of each answer kept in the log
 DEFAULT_SIZE = 50
 MAX_SIZE = 200
 MATCH_RULES = ("ALL", "ANY")   # every filter must hold, or any one of them
@@ -224,8 +222,8 @@ class TableauService:
 
     def _read(self, label: str, path: str, accept: str = "application/json") -> Any:
         data = self._client.get_json(path, accept)
-        if log.isEnabledFor(logging.INFO):
-            log.info("%s: GET %s answered: %s", label, path, str(data)[:LOG_CHARS])
+        log.info("%s: GET %s answered (%d characters)", label, endpoint(path), len(str(data)))
+        log_body(log, label, data, f"GET {endpoint(path)}")
         return data
 
     def _fields_meta(self, workspace_id: str, fresh: bool = False) -> Any:
@@ -279,7 +277,8 @@ class TableauService:
                 entry["appliedFilters"] = {"matchRule": match, "filters": chosen}
             else:
                 entry.pop("appliedFilters", None)
-            log.info("Filters of column %s of view %s: %s", column_id, view_id, chosen)
+            log.info("Filters of column %s of view %s: %d chosen", column_id, view_id, len(chosen))
+            log_body(log, "filters of", chosen, f"column {column_id} of view {view_id}")
         if columns is not None:
             self._arrange_columns(workspace_id, definition, [str(c) for c in columns])
         self._client.send_json("PUT", base, definition, META)
@@ -321,11 +320,12 @@ class TableauService:
         try:
             made = self._client.send_json("POST", base, body, META)
         except FmApiError as exc:
-            log.error("The view was refused (%s); the body sent was: %s", exc, json.dumps(body)[:LOG_CHARS])
+            log.error("The view was refused (%s); the body sent was %d bytes", exc, len(json.dumps(body)))
+            log_body(log, "view sent to", json.dumps(body), f"POST {endpoint(base)}")
             raise
         location = next((v for k, v in made.headers.items() if k.lower() == "location"), "")
         view_id = last_segment(location) or id_of(as_dict(made.data))
-        log.info("View %r made with %d columns: %s", name, len(body_columns), view_id)
+        log.info("A view made with %d columns: %s", len(body_columns), view_id)
         if not view_id.isdigit():
             raise FmApiError("The view was made, but Fusion Manage did not say which.")
         return {"id": view_id}
@@ -340,9 +340,10 @@ class TableauService:
         try:
             self._client.send_json("PUT", base, definition, META)
         except FmApiError as exc:
-            log.error("The view was not renamed (%s); the body sent was: %s", exc, json.dumps(definition)[:LOG_CHARS])
+            log.error("The view was not renamed (%s); the body sent was %d bytes", exc, len(json.dumps(definition)))
+            log_body(log, "view sent to", json.dumps(definition), f"PUT {endpoint(base)}")
             raise
-        log.info("View %s of workspace %s renamed to %r", view_id, workspace_id, name)
+        log.info("View %s of workspace %s renamed", view_id, workspace_id)
         return {"id": view_id, "name": name}
 
     def delete_view(self, workspace_id: str, view_id: str) -> Dict[str, Any]:

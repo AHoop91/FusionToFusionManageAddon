@@ -106,7 +106,7 @@ class AuthService:
         try:
             server = CallbackServer(settings.callback_port, pkce["state"])
         except AuthError as exc:
-            self._fail(str(exc))
+            self._fail(str(exc), logged=exc.log_text)
             raise
         url = build_authorize_url(settings.client_id, settings.callback_url,
                                   settings.scopes, pkce["challenge"], pkce["state"])
@@ -123,7 +123,8 @@ class AuthService:
         try:
             result = server.wait(LOGIN_TIMEOUT_SECONDS, self._cancel)
             if not result["code"]:
-                raise AuthError(result["error"] or t("data.auth_failed"))
+                raise AuthError(result["error"] or t("data.auth_failed"),
+                                logged=f"Sign-in refused ({result['error_code']})" if result.get("error_code") else "")
             tokens = exchange_code(settings.client_id, result["code"],
                                    settings.callback_url, verifier)
             with self._lock:   # the check and the save are one step: a sign-out cannot come between them
@@ -136,7 +137,7 @@ class AuthService:
             log.info("Signed in")
             self._session_changed()
         except AuthError as exc:
-            self._fail(str(exc), settings.client_id, generation)
+            self._fail(str(exc), settings.client_id, generation, exc.log_text)
         except Exception as exc:  # noqa: BLE001 - background thread must not die silently
             log.exception("Unexpected sign-in failure")
             self._fail(t("data.auth_unexpected", reason=exc), settings.client_id, generation)
@@ -148,14 +149,15 @@ class AuthService:
                 except Exception:  # noqa: BLE001 - telling the panel is a courtesy
                     log.exception("Could not report the end of the sign-in")
 
-    def _fail(self, message: str, client_id: str = "", generation: Optional[int] = None) -> None:
-        """Report a failed sign-in, unless the user signed out since it began (``generation``): it is over, not failed."""
+    def _fail(self, message: str, client_id: str = "", generation: Optional[int] = None, logged: str = "") -> None:
+        """Report a failed sign-in, unless the user signed out since it began (``generation``): it is over, not failed. The user is shown
+        ``message``; the log gets ``logged`` (what ``AuthError.log_text`` says: no quote of the token endpoint's answer), else ``message``."""
         with self._lock:
             if generation is not None and self._generations.get(client_id, 0) != generation:
-                log.info("Sign-in ended after a sign-out: %s", message)
+                log.info("Sign-in ended after a sign-out: %s", logged or message)
                 return
             self._state, self._error = STATE_ERROR, message
-        log.warning("Sign-in failed: %s", message)
+        log.warning("Sign-in failed: %s", logged or message)
 
     def cancel_login(self) -> None:
         """Abort a pending browser sign-in."""

@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from ..core import backoff
 from ..core.cancel import ADDIN, CancelToken
 from ..core.i18n import t
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import allowed_code, allowed_fields, describe_body, get_logger, log_body
 from ..core.shapes import as_dict
 from ..core.timing import Stopwatch
 
@@ -28,11 +28,10 @@ ATTEMPTS = 3
 RETRY_HTTP = (429, 502, 503, 504)
 TRANSIENT_CODES = ("DATA_NOT_READY", "SUBREQUEST_HTTP_ERROR")   # a service behind the gateway was not ready or not answering
 
-# How much of an answer is kept in a log line or an error message.
+# How much of an answer is kept in an error message (a log gets none of it: see ``MfgApiError.log_text``).
 HTTP_DETAIL_CHARS = 4000
-ERRORS_LOG_CHARS = 1000
-EXTENSIONS_LOG_CHARS = 300
 REASON_CHARS = 200
+EXTENSIONS_LOG_CHARS = 300   # of what a query cost, which the service reports in points: no data
 
 
 def _first_field(query_text: str) -> str:
@@ -60,10 +59,20 @@ def _reason_in(detail: str) -> str:
 class MfgApiError(Exception):
     """Raised when a Manufacturing Data Model request fails or returns errors."""
 
-    def __init__(self, message: str, transient: bool = False, code: str = "") -> None:
+    def __init__(self, message: str, transient: bool = False, code: str = "", status: int = 0, from_server: bool = False) -> None:
         super().__init__(message)
+        self.status = status   # the HTTP status, when the service answered with one
+        self.from_server = from_server   # the message quotes what the service said, so a log does not get it
         self.transient = transient   # worth trying again: the service was busy or unreachable, not the query wrong
         self.code = code   # the service's own code for a GraphQL error (``FHQ-403``: not allowed), when it gave one
+
+    @property
+    def log_text(self) -> str:
+        """What a log says of this error (``RedactingFormatter`` uses it in place of the message): the status and the code, when the message
+        quotes the service's answer, which may hold design and personal data. A message made here is its own text."""
+        if not self.from_server:
+            return str(self)
+        return " ".join(part for part in ("Data Model error", f"HTTP {self.status}" if self.status else "", f"code={self.code}" if allowed_code("code", self.code) else "") if part)
 
 
 def data_of(payload: Any) -> Dict[str, Any]:
@@ -71,12 +80,14 @@ def data_of(payload: Any) -> Dict[str, Any]:
     answer = as_dict(payload)
     errors = answer.get("errors")
     if errors:
-        log.error("GraphQL errors: %s", json.dumps(errors)[:ERRORS_LOG_CHARS])
+        log.error("GraphQL answered with %d error(s) (%s)", len(errors), allowed_fields(json.dumps({"errors": errors if isinstance(errors, list) else []})))
+        log_body(log, "errors of", errors, FUSION_GRAPHQL_URL)
         first = as_dict(errors[0])
         extensions = as_dict(first.get("extensions"))
         status = as_dict(extensions.get("http")).get("status")
         transient = extensions.get("code") in TRANSIENT_CODES or status in RETRY_HTTP
-        raise MfgApiError(str(first.get("message") or t("data.mfg_graphql_error")), transient=transient, code=str(extensions.get("code") or ""))
+        raise MfgApiError(str(first.get("message") or t("data.mfg_graphql_error")), transient=transient, code=str(extensions.get("code") or ""),
+                          status=status if isinstance(status, int) else 0, from_server=True)
     data = answer.get("data")
     if not isinstance(data, dict):
         raise MfgApiError(t("data.mfg_no_data"))
@@ -119,11 +130,12 @@ class FusionGraphQlClient:
         if response.statusCode != 200:
             log.debug("graphql %s failed with HTTP %s after %.2fs", name, response.statusCode, seconds)
             detail = _text_of(response)[:HTTP_DETAIL_CHARS]
-            log.error("GraphQL HTTP %s from %s: %s", response.statusCode, FUSION_GRAPHQL_URL, detail)
+            log.error("GraphQL HTTP %s from %s (%s)", response.statusCode, FUSION_GRAPHQL_URL, describe_body(detail.encode("utf-8")))
+            log_body(log, "refusal from", detail, FUSION_GRAPHQL_URL)
             reason = _reason_in(detail)
             raise MfgApiError(t("data.mfg_returned_status_reason", status=response.statusCode, reason=reason) if reason
                               else t("data.mfg_returned_status", status=response.statusCode),
-                              transient=response.statusCode in RETRY_HTTP)
+                              transient=response.statusCode in RETRY_HTTP, status=response.statusCode, from_server=bool(reason))
         try:
             payload = json.loads(response.data)
         except ValueError as exc:

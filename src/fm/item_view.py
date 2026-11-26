@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from ..auth.errors import AuthError
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import endpoint, get_logger, log_body
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
 from .items import ItemService, display_text
@@ -32,7 +32,6 @@ VISIBLE_ALWAYS = ("ALWAYS", "VISIBLE")
 HEADER_FIELDS = ("TYPE",)   # read for the line under the title, shown or not
 MAX_IMAGE_BYTES = 2_000_000
 MAX_PICTURES_AT_ONCE = 6   # pictures of an item downloaded together
-LOG_CHARS = 3000   # of an answer that could not be laid out, kept in the log
 IMAGE, CHECK_BOX = "Image", "Check Box"   # the types of field that are drawn or worded differently
 COLUMN_KEYS = ("columns", "columnNames", "columnTitles")   # where a matrix layout may name its columns and rows, in the order tried
 ROW_KEYS = ("rows", "rowNames", "rowTitles")
@@ -66,7 +65,7 @@ def load_image(client: FmClient, link: str) -> str:
     try:
         body, kind = client.get_bytes(link)
     except (FmApiError, OSError) as exc:
-        log.warning("Could not read the image %s: %s", link, exc)
+        log.warning("Could not read the image %s: %s", endpoint(link), exc)
         return ""
     if len(body) > MAX_IMAGE_BYTES or not kind.lower().startswith("image/"):
         return ""
@@ -256,7 +255,8 @@ class ItemViewService:
             loader = self._pictures(data) if pictures else no_image
             view = build_view(data, layouts.result(), loader, self._client.base_url, hidden.result())
         if not view["sections"]:   # the answer was not laid out as expected: keep the start of it in the log
-            log.error("No sections could be built for item %s: %s", item_id, str(data)[:LOG_CHARS])
+            log.error("No sections could be built for item %s: the answer was a %s", item_id, type(data).__name__)
+            log_body(log, "item", data, str(item_id))
         view["item_id"], view["workspace_id"], view["item_urn"] = item_id, workspace_id, str(data.get("urn") or "")
         return view
 

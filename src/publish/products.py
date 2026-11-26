@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..core.i18n import t
 from ..core.shapes import as_dict, dict_rows, rows_in
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import endpoint, get_logger, log_body
 from ..fm.client import WORKSPACES, FmApiError, FmClient, SendResult, last_segment
 from ..fm.bom import split_title
 from ..fm.components import Candidate, ComponentService, is_working, number_matches
@@ -339,7 +339,8 @@ class ProductService:
         try:
             self._client.send_json(method, url, row)
         except FmApiError as exc:
-            log.warning("%s of a row to %s failed: %s; body %s", method, url, exc, row)
+            log.warning("%s of a row to %s failed: %s", method, endpoint(url), exc)
+            log_body(log, "row sent to", row, f"{method} {endpoint(url)}")
             raise self._refused(exc) from exc
 
     @staticmethod

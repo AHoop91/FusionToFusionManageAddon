@@ -19,18 +19,15 @@ from ..core import backoff
 from ..core.cancel import ADDIN, CancelToken
 from ..core.http import open_url
 from ..core.i18n import t
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import allowed_fields, describe_body, endpoint, get_logger, log_body, new_request_id
 from ..core.timing import Stopwatch
 
 log = get_logger("fm.client")
 
 
 FM_HOST_SUFFIX = ".autodeskplm360.net"
-DEBUG_BODY = 20000   # bytes of a request or answer kept in a verbose log
-ANSWER_LOG_BYTES = 500   # bytes of a write's answer kept in the normal log
 ERROR_BODY_BYTES = 8000   # bytes of a refusal read, for the log and for a form that shows what was refused
 ERROR_MESSAGE_CHARS = 300   # characters of it that go into the message the user can see
-NOT_JSON_LOG_BYTES = 300   # bytes of an answer that was not JSON kept in the log
 EMBEDDED_FILE_LOG_CHARS = 40   # characters of each file embedded in a request kept in the log
 REQUEST_TIMEOUT_SECONDS = 15
 WRITE_TIMEOUT_SECONDS = 60   # creating an item with an image can take longer than a read
@@ -54,11 +51,21 @@ VIEW = "views/1"   # the view whose fields and sections an item is written throu
 class FmApiError(Exception):
     """Raised when a Fusion Manage request fails or returns bad data."""
 
-    def __init__(self, message: str, status: int = NO_RESPONSE, body: str = "", retry_after: Optional[float] = None) -> None:
+    def __init__(self, message: str, status: int = NO_RESPONSE, body: str = "", retry_after: Optional[float] = None, address: str = "") -> None:
         super().__init__(message)
+        self.address = address   # ``METHOD path`` of the request, without its query string, for the log
         self.retry_after = retry_after   # seconds the answer's ``Retry-After`` header asked to wait, when it had one
         self.status = status   # HTTP status, or ``NO_RESPONSE`` when there was none
         self.body = body   # what Fusion Manage said in a refusal, as it said it (the start of it): for a caller that reads it
+
+    @property
+    def log_text(self) -> str:
+        """What a log says of this error (``RedactingFormatter`` uses it in place of the message). An error with a status has a message that
+        may quote what Fusion Manage answered, which holds item and personal data: the log gets the status, the request and the codes in the
+        answer (see ``logging_setup.allowed_fields``). One with no response has a message made here, from the request and the reason."""
+        if self.status == NO_RESPONSE:
+            return str(self)
+        return " ".join(part for part in (f"HTTP {self.status}", self.address, allowed_fields(self.body)) if part)
 
     @property
     def outcome_unknown(self) -> bool:
@@ -67,14 +74,15 @@ class FmApiError(Exception):
         return self.status == NO_RESPONSE or self.status >= 500
 
 
-def _clip(data: bytes) -> str:
-    """The start of a request or answer, for a verbose log."""
-    return data[:DEBUG_BODY].decode("utf-8", "replace")
-
-
 def _readable(payload: Optional[bytes]) -> str:
     """A request body for the log with each embedded file (a ``data:`` uri) cut to its start, so the fields can be read."""
     return _DATA_URI.sub(lambda match: match.group(0)[:EMBEDDED_FILE_LOG_CHARS] + "...", (payload or b"").decode("utf-8", "replace"))
+
+
+def _debug_body(what: str, address: str, data: Any) -> None:
+    """Write a body to the log, but only in a verbose one (see ``logging_setup.log_body``): it holds whatever the body held, business and
+    personal data, so such a log is never shared unreviewed."""
+    log_body(log, what, data, address)
 
 
 def _said(exc: urllib.error.HTTPError) -> str:
@@ -82,12 +90,16 @@ def _said(exc: urllib.error.HTTPError) -> str:
     return exc.read()[:ERROR_BODY_BYTES].decode("utf-8", "replace")
 
 
-def _read_failure(exc: OSError, path: str) -> FmApiError:
-    """The error for a read of ``path`` that failed: a refusal (``HTTPError``, logged with what Fusion Manage said) or no answer at all."""
+def _read_failure(exc: OSError, path: str, request_id: str = "") -> FmApiError:
+    """The error for a read of ``path`` that failed: a refusal (``HTTPError``) or no answer at all. The log gets the status, the endpoint and the
+    codes in the refusal, never what it said: that goes only into a verbose log (``_debug_body``)."""
+    address = f"GET {endpoint(path)}"
     if isinstance(exc, urllib.error.HTTPError):
-        log.error("Fusion Manage HTTP %s for %s: %s", exc.code, path, _said(exc))
-        return FmApiError(t("data.fm_returned_status", status=exc.code, path=path), exc.code, retry_after=backoff.retry_after(exc.headers))
-    return FmApiError(t("data.fm_request_failed", path=path, reason=exc))
+        said = _said(exc)
+        log.error("Fusion Manage HTTP %s for %s [%s]: %s", exc.code, address, request_id, describe_body(said.encode("utf-8")))
+        _debug_body("refusal to", address, said)
+        return FmApiError(t("data.fm_returned_status", status=exc.code, path=endpoint(path)), exc.code, retry_after=backoff.retry_after(exc.headers), address=address)
+    return FmApiError(t("data.fm_request_failed", path=endpoint(path), reason=exc))
 
 
 def last_segment(link: Any) -> str:
@@ -186,16 +198,17 @@ class FmClient:
         again a few times, since reading changes nothing.
         """
         url = self._url(path)   # an address that is refused, or no usable hub, is not a failure that passes: it is not tried again
+        request_id = new_request_id()   # one for the call, so its tries and its end can be told from another call's
         for attempt in range(1, READ_ATTEMPTS + 1):
             try:
-                return self._get_once(url, path, accept)
+                return self._get_once(url, path, accept, request_id)
             except FmApiError as exc:
                 if attempt == READ_ATTEMPTS or exc.status not in RETRY_STATUSES:
                     raise
                 wait = backoff.delay(attempt, exc.retry_after)
                 if wait is None:   # the server asked for longer than is worth waiting
                     raise
-                log.warning("Fusion Manage read of %s failed (%s), attempt %d of %d, again in %.1fs", path, exc, attempt, READ_ATTEMPTS, wait)
+                log.warning("Fusion Manage read of %s [%s] failed (%s), attempt %d of %d, again in %.1fs", endpoint(path), request_id, exc, attempt, READ_ATTEMPTS, wait)
                 self.cancel.wait(wait)
 
     def _url(self, path: str) -> str:
@@ -210,7 +223,7 @@ class FmClient:
             headers["Content-Type"] = content_type
         return urllib.request.Request(url, data=data, headers=headers, method=method)
 
-    def _get_once(self, url: str, path: str, accept: str) -> Any:
+    def _get_once(self, url: str, path: str, accept: str, request_id: str = "") -> Any:
         """One GET of ``url``: the parsed JSON, or None when the answer has no content. Raises ``FmApiError`` when it fails or is not JSON."""
         self.cancel.check()
         watch = Stopwatch()
@@ -221,18 +234,20 @@ class FmClient:
                 first_byte_seconds = watch.lap()   # until the response headers arrived
                 body = response.read()
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("GET %s -> %s (token %.2fs, first byte %.2fs, download %.2fs, %d bytes): %s", path, response.status,
-                              token_seconds, first_byte_seconds, watch.lap(), len(body), _clip(body))
+                    log.debug("GET %s -> %s [%s] (token %.2fs, first byte %.2fs, download %.2fs, %s)", endpoint(path), response.status, request_id,
+                              token_seconds, first_byte_seconds, watch.lap(), describe_body(body))
+                    _debug_body("answer to", f"GET {endpoint(path)}", body)
                 if response.status == NO_CONTENT or not body.strip():
                     return None
                 try:
                     return json.loads(body)
                 except ValueError as exc:
-                    log.error("Fusion Manage HTTP %s for %s was not JSON (%s): %r", response.status, path,
-                              response.headers.get("Content-Type"), body[:NOT_JSON_LOG_BYTES])
-                    raise FmApiError(t("data.fm_request_failed", path=path, reason=exc)) from exc
+                    log.error("Fusion Manage HTTP %s for GET %s [%s] was not JSON (%s, %d bytes)", response.status, endpoint(path), request_id,
+                              response.headers.get("Content-Type"), len(body))
+                    _debug_body("answer to", f"GET {endpoint(path)}", body)
+                    raise FmApiError(t("data.fm_request_failed", path=endpoint(path), reason=exc)) from exc
         except OSError as exc:
-            raise _read_failure(exc, path) from exc
+            raise _read_failure(exc, path, request_id) from exc
 
     def get_bytes(self, path: str, timeout: int = REQUEST_TIMEOUT_SECONDS) -> Tuple[bytes, str]:
         """GET ``path`` (an image or a file) and return ``(body, content type)``. Raises ``FmApiError`` on failure.
@@ -240,16 +255,17 @@ class FmClient:
         A file is often served from another host after a redirect; the sign-in is not sent there.
         """
         self.cancel.check()
+        request_id = new_request_id()
         request = self._request(self._url(path), "*/*")
         watch = Stopwatch()
         try:
             with open_url(request, timeout, self.cancel) as response:
                 body = response.read()
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("GET %s -> %s (%.2fs, %d bytes)", path, response.status, watch.lap(), len(body))
+                    log.debug("GET %s -> %s [%s] (%.2fs, %d bytes)", endpoint(path), response.status, request_id, watch.lap(), len(body))
                 return body, str(response.headers.get("Content-Type") or "")
         except OSError as exc:
-            raise _read_failure(exc, path) from exc
+            raise _read_failure(exc, path, request_id) from exc
 
     def put_bytes(self, url: str, content: bytes, headers: Optional[Dict[str, str]] = None, timeout: int = UPLOAD_TIMEOUT_SECONDS,
                   progress: Optional[Callable[[float], None]] = None) -> int:
@@ -272,8 +288,9 @@ class FmClient:
                 return response.status
         except urllib.error.HTTPError as exc:
             said = _said(exc)
-            log.error("Upload HTTP %s: %s", exc.code, said)
-            raise FmApiError(t("data.fm_upload_returned", status=exc.code, said=said[:ERROR_MESSAGE_CHARS]), exc.code) from exc
+            log.error("Upload HTTP %s (%s)", exc.code, describe_body(said.encode("utf-8")))   # neither the signed address nor what was said is logged
+            _debug_body("refusal to", "PUT upload", said)
+            raise FmApiError(t("data.fm_upload_returned", status=exc.code, said=said[:ERROR_MESSAGE_CHARS]), exc.code, address="PUT upload") from exc
         except OSError as exc:
             raise FmApiError(t("data.fm_upload_failed", reason=exc)) from exc
 
@@ -290,24 +307,25 @@ class FmClient:
         request before doing anything: it is sent again after the wait ``Retry-After`` asks for (else a growing, jittered one), up to
         ``WRITE_ATTEMPTS`` times.
         """
+        request_id = new_request_id()
         for attempt in range(1, WRITE_ATTEMPTS + 1):
             try:
-                return self._send_once(method, path, body, content_type)
+                return self._send_once(method, path, body, content_type, request_id)
             except FmApiError as exc:
                 wait = backoff.delay(attempt, exc.retry_after) if exc.status == BUSY else None
                 if attempt == WRITE_ATTEMPTS or wait is None:
                     raise
-                log.warning("Fusion Manage %s %s was refused as too busy, attempt %d of %d, again in %.1fs", method, path, attempt, WRITE_ATTEMPTS, wait)
+                log.warning("Fusion Manage %s %s [%s] was refused as too busy, attempt %d of %d, again in %.1fs", method, endpoint(path), request_id, attempt, WRITE_ATTEMPTS, wait)
                 self.cancel.wait(wait)
         raise AssertionError("unreachable: the last attempt returns or raises")
 
-    def _send_once(self, method: str, path: str, body: Any, content_type: str) -> SendResult:
+    def _send_once(self, method: str, path: str, body: Any, content_type: str, request_id: str = "") -> SendResult:
         """One try of ``send_json``."""
         self.cancel.check()
         payload = None if body is None else json.dumps(body).encode("utf-8")
         request = self._request(self._url(path), "application/json", method, payload, content_type if payload is not None else "")
-        if log.isEnabledFor(logging.DEBUG):
-            log.debug("%s %s body: %s", method, path, _clip(payload or b""))
+        address = f"{method} {endpoint(path)}"
+        _debug_body("sent to", address, _readable(payload))
         began = time.monotonic()
         try:
             with open_url(request, WRITE_TIMEOUT_SECONDS, self.cancel) as response:
@@ -315,17 +333,19 @@ class FmClient:
                 try:
                     data = json.loads(raw) if raw.strip() else None
                 except ValueError as exc:
-                    log.error("Fusion Manage HTTP %s for %s %s was not JSON: %r", response.status, method, path, raw[:NOT_JSON_LOG_BYTES])
-                    raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc), response.status) from exc
+                    log.error("Fusion Manage HTTP %s for %s [%s] was not JSON (%d bytes)", response.status, address, request_id, len(raw))
+                    _debug_body("answer to", address, raw)
+                    raise FmApiError(t("data.fm_request_failed_method", method=method, path=endpoint(path), reason=exc), response.status) from exc
                 result = SendResult(response.status, dict(response.headers.items()), data)
-                log.info("Fusion Manage %s %s -> %s %s", method, path, result.status, raw[:ANSWER_LOG_BYTES].decode("utf-8", "replace"))
-                if log.isEnabledFor(logging.DEBUG):
-                    log.debug("%s %s took %.2fs, answered: %s", method, path, time.monotonic() - began, _clip(raw))
+                log.info("Fusion Manage %s -> %s in %.2fs [%s] (%s)", address, result.status, time.monotonic() - began, request_id, describe_body(raw))
+                _debug_body("answer to", address, raw)
                 return result
         except urllib.error.HTTPError as exc:
             said = _said(exc)
-            log.error("Fusion Manage HTTP %s for %s %s: %s; it sent: %s", exc.code, method, path, said, _readable(payload))
-            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=path, said=said[:ERROR_MESSAGE_CHARS]), exc.code, said,
-                             backoff.retry_after(exc.headers)) from exc
+            log.error("Fusion Manage HTTP %s for %s in %.2fs [%s] (answer: %s; sent: %d bytes)", exc.code, address, time.monotonic() - began, request_id,
+                      describe_body(said.encode("utf-8")), len(payload or b""))
+            _debug_body("refusal to", address, said)
+            raise FmApiError(t("data.fm_returned_status_said", status=exc.code, method=method, path=endpoint(path), said=said[:ERROR_MESSAGE_CHARS]), exc.code, said,
+                             backoff.retry_after(exc.headers), address) from exc
         except OSError as exc:
-            raise FmApiError(t("data.fm_request_failed_method", method=method, path=path, reason=exc)) from exc
+            raise FmApiError(t("data.fm_request_failed_method", method=method, path=endpoint(path), reason=exc)) from exc

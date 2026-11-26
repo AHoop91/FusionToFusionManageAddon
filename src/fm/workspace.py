@@ -19,7 +19,7 @@ from urllib.parse import quote_plus
 
 from ..auth.errors import AuthError
 from ..config.workspace_models import ITEMS_KIND, WorkspaceKind, kind_texts
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import get_logger, log_body
 from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig, rows_in, whole
 from .client import LOOKUPS, WORKSPACES, FmApiError, FmClient, last_segment
@@ -232,7 +232,7 @@ class WorkspaceService:
         try:
             data = self._client.get_json(f"{base}/{path}")
             if path != "fields":
-                log.info("Fields of %s/%s: %.4000s", base, path, data)   # how a grid is described is read from here
+                log_body(log, "fields of", data, f"{base}/{path}")   # how a grid is described is read from here: in a verbose log
         except (FmApiError, AuthError) as exc:
             log.warning("Could not load fields for %s/%s: %s", base, path, exc)
             return [], t("data.fm_fields_failed", reason=exc)

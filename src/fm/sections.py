@@ -8,7 +8,7 @@ matrices (grids of fields), whose fields belong to the section too.
 
 from typing import Any, Dict, Iterator, List
 
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import get_logger, log_body
 from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows
 from .client import WORKSPACES, FmApiError, FmClient, last_segment
@@ -18,7 +18,6 @@ from .ttl_cache import TtlCache
 log = get_logger("fm.sections")
 
 BULK = "application/vnd.autodesk.plm.sections.bulk+json"   # asks for every section with its fields and matrices in one answer
-LOG_CHARS = 500   # of a sections answer that held no fields, kept in the log
 
 
 def _link(node: Any) -> str:
@@ -86,6 +85,7 @@ class SectionService:
         details = self._details(workspace_id)
         fields = parse_sections(details)
         if not fields:   # say so now, instead of every item failing with "not in any section"
-            log.error("No fields found in the sections of workspace %s: %r", workspace_id, str(details)[:LOG_CHARS])
+            log.error("No fields found in the sections of workspace %s (%d sections)", workspace_id, len(details))
+            log_body(log, "sections of", details, str(workspace_id))
             raise FmApiError(t("data.fm_sections_no_fields", workspace=workspace_id, count=len(details)))
         return fields

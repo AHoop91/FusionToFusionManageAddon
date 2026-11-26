@@ -827,7 +827,7 @@ class ItemPanel:
             raise ItemNotFound(number)
         picked, competing = self._choices.resolve(cfg.workspace_id, number, hits)
         if len(competing) > 1:
-            log.info("Item number %s matches %d items: %s", number, len(competing), "; ".join(f"{h['id']} ({h['descriptor']})" for h in competing))
+            log.info("Item number %s matches %d items: %s", number, len(competing), ", ".join(str(h["id"]) for h in competing))
         if picked is None:
             raise SeveralItems(number, competing)
         view = ItemViewService(client).read(cfg.workspace_id, picked["id"], held)

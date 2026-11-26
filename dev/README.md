@@ -28,4 +28,4 @@ Before you write a new form, field control, list, view table, error display or d
 ## Keeping the notes true
 
 - A note says only what the code does now. When you change a component, change its note in the same commit.
-- Each note ends its description with a "What Fusion Manage answers" section (the refusal note has "The refusal Fusion Manage sends"). Every key there is marked Seen (in a real answer in the add-in log at `%LOCALAPPDATA%\MfgToFm\logs`) or Assumed (the code or tests rely on it). When you see a new real answer, move its shape to Seen. Do not add a key you have not seen.
+- Each note ends its description with a "What Fusion Manage answers" section (the refusal note has "The refusal Fusion Manage sends"). Every key there is marked Seen (in a real answer in a verbose add-in log at `%LOCALAPPDATA%\MfgToFm\logs`: a normal log holds no answers, see `logging_setup.log_body`) or Assumed (the code or tests rely on it). When you see a new real answer, move its shape to Seen. Do not add a key you have not seen.

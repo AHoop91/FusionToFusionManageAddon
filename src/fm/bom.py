@@ -9,7 +9,7 @@ import re
 from datetime import date
 from typing import Any, Dict, List, Tuple
 
-from ..core.logging_setup import get_logger
+from ..core.logging_setup import endpoint, get_logger
 from ..core.i18n import t
 from ..core.shapes import as_dict, as_list, dict_rows, dig
 from .client import WORKSPACES, FmApiError, FmClient
@@ -169,7 +169,7 @@ class BomService:
                 f"?depth={depth}&effectiveDate={date.today().isoformat()}&revisionBias={self._bias}&rootId={item_id}")
         data = self._client.get_json(path, accept=ACCEPT)
         nodes = len(as_list(dig(data, "nodes")))
-        log.info("BOM answer for %s: %d node(s)", path, nodes)
+        log.info("BOM answer for %s: %d node(s)", endpoint(path), nodes)
         if not nodes:   # an item is always a node of its own BOM, so an answer with none is not a BOM
             raise FmApiError(t("data.fm_no_bom_nodes"))
         return data
