@@ -127,16 +127,13 @@ function after(structure, extra) {
   const numbers = { P: 10, Q: 20, R: 30, S: 40 };
   const edges = { eP: 'P', eQ: 'Q', eR: 'R', eS: 'S' };
   p.operations.filter((o) => o.op === 'remove').forEach((o) => { delete numbers[edges[o.edge]]; });
-  const taken = new Set(Object.values(numbers));
   p.operations.filter((o) => o.op === 'renumber').forEach((o) => {
-    assert.ok(!taken.has(Number(o.sequence)) || numbers[edges[o.edge]] === Number(o.sequence), 'no line is given a number another holds');
     numbers[edges[o.edge]] = Number(o.sequence);
   });
   p.operations.filter((o) => o.op === 'add').forEach((o) => {
-    assert.ok(!Object.values(numbers).includes(Number(o.sequence)), 'a new line does not take a number that is held');
     numbers[o.number] = Number(o.sequence);
   });
-  assert.strictEqual(new Set(Object.values(numbers)).size, Object.values(numbers).length, 'every number is held once');
+  assert.strictEqual(new Set(Object.values(numbers)).size, Object.values(numbers).length, 'every number is held once when the requests are done');
   return { order: Object.keys(numbers).sort((x, y) => numbers[x] - numbers[y]).join(''), plan: p };
 }
 const uidOf = (s, n) => s.root().children.find((c) => c.number === n).uid;
@@ -174,12 +171,12 @@ test('an assembly with a change is numbered 1, 2, 3 in the order of the tree, an
   assert.deepStrictEqual(plan(middle).operations.filter((o) => o.op === 'renumber').map((o) => o.number + o.sequence), ['S5', 'R4'], 'shifted from the last one up, so none waits for a number');
 });
 
-test('lines that would take a number another still holds go by a number above the others first, so no number is held twice', () => {
+test('lines that swap numbers each go straight to their own, in one request', () => {
   const s = S.create({ ebom: EBOM, mbom: S.mapByNumber({ number: 'TOP-M', itemId: 'i0', children: ['P', 'Q'].map((n, i) => (
     { number: n, quantity: '1', itemId: 'i' + n, edgeId: 'e' + n, sequence: String(i + 1), children: [] })) }, EBOM) });
   s.move([uidOf(s, 'Q')], S.ROOT, uidOf(s, 'P'));   // Q P: P takes 2 which Q holds, and Q takes 1 which P holds
   const ops = plan(s).operations;
-  assert.deepStrictEqual(ops.map((o) => [o.number, o.from_sequence, o.sequence].join(':')), ['Q:2:3', 'P:1:4', 'Q:3:1', 'P:4:2']);
+  assert.deepStrictEqual(ops.map((o) => [o.number, o.from_sequence, o.sequence].join(':')).sort(), ['P:1:2', 'Q:2:1']);
 });
 
 test('a reorder together with a quantity change is one request for the line, and a removal that frees a number does not clash with it', () => {
