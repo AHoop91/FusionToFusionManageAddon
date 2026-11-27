@@ -39,6 +39,13 @@ class MbomService:
         wanted = number.strip().lower()
         return any(number_key(hit["descriptor"]) == wanted for hit in ItemFinder(self._client, LATEST).search(workspace_id, number))
 
+    def of_component(self, workspace_id: str, record_link: str, number_field: str) -> List[Dict[str, str]]:
+        """The items of the workspace made from the component whose record in the Components workspace is at ``record_link``: ``find`` with the
+        lineage id read from that record (its Lineage URN), as the component may be a design of its own, not the open one. Raises ``FmApiError``
+        when the record has no design or no asset id, or the search fails."""
+        lineage, asset = ComponentService(self._client).identity(record_link)   # one read of the record
+        return self._search(workspace_id, lineage, asset, number_field)
+
     def find(self, workspace_id: str, lineage: str, record_link: str, number_field: str) -> List[Dict[str, str]]:
         """The items of the workspace made from the design with this lineage id and the asset id of its Components record (both must match),
         as ``{"id", "number", "descriptor"}`` in the order the search gives them. Only the working version of each item is searched for.
@@ -48,7 +55,10 @@ class MbomService:
         when ``lineage`` is not a lineage id, the record has no asset id or the search fails: a failed search is not "no MBOM"."""
         if not LINEAGE.fullmatch(lineage):
             raise FmApiError(t("data.fm_bad_lineage"))
-        asset = ComponentService(self._client).asset(record_link)
+        return self._search(workspace_id, lineage, ComponentService(self._client).asset(record_link), number_field)
+
+    def _search(self, workspace_id: str, lineage: str, asset: str, number_field: str) -> List[Dict[str, str]]:
+        """The search ``find`` and ``of_component`` make, for a lineage id and an asset id already known."""
         log.info("Looking for the MBOM items of workspace %s with %s=%s and %s=%s", workspace_id, ITEM_LINEAGE_FIELD, lineage, ITEM_ASSET_FIELD, asset)
         fields = [Field(ITEM_LINEAGE_FIELD), Field(ITEM_ASSET_FIELD), Field(number_field), Field(DESCRIPTOR_FIELD, DESCRIPTOR_TAB)]
         filters = [Filter(ITEM_LINEAGE_FIELD, IS, lineage), Filter(ITEM_ASSET_FIELD, IS, asset), Filter(WORKING_FIELD, IS_TRUE, "", LIFECYCLE)]

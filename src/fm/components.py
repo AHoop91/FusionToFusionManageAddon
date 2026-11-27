@@ -6,7 +6,7 @@ for the options whose text matches the item number. The option's ``link`` is wha
 """
 
 import re
-from typing import Any, List, NamedTuple, Tuple
+from typing import Any, Dict, List, NamedTuple, Tuple
 from urllib.parse import quote
 
 from ..core.logging_setup import get_logger
@@ -28,6 +28,7 @@ LINEAGE_FIELD = "LINEAGE_URN"   # the Components workspace field that holds it
 ASSET_FIELD = "ASSET_URN"   # and the one that holds the design's asset id (it is not part of the Data Model's model id)
 _URN = re.compile(r"\.(\d+)\.(\d+)\s*$")   # urn:adsk.plm:tenant.workspace.item:TENANT.<workspace>.<item>
 _WORKING = re.compile(r"\[REV:\s*w(?:orking)?\s*\]", re.IGNORECASE)   # "[REV:w]": how Fusion Manage names the working version
+_IDENTITIES = TtlCache(600)   # (lineage id, asset id) of a Components record by tenant and link: the design a record was made from does not change
 _WORKSPACES = TtlCache(600)   # the Components workspace's id by tenant: it does not change, and the Export window asks twice
 
 
@@ -91,28 +92,53 @@ class ComponentService:
                 _WORKSPACES.put(key, found)
         return found
 
-    def _field(self, link: str, field_id: str) -> str:
-        """The text of a field of the item at ``link``: "" when the item holds no value for it, or ``link`` is not an item's (nothing is read)."""
+    def _values(self, link: str) -> Dict[str, Any]:
+        """The fields of the item at ``link`` (``collect_values``): none when ``link`` is not an item's (nothing is read)."""
         workspace_id, item_id = link_ids(link)
         if not item_id:
-            return ""
-        return str(collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}")).get(field_id) or "")
+            return {}
+        return collect_values(self._client.get_json(f"{WORKSPACES}/{workspace_id}/items/{item_id}"))
 
-    def design_file(self, link: str) -> str:
-        """The lineage id (``urn:adsk.wipprod:dm.lineage:...``) of the Fusion design the component item at ``link`` was published from: what Fusion
-        opens the design by. It is the item's Lineage URN field. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no design."""
-        found = self._field(link, LINEAGE_FIELD)
+    @staticmethod
+    def _lineage_of(values: Dict[str, Any]) -> str:
+        """The lineage id in the fields of a Components record; raises ``FmApiError`` when it has none."""
+        found = str(values.get(LINEAGE_FIELD) or "")
         if not LINEAGE.fullmatch(found):
             raise FmApiError(t("data.fm_no_design_file"))
         return found
 
-    def asset(self, link: str) -> str:
-        """The asset id of the Fusion design the component item at ``link`` was published from (its Asset URN field): what the Items workspace's
-        ``COMPONENT_ASSET_URN`` copies. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no asset id."""
-        found = self._field(link, ASSET_FIELD)
+    @staticmethod
+    def _asset_of(values: Dict[str, Any]) -> str:
+        """The asset id in the fields of a Components record; raises ``FmApiError`` when it has none."""
+        found = str(values.get(ASSET_FIELD) or "")
         if not found:
             raise FmApiError(t("data.fm_no_asset"))
         return found
+
+    @classmethod
+    def forget(cls) -> None:
+        """Drop the ids kept of Components records, so the next look reads them again (the page's Refresh)."""
+        _IDENTITIES.clear()
+
+    def identity(self, link: str) -> Tuple[str, str]:
+        """``(lineage id, asset id)`` of the Fusion design the component item at ``link`` was published from, in one read of the record. Raises
+        ``FmApiError`` when ``link`` is not an item's, or the item has no design or no asset id. Kept for the next look at the same record."""
+        key = (self._client.base_url, link)
+        kept = _IDENTITIES.get(key)   # the design a record was made from does not change, so the next open of the same part reads nothing
+        if kept:
+            return kept
+        values = self._values(link)
+        return _IDENTITIES.put(key, (self._lineage_of(values), self._asset_of(values)))   # only what was found: a record with no design yet may be given one later
+
+    def design_file(self, link: str) -> str:
+        """The lineage id (``urn:adsk.wipprod:dm.lineage:...``) of the Fusion design the component item at ``link`` was published from: what Fusion
+        opens the design by. It is the item's Lineage URN field. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no design."""
+        return self._lineage_of(self._values(link))
+
+    def asset(self, link: str) -> str:
+        """The asset id of the Fusion design the component item at ``link`` was published from (its Asset URN field): what the Items workspace's
+        ``COMPONENT_ASSET_URN`` copies. Raises ``FmApiError`` when ``link`` is not an item's, or the item has no asset id."""
+        return self._asset_of(self._values(link))
 
     def revision_and_state(self, link: str) -> Tuple[str, str]:
         """``(revision, life cycle state)`` of the component record at ``link`` (the Data Model gives it, see ``read_manage_item``)."""

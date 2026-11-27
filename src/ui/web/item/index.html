@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../shared/css/header.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/picker.css">
+  <link rel="stylesheet" href="../shared/css/choice-table.css">
   <link rel="stylesheet" href="../shared/css/section.css">
   <link rel="stylesheet" href="../shared/css/toast.css">
   <link rel="stylesheet" href="../shared/css/empty-state.css">
@@ -53,16 +54,14 @@
 
     <!-- Shown, centred, in place of the item: when no item has the number, or the user may not view the workspace. -->
     <div id="item-empty" class="loader item-empty" hidden>
-      <svg id="item-empty-icon" class="item-empty-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
-      <p id="item-empty-text" class="item-empty-text"></p>
-      <p id="item-empty-number" class="item-empty-number" hidden></p>
-      <p id="item-empty-hint" class="item-empty-hint"></p>
-      <!-- Several items share the number: one button each, filled in by item.js. -->
-      <div id="item-empty-picker" class="item-empty-picker" hidden>
-        <input id="item-empty-filter" class="item-empty-filter" type="search" placeholder="Filter by name or ID" aria-label="Filter the items" data-i18n-attr="placeholder:item.filter_placeholder;aria-label:item.filter_label" hidden>
-        <ul id="item-empty-choices" class="item-empty-choices"></ul>
-        <p id="item-empty-capped" class="item-empty-capped" data-i18n="item.capped_note" hidden>Only the first items found are listed. If yours is not here, give the items different numbers in Fusion Manage.</p>
+      <div class="item-empty-head">   <!-- a plain wrapper, except when the user is to choose an item: then it is the white heading above the table -->
+        <svg id="item-empty-icon" class="item-empty-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+        <p id="item-empty-text" class="item-empty-text"></p>
+        <p id="item-empty-number" class="item-empty-number" hidden></p>
+        <p id="item-empty-hint" class="item-empty-hint"></p>
       </div>
+      <!-- Several items are made from the component: the shared table of choices (choice-table.js), filled in by item.js. -->
+      <div id="item-empty-picker" class="item-empty-picker" hidden></div>
       <!-- What the Publish button will do, so the user knows what comes next. Nothing is sent until they confirm in the Publish panel. -->
       <ol id="item-empty-steps" class="item-empty-steps" hidden>
         <li data-i18n="item.step_review">Opens the Publish panel, where you review what will be sent</li>
@@ -169,6 +168,7 @@
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/picker.js"></script>
+  <script src="../shared/js/choice-table.js"></script>
   <script src="../shared/js/section.js"></script>
   <!-- Item panel -->
   <script src="js/safe-html.js"></script>

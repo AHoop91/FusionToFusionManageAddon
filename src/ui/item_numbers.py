@@ -21,6 +21,7 @@ from ..core.logging_setup import get_logger
 from ..core.paths import DataDirError, data_dir, temp_dir
 from ..core.shapes import as_dict, dig
 from ..fm.components import manage_link
+from ..fm.ttl_cache import TtlCache
 from ..fusion_mfg.design_reads import DesignReads
 from ..fusion_mfg.fusion_graphql_client import FusionGraphQlClient, MfgApiError
 from ..fusion_mfg.hub_lookup import read_hub_id
@@ -53,6 +54,7 @@ class Subject(NamedTuple):
 
     item_number: str   # what Fusion Manage finds the item by
     part_number: str   # what Fusion calls the component, to find it in the open design
+    ref: Optional[DesignRef] = None   # where the Data Model finds it, set by ``NumberFinder.find`` (not kept: it names a version of a design)
 
 
 def design_ref(design: Any) -> DesignRef:
@@ -160,6 +162,7 @@ class ItemNumbers:
         self._file_lock = threading.Lock()   # one find of a design by its file at a time (the read ahead and the click arrive together)
         self._files: Dict[str, Tuple[str, str]] = {}   # design file id -> (model id, time), kept while the Export window is open
         self._hubs: Dict[str, str] = {}   # hub name -> hub id
+        self._links = TtlCache(600)   # the Components record found for (model id, time, part number): a saved version never changes
 
     def _model_of_file(self, client: FusionGraphQlClient, ref: DesignRef) -> DesignRef:
         """``ref`` with the Data Model id of its design, found from the design's data file (the hub's item whose id is the file's lineage id)."""
@@ -183,6 +186,10 @@ class ItemNumbers:
             return ref
         self._require_saved(ref)
         return self._model_of_file(FusionGraphQlClient(cancel), ref)
+
+    def forget_links(self) -> None:
+        """Drop the Components records found for parts, so the next look asks the Data Model again (the Item page's Refresh)."""
+        self._links.clear()
 
     def forget_files(self) -> None:
         """Drop the models found for design files, so the next lookup asks again (the design may have been saved since)."""
@@ -242,10 +249,16 @@ class ItemNumbers:
     def record_link(self, ref: DesignRef, part_number: str = "", cancel: Optional[CancelToken] = None) -> str:
         """The API link of the record in the Components workspace (``/api/v3/workspaces/<workspace>/items/<item>``) of the component with
         ``part_number`` in the design ``ref`` ("" is the design itself), from the Data Model: "" when it is not linked to one yet. Raises
-        ``NoItemNumber`` when the design is not saved or has no such component. Worker thread."""
+        ``NoItemNumber`` when the design is not saved or has no such component. A link found is kept for the saved version of the design (it
+        does not change), so the next look at it skips the Data Model's query for the link (the summary is read, and kept); "" is not kept, as the link may be made later. Worker thread."""
         ref, client, summary = self._summary_of(ref, cancel)
+        key = (ref.model_id, ref.time, part_number.strip().lower())
+        kept = self._links.get(key) if ref.time else None   # a version with no time is not saved: it may change
+        if kept:
+            return kept
         linked = read_manage_item(client, summary, self._the_component(client, ref, summary, part_number), ref.time)
-        return manage_link(linked["urn"], linked["url"])
+        link = manage_link(linked["urn"], linked["url"])
+        return self._links.put(key, link) if link and ref.time else link
 
     def resolve(self, ref: DesignRef, part_number: str, cancel: Optional[CancelToken] = None) -> Subject:
         """The ``Subject`` of the component with ``part_number`` in the design ``ref`` ("" is the design itself). Worker thread."""

@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from src.fm.client import FmApiError
+from src.fm.components import ComponentService
 from src.fm.mbom import ITEM_ASSET_FIELD, ITEM_LINEAGE_FIELD, WORKING_FIELD, MbomService
 
 LINEAGE = "urn:adsk.wipprod:dm.lineage:4A7qrWmaTuG0eOal8ycK3w"
@@ -17,6 +18,7 @@ class Client:
 
     def __init__(self, *answers, record=RECORD):
         self.answers, self.sent, self.record, self.read = list(answers), [], record, []
+        self.base_url = "https://acme.example"
 
     def get_json(self, path):
         self.read.append(path)
@@ -86,6 +88,36 @@ class FindTests(unittest.TestCase):
     def test_an_answer_that_is_not_a_search_raises_and_is_not_an_empty_list(self):
         with self.assertRaises(FmApiError):
             MbomService(Client({"error": []})).find("242", LINEAGE, LINK, "NUMBER")
+
+
+class OfComponentTests(unittest.TestCase):
+    def setUp(self):
+        ComponentService.forget()   # what an earlier test kept of the record is not this test's
+        self.addCleanup(ComponentService.forget)
+
+    BOTH = {"sections": [{"fields": [{"__self__": "/api/v3/workspaces/57/items/16997/views/1/fields/ASSET_URN", "value": ASSET},
+                                     {"__self__": "/api/v3/workspaces/57/items/16997/views/1/fields/LINEAGE_URN", "value": LINEAGE}]}]}
+
+    def test_the_lineage_id_is_read_from_the_components_record_not_from_the_open_design(self):
+        client = Client(answer(("11", "PN-1-A")), record=self.BOTH)
+        self.assertEqual(MbomService(client).of_component("242", LINK, "NUMBER"), [{"id": "11", "number": "PN-1-A", "descriptor": "PN-1-A - Name"}])
+        self.assertEqual(client.sent[0][2]["filter"][0]["filterValue"], LINEAGE)
+        self.assertEqual(client.read, [LINK])   # one read of the record gives both ids
+
+    def test_the_ids_of_a_record_are_kept_so_the_next_look_reads_nothing_until_refresh(self):
+        client = Client(answer(("11", "PN-1-A")), answer(("11", "PN-1-A")), answer(("11", "PN-1-A")), record=self.BOTH)
+        MbomService(client).of_component("242", LINK, "NUMBER")
+        MbomService(client).of_component("242", LINK, "NUMBER")
+        self.assertEqual(client.read, [LINK])   # read once; the search is made each time
+        ComponentService.forget()
+        MbomService(client).of_component("242", LINK, "NUMBER")
+        self.assertEqual(client.read, [LINK, LINK])
+
+    def test_a_record_with_no_lineage_id_is_refused_before_a_search(self):
+        client = Client(record=RECORD)   # it holds an asset id only
+        with self.assertRaises(FmApiError):
+            MbomService(client).of_component("242", LINK, "NUMBER")
+        self.assertEqual(client.sent, [])
 
 
 def found(*descriptors):

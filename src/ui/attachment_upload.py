@@ -28,7 +28,8 @@ from ..core.logging_setup import get_logger
 from ..fm.attachments import NEW_VERSION, AttachmentService
 from ..fm.client import FmClient
 from ..fm.components import link_ids
-from ..fm.v3_search import WORKING, ItemChoices, ItemFinder
+from ..fm.mbom import MbomService
+from ..fm.v3_search import ItemChoices
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
 from ..publish.run_files import remove_run, temp_root
@@ -95,7 +96,7 @@ class AttachmentUpload:
         self._contexts = HubContexts(config, auth.session)
         self._auth = auth
         self._reload = reload   # read the item shown again (its tab counts change)
-        self._choices = choices or ItemChoices()   # which item is meant where several share a number: the Item panel's choice
+        self._choices = choices or ItemChoices()   # which item is meant where several are made from the part: the Item panel's choice
         self._announce = announce   # told ``status()`` each time it changes, from any thread: the pages are pushed it, and also ask now and then
         self._lock = threading.Lock()
         self._components = TtlCache(60)   # (workspace id, item id) of a component's record by (stamp, item number), found ahead of an export
@@ -166,21 +167,29 @@ class AttachmentUpload:
         self._tasks.post(lambda: self._make(job, context, located, subject))
 
     def _find(self, goal: _Goal, subject: Subject, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
-        """``(workspace id, item id)`` of the item of ``subject``, or of its Components record for the COMPONENT destination (which needs the ``ref`` of ``goal``)."""
+        """``(workspace id, item id)`` of the item made from ``subject``, or of its Components record for the COMPONENT destination. Both need
+        where the Data Model finds the part: the ``ref`` of ``goal``, else the one the finder gave the ``subject``."""
+        ref = goal.ref or subject.ref
+        if ref is None:
+            raise LookupError(t("app.no_item_shown"))
         if goal.destination == COMPONENT:
-            return self._find_component(subject, goal.ref, context, cancel)
-        return self._find_item(subject.item_number, context, cancel)
+            return self._find_component(subject, ref, context, cancel)
+        return self._find_item(subject, ref, context, cancel)
 
-    def _find_item(self, number: str, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
-        """``(workspace id, item id)`` of the working version of the item numbered ``number`` in the Items workspace: a released version
-        cannot have files attached."""
+    def _find_item(self, subject: Subject, ref: DesignRef, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
+        """``(workspace id, item id)`` of the working version of the item made from ``subject``, a part of the design ``ref``: found by the lineage
+        id and asset id of its Components record, as the Item panel finds it (a released version cannot have files attached). Raises
+        ``LookupError`` when there is none, or several and the Item panel has not been told which is meant."""
         if context.items_problem:
             raise ValueError(t("app.complete_in_preferences", problem=context.items_problem))
-        workspace_id = context.cfg.workspace_id
-        hits = ItemFinder(FmClient(context.settings, self._auth, cancel), WORKING).search(workspace_id, number)
+        number, workspace_id = subject.item_number, context.cfg.workspace_id
+        link = self._records(ref, subject.part_number, cancel)
+        if not link:
+            raise LookupError(t("data.fm_mbom_not_linked"))
+        hits = MbomService(FmClient(context.settings, self._auth, cancel)).of_component(workspace_id, link, context.cfg.item_number_field())
         if not hits:
             raise LookupError(t("app.no_item_for_number", number=number))
-        picked, competing = self._choices.resolve(workspace_id, number, hits)
+        picked, competing = self._choices.pick(workspace_id, number, hits)
         if picked is None:   # the choice is made in the Item panel, which lists the items; a file is not attached to one of them by guesswork
             raise LookupError(t("app.items_match_choose_in_panel", count=len(competing), number=number))
         return workspace_id, picked["id"]

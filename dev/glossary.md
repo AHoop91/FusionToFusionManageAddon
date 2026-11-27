@@ -22,16 +22,17 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | I need to | Use | Where | Note |
 | --- | --- | --- | --- |
 | Find an item by item number | `ItemFinder.search` (one) or `find_many` (several, with fields) | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
-| Pick one item when several share a number | `resolve_hits`, `ItemChoices` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
+| Pick one item when several share a number | `resolve_hits`, `ItemChoices.resolve` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
+| Pick one item when several were found by something other than their number (the MBOM items of a component) | `ItemChoices.pick` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
 | Read an item's fields | `ItemService.read`, `read_named` | `fm/items.py` | |
 | Search a workspace's Grid tab (the v3 search cannot) | `V1SearchService.page` or `rows`, with `build_definition` | `fm/v1_search.py` | [finding-items.md](finding-items.md) |
 | Find where a design is used in the portfolio (a product's Primary Component, or a row of its Variants grid) | `ProductService.usage` (the `products_usage` action) | `publish/products.py`, `ui/actions/product_actions.py` | [finding-items.md](finding-items.md) |
 | The open design's name, number and thumbnail from the Data Model, with the revision and state of its Fusion Manage item | `ItemNumbers.describe`, `item_view.revision_and_state` (the `products_design` action) | `ui/item_numbers.py`, `fm/item_view.py` | [finding-items.md](finding-items.md) |
 | Open the Fusion design a Components item was published from (its Lineage URN, then `findFileById`) | `ComponentService.design_file`, `open_design_file` (the `products_design_file` and `products_open_file` actions) | `fm/components.py`, `ui/actions/product_actions.py` | [finding-items.md](finding-items.md) |
 | Search the Items workspace with text and filters (Add Items picker) | `ItemSearchService.page`, `search_path`, `build_query` | `fm/v3_search.py` | [finding-items.md](finding-items.md) |
-| Find the Components record of a part of the open design (its address, from the Data Model) | `ItemNumbers.record_link(ref, part_number)`, which uses `read_manage_item` and `manage_link` | `ui/item_numbers.py`, `fusion_mfg/model_service.py`, `fm/components.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
-| Read the Asset URN or the Lineage URN of a Components record | `ComponentService.asset`, `design_file` | `fm/components.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
-| Find the manufacturing bills of materials (MBOM) of a design, or check an item number is free | `MbomService.find` (lineage and asset), `number_taken` | `fm/mbom.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
+| Find the Components record of a part of the open design (its address, from the Data Model; kept for a saved version of the design) | `ItemNumbers.record_link(ref, part_number)`, which uses `read_manage_item` and `manage_link` | `ui/item_numbers.py`, `fusion_mfg/model_service.py`, `fm/components.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
+| Read the Asset URN or the Lineage URN of a Components record (`identity` gives both in one read) | `ComponentService.identity`, `asset`, `design_file` | `fm/components.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
+| Find the manufacturing bills of materials (MBOM) of a design, or of a component (the Item panel's lookup), or check an item number is free | `MbomService.find` (lineage and asset), `of_component` (lineage read from the component's record), `number_taken` | `fm/mbom.py` | [manufacturing-data-model.md](manufacturing-data-model.md) |
 | List the options of the Component linking picklist for a number | `ComponentService.matching` | `fm/components.py` | [finding-items.md](finding-items.md) |
 | Read the derived fields a linking field takes from the item it links to (sent with the link on publish) | `PivotService.derived` | `fm/pivots.py` | [publish-item-flow.md](publish-item-flow.md) |
 | Read an item's BOM, its BOM tab, or where it is used | `fm/bom.py`, `fm/bom_view.py`, `fm/where_used.py` | `fm/` | |
@@ -140,7 +141,7 @@ Paths are under `src/`. A "worker thread" means a thread of our own, never Fusio
 | Add entries to Fusion's right-click menu | `ItemContextMenu` | `ui/item_context_menu.py` |
 | Find the item number of a component on a worker thread, then act on it on the UI thread | `NumberFinder.find` with `FindOptions` | `ui/number_finder.py` |
 | What the Export window reads and does: what is exported, its names, the item number read ahead, the look at the attached files, the export | `ExportPanel` (the Item panel's `exporter`) | `ui/export_panel.py` |
-| The Item page's actions: tab look-ups, item loading, selection following, uploads from the Actions menu, files freshness | `ItemPanel` | `ui/item_panel.py` |
+| The Item page's actions: tab look-ups, item loading, selection following, uploads from the Actions menu, files freshness (it opens the palette at once in its loading state, `_open_part`, and finds the item behind it; pictures are a look-up of their own, `picture_load`) | `ItemPanel` | `ui/item_panel.py` |
 
 ## Web: shared scripts (`ui/web/shared/js/`)
 
@@ -159,6 +160,7 @@ Every script attaches to `window.MfgUi` (`ns`). Load order is in each `index.htm
 | One control per field of a workspace form spec, its value, required star, error line and Fusion Manage refusals | `ns.formControls.make({ask, failure, openLightbox, actions})` in `form-controls.js` (the Products page and the Publish dialog use it) | [workspace-forms.md](workspace-forms.md) |
 | Browser checks of Fusion Manage's validators | `ns.validators.check` in `validators.js` | [validation.md](validation.md) |
 | A short message at the bottom | `ns.toast.show` | |
+| A table to choose one row from, with a search bar, column titles, a row count and arrows (Publish lists its MBOM items with it; the Item panel lists the items made from a component) | `ns.choiceTable.make({rows, titles, text, onPick})`, styled by `shared/css/choice-table.css` (it holds the structure viewer's `sv-bar`, `sv-search` and `sv-pane` too) | |
 | A tooltip that shows quickly | `ns.tooltip` | |
 | A progress card for an upload | `ns.uploadProgress` | |
 | A report of what differs from Fusion Manage (the Item panel) | `ns.diffReport` | |

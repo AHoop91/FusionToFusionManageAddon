@@ -123,3 +123,28 @@ test('a section laid out folded starts folded and asks for its pictures only whe
   assert.strictEqual(asked.length, 4, 'only the first opening asks');
   assert.ok(open && !open.classList.contains('folded'));
 });
+
+test('the table of choices lists a row for each choice, narrows by what is typed, counts the rows and sends the key picked', () => {
+  const w = page(['dom.js', 'choice-table.js']);
+  const picked = [];
+  const table = w.MfgUi.choiceTable.make({
+    rows: [{ key: '1', first: 'PN-1-A', second: 'PN-1-A - Bolt', pill: '' }, { key: '2', first: 'PN-1-B', second: 'PN-1-B - Nut', pill: 'New' }],
+    titles: ['Item number', 'Descriptor'],
+    text: { search: 'Search', hint: 'Pick one', label: 'Items', count: (n) => n + ' items', none: 'Nothing' },
+    onPick: (key) => picked.push(key),
+  });
+  w.document.body.appendChild(table);
+  assert.strictEqual(table.querySelectorAll('.ct-row').length, 2);
+  assert.strictEqual(table.querySelector('.ct-footer').textContent, '2 items');
+  assert.strictEqual(table.querySelectorAll('.ct-pill').length, 1);
+  const search = table.querySelector('.sv-search');
+  search.value = 'nut';
+  search.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.strictEqual(table.querySelectorAll('.ct-row').length, 1);
+  assert.strictEqual(table.querySelector('.ct-footer').textContent, '1 items');
+  table.querySelector('.ct-row').click();
+  assert.strictEqual(JSON.stringify(picked), '["2"]');
+  search.value = 'zzz';
+  search.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.strictEqual(table.querySelector('.ct-none').textContent, 'Nothing');
+});

@@ -1,6 +1,7 @@
 """The Item panel reads an item, and answers the look-ups and uploads of the page, under the hub context the item was read under."""
 
 import types
+from concurrent.futures import Future
 import unittest
 from unittest import mock
 
@@ -12,6 +13,28 @@ from tests.without_fusion import fusion_modules_stubbed
 with fusion_modules_stubbed():
     from src.ui import export_panel, fusion_selection, item_panel, number_finder
     from src.ui.item_panel import ItemNotFound, ItemPanel
+
+
+class _InlinePool:
+    """A pool that does the work where it is asked (the tests stand in for ``threading.Thread``, which a real pool starts)."""
+
+    def __init__(self, max_workers=1):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    @staticmethod
+    def submit(work, *args):
+        done = Future()
+        try:
+            done.set_result(work(*args))
+        except Exception as exc:  # noqa: BLE001 - what a real pool does: the caller finds it in the result
+            done.set_exception(exc)
+        return done
 
 
 class Setup(unittest.TestCase):
@@ -66,6 +89,91 @@ class ReadTests(Setup):
     def test_an_answer_that_is_not_an_item_carries_it_too(self):
         self.read_with(ItemNotFound("PN-1"))
         self.assertEqual((self.panel._status({})["missing"], self.panel._status({})["stamp"]), ("PN-1", self.stamp))
+
+    def read_items(self, hits):
+        """``_read`` of the component ``("ref", "PN-1")`` when the lineage and asset search finds ``hits``; ``(answer, the search, the read of the item)``."""
+        context = self.panel._contexts.attempt()[0]
+        with mock.patch.object(item_panel, "FmClient"), mock.patch.object(self.panel, "_held_permissions", return_value=set()),                 mock.patch.object(self.panel, "_items_of_component", return_value=hits) as search,                 mock.patch.object(item_panel, "ItemViewService") as view, mock.patch.object(item_panel, "ThreadPoolExecutor", _InlinePool):
+            view.return_value.read.return_value = {}
+            answer = self.panel._read(item_panel.Subject("PN-1", "PN-1", "ref"), mock.Mock(), context)
+        return answer, search, view.return_value.read
+
+    def test_the_item_is_the_one_made_from_the_component(self):
+        answer, search, read = self.read_items([{"id": "9", "descriptor": "PN-1-A - Nut"}])
+        self.assertEqual((answer["others"], read.call_args.args[1]), ([], "9"))
+        self.assertEqual(search.call_args.args[2], item_panel.Subject("PN-1", "PN-1", "ref"))
+
+    def test_several_items_made_from_the_component_are_a_choice_whatever_their_numbers(self):
+        with self.assertRaises(item_panel.SeveralItems) as raised:
+            self.read_items([{"id": "8", "descriptor": "PN-1-A - Bolt"}, {"id": "9", "descriptor": "PN-1-B - Nut"}])
+        self.assertEqual([c["id"] for c in raised.exception.candidates], ["8", "9"])
+
+    def test_choosing_among_the_items_found_does_not_search_again(self):
+        context = self.panel._contexts.attempt()[0]
+        hits = [{"id": "8", "descriptor": "PN-1-A - Bolt"}, {"id": "9", "descriptor": "PN-1-B - Nut"}]
+        subject = item_panel.Subject("PN-1", "PN-1", "ref")
+        with mock.patch.object(item_panel, "FmClient"), mock.patch.object(self.panel, "_held_permissions", return_value=set()), \
+                mock.patch.object(self.panel, "_items_of_component", return_value=hits) as search, \
+                mock.patch.object(item_panel, "ItemViewService") as view, mock.patch.object(item_panel, "ThreadPoolExecutor", _InlinePool):
+            view.return_value.read.return_value = {}
+            with self.assertRaises(item_panel.SeveralItems):
+                self.panel._read(subject, mock.Mock(), context)
+            self.panel._design_choices.set("242", "PN-1", "9")
+            self.panel._read(subject, mock.Mock(), context)
+        search.assert_called_once()
+        self.assertEqual(view.return_value.read.call_args.args[1], "9")
+
+    def test_opening_the_panel_again_asks_which_item_is_meant(self):
+        self.panel._design_choices.set("242", "PN-1", "9")
+        self.panel._design_choices.set("242", "PN-2", "5")
+        with mock.patch.object(self.panel, "_start"), mock.patch.object(self.panel, "_session"):
+            self.panel._open(item_panel.Subject("PN-1", "PN-1", "ref"), show=False)
+        hits = [{"id": "8", "descriptor": "PN-1-A"}, {"id": "9", "descriptor": "PN-1-B"}]
+        self.assertIsNone(self.panel._design_choices.pick("242", "PN-1", hits)[0])   # forgotten
+        self.assertEqual(self.panel._design_choices.pick("242", "PN-2", [{"id": "5", "descriptor": "x"}, {"id": "6", "descriptor": "y"}])[0]["id"], "5")   # another component's pick stays
+
+    def test_a_read_that_is_cancelled_ends_without_a_word(self):
+        context = self.panel._contexts.attempt()[0]
+        with mock.patch.object(self.panel, "_read", side_effect=item_panel.Cancelled()), mock.patch.object(self.panel, "_settle") as settle:
+            self.panel._load(1, item_panel.Subject("PN-1", "PN-1", "ref"), mock.Mock(), context)
+        settle.assert_not_called()
+
+    def test_a_part_that_cannot_be_found_leaves_no_item_to_refresh(self):
+        self.panel._number, self.panel._part = "PN-0", "PN-0"
+        with mock.patch.object(self.panel, "_start") as start:
+            self.panel._loading()
+            self.panel._refresh({})
+        self.assertEqual((self.panel._number, self.panel._part, self.panel._ref), ("", "", None))
+        start.assert_not_called()   # Refresh has nothing to read: the item before is not brought back over the error
+
+    def test_no_item_made_from_the_component_is_no_item(self):
+        with self.assertRaises(ItemNotFound):
+            self.read_items([])
+
+    def test_the_item_is_read_without_its_pictures_which_the_page_asks_for_after(self):
+        context = self.panel._contexts.attempt()[0]
+        with mock.patch.object(item_panel, "FmClient"), mock.patch.object(self.panel, "_held_permissions", return_value=set()),                 mock.patch.object(self.panel, "_items_of_component", return_value=[{"id": "9", "descriptor": "PN-1 - Nut"}]),                 mock.patch.object(item_panel, "ItemViewService") as view, mock.patch.object(item_panel, "ThreadPoolExecutor", _InlinePool):
+            view.return_value.read.return_value = {}
+            self.panel._read(item_panel.Subject("PN-1", "PN-1", "ref"), mock.Mock(), context)
+        self.assertIs(view.return_value.read.call_args.kwargs["pictures"], False)
+
+    def test_a_picture_is_read_through_a_look_up_of_the_page(self):
+        with mock.patch.object(self.panel, "_lookup", return_value={"started": True}) as lookup, mock.patch.object(item_panel, "TableauService") as service:
+            self.panel._picture_load({"request": "r1", "workspace_id": "242", "item_id": "9", "link": "/api/v2/x"})
+            lookup.call_args.args[1](mock.Mock())
+        service.return_value.picture.assert_called_once_with("242", "/api/v2/x")
+        self.assertEqual(lookup.call_args.args[2], "picture_result")
+
+    def test_a_component_with_no_record_in_the_components_workspace_cannot_be_looked_for(self):
+        self.panel._numbers.record_link = mock.Mock(return_value="")
+        with self.assertRaisesRegex(ValueError, "no record in the Components workspace"):
+            self.panel._items_of_component(mock.Mock(), mock.Mock(), item_panel.Subject("PN-1", "PN-1", "ref"), mock.Mock())
+        self.panel._numbers.record_link.assert_called_once()
+        self.assertEqual(self.panel._numbers.record_link.call_args.args[:2], ("ref", "PN-1"))
+
+    def test_a_component_with_no_reference_cannot_be_looked_for(self):
+        with self.assertRaises(ValueError):
+            self.panel._items_of_component(mock.Mock(), mock.Mock(), item_panel.Subject("PN-1", "PN-1"), mock.Mock())
 
     def test_settings_that_cannot_be_read_are_the_answer_and_nothing_is_read(self):
         self.config.effective_settings.side_effect = RuntimeError("shared file unreadable")
@@ -125,8 +233,8 @@ class RequestTests(Setup):
         with mock.patch.object(self.panel, "_start"):
             self.panel._choose_item(self.ask(item_id="9"))
         hits = [{"id": "8", "descriptor": "PN-1 - Bolt"}, {"id": "9", "descriptor": "PN-1 - Nut"}]
-        self.assertEqual(self.panel._choices.resolve("242", "PN-1", hits)[0]["id"], "9")   # kept for the workspace the item was read in
-        self.assertIsNone(self.panel._choices.resolve("999", "PN-1", hits)[0])
+        self.assertEqual(self.panel._design_choices.pick("242", "PN-1", hits)[0]["id"], "9")   # kept for the workspace the item was read in
+        self.assertIsNone(self.panel._design_choices.pick("999", "PN-1", hits)[0])
 
     def test_a_choice_made_before_the_context_changed_is_refused(self):
         self.panel._number = "PN-1"

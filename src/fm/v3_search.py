@@ -223,7 +223,7 @@ def resolve_hits(hits: List[Hit], number: str, chosen: str = "") -> Tuple[Option
 
 
 class ItemChoices:
-    """The item the user picked where several items share an item number, by workspace and number, for as long as the add-in runs.
+    """The item the user picked where several items are made from a component, by workspace and the component's item number, until the panel is next opened for it.
 
     One store is shared by the Item panel and by the uploads that start from it, so they cannot disagree. Any thread may use it."""
 
@@ -243,14 +243,25 @@ class ItemChoices:
             else:
                 self._chosen.pop(self._key(workspace_id, number), None)
 
-    def resolve(self, workspace_id: str, number: str, found: List[Hit]) -> Tuple[Optional[Hit], List[Hit]]:
-        """``resolve_hits`` with the choice made for the number. A choice that is none of the hits any more is forgotten."""
+    def forget(self, number: str) -> None:
+        """Forget the choices made for the number, in every workspace."""
+        with self._lock:
+            for key in [k for k in self._chosen if k[1] == number.strip().lower()]:
+                del self._chosen[key]
+
+    def pick(self, workspace_id: str, number: str, found: List[Hit]) -> Tuple[Optional[Hit], List[Hit]]:
+        """``(hit, found)`` for the items made from a component, found by its lineage and asset id (so their numbers may differ and every one
+        of them competes): the one chosen earlier, else the only one, else None (the user is to choose). A choice that is none of ``found`` any
+        more is forgotten."""
         with self._lock:
             chosen = self._chosen.get(self._key(workspace_id, number), "")
-            if chosen and not any(hit["id"] == chosen for hit in found):
+            if chosen and not any(hit["id"] == chosen for hit in found):   # no longer a hit: forgotten
                 self._chosen.pop(self._key(workspace_id, number), None)
                 chosen = ""
-        return resolve_hits(found, number, chosen)
+        picked = next((hit for hit in found if hit["id"] == chosen), None) if chosen else None
+        if picked is None and len(found) == 1:
+            picked = found[0]
+        return picked, list(found)
 
 
 # ---- The searches -------------------------------------------------------------------------------------------------------------------

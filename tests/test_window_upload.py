@@ -16,7 +16,7 @@ CONTEXT = capture(config_of())
 LINK = "/api/v3/workspaces/176/items/5"   # the Components record the Data Model says a part is linked to
 RECORDS = mock.Mock(return_value=LINK)
 REF = types.SimpleNamespace(model_id="m1")   # the design the part is in
-SUBJECT = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
+SUBJECT = types.SimpleNamespace(item_number="PN-1", part_number="PN-1", ref=REF)
 
 
 class _Stub(types.ModuleType):
@@ -46,7 +46,7 @@ def setUpModule():
         del sys.modules[name]   # imported again below, against the stand-ins
     from src.ui import attachment_upload
     AttachmentUpload, UploadJob = attachment_upload.AttachmentUpload, attachment_upload.UploadJob
-    Goal, Located = attachment_upload._Goal, attachment_upload._Located
+    Goal, Located, Subject = attachment_upload._Goal, attachment_upload._Located, attachment_upload.Subject
 
 
 def tearDownModule():
@@ -259,37 +259,57 @@ class FindItemTests(unittest.TestCase):
         self.upload = AttachmentUpload(_Ui(), _Tasks(), _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
         self.addCleanup(mock.patch.stopall)
 
-    def _search(self, hits):
-        service = mock.patch.object(self.module, "ItemFinder").start()
-        service.return_value.search.return_value = hits
+    def _search(self, hits, link=LINK):
+        self.records = mock.Mock(return_value=link)
+        self.upload._records = self.records
+        service = mock.patch.object(self.module, "MbomService").start()
+        service.return_value.of_component.return_value = hits
         mock.patch.object(self.module, "FmClient").start()
         return service
 
+    def _find(self, context=None):
+        return self.upload._find_item(self.module.Subject("PN-1", "Gear"), REF, context or CONTEXT)
+
     def test_an_items_workspace_that_is_not_set_up_says_so(self):
         with self.assertRaisesRegex(ValueError, "not set.*Complete it in Preferences"):
-            self.upload._find_item("PN-1", capture(config_of(workspace="")))
+            self._find(capture(config_of(workspace="")))
 
-    def test_no_item_for_the_number_is_said(self):
+    def test_no_item_made_from_the_part_is_said(self):
         self._search([])
         with self.assertRaisesRegex(LookupError, "No item exists for PN-1"):
-            self.upload._find_item("PN-1", CONTEXT)
+            self._find()
 
-    def test_one_hit_is_the_item(self):
-        service = self._search([{"id": "9", "descriptor": "PN-1 - Bolt"}])
-        self.assertEqual(self.upload._find_item("PN-1", CONTEXT), ("242", "9"))
-        self.assertEqual(service.call_args.args[1], self.module.WORKING)   # a released version cannot have files attached
+    def test_a_part_with_no_components_record_cannot_be_looked_for(self):
+        self._search([], link="")
+        with self.assertRaisesRegex(LookupError, "no record in the Components workspace"):
+            self._find()
+
+    def test_one_hit_is_the_item_and_is_found_from_the_record_of_the_part(self):
+        service = self._search([{"id": "9", "number": "PN-1-A", "descriptor": "PN-1-A - Bolt"}])
+        self.assertEqual(self._find(), ("242", "9"))
+        self.records.assert_called_once_with(REF, "Gear", None)
+        self.assertEqual(service.return_value.of_component.call_args.args[:2], ("242", LINK))   # the working version only: a released one cannot have files attached
 
     def test_the_item_is_looked_for_under_the_context_not_the_settings_now_active(self):
-        client = mock.patch.object(self.module, "FmClient").start()
-        mock.patch.object(self.module, "ItemFinder").start().return_value.search.return_value = [{"id": "9", "descriptor": "PN-1 - Bolt"}]
+        self._search([{"id": "9", "descriptor": "PN-1 - Bolt"}])
+        client = self.module.FmClient
         self.upload._config = config_of(tenant="other", workspace="999", hub="hub2")   # another hub is active when the worker gets to it
-        self.assertEqual(self.upload._find_item("PN-1", CONTEXT), ("242", "9"))
+        self.assertEqual(self._find(), ("242", "9"))
         self.assertEqual(client.call_args.args[0].tenant, "acme")
 
     def test_several_that_match_are_not_guessed_between(self):
-        self._search([{"id": "9", "descriptor": "PN-1 - Bolt"}, {"id": "10", "descriptor": "PN-1 - Nut"}])
+        self._search([{"id": "9", "descriptor": "PN-1-A - Bolt"}, {"id": "10", "descriptor": "PN-1-B - Nut"}])
         with self.assertRaisesRegex(LookupError, "2 Fusion Manage items match PN-1"):
-            self.upload._find_item("PN-1", CONTEXT)
+            self._find()
+
+    def test_the_item_the_panel_was_told_is_meant_is_the_one_used(self):
+        self._search([{"id": "9", "descriptor": "PN-1-A - Bolt"}, {"id": "10", "descriptor": "PN-1-B - Nut"}])
+        self.upload._choices.set("242", "PN-1", "10")
+        self.assertEqual(self._find(), ("242", "10"))
+
+    def test_a_part_with_no_reference_cannot_be_looked_for(self):
+        with self.assertRaises(LookupError):
+            self.upload._find(self.module._Goal("item"), self.module.Subject("PN-1", "Gear"), CONTEXT)
 
 
 class PreviewTests(unittest.TestCase):
@@ -356,7 +376,7 @@ class ContextTests(unittest.TestCase):
         self.ui, self.tasks = _Ui(), _Queue()
         self.config = config_of()
         self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), self.config, auth_of(), lambda: None, records=RECORDS)
-        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
+        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1", ref=REF)
 
     def _change_hub(self):
         self.config.hub_id = "hub2"
@@ -401,7 +421,7 @@ class WindowTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks, self.window = _Ui(), _Queue(), _Window()
         self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), self.window, config_of(), auth_of(), lambda: None, records=RECORDS)
-        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
+        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1", ref=REF)
 
     def _from_number(self):
         with mock.patch("threading.Thread"):
@@ -435,7 +455,7 @@ class FindThenMakeTests(unittest.TestCase):
     def setUp(self):
         self.ui, self.tasks = _Ui(), _Queue()
         self.upload = AttachmentUpload(self.ui, self.tasks, _Host(), _Window(), config_of(), auth_of(), lambda: None, records=RECORDS)
-        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1")
+        self.subject = types.SimpleNamespace(item_number="PN-1", part_number="PN-1", ref=REF)
         self.job = _job()
         self.upload._begin(self.job, 0)
 

@@ -49,7 +49,7 @@ class FindTests(Setup):
         self.find()
         self.then.assert_not_called()   # nothing happens before the worker runs
         self.run_threads()
-        self.then.assert_called_once_with(subject)
+        self.then.assert_called_once_with(subject._replace(ref="ref"))   # handed on with where the Data Model finds the component
         self.assertEqual(resolve.call_args.args[:2], ("ref", "PN-1"))
         self.warm.assert_called_once()
 
@@ -59,14 +59,6 @@ class FindTests(Setup):
             self.find(options=number_finder.FindOptions())
         make.assert_called_once_with("PN-1")
         self.run_threads()
-
-    def test_a_fresh_find_reads_the_layout_of_the_workspace_again(self):
-        with mock.patch.object(number_finder, "ItemViewService") as service:
-            self.find(options=number_finder.FindOptions(ref="ref", fresh=True))
-            service.forget.assert_called_once_with()
-            service.reset_mock()
-            self.find()
-            service.forget.assert_not_called()
 
     def test_a_find_that_was_cancelled_says_nothing(self):
         self.resolve_with(Cancelled())
@@ -162,12 +154,27 @@ class FollowTests(Setup):
         self.assertIs(options.cancel, self.panel._follow.token)
         self.assertEqual(self.find.call_args.args[0], "PN-2")
 
-    def test_opening_the_selected_reads_the_selection_fresh(self):
+    def test_opening_the_selected_shows_the_panel_loading_before_anything_is_read(self):
+        order = []
+        self.panel._host.show.side_effect = lambda: order.append("show")
+        self.find.side_effect = lambda *a, **k: order.append("find")
         with mock.patch.object(fusion_selection, "selected_part_number", return_value="PN-3"):
             self.panel.open_selected()
+        self.assertEqual(order, ["show", "find"])   # the panel is up, loading, before the part is looked for
+        self.assertTrue(self.panel._state["pending"])
         self.assertEqual(self.find.call_args.args[0], "PN-3")
-        self.assertTrue(self.find.call_args.args[2].fresh)
-        self.assertEqual(self.find.call_args.args[1], self.panel._open)
+
+    def test_a_part_that_cannot_be_found_is_the_panels_answer_not_a_message_box(self):
+        with mock.patch.object(fusion_selection, "selected_part_number", return_value="PN-3"):
+            self.panel.open_selected()
+        self.find.call_args.args[2].fail("The design is not saved.")
+        self.assertEqual((self.panel._state["pending"], self.panel._state["message"]), (False, "The design is not saved."))
+
+    def test_nothing_is_shown_for_a_part_with_no_number(self):
+        with mock.patch.object(fusion_selection, "selected_part_number", return_value=""):
+            self.panel.open_selected()
+        self.panel._host.show.assert_not_called()
+        self.find.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -95,26 +95,33 @@ class ResolveHitsTests(unittest.TestCase):
 
 
 class ItemChoicesTests(unittest.TestCase):
-    TWINS = ResolveHitsTests.TWINS
+    MADE = [{"id": "1", "descriptor": "PN-1-A - Name"}, {"id": "2", "descriptor": "PN-1-B - Name"}]   # numbers differ: found by lineage, not number
+
+    def test_every_item_competes_whatever_its_number(self):
+        picked, competing = ItemChoices().pick("242", "PN-1", self.MADE)
+        self.assertEqual((picked, competing), (None, self.MADE))
+
+    def test_the_only_item_is_used(self):
+        self.assertEqual(ItemChoices().pick("242", "PN-1", self.MADE[:1])[0]["id"], "1")
 
     def test_a_choice_is_kept_by_workspace_and_number_ignoring_case(self):
         choices = ItemChoices()
         choices.set("242", "PN-001276", "2")
-        self.assertEqual(choices.resolve("242", " pn-001276 ", self.TWINS)[0]["id"], "2")
-        self.assertIsNone(choices.resolve("999", "PN-001276", self.TWINS)[0])
-
-    def test_a_choice_that_is_no_longer_a_hit_is_forgotten(self):
-        choices = ItemChoices()
-        choices.set("242", "PN-001276", "7")
-        self.assertIsNone(choices.resolve("242", "PN-001276", self.TWINS)[0])
-        choices.set("242", "PN-001276", "")
-        self.assertIsNone(choices.resolve("242", "PN-001276", self.TWINS)[0])
+        self.assertEqual(choices.pick("242", " pn-001276 ", self.MADE)[0]["id"], "2")
+        self.assertIsNone(choices.pick("999", "PN-001276", self.MADE)[0])
 
     def test_an_empty_id_clears_the_choice(self):
         choices = ItemChoices()
-        choices.set("242", "PN-001276", "1")
-        choices.set("242", "PN-001276", "")
-        self.assertIsNone(choices.resolve("242", "PN-001276", self.TWINS)[0])
+        choices.set("242", "PN-1", "1")
+        choices.set("242", "PN-1", "")
+        self.assertIsNone(choices.pick("242", "PN-1", self.MADE)[0])
+
+    def test_a_choice_is_used_and_one_that_is_no_longer_found_is_forgotten(self):
+        choices = ItemChoices()
+        choices.set("242", "PN-1", "2")
+        self.assertEqual(choices.pick("242", "PN-1", self.MADE)[0]["id"], "2")
+        self.assertIsNone(choices.pick("242", "PN-1", [{"id": "3", "descriptor": "PN-1-C"}, {"id": "4", "descriptor": "PN-1-D"}])[0])
+        self.assertIsNone(choices.pick("242", "PN-1", self.MADE)[0])
 
 
 class ChunkTests(unittest.TestCase):

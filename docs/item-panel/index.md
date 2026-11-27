@@ -18,8 +18,9 @@ The **Item Panel** shows an item's Fusion Manage record inside Fusion, next to t
 
 - Select a component and choose **Manage ▸ Item Management ▸ Open Fusion Manage Item**, or right-click the component and choose **Open Fusion Manage Item**.
 - With nothing selected, the panel shows the item of the open design (or, in a drawing, of the design the drawing shows).
+- The panel opens at once and shows its loading animation while the item is found. If the item cannot be found (the design is not saved, say), the reason is shown in the panel. Pictures in the item's fields appear as grey placeholders and fill in after the rest of the item is drawn.
 
-The add-in finds the component you selected by its part number in the open design, reads that component's item number from the Manufacturing Data Model, and looks the item up in the Items workspace by that item number. The panel is drawn by the add-in from the item's own sections and fields, so it needs no separate web sign-in.
+The add-in finds the component you selected by its part number in the open design, finds that component's record in the Components workspace through the Manufacturing Data Model, and looks the item up in the Items workspace by the **lineage ID** and **asset ID** of that record, as [Publish](../publishing/index.md) finds the manufacturing items of a design. This needs the `COMPONENT_LINEAGE_URN` and `COMPONENT_ASSET_URN` fields in the Items workspace (see [Multi-manufacturing bill of materials](../configuration/index.md#multi-manufacturing-bill-of-materials)); without them the panel says the search failed. The panel is drawn by the add-in from the item's own sections and fields, so it needs no separate web sign-in.
 
 **The panel follows your selection.** While it is open, selecting another component shows that component's item.
 
@@ -39,14 +40,14 @@ If no item has the number, the panel says **No Item Exists In Fusion Manage Yet*
 
 ![The Item Panel when no item exists: the heading No Item Exists In Fusion Manage Yet, the item number PN-001291, the three steps publishing performs, and the Publish to Fusion Manage button](../images/item-not-found.png){ width="700" }
 
-### When several items share the number
+### When several items are made from the component
 
-If more than one item in the Items workspace has the component's item number, the panel does not guess. In place of the item it lists them, each with its descriptor and Item ID. Click the one you mean.
+If more than one item in the Items workspace carries the lineage ID and asset ID of the component, the panel does not guess. In place of the item it lists them in a table, the same one Publish shows for the manufacturing items of a design: each row has the item number and descriptor, and a search field narrows the list. Click the one you mean. Their item numbers may differ, for example `PN-1-A` and `PN-1-B`.
 
-- Your choice is remembered for that item number until Fusion closes. It also decides which item a STEP file or drawing is attached to from the panel.
+- Your choice lasts until you next open the panel for that component, which always shows the table again. While it lasts, it also decides which item a STEP, PDF, DWG or DXF file is attached to, from the panel, the right-click menu or the Export window. Those find the item the same way as the panel, and refuse to attach to one of several until you have chosen in the panel.
 - A button that appears in the header (two arrows) shows the list again, so you can choose another.
-- If the Fusion Manage search returns look-alike descriptors (`PN-1001 - A` and `PN-10010 - B` for `PN-1001`), the one whose descriptor starts with exactly the item number is used, and you are not asked.
-- Better, give every item its own number. Two items with one number are a data problem in Fusion Manage, and publishing skips such a component until you choose.
+- Only the working version of each item is searched, as in Publish.
+- If the component has no record in the Components workspace yet, or the record has no lineage or asset ID, the panel says so instead of falling back to the item number.
 
 ## Header
 
@@ -62,7 +63,7 @@ The numbers in the screenshot match the table. Controls without a number appear 
 | 1 | Title and status line | The item's title, and a line with its version, lifecycle state and Type. |
 | | **Up-to-date check** (at the right end of the tabs) | A small circle turns while the panel compares the item's mapped fields with the open design, the same comparison the Publish panel makes. When all is well it disappears; when something differs it becomes an amber **OUT OF DATE** pill, and a red **CHECK FAILED** pill if the check could not be made. Click the pill to open a dialog that lists what differs (each field with what the open design holds beside what Fusion Manage holds, or each component with its two quantities) and has a **Republish** button that opens the Publish panel; for a failed check it gives the reason. Hover the pill for a short summary. The mark belongs to the tab shown, and the Item and Bill of Materials tabs have a check so far: the other tabs show no mark. (The Files tab marks out-of-date files on their own rows instead; see [Files](#files).) It is checked once each time the item is read in full (opening it, **Refresh**, an upload), not when you click the Item tab again. It is not shown for a component below the top of the design. |
 | 2 | **Open in browser** | Opens the item in Fusion Manage in your web browser. |
-| | **Choose another item** | Shown only when several items share the number. Lists them again so you can pick a different one. |
+| | **Choose another item** | Shown only when several items are made from the component. Lists them again so you can pick a different one. |
 | 3 | **Refresh** | Reads the item again from Fusion Manage. |
 | 4 | **Actions** (⋯) | Uploads the technical representation: **Export STEP File** in a design, or the drawing PDF in a drawing. See [STEP File](../publishing/index.md#step-file) and [Drawing Representation](../publishing/index.md#drawing-representation). In a design the menu also has **Republish**, which opens the Publish panel. |
 

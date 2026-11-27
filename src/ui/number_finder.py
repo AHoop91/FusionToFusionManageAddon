@@ -29,14 +29,12 @@ log = get_logger("number_finder")
 
 class FindOptions(NamedTuple):
     """How ``NumberFinder.find`` behaves: ``quiet`` leaves a failure at the log; ``fail`` is given the reason instead of a message box showing
-    it; ``cancel`` ends the find; ``ref`` is where the Data Model finds the part (else worked out); ``fresh`` reads the workspace's layout
-    again instead of using what was kept (the panel is being opened, not following a selection)."""
+    it; ``cancel`` ends the find; ``ref`` is where the Data Model finds the part (else worked out)."""
 
     quiet: bool = False
     fail: Optional[Callable[[str], None]] = None
     cancel: Optional[CancelToken] = None
     ref: Optional[DesignRef] = None
-    fresh: bool = False
 
 
 class NumberFinder:
@@ -60,9 +58,6 @@ class NumberFinder:
         ref = options.ref or fusion_selection.part_ref(part_number)
         context, _reason = self._contexts.attempt()   # only an optimisation: what is asked for reports the settings it cannot read
 
-        if options.fresh:
-            ItemViewService.forget()
-
         def work() -> None:
             self.warm(context)   # the workspace's layouts are read while the Data Model answers
             try:
@@ -72,7 +67,7 @@ class NumberFinder:
             except Exception as exc:  # shown to the user, never raised into a thread nobody watches
                 self._report_failure(part_number, exc, options)
                 return
-            self._tasks.post(lambda: then(subject))
+            self._tasks.post(lambda: then(subject._replace(ref=ref)))
 
         threading.Thread(target=work, daemon=True).start()
 

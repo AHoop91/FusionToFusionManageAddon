@@ -56,41 +56,22 @@
     $('item-empty-picker').hidden = true;   // only the "several items" state has it: see showChoices
     $('item-empty-steps').hidden = !offerPublish;   // what Publish will do: only the "not published" state has it
     $('item-empty').classList.toggle('item-empty-denied', icon === ICON_DENIED);
+    $('item-empty').classList.remove('item-empty-choosing');   // only the "several items" state is laid out from the top: see showChoices
     $('item-empty').hidden = false;
   }
 
-  const CHOICES_COMPACT = 4;   // more items than this are listed one line each
-  const CHOICES_FILTER = 8;   // more items than this get a box to narrow them by typing
-
-  /** Several items share the item number: list them, one button each, and send the one picked. */
+  /** Several items are made from the component: list them in the shared table of choices (the one Publish lists its MBOM items in), and send the one picked. */
   function showChoices(entry) {
-    showEmpty({ icon: ICON_SEVERAL, text: t('item.several_title'), hint: t('item.several_hint'), canPublish: false, number: entry.choose_number });
-    const box = $('item-empty-picker');
-    const list = $('item-empty-choices');
-    const filter = $('item-empty-filter');
-    const note = $('item-empty-capped');
-    const many = entry.choose.length > CHOICES_COMPACT;   // one line each, so a long list is quick to scan
-    list.replaceChildren();
-    list.classList.toggle('item-choices-compact', many);
-    const rows = entry.choose.map(function (candidate) {
-      const row = el('li');
-      const button = el('button', 'item-choice', '');
-      button.type = 'button';
-      button.appendChild(el('span', 'item-choice-name', candidate.descriptor));
-      button.appendChild(el('span', 'item-choice-id', many ? t('item.choice_id_short', { id: candidate.id }) : t('item.choice_id', { id: candidate.id })));
-      button.addEventListener('click', function () { bridge.send('choose_item', { item_id: candidate.id, stamp: entry.stamp }); });
-      row.appendChild(button);
-      list.appendChild(row);
-      return { row: row, text: (candidate.descriptor + ' ' + candidate.id).toLowerCase() };
-    });
-    filter.hidden = entry.choose.length <= CHOICES_FILTER;   // a long list can be narrowed by typing
-    filter.value = '';
-    filter.oninput = function () {
-      const words = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
-      rows.forEach(function (r) { r.row.hidden = !words.every(function (w) { return r.text.indexOf(w) >= 0; }); });
-    };
-    note.hidden = !entry.choose_capped;   // the search returns no more than this many: the one meant may not be among them
-    box.hidden = false;
+    showEmpty({ icon: ICON_SEVERAL, text: t('item.several_title', { number: entry.choose_number }), hint: '', canPublish: false, number: t('item.several_pill') });
+    $('item-empty-picker').replaceChildren(ns.choiceTable.make({
+      rows: entry.choose.map(function (candidate) { return { key: candidate.id, first: candidate.number, second: candidate.descriptor, pill: '' }; }),
+      titles: [t('item.choice_col_number'), t('item.choice_col_descriptor')],
+      text: { search: t('item.choice_search'), hint: '', label: t('item.choice_label'),
+              count: function (n) { return t('item.choice_count', { count: n }); }, none: t('item.choice_none') },
+      onPick: function (id) { bridge.send('choose_item', { item_id: id, stamp: entry.stamp }); },
+    }));
+    $('item-empty').classList.add('item-empty-choosing');
+    $('item-empty-picker').hidden = false;
   }
 
   const LAZY_TABS = ['files', 'bom', 'whereused', 'workflows', 'changelog'];
@@ -198,7 +179,7 @@
     });
     itemUrl = view.url || '';
     $('item-open').hidden = !itemUrl;
-    $('item-switch').hidden = !(view.others && view.others.length > 1);   // several items share the number: the user may pick another
+    $('item-switch').hidden = !(view.others && view.others.length > 1);   // several items are made from the component: the user may pick another
   }
 
   // What the open document uploads, shared with the Files tab's toolbar: ``actions`` as Python's ``upload_context`` gives them, whether one
@@ -409,12 +390,23 @@
     });
   }
 
+  const pictures = {};   // picture link -> its data uri ('' none), for the item shown
+
+  /** One picture of an image field, asked for after the item is drawn (its field is a skeleton until ``done(src)``; '' when it cannot be read). */
+  function loadPicture(view, link, done) {
+    if (pictures[link] !== undefined) { done(pictures[link]); return; }
+    ns.itemTree.load('picture_load', 'picture_result', { workspace_id: view.workspace_id, item_id: view.item_id, stamp: view.stamp, link: link }, function (error, result) {
+      pictures[link] = error || !result ? '' : result.image;
+      done(pictures[link]);
+    });
+  }
+
   function render(view, keepCheck) {
     setLoading(false);
     bridge.send('upload_context');   // the three dots show once there is something in them
     renderHeader(view);
     currentView = view;
-    if (!keepCheck) { leaveReads(); checkOf = {}; }   // the item is read afresh: what was still being read for the last read is not wanted
+    if (!keepCheck) { leaveReads(); checkOf = {}; Object.keys(pictures).forEach(function (link) { delete pictures[link]; }); }   // the item is read afresh: what was still being read for the last read is not wanted
     labelTabs(view);
     if (startOnItemTab || document.querySelector('.item-tab-active').disabled) showTab('item');   // just opened, or the tab open for the last item is not allowed for this one
     startOnItemTab = false;
@@ -429,7 +421,7 @@
     const body = $('item-body');
     body.replaceChildren();
     if (!view.sections.length) { message(t('item.no_fields')); return; }
-    view.sections.forEach(function (section) { body.appendChild(ns.itemSections.section(section, openLightbox)); });
+    view.sections.forEach(function (section) { body.appendChild(ns.itemSections.section(section, openLightbox, function (link, done) { loadPicture(view, link, done); })); });
   }
 
   function handle(r) {
@@ -482,7 +474,7 @@
     bridge.on('item_changed', function (note) {   // Python opened another item in this palette
       quietRead = false;   // another item (or an upload's reload): the loading screen is right
       if (note && note.item_tab) startOnItemTab = true;   // the panel was opened, not just following the selection: back to the Item tab
-      setLoading(true, t('item.finding'));   // at once, not after the answer to the poll
+      setLoading(true, note && note.chosen ? '' : t('item.finding'));   // at once, not after the answer to the poll; the items are known when one is chosen
       poll();
     });
     bridge.on('refresh_item_view', handle);
