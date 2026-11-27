@@ -18,6 +18,7 @@
   let itemUrl = '';
   let currentView = null;
   let offerPublish = false;   // the empty state is the "not published" one, which may offer Publish
+  let pendingText = '';   // what the loading screen says while Python reads: finding the item, or (the items being known) loading the one chosen
   let quietRead = false;   // the item is being read again from its tab: no loading screen over what is shown
 
   /** Show the bouncing balls (and hide the item) while Python is still reading everything the item needs. */
@@ -440,7 +441,7 @@
 
   /** Python is still reading the item: show the loading screen once for each open, and ask again soon. */
   function waitForItem(entry) {
-    if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, t('item.finding')); }
+    if (shownSeq !== entry.seq) { shownSeq = entry.seq; if (!quietRead) setLoading(true, pendingText || t('item.finding')); }
     timer = setTimeout(poll, POLL_INTERVAL_MS);
   }
 
@@ -474,7 +475,8 @@
     bridge.on('item_changed', function (note) {   // Python opened another item in this palette
       quietRead = false;   // another item (or an upload's reload): the loading screen is right
       if (note && note.item_tab) startOnItemTab = true;   // the panel was opened, not just following the selection: back to the Item tab
-      setLoading(true, note && note.chosen ? '' : t('item.finding'));   // at once, not after the answer to the poll; the items are known when one is chosen
+      pendingText = note && note.chosen ? t('item.loading_item') : '';   // the items are known when one is chosen: nothing is found, the item is loaded
+      setLoading(true, pendingText || t('item.finding'));   // at once, not after the answer to the poll
       poll();
     });
     bridge.on('refresh_item_view', handle);
