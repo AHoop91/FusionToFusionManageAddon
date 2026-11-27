@@ -18,6 +18,8 @@ window.MfgUi.el = function (tag, className, text) {
 };
 
 /** A 24x24 icon drawn from path strings; ``size`` (px) is optional, the stylesheet can size it instead. */
+window.MfgUi.EXTERNAL_ICON = ['M15 3h6v6', 'M10 14L21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'];   // a square with an arrow out of it, for a link that opens outside the panel
+
 window.MfgUi.svg = function (paths, size) {
   const namespace = 'http://www.w3.org/2000/svg';
   const node = document.createElementNS(namespace, 'svg');

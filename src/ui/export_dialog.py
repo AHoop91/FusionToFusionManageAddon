@@ -31,7 +31,7 @@ from ..core.logging_setup import get_logger
 from ..fm.client import WORKSPACES, FmApiError, FmClient
 from ..fm.components import ComponentService
 from ..fm.permissions import ATTACH_PERMISSIONS, REFUSED, denial
-from . import drawing_source
+from . import drawing_source, fusion_selection
 from .export_options import DESIGN, DRAWING, describe, formats_for
 from .export_panel import ExportPanel
 from .message_bridge import MessageBridge
@@ -80,6 +80,11 @@ class ExportDialog:
         self._host.dispose()
         self._host.show()
 
+    def show_selected(self) -> None:
+        """Open the window for the component that was right-clicked: it is selected again first, as the window exports the selected component. UI thread."""
+        fusion_selection.restore_menu_selection()
+        self.show()
+
     # ---- What can be attached to ----------------------------------------------------
 
     def _setup(self) -> Tuple[Dict[str, str], Optional[HubContext]]:
@@ -96,7 +101,7 @@ class ExportDialog:
     def _offered(context: Optional[HubContext]) -> Tuple[str, ...]:
         """The destinations the window offers: with the Items workspace turned off, files can only go to the component, so the item is not offered
         (and nothing is said about it)."""
-        return (COMPONENT,) if context is not None and context.items_off else (ITEM, COMPONENT)
+        return (COMPONENT,) if context is not None and context.items_off else (COMPONENT, ITEM)
 
     def problem(self) -> str:
         """Why nothing can be exported to when no destination is set up, and nothing when one is: for the ribbon button. UI thread."""
@@ -210,12 +215,13 @@ class ExportDialog:
         threading.Thread(target=self._check_access, args=(setup, context), daemon=True).start()
         if warm:
             self._panel.warm_export_target(self._item_found, self._thumbnail_found)
+            self._panel.warm_export_items(lambda found: self._push("export_items", found))
 
     def _destinations(self, setup: Dict[str, str], context: Optional[HubContext]) -> List[Dict[str, Any]]:
         """The destinations as the page shows them: why one is off, whether it is still being checked, and whether it is hidden."""
         offered = self._offered(context)
         destinations = []
-        for key in (ITEM, COMPONENT):
+        for key in (COMPONENT, ITEM):
             reason = setup[key] or self._access.get(key, "")
             destinations.append({"key": key, "label": _label(key), "reason": reason,
                                  "checking": not reason and key not in self._access,
@@ -242,11 +248,12 @@ class ExportDialog:
         key, destination = str(payload.get("format") or ""), str(payload.get("destination") or "")
         if key not in formats_for(_document()) or destination not in (ITEM, COMPONENT):
             raise ValueError(t("app.export_choose_format_destination"))
+        item_id = self._chosen_item(destination, str(payload.get("target") or ""), str(payload.get("item") or ""))
 
         def found(result: Dict[str, Any]) -> None:
-            self._push("export_files_found", dict(result, format=key, destination=destination))
+            self._push("export_files_found", dict(result, format=key, destination=destination, item=item_id))
 
-        self._panel.export_files(key, destination, str(payload.get("target") or ""), found)
+        self._panel.export_files(key, destination, str(payload.get("target") or ""), found, item_id)
         return {"started": True}
 
     def _run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -262,9 +269,19 @@ class ExportDialog:
             number, problem = self._panel.export_target()
             if problem:
                 raise ValueError(problem)
-        log.info("Export %s of %s to the %s", key, number, destination)
-        self._panel.export(key, destination, number)   # the window stays open and follows it (``upload_status``)
+        item_id = self._chosen_item(destination, number, str(payload.get("item") or ""))
+        log.info("Export %s of %s to the %s%s", key, number, destination, f" {item_id}" if item_id else "")
+        self._panel.export(key, destination, number, item_id)   # the window stays open and follows it (``upload_status``)
         return {"started": True}
+
+    def _chosen_item(self, destination: str, number: str, item_id: str) -> str:
+        """The item the table chose, for the item destination ("" for the component): raises (shown in the window) unless it is one of the items the
+        table listed for the part, so a file is not attached to an id the page merely sent."""
+        if destination != ITEM:
+            return ""
+        if not self._panel.knows_item(number, item_id):
+            raise ValueError(t("app.export_choose_item"))
+        return item_id
 
     def _require_usable(self, destination: str) -> None:
         """Raise (shown in the window) unless ``destination`` is set up and the permissions read for it allow attaching files. UI thread."""

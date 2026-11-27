@@ -194,7 +194,7 @@ The add-in asks Fusion Manage for items whose descriptor matches the component's
 - **When you publish.** Before anything is written, the run looks up every item number in Fusion Manage. If any number is carried by several items, the whole run fails and nothing is published. The progress dialog shows the Validating bar failed and Publishing not started. While the numbers are looked up, each row of the Bill of Materials shows a spinner, then a green tick, or a red cross when several items carry its number. The crosses stay after the failure, and the panel does not refresh, so you can find the items to fix. The run does not appear in the Job Queue. Nothing is partly published, so after you have fixed Fusion Manage you publish again.
 - **If the look-up fails.** If Fusion Manage cannot be searched, the run fails the same way, because the numbers cannot be known to be unique.
 
-The [Item Panel](../item-panel/index.md#when-several-items-share-the-number) asks which item you mean, and remembers the item you pick. The right-click STEP upload, the drawing upload and the Export window use the Item panel's choice; when several items match and none was chosen they stop with a message and attach nothing.
+The [Item Panel](../item-panel/index.md#when-several-items-are-made-from-the-component) asks which item you mean, and remembers the item you pick. When several items are made from the component, the Export window opens on the same table of items; pick one and the options follow, with **Change item** at the top right to choose again. **Attach to the component instead** skips the choice.
 
 A BOM line of an assembly that matches several items is left without a status for the same reason. Fix it by removing the duplicate in Fusion Manage.
 
@@ -335,16 +335,21 @@ All BOM requests are sent **after** every item exists, one parent at a time. A f
 
 ## The Export Window
 
-**Export** (in the **Export** panel of the **Manage** tab) opens one small window for every file the add-in can attach. You choose two things:
+**Export** (in the **Export** panel of the **Manage** tab) opens one small window for every file the add-in can attach.
 
-1. **Attach to.** Two cards, at the top. **Item** attaches the file to the item of the part in the Items workspace. **Component** attaches it to the part's record in the Components workspace: its **working version**, when the part has several revisions. When the window opens it checks, in Fusion Manage, that you may attach files to each workspace (**View Items**, **Add Attachments** and **Edit Attachments**; the last is for a new version of a file already there). A card you may not use is greyed out and says why. If the Items workspace is not set up in Preferences, **Item** says *Item is not configured. Complete it in Preferences.* and a usable card is chosen for you: the default for that format in **Preferences ▸ Export** if it can be used, otherwise the first usable one. **Component** is also greyed out when the connection is invalid or there is no Components workspace.
-2. **File format.** What the open document can be exported as: a **design** makes a **STEP** file; a **drawing** makes a **PDF**, **DWG** or **DXF**. The window names what is being exported: the selected component of a design (else the whole design), or the top of a drawing.
+**When several items are made from the part,** the window first shows a table of them, as the [Item Panel](../item-panel/index.md#when-several-items-are-made-from-the-component) does, found by the lineage and asset ID of the part's record in the Components workspace. Pick the item the file goes to and the options follow. **Attach to the component instead** skips the choice. With one item there is no table: it is picked for you.
 
-The window starts with what is being exported: its item number (a grey bar stands there while it is read from Fusion Manage), and under it the description of the design. The attachment card shows whether the file already in Fusion Manage is **Up to date**, with the date the component was last modified, the file's version, size and who changed it.
+The options are two cards under a header that names what is exported (its thumbnail, item number and name; a grey bar stands where the item number is read). **Change item** at the top right brings the table back; it is there only when several items were found.
+
+1. **Format**, **Attach to** and **Link**, in the first card.
+    - **Format** is what the open document can be exported as: a **design** makes a **STEP** file; a **drawing** makes a **PDF**, **DWG** or **DXF**. The window names what is being exported: the selected component of a design (else the whole design), or the top of a drawing.
+    - **Attach to** is **Component** or **Item**. **Component** attaches the file to the part's record in the Components workspace: its **working version**, when the part has several revisions. **Item** attaches it to the item of the part in the Items workspace. When the window opens it checks, in Fusion Manage, that you may attach files to each workspace (**View Items**, **Add Attachments** and **Edit Attachments**; the last is for a new version of a file already there). A choice you may not use is greyed out and a note says why. If the Items workspace is not set up in Preferences, **Item** says *Item is not configured. Complete it in Preferences.* and a usable choice is made for you: the default for that format in **Preferences ▸ Export** if it can be used, otherwise the first usable one. **Component** is also greyed out when the connection is invalid or there is no Components workspace.
+    - **Link** shows the record the file goes to, the item picked or the component, and **Open in Fusion Manage** opens its page in your browser.
+2. **Attachment**, in the second card: the file name and whether the file already in Fusion Manage is **Up to date**, **Out of date** or **New file**, its version, size, when and by whom it was last changed, and what **Export** will do (a new version of the file, or the file attached for the first time).
 
 Choose **Export** and the window stays open and shows the progress: **Find item**, the file being made, and **Upload**, with a percentage where one can be measured. It then says how it went. On success it reads *Export complete* with where the file went, and **Done** closes it. On a failure it reads *Export failed* with the reason; **Try again** takes you back to the choices, and **Close** closes the window. **Cancel** closes the window before an export starts. The file is named after the item number and a file of the same name is replaced by a new version. See [STEP File](#step-file) and [Drawing Representation](#drawing-representation).
 
-The **Actions** menu of the [Item Panel](../item-panel/index.md) and the right-click entries do not open this window: they export in one step and always attach to the item.
+The right-click entries (**Export STEP File**, **Export PDF**) open this window for the component or drawing you clicked. The **Actions** menu of the [Item Panel](../item-panel/index.md) does not: it exports in one step and always attaches to the item.
 
 ## STEP File
 
@@ -357,15 +362,15 @@ The item must already exist. Publish it first ([Item Creation](#item-creation)).
 
 ### Find the right-click entry
 
-**Export STEP File** is in the right-click menu of a component. It is the quickest way to upload, with no window to fill in.
+**Export STEP File** is in the right-click menu of a component. It opens the [Export window](#the-export-window) for that component, so you can check the item and the file before it is attached.
 
 1. Open the saved design in the Design workspace. The entry is not offered in a drawing.
 2. Right-click the component you want, in the browser or on the canvas. Any component works, not only the top one. With nothing selected, the design's top-level component is used.
 3. Choose **Export STEP File**.
 
-The entry appears only once the add-in is set up. The upload then runs as described below: the item is found by its item number, a STEP file of the selected component is made and attached to that item, and a file already attached with the same name becomes a new version. See [New versions, not duplicates](#new-versions-not-duplicates).
+The entry appears only once the add-in is set up. Choose **Export** in the window and the upload runs as described below: a STEP file of the selected component is made and attached to the item (or the component) you chose, and a file already attached with the same name becomes a new version. See [New versions, not duplicates](#new-versions-not-duplicates).
 
-You can also click **Export** in the **Export** panel of the **Manage** tab on the ribbon. This opens the [Export window](#the-export-window), where you choose whether to attach to the item or the component, and the file format (STEP for a design). The upload is also in the **Actions** menu of the [Item Panel](../item-panel/index.md). The right-click entry and the Actions menu always attach to the item. Only the Export window lets you attach to the component record instead.
+You can also click **Export** in the **Export** panel of the **Manage** tab on the ribbon. This opens the [Export window](#the-export-window), where you pick the item the file goes to when several are made from the component, the file format (STEP for a design) and whether to attach to the item or the component. The upload is also in the **Actions** menu of the [Item Panel](../item-panel/index.md). The Actions menu always attaches to the item. Only the Export window lets you attach to the component record instead.
 
 ### Upload a STEP file
 
@@ -428,10 +433,10 @@ A drawing is **not an item of its own**. Its PDF is attached to the item of the 
 ### Upload a drawing PDF
 
 1. Open the drawing. The add-in works out which item it belongs to from the design the drawing references: the part number of that design's **top-level component** is read, then its item number from the Data Model, and the item with that number is the one used.
-2. Choose **Manage ▸ Export ▸ Export** and pick PDF, or right-click the top of the drawing's component tree and choose **Export PDF**. In a drawing, the [Item Panel](../item-panel/index.md) **Actions** menu offers the same upload.
+2. Choose **Manage ▸ Export ▸ Export** and pick PDF, or right-click the top of the drawing's component tree and choose **Export PDF**, which opens the Export window. In a drawing, the [Item Panel](../item-panel/index.md) **Actions** menu offers the same upload.
 3. A PDF of every sheet of the drawing is created, named after the item number (for example `PN-1001.pdf`), and uploaded in a window with the stages **Find item**, **Create PDF** and **Upload**.
 
-The Export window and the Item Panel's **Actions** menu can also make a **DWG** or a **DXF** of the drawing, attached the same way, as `PN-1001.dwg` or `PN-1001.dxf`. The right-click entry makes the PDF only. A Fusion that cannot export those formats says so.
+The Export window and the Item Panel's **Actions** menu can also make a **DWG** or a **DXF** of the drawing, attached the same way, as `PN-1001.dwg` or `PN-1001.dxf`. The right-click entry opens the same window. A Fusion that cannot export those formats says so.
 
 The right-click entry is meant for the top of the tree. It is not offered on an occurrence or on a component other than the design's top-level one, but it can appear for other kinds of selection.
 

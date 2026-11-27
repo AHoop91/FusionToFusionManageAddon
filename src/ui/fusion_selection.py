@@ -57,6 +57,15 @@ def active_selection() -> List[Any]:
     return [selections.item(index).entity for index in range(selections.count)]
 
 
+def restore_menu_selection() -> None:
+    """Select again what was selected when the right-click menu opened (choosing an entry may have cleared it), so whatever reads the selection
+    next sees the component that was clicked. UI thread."""
+    selections = adsk.core.Application.get().userInterface.activeSelections
+    selections.clear()
+    for entity in menu_selection:
+        selections.add(entity)
+
+
 def selected_part_number(from_menu: bool = False) -> str:
     """Part number of the selected component, else of the open design ("" if neither has one). In a drawing the same: a component
     of the tree gives its own number, and the top of the tree (or nothing) the number of the design the drawing shows, which is

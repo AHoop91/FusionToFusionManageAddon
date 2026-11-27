@@ -178,5 +178,16 @@ class SelectsRootTests(unittest.TestCase):
         self.assertFalse(self.selects(design, lambda e: part("OTHER")))
 
 
+class RestoreMenuSelectionTests(unittest.TestCase):
+    def test_what_was_selected_when_the_menu_opened_is_selected_again(self):
+        selections = mock.Mock()
+        app = mock.Mock()
+        app.userInterface.activeSelections = selections
+        with mock.patch.object(sel.adsk.core.Application, "get", return_value=app), mock.patch.object(sel, "menu_selection", ["a", "b"]):
+            sel.restore_menu_selection()
+        selections.clear.assert_called_once_with()
+        self.assertEqual([call.args[0] for call in selections.add.call_args_list], ["a", "b"])
+
+
 if __name__ == "__main__":
     unittest.main()

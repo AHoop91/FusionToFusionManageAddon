@@ -520,21 +520,6 @@ class ItemPanel:
             return {"publish": True, "actions": [{"action": "add_step_file", "label": t("app.export_step_name"), "ext": ".step", "ready": True}]}
         return {"publish": False, "actions": []}   # neither a design nor a drawing is open: nothing to offer
 
-    def upload_selected_step(self) -> None:
-        """Upload the open design as the STEP file of the item of the selected component (the right-click entry). UI thread."""
-        number = fusion_selection.selected_part_number(from_menu=True)
-        if self._finder.has_number(number):
-            pick(fusion_selection.menu_selection)
-            self._finder.find(number, lambda subject: self._uploads.from_number(step_job(), subject))
-
-    def upload_drawing(self) -> None:
-        """Upload the open drawing as the PDF of the item of the design it shows (the right-click entry). UI thread."""
-        number, reason = drawing_source.top_level_number()
-        if not number:
-            self._ui.messageBox(t("app.drawing_not_ready_box", reason=reason), item_command_name())
-            return
-        self._finder.find(number, lambda subject: self._uploads.from_number(drawing_job(PDF), subject))
-
     def _reload(self) -> None:
         """Read the item again (an upload changes its tab counts) and tell the page. UI thread."""
         if self._number:

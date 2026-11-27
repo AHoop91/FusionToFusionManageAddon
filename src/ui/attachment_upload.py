@@ -14,11 +14,12 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 import adsk.core
 
 from ..auth.auth_service import AuthService
+from ..auth.errors import AuthError
 from ..config.config_service import ConfigService
 from ..config.export_models import COMPONENT, ITEM
 from ..config.hub_context import HubContext, HubContexts
@@ -26,9 +27,10 @@ from ..core.cancel import Cancelled, CancelToken
 from ..core.i18n import t
 from ..core.logging_setup import get_logger
 from ..fm.attachments import NEW_VERSION, AttachmentService
-from ..fm.client import FmClient
+from ..fm.client import FmApiError, FmClient
 from ..fm.components import link_ids
 from ..fm.mbom import MbomService
+from ..fm.pages import link_page, page_url
 from ..fm.v3_search import ItemChoices
 from ..fm.ttl_cache import TtlCache
 from ..publish.exporters import catch_up
@@ -64,11 +66,12 @@ class UploadJob:
 
 
 class _Goal(NamedTuple):
-    """What the file is attached to: the item of a number (``ITEM``), or the Components record of a part of the design ``ref`` (``COMPONENT``,
-    which needs ``ref``)."""
+    """What the file is attached to: the item made from the part (``ITEM``; ``item_id`` is the one the Export window's table chose, else it is
+    found), or the Components record of a part of the design ``ref`` (``COMPONENT``, which needs ``ref``)."""
 
     destination: str
     ref: Optional[DesignRef] = None
+    item_id: str = ""
 
 
 class _Located(NamedTuple):
@@ -144,9 +147,10 @@ class AttachmentUpload:
         return context
 
     # Five parameters, called by ``ItemPanel``: kept so no caller changes.
-    def continue_in_window(self, job: UploadJob, context: HubContext, subject: Subject, destination: str, ref: DesignRef) -> None:
-        """Go on with the upload ``begin_in_window`` started, once the item of ``subject`` (a part of the design ``ref``) is known. UI thread."""
-        threading.Thread(target=self._find_then_make, args=(job, context, subject, _Goal(destination, ref)), daemon=True).start()
+    def continue_in_window(self, job: UploadJob, context: HubContext, subject: Subject, destination: str, ref: DesignRef, item_id: str = "") -> None:
+        """Go on with the upload ``begin_in_window`` started, once the item of ``subject`` (a part of the design ``ref``) is known; ``item_id`` is
+        the item the user chose among several. UI thread."""
+        threading.Thread(target=self._find_then_make, args=(job, context, subject, _Goal(destination, ref, item_id)), daemon=True).start()
 
     def fail_in_window(self, message: str) -> None:
         """End the upload ``begin_in_window`` started, for ``message``. UI thread."""
@@ -174,19 +178,46 @@ class AttachmentUpload:
             raise LookupError(t("app.no_item_shown"))
         if goal.destination == COMPONENT:
             return self._find_component(subject, ref, context, cancel)
+        if goal.item_id:   # the user chose it from the table of the items found: a file is attached to the one they named
+            if context.items_problem:
+                raise ValueError(t("app.complete_in_preferences", problem=context.items_problem))
+            return context.cfg.workspace_id, goal.item_id
         return self._find_item(subject, ref, context, cancel)
+
+    def link_of(self, part_number: str, ref: DesignRef, cancel: Optional[CancelToken] = None) -> str:
+        """The API link of the Components record of the part ``part_number`` of the design ``ref`` ("" when it has none yet). A worker thread."""
+        return self._records(ref, part_number, cancel)
+
+    def page_of(self, link: str, context: HubContext) -> str:
+        """The page in Fusion Manage of the record at the API link ``link`` ("" when ``link`` is empty)."""
+        return link_page(FmClient(context.settings, self._auth).base_url, context.tenant, link) if link else ""
+
+    def items_at(self, link: str, context: HubContext, cancel: Optional[CancelToken] = None) -> List[Dict[str, str]]:
+        """The working versions of the items made from the component whose Components record is at ``link`` (``{"id", "number", "descriptor",
+        "url"}``, the ``url`` the item's page in Fusion Manage), found by the lineage id and asset id of that record, as the Item panel finds them.
+        Raises ``ValueError`` when the Items workspace is not set up or the search fails, and ``LookupError`` when the part has no record yet
+        (``link`` is empty). A worker thread."""
+        if context.items_problem:
+            raise ValueError(t("app.complete_in_preferences", problem=context.items_problem))
+        if not link:
+            raise LookupError(t("data.fm_mbom_not_linked"))
+        client = FmClient(context.settings, self._auth, cancel)
+        try:
+            items = MbomService(client).of_component(context.cfg.workspace_id, link, context.cfg.item_number_field())
+        except (FmApiError, AuthError) as exc:   # as the Item panel says it
+            raise ValueError(t("app.search_failed", reason=exc)) from exc
+        return [dict(item, url=page_url(client.base_url, context.tenant, context.cfg.workspace_id, item["id"])) for item in items]
+
+    def items_of(self, part_number: str, ref: DesignRef, context: HubContext, cancel: Optional[CancelToken] = None) -> List[Dict[str, str]]:
+        """``items_at`` the record of the part ``part_number`` of the design ``ref``."""
+        return self.items_at(self.link_of(part_number, ref, cancel), context, cancel)
 
     def _find_item(self, subject: Subject, ref: DesignRef, context: HubContext, cancel: Optional[CancelToken] = None) -> Tuple[str, str]:
         """``(workspace id, item id)`` of the working version of the item made from ``subject``, a part of the design ``ref``: found by the lineage
         id and asset id of its Components record, as the Item panel finds it (a released version cannot have files attached). Raises
         ``LookupError`` when there is none, or several and the Item panel has not been told which is meant."""
-        if context.items_problem:
-            raise ValueError(t("app.complete_in_preferences", problem=context.items_problem))
         number, workspace_id = subject.item_number, context.cfg.workspace_id
-        link = self._records(ref, subject.part_number, cancel)
-        if not link:
-            raise LookupError(t("data.fm_mbom_not_linked"))
-        hits = MbomService(FmClient(context.settings, self._auth, cancel)).of_component(workspace_id, link, context.cfg.item_number_field())
+        hits = self.items_of(subject.part_number, ref, context, cancel)
         if not hits:
             raise LookupError(t("app.no_item_for_number", number=number))
         picked, competing = self._choices.pick(workspace_id, number, hits)
@@ -221,14 +252,14 @@ class AttachmentUpload:
 
     # Seven parameters, called by ``ItemPanel`` from its worker thread: kept so no caller changes.
     def preview(self, destination: str, subject: Subject, ref: DesignRef, name: str, source: Dict[str, Any], context: HubContext,
-                cancel: Optional[CancelToken] = None) -> Dict[str, Any]:
+                cancel: Optional[CancelToken] = None, item_id: str = "") -> Dict[str, Any]:
         """What attaching the file called ``name`` to the item (or component) of ``subject``, a part of the design ``ref``, would do. ``state``
         is "ok", with the ``existing`` file it would make a new version of (None when it would be attached as new) and whether that file is as
         recent as the ``source`` it is made from (``export_freshness.compare``); or "unavailable", with a ``message``. A worker thread; nothing
         is changed."""
         try:
-            workspace_id, item_id = self._find(_Goal(destination, ref), subject, context, cancel)
-            files = AttachmentService(FmClient(context.settings, self._auth, cancel)).files(workspace_id, item_id)
+            workspace_id, found_id = self._find(_Goal(destination, ref, item_id), subject, context, cancel)
+            files = AttachmentService(FmClient(context.settings, self._auth, cancel)).files(workspace_id, found_id)
         except Cancelled:   # the window moved on to another look: nothing to say
             raise
         except Exception as exc:  # noqa: BLE001 - shown in the Export window, never raised into a thread nobody watches

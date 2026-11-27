@@ -161,6 +161,7 @@ Every script attaches to `window.MfgUi` (`ns`). Load order is in each `index.htm
 | Browser checks of Fusion Manage's validators | `ns.validators.check` in `validators.js` | [validation.md](validation.md) |
 | A short message at the bottom | `ns.toast.show` | |
 | A table to choose one row from, with a search bar, column titles, a row count and arrows (Publish lists its MBOM items with it; the Item panel lists the items made from a component) | `ns.choiceTable.make({rows, titles, text, onPick})`, styled by `shared/css/choice-table.css` (it holds the structure viewer's `sv-bar`, `sv-search` and `sv-pane` too) | |
+| The Export window's items: the table of choices to open on when several items are made from what is exported, then the item picked, with "Change item" to choose again | `ns.exportItems` (`show`, `state`, `selected`, `current`, `reset`, `note`, `recordUrl`; each item and the component carry their Fusion Manage page, opened with `open_url` from the Link row), fed by the `export_items` push (`ExportPanel.warm_export_items`, `AttachmentUpload.items_of`) | |
 | A tooltip that shows quickly | `ns.tooltip` | |
 | A progress card for an upload | `ns.uploadProgress` | |
 | A report of what differs from Fusion Manage (the Item panel) | `ns.diffReport` | |

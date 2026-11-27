@@ -35,6 +35,14 @@ class Setup(unittest.TestCase):
         return thread
 
 
+class ShowSelectedTests(Setup):
+    def test_the_component_that_was_right_clicked_is_selected_again_before_the_window_opens(self):
+        order = []
+        with mock.patch.object(export_dialog.fusion_selection, "restore_menu_selection", side_effect=lambda: order.append("select")),                 mock.patch.object(self.dialog, "show", side_effect=lambda: order.append("show")):
+            self.dialog.show_selected()
+        self.assertEqual(order, ["select", "show"])
+
+
 class SetupReasonTests(Setup):
     def test_a_destination_is_set_up_when_the_connection_and_the_workspace_are_complete(self):
         reasons, context = self.dialog._setup()
@@ -132,6 +140,41 @@ class ReadAgainTests(Setup):
             self.config.config.workspaces = {ITEMS_KIND: WorkspaceConfig(workspace_id="999")}   # changed since
             self.dialog._item_denial(mock.Mock(), context)
         self.assertEqual(denial.call_args[0][1], "242")
+
+
+class ChosenItemTests(Setup):
+    def run_export(self, destination, item=""):
+        self.dialog._checked({"item": "", "component": ""}, capture(self.config).stamp)
+        with mock.patch.object(export_dialog, "formats_for", return_value=["step"]):
+            return self.dialog._run({"format": "step", "destination": destination, "target": "PN-1", "item": item})
+
+    def test_an_export_to_an_item_needs_one_the_table_listed(self):
+        self.panel.knows_item.return_value = False
+        with self.assertRaisesRegex(ValueError, "Choose the item"):
+            self.run_export("item", "99")
+        self.panel.export.assert_not_called()
+
+    def test_the_item_the_table_listed_goes_on_to_the_export(self):
+        self.panel.knows_item.return_value = True
+        self.run_export("item", "17195")
+        self.panel.knows_item.assert_called_once_with("PN-1", "17195")
+        self.panel.export.assert_called_once_with("step", "item", "PN-1", "17195")
+
+    def test_an_export_to_the_component_takes_no_item(self):
+        self.run_export("component", "17195")
+        self.panel.knows_item.assert_not_called()
+        self.panel.export.assert_called_once_with("step", "component", "PN-1", "")
+
+    def test_the_attached_files_are_read_for_the_item_chosen_and_the_answer_names_it(self):
+        self.panel.knows_item.return_value = True
+        sent = []
+        self.dialog._push = lambda event, result: sent.append((event, result))
+        with mock.patch.object(export_dialog, "formats_for", return_value=["step"]):
+            self.dialog._files({"format": "step", "destination": "item", "target": "PN-1", "item": "17195"})
+        self.assertEqual(self.panel.export_files.call_args.args[:2], ("step", "item"))
+        self.assertEqual(self.panel.export_files.call_args.args[-1], "17195")
+        self.panel.export_files.call_args.args[3]({"state": "ok"})
+        self.assertEqual(sent, [("export_files_found", {"state": "ok", "format": "step", "destination": "item", "item": "17195"})])
 
 
 if __name__ == "__main__":

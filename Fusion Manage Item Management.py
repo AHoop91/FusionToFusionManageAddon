@@ -9,7 +9,6 @@ import importlib
 import os
 import sys
 import traceback
-from typing import Callable
 
 import adsk.core
 
@@ -163,15 +162,6 @@ def setup_problem() -> str:
     return _config.items_setup_problem()
 
 
-def _menu_upload(to_item: Callable[[], None]) -> None:
-    """The right-click upload: straight to the item when the Items workspace can be used; otherwise the Export window, where the file can still go to the
-    component (the command is held back only while no destination at all is set up)."""
-    if setup_problem():
-        _export_dialog.show()
-    else:
-        to_item()
-
-
 def portfolio_problem() -> str:
     """Why the Portfolio Management workspace is not set up (the active hub is looked at first)."""
     sync_hub()
@@ -286,7 +276,7 @@ def _run(context) -> None:
         _item_host = PaletteHost(_ui, bridge, ITEM_PALETTE_ID, item_title(), "item", True, ITEM_WIDTH, ITEM_HEIGHT)
         _progress_host = PaletteHost(_ui, bridge, UPLOAD_PROGRESS_PALETTE_ID, upload_title(), "progress", False, UPLOAD_PROGRESS_WIDTH, UPLOAD_PROGRESS_HEIGHT)
         _item_panel = ItemPanel(_ui, _tasks, _item_host, bridge, config, auth, _progress_host, _publish_host.show)
-        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, export_title(), "export", True, EXPORT_WIDTH, EXPORT_HEIGHT)
+        _export_host = PaletteHost(_ui, bridge, EXPORT_PALETTE_ID, export_title(), "export", False, EXPORT_WIDTH, EXPORT_HEIGHT)
         _export_dialog = ExportDialog(_export_host, bridge, _tasks, config, auth, _item_panel.exporter)
         _product_host = PaletteHost(_ui, bridge, PRODUCT_PALETTE_ID, products_title(), "products", True, PRODUCT_WIDTH, PRODUCT_HEIGHT)
         bridge.set_pusher(_push_to_panels)   # background work can now tell the panels when it is done, instead of being asked
@@ -301,11 +291,11 @@ def _run(context) -> None:
                           _icon("publish"), needs_setup=True, root_only=True, context="design"),
             RibbonCommand(MENU_UPLOAD_STEP_COMMAND_ID, export_step_name(),
                           export_step_tooltip(),
-                          lambda: _menu_upload(_item_panel.upload_selected_step),
+                          _export_dialog.show_selected,
                           _icon("upload_step"), needs_destination=True, context="design"),
             RibbonCommand(MENU_UPLOAD_DRAWING_COMMAND_ID, upload_drawing_name(),
                           upload_drawing_tooltip(),
-                          lambda: _menu_upload(_item_panel.upload_drawing),
+                          _export_dialog.show,
                           _icon("upload_drawing"), needs_destination=True, needs_drawing=True, root_only=True, context="drawing"),
         ]
         _item_menu = ItemContextMenu(_ui, menu_commands)

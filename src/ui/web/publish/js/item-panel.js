@@ -29,7 +29,6 @@
   // The icons of the viewer's two buttons (``mbom-viewer.js``), shown in front of the title of the dialog they open. The last two paths of the box are its plus.
   const ICON_NEW = ['M10 3l7 4v6', 'M17 7l-7 4-7-4', 'M10 11v9', 'M3 7v10l7 4', 'M10 3L3 7', 'M18 14.5v7', 'M14.5 18h7'];
   const ICON_BOUGHT = ['M3 4h2.5l2 11h10l2-8H7', 'M10 19.5h.01', 'M17 19.5h.01'];
-  const ICON_OPEN = ['M15 3h6v6', 'M10 14L21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'];   // a square with an arrow out of it
   const OWN = ['items_form', 'items_create', 'bought_open', 'bought_create'];
 
   // ---- Talking to Python -------------------------------------------------------------
@@ -341,7 +340,7 @@
     if (found.url) {   // its page in Fusion Manage, in the system browser
       const open = el('button', 'ic-found-open');
       open.type = 'button';
-      open.append(ns.svg(ICON_OPEN, 14), el('span', '', t('publish.item_found_open')));
+      open.append(ns.svg(ns.EXTERNAL_ICON, 14), el('span', '', t('publish.item_found_open')));
       open.addEventListener('click', function () { bridge.send('open_url', { url: found.url }); });
       card.appendChild(open);
     }

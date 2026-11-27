@@ -38,6 +38,8 @@
   let askTimer = 0;        // the pause before the files are asked for, so the choice is drawn first and quick changes ask once
   let progressCard = null; // the progress card, once mounted
   let startedAt = 0;       // when the export was asked for
+  let itemsAnswer = null;  // Python's list of the items made from what is exported, until the context it is for has arrived
+  let linkUrl = '';         // the page in Fusion Manage of the record the file goes to ("" when it is not known)
   let phase = 'form';      // 'form' (choosing), 'working' (the export is under way) or 'result' (how it went)
 
   // ---- Choices --------------------------------------------------------------------------
@@ -62,8 +64,35 @@
     return part;
   }
 
+  /** The item number of what is exported once it is known, else the part number it is looked up by. */
+  function numberText() {
+    return itemNumber || context.target;
+  }
+
+  /** The id of the item the table picked, when the file is going to an item; "" otherwise (a component has no item to pick). */
+  function chosenItem() {
+    return destination === 'item' ? ns.exportItems.selected() : '';
+  }
+
+  /** The file goes to an item only once the table has one picked. */
   function syncRun() {
-    $('export-run').disabled = !(format && destination && !context.problem);
+    $('export-run').disabled = !(format && destination && !context.problem && (destination !== 'item' || chosenItem()));
+  }
+
+  /** The pick in the table changed: what the button and the attached files say follows it. */
+  function itemChanged() {
+    if (!context) return;
+    paintView();
+    syncRun();
+    loadFiles();
+  }
+
+  /** The items listed for what is exported are shown once the context they are for is here (the list may come first). */
+  function applyItems() {
+    if (!context || !itemsAnswer || itemsAnswer.target !== context.target) return;
+    const answer = itemsAnswer;
+    itemsAnswer = null;
+    ns.exportItems.show(answer);
   }
 
   /** The destination the format chosen starts on (set in Preferences, on the Export tab) when it can be used, else the first that can. */
@@ -109,13 +138,59 @@
     if (context.destinations.some(function (d) { return d.checking; })) box.appendChild(skeleton(t('export.checking_permissions')));
   }
 
-  /** What shows in the pill at the top: the destination chosen, or why there is none. */
-  function summarizeDestination() {
-    const chosen = context.destinations.filter(function (d) { return d.key === destination; })[0];
-    const waiting = context.destinations.some(function (d) { return d.checking; });
-    const pill = $('export-destination-summary');
-    pill.textContent = chosen ? chosen.label : waiting ? t('export.checking') : t('export.none_available');
-    pill.dataset.kind = chosen ? chosen.key : '';
+  /** The record the file goes to, in the panel, with a link that opens it in Fusion Manage: the item picked, or the component. */
+  function paintLinkRow() {
+    let kind = '';
+    let text = '';
+    let url = '';
+    if (destination === 'item') {
+      const picked = ns.exportItems.current();
+      kind = t('export.kind_item');
+      text = picked ? picked.descriptor : ns.exportItems.note();
+      url = picked ? picked.url : '';
+    } else if (destination === 'component') {
+      kind = t('export.kind_component');
+      text = [numberText(), context.name].filter(Boolean).join(' - ');
+      url = ns.exportItems.recordUrl();
+    }
+    $('export-link-row').hidden = !destination;
+    $('export-link-kind').textContent = text && url ? kind : '';
+    $('export-link-text').textContent = text;
+    $('export-link-text').classList.toggle('is-off', !url && destination === 'item' && !ns.exportItems.current());
+    linkUrl = url;
+    $('export-link-open').hidden = !url;
+  }
+
+  /** What the window shows now: "finding" while the items are looked for, the table of items to choose from, or the options (the usual view). */
+  function viewName() {
+    if (!context) return 'finding';
+    if (denied) return 'options';
+    if (context.destinations.some(function (d) { return d.checking; })) return 'finding';   // the destination is not known yet: no view is chosen for it
+    if (destination !== 'item') return 'options';
+    const state = ns.exportItems.state();
+    if (state === 'finding') return 'finding';
+    return state === 'several' && !ns.exportItems.selected() ? 'choosing' : 'options';
+  }
+
+  function paintView() {
+    if (!context) return;
+    const view = viewName();
+    document.querySelector('.export-body').classList.toggle('is-choosing', view === 'choosing');
+    $('export-choose').hidden = view === 'options';
+    $('export-choose').classList.toggle('is-finding', view === 'finding');   // only grey bars, until it is known whether there is a table to choose from
+    $('export-panel').hidden = view !== 'options';
+    $('export-change').hidden = !(view === 'options' && destination === 'item' && ns.exportItems.state() === 'several');
+    $('export-choose-title').textContent = t('item.several_title', { number: numberText() });
+    paintLinkRow();
+  }
+
+  /** A destination was chosen: what is shown, the button and the attached files follow it. */
+  function destinationChosen(key) {
+    destination = key;
+    renderDestinationNote();
+    paintView();
+    syncRun();
+    loadFiles();
   }
 
   function renderDestinations() {
@@ -125,16 +200,10 @@
     const offered = context.destinations.filter(function (d) { return !d.hidden; });
     $('export-destination-group').hidden = offered.length < context.destinations.length && offered.every(function (d) { return !d.reason; });
     offered.forEach(function (d) {
-      box.appendChild(segment(d, 'export-destination', { checked: d.key === destination, off: !!d.reason || d.checking }, function (key) {
-        destination = key;
-        summarizeDestination();
-        renderDestinationNote();
-        syncRun();
-        loadFiles();
-      }));
+      box.appendChild(segment(d, 'export-destination', { checked: d.key === destination, off: !!d.reason || d.checking }, destinationChosen));
     });
-    summarizeDestination();
     renderDestinationNote();
+    paintView();
   }
 
   // ---- The files attached where the export would go -------------------------------------
@@ -151,24 +220,26 @@
     return t('export.size_kb', { n: Math.max(1, Math.round(bytes / 1024)) });
   }
 
-  /** Bouncing balls and a line of text, while the attached files are read. */
-  function loading() {
-    const box = el('div', 'export-files-loading');
-    const balls = el('div', 'balls');
-    balls.setAttribute('role', 'status');
-    balls.setAttribute('aria-label', t('export.reading_files'));
-    for (let i = 0; i < 3; i++) balls.appendChild(el('span'));
-    box.appendChild(balls);
-    box.appendChild(el('span', 'export-note', t('export.checking_attached')));
-    return box;
+  /** A grey bar of the card, ``size`` the class that gives it its width and height. */
+  function bar(size) {
+    return el('span', 'export-skeleton export-file-bar ' + size);
   }
 
-  /** A line of the card: what it is about, and the fact. */
-  function detail(label, value) {
-    const row = el('div', 'export-file-row');
-    row.appendChild(el('dt', '', label));
-    row.appendChild(el('dd', '', value));
-    return row;
+  /** Grey bars in the shape of the card (the name and state, the four facts, the line about the export), while the attached files are read. */
+  function loading() {
+    const box = el('div', 'export-file export-file-loading');
+    box.setAttribute('role', 'status');
+    box.setAttribute('aria-label', t('export.reading_files'));
+    const head = el('div', 'export-file-head');
+    head.append(bar('is-name'), bar('is-badge'));
+    const facts = el('div', 'export-stats');
+    for (let i = 0; i < 4; i++) {
+      const cell = el('div', 'export-stat');
+      cell.append(bar('is-label'), bar('is-value'));
+      facts.appendChild(cell);
+    }
+    box.append(head, facts, bar('is-effect'));
+    return box;
   }
 
   /** How the card names a state of the attached file. */
@@ -205,18 +276,25 @@
     return (old.freshness || {}).state || 'unknown';
   }
 
-  /** The lines about the file already attached: when it was modified, its version and size, and who changed it when. */
-  function buildFileRows(old) {
-    const rows = el('dl', 'export-file-rows');
-    if (old.freshness && old.freshness.modified) rows.appendChild(detail(t('export.row_modified'), shortDate(old.freshness.modified)));
-    rows.appendChild(detail(t('export.row_version'), old.version || t('export.unknown')));
-    if (old.size) rows.appendChild(detail(t('export.row_size'), fileSize(old.size)));
-    rows.appendChild(detail(t('export.row_changed'), old.updated ? shortDate(old.updated) : t('export.unknown')));
-    if (old.user) rows.appendChild(detail(t('export.row_changed_by'), old.user));
-    return rows;
+  /** A fact about the file already attached: what it is about, and the fact. */
+  function stat(label, value) {
+    const cell = el('div', 'export-stat');
+    cell.appendChild(el('dt', '', label));
+    cell.appendChild(el('dd', '', value));
+    return cell;
   }
 
-  /** The card of an answer about the files that was read: the name and the state, and the lines about what is attached already. */
+  /** The facts about the file already attached, in a row: its version and size, and when and by whom it was changed. */
+  function buildFileStats(old) {
+    const row = el('dl', 'export-stats');
+    row.appendChild(stat(t('export.row_version'), old.version || t('export.unknown')));
+    if (old.size) row.appendChild(stat(t('export.row_size'), fileSize(old.size)));
+    row.appendChild(stat(t('export.row_changed'), old.updated ? shortDate(old.updated) : t('export.unknown')));
+    if (old.user) row.appendChild(stat(t('export.row_changed_by'), old.user));
+    return row;
+  }
+
+  /** The status of the file the export affects: its name and whether it is up to date, what is attached now, and what the export will do. */
   function buildFileCard(found) {
     const old = found.existing;
     const state = attachedState(old);
@@ -225,14 +303,15 @@
     head.appendChild(el('span', 'export-file-name', found.name));
     head.appendChild(el('span', 'export-file-badge', stateName(state)));
     card.appendChild(head);
-    if (old) card.appendChild(buildFileRows(old));
+    if (old) card.appendChild(buildFileStats(old));
+    card.appendChild(el('p', 'export-file-effect', old ? t('export.effect_version') : t('export.effect_new')));
     return card;
   }
 
   /** Ask what is attached for the format and destination chosen, unless that was asked already or there is nothing to ask about. */
   function loadFiles() {
-    const key = [format, destination, context.target].join('|');
-    if (!format || !destination || context.problem) {
+    const key = [format, destination, context.target, chosenItem()].join('|');
+    if (!format || !destination || context.problem || (destination === 'item' && !chosenItem())) {
       files = null;
       filesKey = '';
       clearTimeout(filesTimer);
@@ -252,13 +331,13 @@
     }, FILES_WAIT_MS);
     clearTimeout(askTimer);
     askTimer = setTimeout(function () {   // the call into Fusion holds the page until it returns, so it waits for the choice to be drawn
-      bridge.send('export_files', { format: format, destination: destination, target: context.target });
+      bridge.send('export_files', { format: format, destination: destination, target: context.target, item: chosenItem() });
     }, FILES_ASK_DELAY_MS);
   }
 
   /** An answer about the files: kept when it is for the choices now made, dropped when it is for an earlier choice. */
   function filesFound(r) {
-    if (!r.ok || !files || r.result.format !== format || r.result.destination !== destination) return;
+    if (!r.ok || !files || r.result.format !== format || r.result.destination !== destination || r.result.item !== chosenItem()) return;
     clearTimeout(filesTimer);
     files = r.result;
     renderFiles();
@@ -302,7 +381,7 @@
     paintTarget();
     paintThumbnail();
     $('export-name').textContent = context.name;   // the component's name in Fusion
-    $('export-description').textContent = context.description;   // when Fusion has one for the design
+    $('export-name').title = context.description || '';   // the design's description, when Fusion has one
     const problem = $('export-problem');
     problem.textContent = context.problem;
     problem.hidden = !context.problem;
@@ -318,6 +397,7 @@
     context = result;
     format = context.formats.length ? context.formats[0].key : '';
     destination = preferred();
+    applyItems();
     renderForm();
     if (context.problem) setTimeout(function () { bridge.send('export_context'); }, CONTEXT_POLL_MS);
   }
@@ -394,7 +474,7 @@
   function run() {
     showError('');
     $('export-run').disabled = true;
-    bridge.send('export_run', { format: format, destination: destination, target: context.target });
+    bridge.send('export_run', { format: format, destination: destination, target: context.target, item: chosenItem() });
   }
 
   /** Back to the choices after a failure, as they were left. */
@@ -422,17 +502,24 @@
     ns.account.init();
     ns.auth.init();
     progressCard = ns.uploadProgress.mount($('export-progress'));
+    ns.exportItems.init({ changed: itemChanged });
+    ns.exportItems.show(null);   // until Python has listed the items
 
     bridge.on('export_context', function (r) { if (r.ok) load(r.result); else showError(r.error); });
     bridge.on('export_item', function (r) {
       if (!r.ok) return;
       itemNumber = r.result.item_number;
-      if (context && context.target === r.result.target) paintTarget();   // else it is shown when the context arrives
+      if (context && context.target === r.result.target) { paintTarget(); paintView(); }   // else it is shown when the context arrives
     });
     bridge.on('export_thumbnail', function (r) {
       if (!r.ok) return;
       thumbnail = r.result;
       if (context) paintThumbnail();   // else it is shown when the context arrives
+    });
+    bridge.on('export_items', function (r) {
+      itemsAnswer = r.ok ? r.result : { target: context ? context.target : '', items: [], error: r.error };
+      applyItems();
+      if (context) renderForm();
     });
     bridge.on('export_access', function (r) {
       if (!r.ok) return;
@@ -451,6 +538,13 @@
     $('export-done').addEventListener('click', function () { bridge.send('export_close'); });
     $('export-retry').addEventListener('click', retry);
     $('export-run').addEventListener('click', run);
+    $('export-link-open').prepend(ns.svg(ns.EXTERNAL_ICON, 14));
+    $('export-link-open').addEventListener('click', function () { if (linkUrl) bridge.send('open_url', { url: linkUrl }); });
+    $('export-change').addEventListener('click', function () { ns.exportItems.reset(); });
+    $('export-use-component').addEventListener('click', function () {
+      destinationChosen('component');
+      renderDestinations();   // the radio buttons follow the choice
+    });
 
     ns.auth.onChange(signInKnown);
     ns.auth.refresh();

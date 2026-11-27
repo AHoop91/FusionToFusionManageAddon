@@ -307,6 +307,41 @@ class FindItemTests(unittest.TestCase):
         self.upload._choices.set("242", "PN-1", "10")
         self.assertEqual(self._find(), ("242", "10"))
 
+    def test_the_items_of_a_part_are_listed_from_its_record_whatever_the_choice(self):
+        hits = [{"id": "9", "number": "PN-1-A", "descriptor": "PN-1-A - Bolt"}, {"id": "10", "number": "PN-1-B", "descriptor": "PN-1-B - Nut"}]
+        service = self._search(hits)
+        self.module.FmClient.return_value.base_url = "https://acme.example"
+        listed = self.upload.items_of("Gear", REF, CONTEXT)
+        self.assertEqual([item["id"] for item in listed], ["9", "10"])
+        self.assertEqual(listed[0]["url"], self.module.page_url("https://acme.example", "acme", "242", "9"))   # the item's page in Fusion Manage, to open it
+        self.records.assert_called_once_with(REF, "Gear", None)
+        self.assertEqual(service.return_value.of_component.call_args.args[:2], ("242", LINK))
+
+    def test_the_page_of_the_components_own_record_is_made_from_its_link(self):
+        self._search([])
+        self.module.FmClient.return_value.base_url = "https://acme.example"
+        self.assertEqual(self.upload.page_of(self.upload.link_of("Gear", REF), CONTEXT), self.module.link_page("https://acme.example", "acme", LINK))
+
+    def test_a_part_with_no_components_record_has_no_page_for_it(self):
+        self._search([], link="")
+        self.assertEqual(self.upload.page_of(self.upload.link_of("Gear", REF), CONTEXT), "")
+
+    def test_a_part_with_no_components_record_has_no_items_to_list(self):
+        self._search([], link="")
+        with self.assertRaisesRegex(LookupError, "no record in the Components workspace"):
+            self.upload.items_of("Gear", REF, CONTEXT)
+
+    def test_the_item_the_table_chose_is_the_one_found_with_no_search(self):
+        service = self._search([{"id": "9", "descriptor": "x"}, {"id": "10", "descriptor": "y"}])
+        goal = self.module._Goal("item", REF, "10")
+        self.assertEqual(self.upload._find(goal, self.module.Subject("PN-1", "Gear", REF), CONTEXT), ("242", "10"))
+        service.return_value.of_component.assert_not_called()
+        self.records.assert_not_called()
+
+    def test_the_item_the_table_chose_is_refused_when_the_items_workspace_is_not_set_up(self):
+        with self.assertRaisesRegex(ValueError, "not set.*Complete it in Preferences"):
+            self.upload._find(self.module._Goal("item", REF, "10"), self.module.Subject("PN-1", "Gear", REF), capture(config_of(workspace="")))
+
     def test_a_part_with_no_reference_cannot_be_looked_for(self):
         with self.assertRaises(LookupError):
             self.upload._find(self.module._Goal("item"), self.module.Subject("PN-1", "Gear"), CONTEXT)

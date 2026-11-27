@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="../shared/css/empty-state.css">
   <link rel="stylesheet" href="../shared/css/progress.css">
   <link rel="stylesheet" href="../shared/css/upload-progress.css">
+  <link rel="stylesheet" href="../shared/css/choice-table.css">
   <link rel="stylesheet" href="css/export-page.css">
 </head>
 <body>
@@ -54,36 +55,59 @@
           <div id="export-thumbnail" class="export-thumbnail" role="img" aria-label="Thumbnail" data-i18n-attr="aria-label:export.thumbnail" hidden></div>
           <div class="export-summary-text">
             <h1 id="export-target" class="export-target"></h1>
-            <h2 id="export-name" class="export-name"></h2>
-            <p id="export-description" class="export-description"></p>
+            <p id="export-name" class="export-name"></p>
           </div>
-          <!-- Where the file will be attached, always in view (the section below changes it). -->
-          <span id="export-destination-summary" class="export-pill" title="Where the file will be attached" data-i18n-attr="title:export.destination_tip"></span>
+          <!-- Several items are made from the component: shows the table of items again, to pick another. -->
+          <button id="export-change" class="btn btn-secondary" type="button" data-i18n="export.change_item" hidden>Change item</button>
         </header>
         <p id="export-problem" class="export-alert" role="alert" hidden></p>
+
         <!-- Fusion Manage does not let the user in: this stands in place of the choices (see export-page.js). -->
         <div id="export-denied" class="export-denied item-empty item-empty-denied" role="alert"></div>
 
-        <section id="export-format-group" class="export-group" aria-labelledby="export-format-title">
-          <h2 id="export-format-title" data-i18n="export.format_title">File format</h2>
-          <p class="export-hint" data-i18n="export.format_hint">The type of file to create from the open document.</p>
-          <div id="export-formats" class="export-segments" role="radiogroup" aria-labelledby="export-format-title"></div>
+        <!-- Several items are made from the component: the window opens on the shared table of choices, as the Item panel does (export-items.js). -->
+        <section id="export-choose" class="export-choose is-finding" aria-labelledby="export-choose-title">
+          <div class="export-choose-head">
+            <h2 id="export-choose-title" class="export-choose-title"></h2>
+            <span class="export-choose-pill" data-i18n="item.several_pill">Please select an item</span>
+            <span class="export-skeleton export-choose-wait is-title" aria-hidden="true"></span>
+            <span class="export-skeleton export-choose-wait is-pill" aria-hidden="true"></span>
+            <button id="export-use-component" class="btn btn-secondary export-choose-component" type="button" data-i18n="export.use_component">Attach to the component instead</button>
+          </div>
+          <div id="export-items" class="export-choose-table" aria-live="polite"></div>
         </section>
 
-        <section id="export-destination-group" class="export-group" aria-labelledby="export-destination-title">
-          <h2 id="export-destination-title" data-i18n="export.destination_title">Attach to</h2>
-          <p class="export-hint" data-i18n="export.destination_hint">Where in Fusion Manage the exported file is attached. This is defined within your settings, but you can override it if necessary.</p>
-          <div id="export-destinations" class="export-segments" role="radiogroup" aria-labelledby="export-destination-title"></div>
-          <div id="export-destination-note" class="export-notes" aria-live="polite"></div>
-        </section>
+        <!-- Read from the top: the settings, then what is attached already. Hidden until the window knows which view it shows (export-page.js). -->
+        <div id="export-panel" class="export-panel" hidden>
+          <div class="export-card export-settings">
+            <section id="export-format-group" class="export-row" aria-labelledby="export-format-title">
+              <h2 id="export-format-title" data-i18n="export.format_title">Format</h2>
+              <div id="export-formats" class="export-segments" role="radiogroup" aria-labelledby="export-format-title"></div>
+            </section>
+            <section id="export-destination-group" class="export-row" aria-labelledby="export-destination-title">
+              <h2 id="export-destination-title" data-i18n="export.destination_title">Attach to</h2>
+              <div id="export-destinations" class="export-segments" role="radiogroup" aria-labelledby="export-destination-title"></div>
+              <div id="export-destination-note" class="export-notes" aria-live="polite"></div>
+            </section>
+            <!-- The record the file is attached to, in Fusion Manage: the item picked or the component, with a link to open it. -->
+            <section id="export-link-row" class="export-row" aria-labelledby="export-link-title">
+              <h2 id="export-link-title" data-i18n="export.link_title">Link</h2>
+              <div class="export-link">
+                <span id="export-link-kind" class="export-link-kind"></span>
+                <span id="export-link-text" class="export-link-text"></span>
+                <button id="export-link-open" class="export-link-action" type="button" hidden>
+                  <span data-i18n="export.open_record">Open in Fusion Manage</span>
+                </button>
+              </div>
+            </section>
+          </div>
 
-        <!-- What is attached in Fusion Manage already, and so whether this export adds a file or makes a new version of one. -->
-        <section id="export-files-group" class="export-group export-files-group" aria-labelledby="export-files-title" hidden>
-          <h2 id="export-files-title" data-i18n="export.files_title">Attachment</h2>
-          <p class="export-hint" data-i18n="export.files_hint">Fusion Manage keeps one file for each name, so exporting again adds a new version of it, not a second copy.</p>
-          <div id="export-files" aria-live="polite"></div>
-        </section>
-
+          <!-- What is attached in Fusion Manage already, and so whether this export adds a file or makes a new version of one. -->
+          <section id="export-files-group" class="export-card export-files-group" aria-labelledby="export-files-title" hidden>
+            <h2 id="export-files-title" data-i18n="export.files_title">Attachment</h2>
+            <div id="export-files" aria-live="polite"></div>
+          </section>
+        </div>
         <p id="export-error" class="export-alert" role="alert" hidden></p>
       </div>
 
@@ -116,6 +140,8 @@
   <script src="../shared/js/account.js"></script>
   <script src="../shared/js/auth.js"></script>
   <script src="../shared/js/upload-progress.js"></script>
+  <script src="../shared/js/choice-table.js"></script>
+  <script src="js/export-items.js"></script>
   <script src="js/export-page.js"></script>
 </body>
 </html>

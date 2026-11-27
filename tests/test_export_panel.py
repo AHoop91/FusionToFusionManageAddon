@@ -267,13 +267,76 @@ class ExportTests(ExportSetup):
         self.assertEqual(number, "PN-1")
         self.assertEqual((options.ref, options.fail), ("ref", self.uploads.fail_in_window))
         then(self.subject)
-        self.uploads.continue_in_window.assert_called_once_with("job", "context", self.subject, "dest", "ref")
+        self.uploads.continue_in_window.assert_called_once_with("job", "context", self.subject, "dest", "ref", "")
+
+    def test_the_item_the_table_chose_goes_on_to_the_upload(self):
+        self.uploads.begin_in_window.return_value = "context"
+        self.exporter.export("pdf", "dest", "PN-1", "17195")
+        self.find.call_args.args[1](self.subject)
+        self.assertEqual(self.uploads.continue_in_window.call_args.args[-1], "17195")
 
     def test_the_selected_target_is_used_when_no_number_is_passed(self):
         self.uploads.begin_in_window.return_value = "context"
         with mock.patch.object(self.exporter, "export_target", return_value=("PN-9", "")):
             self.exporter.export("pdf", "dest")
         self.assertEqual(self.find.call_args.args[0], "PN-9")
+
+
+class WarmExportItemsTests(ExportSetup):
+    def setUp(self):
+        super().setUp()
+        self.found = mock.Mock()
+        for target, name, value in ((self.exporter, "export_target", ("PN-1", "")), (fusion_selection, "part_ref", "ref")):
+            patcher = mock.patch.object(target, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.items = [{"id": "17073", "number": "PN-1", "descriptor": "PN-1 - Joint", "url": "https://acme/17073"},
+                      {"id": "17195", "number": "PN-1-US", "descriptor": "PN-1-US - Joint", "url": "https://acme/17195"}]
+        self.uploads.link_of.return_value = "/api/v3/workspaces/1/items/2"
+        self.uploads.page_of.return_value = "https://acme/component"
+
+    def warm(self):
+        self.exporter.warm_export_items(self.found)
+        self.run_threads()
+
+    def test_the_items_are_listed_from_the_part_and_its_reference_without_the_item_number(self):
+        self.uploads.items_at.return_value = self.items
+        self.warm()
+        self.assertEqual(self.uploads.link_of.call_args.args[:2], ("PN-1", "ref"))
+        self.assertEqual(self.uploads.items_at.call_args.args[0], "/api/v3/workspaces/1/items/2")   # the link is read once and both come from it
+        self.uploads.link_of.assert_called_once()
+        self.found.assert_called_once_with({"target": "PN-1", "items": self.items, "component_url": "https://acme/component"})
+
+    def test_only_the_items_listed_are_known_for_the_part(self):
+        self.uploads.items_at.return_value = self.items
+        self.warm()
+        self.assertTrue(self.exporter.knows_item("PN-1", "17195"))
+        self.assertFalse(self.exporter.knows_item("PN-1", "99"))
+        self.assertFalse(self.exporter.knows_item("PN-2", "17195"))
+        self.exporter.reset_export()
+        self.assertFalse(self.exporter.knows_item("PN-1", "17195"))   # a window opened again lists them again
+
+    def test_why_they_could_not_be_listed_is_told_in_place_of_the_list(self):
+        self.uploads.items_at.side_effect = LookupError("no record")
+        self.warm()
+        self.found.assert_called_once_with({"target": "PN-1", "items": [], "error": "no record", "component_url": "https://acme/component"})
+        self.assertFalse(self.exporter.knows_item("PN-1", "17195"))
+
+    def test_a_record_that_cannot_be_read_is_told_with_no_link_and_no_items(self):
+        self.uploads.link_of.side_effect = LookupError("no record")
+        self.warm()
+        self.found.assert_called_once_with({"target": "PN-1", "items": [], "error": "no record", "component_url": ""})
+        self.uploads.items_at.assert_not_called()
+
+    def test_a_window_that_was_closed_says_nothing(self):
+        self.uploads.items_at.side_effect = Cancelled()
+        self.warm()
+        self.found.assert_not_called()
+
+    def test_nothing_to_export_lists_nothing(self):
+        self.exporter.export_target.return_value = ("", "why")
+        self.warm()
+        self.assertEqual(self.started, [])
 
 
 class SharedStateTests(ExportSetup):
